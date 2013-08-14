@@ -1,0 +1,23 @@
+------------------------------------------------------------
+revno: 3105
+committer: Jonathan Perkin <jperkin@sun.com>
+branch nick: mysql-5.1.39-release
+timestamp: Fri 2009-09-04 17:45:07 +0200
+message:
+  Install mysqld.lib
+------------------------------------------------------------
+revno: 3104
+tags: clone-5.1.39-build
+committer: Jonathan Perkin <jperkin@sun.com>
+branch nick: mysql-5.1
+timestamp: Thu 2009-09-03 01:48:06 +0200
+message:
+  Merge from mysql-5.1.38-release
+    ------------------------------------------------------------
+    revno: 2949.7.9
+    tags: mysql-5.1.38
+    committer: Jonathan Perkin <jperkin@sun.com>
+    branch nick: mysql-5.1.38-release
+    timestamp: Tue 2009-09-01 08:40:13 +0200
+    message:
+      Only install the innodb plugin if the plugin directory exists.
