@@ -21,7 +21,6 @@
 #endif
 
 #include <my_tree.h>
-
 /*
   Class Item_sum is the base class used for special expressions that SQL calls
   'set functions'. These expressions are formed with the help of aggregate
@@ -245,9 +244,10 @@ public:
   */
   List<Item_field> outer_fields;
 
-protected:  
   uint arg_count;
   Item **args, *tmp_args[2];
+  THD* thd() { return IDB_thd; }
+protected:  
   /* 
     Copy of the arguments list to hold the original set of arguments.
     Used in EXPLAIN EXTENDED instead of the current argument list because 
@@ -256,22 +256,23 @@ protected:
   Item **orig_args, *tmp_orig_args[2];
   table_map used_tables_cache;
   bool forced_const;
+  THD* IDB_thd; // @InfiniDB. save current thd pointer here for IDB use.
 
 public:  
 
   void mark_as_sum_func();
-  Item_sum() :quick_group(1), arg_count(0), forced_const(FALSE)
+  Item_sum() :quick_group(1), arg_count(0), forced_const(FALSE), IDB_thd(0)
   {
     mark_as_sum_func();
   }
   Item_sum(Item *a) :quick_group(1), arg_count(1), args(tmp_args),
-    orig_args(tmp_orig_args), forced_const(FALSE)
+    orig_args(tmp_orig_args), forced_const(FALSE), IDB_thd(0)
   {
     args[0]=a;
     mark_as_sum_func();
   }
   Item_sum( Item *a, Item *b ) :quick_group(1), arg_count(2), args(tmp_args),
-    orig_args(tmp_orig_args), forced_const(FALSE)
+    orig_args(tmp_orig_args), forced_const(FALSE), IDB_thd(0)
   {
     args[0]=a; args[1]=b;
     mark_as_sum_func();
@@ -1201,8 +1202,8 @@ class Item_func_group_concat : public Item_sum
    */
   Unique *unique_filter;
   TABLE *table;
-  ORDER **order;
-  Name_resolution_context *context;
+  //ORDER **order;
+  //Name_resolution_context *context;
   /** The number of ORDER BY items. */
   uint arg_count_order;
   /** The number of selected items, aka the expr list. */
@@ -1239,13 +1240,7 @@ public:
   enum Sumfunctype sum_func () const {return GROUP_CONCAT_FUNC;}
   const char *func_name() const { return "group_concat"; }
   virtual Item_result result_type () const { return STRING_RESULT; }
-  enum_field_types field_type() const
-  {
-    if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB )
-      return MYSQL_TYPE_BLOB;
-    else
-      return MYSQL_TYPE_VARCHAR;
-  }
+  enum_field_types field_type() const;
   void clear();
   bool add();
   void reset_field() { DBUG_ASSERT(0); }        // not used
@@ -1278,4 +1273,11 @@ public:
   virtual void print(String *str, enum_query_type query_type);
   virtual bool change_context_processor(uchar *cntx)
     { context= (Name_resolution_context *)cntx; return FALSE; }
+  // InfiniDB added interface
+  bool isDistinct() { return distinct; }
+  uint count_field() { return arg_count_field; }
+  uint order_field() { return arg_count_order; }
+  String* str_separator() { return separator; }
+  ORDER **order; // InfiniDB: keep it in public place
+  Name_resolution_context *context; // InfiniDB: keep it in public place
 };

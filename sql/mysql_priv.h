@@ -43,6 +43,7 @@
 #include "sql_array.h"
 #include "sql_plugin.h"
 #include "scheduler.h"
+#include "errorids.h"                   /* InfiniDB Window Function errors */
 
 class Parser_state;
 
@@ -56,7 +57,9 @@ class Parser_state;
 enum enum_query_type
 {
   QT_ORDINARY,
-  QT_IS
+  QT_IS,
+  QT_INFINIDB, // this is for InfiniDB post process to customerize item::print() functions.
+  QT_INFINIDB_NO_QUOTE, // customized item:print() without quote delimiter
 };
 
 /* TODO convert all these three maps to Bitmap classes */
@@ -634,7 +637,8 @@ enum enum_parsing_place
   IN_HAVING,
   SELECT_LIST,
   IN_WHERE,
-  IN_ON
+  IN_ON,
+  IN_GROUP_BY
 };
 
 struct st_table;
@@ -773,6 +777,9 @@ class sys_var;
 #ifdef MYSQL_SERVER
 class Comp_creator;
 typedef Comp_creator* (*chooser_compare_func_creator)(bool invert);
+#endif
+#ifdef USE_CALPONT_REGEX
+#undef USE_REGEX
 #endif
 #include "item.h"
 extern my_decimal decimal_zero;
@@ -1246,13 +1253,17 @@ bool mysql_rename_table(handlerton *base, const char *old_db,
                         const char * new_name, uint flags);
 bool mysql_prepare_update(THD *thd, TABLE_LIST *table_list,
                           Item **conds, uint order_num, ORDER *order);
+// @InfiniDB. Make conds argument reference to pointer so the optimization
+// result can be passed in to the InfiniDB connector.
 int mysql_update(THD *thd,TABLE_LIST *tables,List<Item> &fields,
-		 List<Item> &values,COND *conds,
+		 List<Item> &values,COND *& conds,
 		 uint order_num, ORDER *order, ha_rows limit,
 		 enum enum_duplicates handle_duplicates, bool ignore);
+// @InfiniDB. Make conds argument reference to pointer so the optimization
+// result can be passed in to the InfiniDB connector.
 bool mysql_multi_update(THD *thd, TABLE_LIST *table_list,
                         List<Item> *fields, List<Item> *values,
-                        COND *conds, ulonglong options,
+                        COND *& conds, ulonglong options,
                         enum enum_duplicates handle_duplicates, bool ignore,
                         SELECT_LEX_UNIT *unit, SELECT_LEX *select_lex);
 bool mysql_prepare_insert(THD *thd, TABLE_LIST *table_list, TABLE *table,
@@ -1269,7 +1280,9 @@ int check_that_all_fields_are_given_values(THD *thd, TABLE *entry,
                                            TABLE_LIST *table_list);
 void prepare_triggers_for_insert_stmt(TABLE *table);
 int mysql_prepare_delete(THD *thd, TABLE_LIST *table_list, Item **conds);
-bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
+// @InfiniDB. Make conds argument reference to pointer so the optimization
+// result can be passed in to the InfiniDB connector.
+bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *& conds,
                   SQL_LIST *order, ha_rows rows, ulonglong options,
                   bool reset_auto_increment);
 bool mysql_truncate(THD *thd, TABLE_LIST *table_list, bool dont_send_ok);
@@ -1330,6 +1343,27 @@ find_field_in_table(THD *thd, TABLE *table, const char *name, uint length,
                     bool allow_rowid, uint *cached_field_index_ptr);
 Field *
 find_field_in_table_sef(TABLE *table, const char *name);
+
+// @InfiniDB util API for error handling
+const LEX_STRING InfiniDB= { C_STRING_WITH_LEN("InfiniDB") };
+
+// generic API
+inline void IDB_set_error(THD* thd, uint64_t errCode, LEX_STRING* args, uint argCount)
+{
+        plugin_ref plugin =     ha_resolve_by_name(thd, &InfiniDB);
+        handlerton* hton = plugin_data(plugin, handlerton*);
+        hton->set_error(thd, errCode, args, argCount);
+}
+
+// one arg API
+inline void IDB_set_error(THD* thd, uint64_t errCode, char* arg)
+{
+        plugin_ref plugin =     ha_resolve_by_name(thd, &InfiniDB);
+        handlerton* hton = plugin_data(plugin, handlerton*);
+        LEX_STRING args[1];
+        args[0].str = arg;
+        hton->set_error(thd, errCode, args, 1);
+}
 
 #endif /* MYSQL_SERVER */
 
@@ -1459,7 +1493,7 @@ Create_field * new_create_field(THD *thd, char *field_name, enum_field_types typ
 				List<String> *interval_list, CHARSET_INFO *cs,
 				uint uint_geom_type);
 void store_position_for_column(const char *name);
-bool add_to_list(THD *thd, SQL_LIST &list,Item *group,bool asc);
+bool add_to_list(THD *thd, SQL_LIST &list,Item *group,bool asc, uint nulls=0);
 bool push_new_name_resolution_context(THD *thd,
                                       TABLE_LIST *left_op,
                                       TABLE_LIST *right_op);
@@ -2522,7 +2556,9 @@ bool schema_table_store_record(THD *thd, TABLE *table);
 
 /* sql/item_create.cc */
 int item_create_init();
+int item_window_function_create_init();  // @InfiniDB
 void item_create_cleanup();
+void item_window_function_create_cleanup(); // @InfiniDB
 
 bool show_create_trigger(THD *thd, const sp_name *trg_name);
 
@@ -2541,6 +2577,7 @@ bool load_collation(MEM_ROOT *mem_root,
                     Field *field,
                     CHARSET_INFO *dflt_cl,
                     CHARSET_INFO **cl);
+
 
 #endif /* MYSQL_SERVER */
 extern "C" int test_if_data_home_dir(const char *dir);

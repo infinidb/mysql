@@ -1373,6 +1373,7 @@ static int binlog_close_connection(handlerton *hton, THD *thd)
 {
   binlog_trx_data *const trx_data=
     (binlog_trx_data*) thd_get_ha_data(thd, binlog_hton);
+  if (!trx_data) return 0;
   DBUG_ASSERT(trx_data->empty());
   thd_set_ha_data(thd, binlog_hton, NULL);
   trx_data->~binlog_trx_data();

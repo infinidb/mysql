@@ -328,6 +328,16 @@ struct system_variables
   ulong query_cache_type;
   ulong read_buff_size;
   ulong read_rnd_buff_size;
+/* InfiniDB */
+  ulong infinidb_vtable_mode;
+  ulong infinidb_decimal_scale;
+  my_bool infinidb_use_decimal_scale;
+  my_bool infinidb_ordered_only;
+  ulong infinidb_string_scan_threshold;
+  ulong infinidb_compression_type;
+  ulong infinidb_stringtable_threshold;
+  my_bool infinidb_varbin_always_hex;
+/* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
   ulong thread_handling;
@@ -1245,6 +1255,9 @@ class THD :public Statement,
            public Open_tables_state
 {
 public:
+	
+	struct INFINIDB_VTABLE; // Calpont InfiniDB
+	
   /* Used to execute base64 coded binlog events in MySQL server */
   Relay_log_info* rli_fake;
 
@@ -1750,7 +1763,53 @@ public:
     KILLED_NO_VALUE      /* means neither of the states */
   };
   killed_state volatile killed;
-
+  
+  // ------------------------------ Calpont InfiniDB ------------------------------
+  public:
+  	
+  enum infinidb_state
+  {
+  	INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
+    INFINIDB_INIT,
+    INFINIDB_CREATE_VTABLE,
+    INFINIDB_ALTER_VTABLE,
+    INFINIDB_SELECT_VTABLE,              
+    INFINIDB_DROP_VTABLE,  
+    INFINIDB_DISABLE_VTABLE,
+    INFINIDB_REDO_PHASE1,	// post process requires to re-create vtable
+    INFINIDB_ORDER_BY,			// for Calpont handler to ignore the 2nd scan for order by
+    INFINIDB_REDO_QUERY,		// redo query with the normal mysql path
+    INFINIDB_ERROR = 32,
+  };
+  
+  struct INFINIDB_VTABLE
+  {
+  	String original_query;
+  	String create_vtable_query;
+  	String alter_vtable_query;
+  	String select_vtable_query;
+  	String drop_vtable_query;   
+  	String insert_vtable_query;
+  	infinidb_state vtable_state;  // flag for Calpont MySQL virtual table structure
+  	bool autoswitch;
+  	bool has_order_by;
+  	bool has_limit; // deprecated
+  	bool mysql_optimizer_off;
+  	bool duplicate_field_name; // @bug 1928. duplicate field name in create_phase will be ingored.
+  	bool call_sp;
+  	bool override_largeside_estimate;
+  	void* cal_conn_info;
+  	bool isUnion;
+  	bool impossibleWhereOnUnion;
+  	bool isInsertSelect;
+  	bool isUpdateWithDerive;
+	bool isInfiniDBDML; // default false
+  };
+   
+  INFINIDB_VTABLE infinidb_vtable;					// Calpont InfiniDB custom structure
+  
+  // ------------------------------ Calpont InfiniDB ------------------------------
+  
   /* scramble - random string sent to client on handshake */
   char	     scramble[SCRAMBLE_LENGTH+1];
 
@@ -2929,6 +2988,95 @@ public:
   bool send_eof();
   virtual void abort();
 };
+
+//@Bug 2703 Move class Select_fetch_protocol_binary and Prepared_statement's definition from sql_pare.cc here
+/**
+  A result class used to send cursor rows using the binary protocol.
+*/
+
+class Select_fetch_protocol_binary: public select_send
+{
+  Protocol_binary protocol;
+public:
+  Select_fetch_protocol_binary(THD *thd);
+  virtual bool send_fields(List<Item> &list, uint flags);
+  virtual bool send_data(List<Item> &items);
+  virtual bool send_eof();
+#ifdef EMBEDDED_LIBRARY
+  void begin_dataset()
+  {
+    protocol.begin_dataset();
+  }
+#endif
+};
+
+/****************************************************************************/
+
+/**
+  Prepared_statement: a statement that can contain placeholders.
+*/
+
+class Prepared_statement: public Statement
+{
+public:
+  enum flag_values
+  {
+    IS_IN_USE= 1,
+    IS_SQL_PREPARE= 2
+  };
+
+  THD *thd;
+  Select_fetch_protocol_binary result;
+  Item_param **param_array;
+  uint param_count;
+  uint last_errno;
+  uint flags;
+  char last_error[MYSQL_ERRMSG_SIZE];
+#ifndef EMBEDDED_LIBRARY
+  bool (*set_params)(Prepared_statement *st, uchar *data, uchar *data_end,
+                     uchar *read_pos, String *expanded_query);
+#else
+  bool (*set_params_data)(Prepared_statement *st, String *expanded_query);
+#endif
+  bool (*set_params_from_vars)(Prepared_statement *stmt,
+                               List<LEX_STRING>& varnames,
+                               String *expanded_query);
+public:
+  Prepared_statement(THD *thd_arg);
+  virtual ~Prepared_statement();
+  void setup_set_params();
+  virtual Query_arena::Type type() const;
+  virtual void cleanup_stmt();
+  bool set_name(LEX_STRING *name);
+  void close_cursor();
+  inline bool is_in_use() { return flags & (uint) IS_IN_USE; }
+  inline bool is_sql_prepare() const { return flags & (uint) IS_SQL_PREPARE; }
+  void set_sql_prepare() { flags|= (uint) IS_SQL_PREPARE; }
+  bool prepare(const char *packet, uint packet_length);
+  bool execute_loop(String *expanded_query,
+                    bool open_cursor,
+                    uchar *packet_arg, uchar *packet_end_arg);
+  /* Destroy this statement */
+  void deallocate();
+  bool set_parameters(String *expanded_query,
+                      uchar *packet, uchar *packet_end);
+private:
+  /**
+    The memory root to allocate parsed tree elements (instances of Item,
+    SELECT_LEX and other classes).
+  */
+  MEM_ROOT main_mem_root;
+  /* Version of the stored functions cache at the time of prepare. */
+  ulong m_sp_cache_version;
+private:
+  bool set_db(const char *db, uint db_length);
+  bool execute(String *expanded_query, bool open_cursor);
+  bool reprepare();
+  bool validate_metadata(Prepared_statement  *copy);
+  void swap_prepared_statement(Prepared_statement *copy);
+};
+
+
 
 class my_var : public Sql_alloc  {
 public:

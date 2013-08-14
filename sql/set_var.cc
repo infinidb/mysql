@@ -327,7 +327,7 @@ static sys_var_const    sys_log_bin(&vars, "log_bin",
 static sys_var_trust_routine_creators
 sys_trust_routine_creators(&vars, "log_bin_trust_routine_creators",
                            &trust_function_creators);
-static sys_var_bool_ptr       
+static sys_var_bool_ptr
 sys_trust_function_creators(&vars, "log_bin_trust_function_creators",
                             &trust_function_creators);
 static sys_var_const    sys_log_error(&vars, "log_error",
@@ -489,6 +489,25 @@ static sys_var_thd_ulong	sys_read_buff_size(&vars, "read_buffer_size",
 static sys_var_opt_readonly	sys_readonly(&vars, "read_only", &opt_readonly);
 static sys_var_thd_ulong	sys_read_rnd_buff_size(&vars, "read_rnd_buffer_size",
 					       &SV::read_rnd_buff_size);
+/* InfiniDB */
+static sys_var_thd_ulong	sys_infinidb_vtable_mode(&vars, "infinidb_vtable_mode",
+					       &SV::infinidb_vtable_mode);
+static sys_var_thd_ulong	sys_infinidb_decimal_scale(&vars, "infinidb_decimal_scale",
+					       &SV::infinidb_decimal_scale);
+static sys_var_thd_bool sys_infinidb_use_decimal_scale(&vars, "infinidb_use_decimal_scale",
+					       &SV::infinidb_use_decimal_scale);
+static sys_var_thd_bool sys_infinidb_ordered_only(&vars, "infinidb_ordered_only",
+					       &SV::infinidb_ordered_only);
+static sys_var_thd_ulong	sys_infinidb_string_scan_threshold(&vars,
+							"infinidb_string_scan_threshold",
+					       &SV::infinidb_string_scan_threshold);
+static sys_var_thd_ulong	sys_infinidb_compression_type(&vars, "infinidb_compression_type",
+					       &SV::infinidb_compression_type);
+static sys_var_thd_ulong	sys_stringtable_threshold(&vars, "infinidb_stringtable_threshold",
+					       &SV::infinidb_stringtable_threshold);
+static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_always_hex",
+					       &SV::infinidb_varbin_always_hex);
+/* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
                                               &SV::div_precincrement);
 static sys_var_long_ptr	sys_rpl_recovery_rank(&vars, "rpl_recovery_rank",
@@ -763,7 +782,7 @@ static sys_var_thd_bit	sys_unique_checks(&vars, "unique_checks", 0,
                                           1,
                                           sys_var::SESSION_VARIABLE_IN_BINLOG);
 #if defined(ENABLED_PROFILING) && defined(COMMUNITY_SERVER)
-static sys_var_thd_bit  sys_profiling(&vars, "profiling", NULL, 
+static sys_var_thd_bit  sys_profiling(&vars, "profiling", NULL,
                                       set_option_bit,
                                       ulonglong(OPTION_PROFILING));
 static sys_var_thd_ulong	sys_profiling_history_size(&vars, "profiling_history_size",
@@ -850,7 +869,7 @@ static sys_var_readonly    sys_repl_report_port(&vars, "report_port", OPT_GLOBAL
 
 #endif
 
-sys_var_thd_bool  sys_keep_files_on_create(&vars, "keep_files_on_create", 
+sys_var_thd_bool  sys_keep_files_on_create(&vars, "keep_files_on_create",
                                            &SV::keep_files_on_create);
 /* Read only variables */
 
@@ -887,7 +906,7 @@ sys_var_str sys_var_general_log_path(&vars, "general_log_file", sys_check_log_pa
 				     sys_default_general_log_path,
 				     opt_logname);
 sys_var_str sys_var_slow_log_path(&vars, "slow_query_log_file", sys_check_log_path,
-				  sys_update_slow_log_path, 
+				  sys_update_slow_log_path,
 				  sys_default_slow_log_path,
 				  opt_slow_logname);
 static sys_var_log_output sys_var_log_output_state(&vars, "log_output", &log_output_options,
@@ -1012,7 +1031,7 @@ static void sys_default_ftb_syntax(THD *thd, enum_var_type type)
 static void fix_low_priority_updates(THD *thd, enum_var_type type)
 {
   if (type == OPT_GLOBAL)
-    thr_upgraded_concurrent_insert_lock= 
+    thr_upgraded_concurrent_insert_lock=
       (global_system_variables.low_priority_updates ?
        TL_WRITE_LOW_PRIORITY : TL_WRITE);
   else
@@ -1127,7 +1146,7 @@ static void fix_query_cache_size(THD *thd, enum_var_type type)
   ulong new_cache_size= query_cache.resize(query_cache_size);
 
   /*
-     Note: query_cache_size is a global variable reflecting the 
+     Note: query_cache_size is a global variable reflecting the
      requested cache size. See also query_cache_size_arg
   */
 
@@ -1135,7 +1154,7 @@ static void fix_query_cache_size(THD *thd, enum_var_type type)
     push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
 			ER_WARN_QC_RESIZE, ER(ER_WARN_QC_RESIZE),
 			query_cache_size, new_cache_size);
-  
+
   query_cache_size= new_cache_size;
 #endif
 }
@@ -1144,7 +1163,7 @@ static void fix_query_cache_size(THD *thd, enum_var_type type)
 #ifdef HAVE_QUERY_CACHE
 static void fix_query_cache_min_res_unit(THD *thd, enum_var_type type)
 {
-  query_cache_min_res_unit= 
+  query_cache_min_res_unit=
     query_cache.set_min_res_unit(query_cache_min_res_unit);
 }
 #endif
@@ -1284,7 +1303,7 @@ bool sys_var_thd_binlog_format::is_readonly() const
   if (thd->in_sub_stmt)
   {
     my_error(ER_STORED_FUNCTION_PREVENTS_SWITCH_BINLOG_FORMAT, MYF(0));
-    return 1;    
+    return 1;
   }
   return sys_var_thd_enum::is_readonly();
 }
@@ -1338,7 +1357,7 @@ static int check_max_delayed_threads(THD *thd, set_var *var)
 static void fix_max_connections(THD *thd, enum_var_type type)
 {
 #ifndef EMBEDDED_LIBRARY
-  resize_thr_alarm(max_connections + 
+  resize_thr_alarm(max_connections +
 		   global_system_variables.max_insert_delayed_threads + 10);
 #endif
 }
@@ -1675,7 +1694,7 @@ bool sys_var_thd_ha_rows::update(THD *thd, set_var *var)
   if (var->type == OPT_GLOBAL)
   {
     /* Lock is needed to make things safe on 32 bit systems */
-    pthread_mutex_lock(&LOCK_global_system_variables);    
+    pthread_mutex_lock(&LOCK_global_system_variables);
     global_system_variables.*offset= (ha_rows) tmp;
     pthread_mutex_unlock(&LOCK_global_system_variables);
   }
@@ -1888,7 +1907,7 @@ err:
 
 CHARSET_INFO *sys_var::charset(THD *thd)
 {
-  return is_os_charset ? thd->variables.character_set_filesystem : 
+  return is_os_charset ? thd->variables.character_set_filesystem :
     system_charset_info;
 }
 
@@ -2002,7 +2021,7 @@ bool sys_var_thd_date_time_format::check(THD *thd, set_var *var)
     my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name, res->c_ptr());
     return 1;
   }
-  
+
   /*
     We must copy result to thread space to not get a memory leak if
     update is aborted
@@ -2059,7 +2078,7 @@ typedef struct old_names_map_st
   const char *new_name;
 } my_old_conv;
 
-static my_old_conv old_conv[]= 
+static my_old_conv old_conv[]=
 {
   {	"cp1251_koi8"		,	"cp1251"	},
   {	"cp1250_latin2"		,	"cp1250"	},
@@ -2077,7 +2096,7 @@ static my_old_conv old_conv[]=
 CHARSET_INFO *get_old_charset_by_name(const char *name)
 {
   my_old_conv *conv;
- 
+
   for (conv= old_conv; conv->old_name; conv++)
   {
     if (!my_strcasecmp(&my_charset_latin1, name, conv->old_name))
@@ -2204,7 +2223,7 @@ bool sys_var_character_set_client::check(THD *thd, set_var *var)
   /* Currently, UCS-2 cannot be used as a client character set */
   if (var->save_result.charset->mbminlen > 1)
   {
-    my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name, 
+    my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name,
              var->save_result.charset->csname);
     return 1;
   }
@@ -2305,7 +2324,7 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
 
   pthread_mutex_lock(&LOCK_global_system_variables);
   key_cache= get_key_cache(base_name);
-                            
+
   if (!key_cache)
   {
     /* Key cache didn't exists */
@@ -2342,7 +2361,7 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
 	Move tables using this key cache to the default key cache
 	and clear the old key cache.
       */
-      NAMED_LIST *list; 
+      NAMED_LIST *list;
       key_cache= (KEY_CACHE *) find_named(&key_caches, base_name->str,
 					      base_name->length, &list);
       key_cache->in_init= 1;
@@ -2371,7 +2390,7 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
     error= (bool)(ha_resize_key_cache(key_cache));
 
   pthread_mutex_lock(&LOCK_global_system_variables);
-  key_cache->in_init= 0;  
+  key_cache->in_init= 0;
 
 end:
   pthread_mutex_unlock(&LOCK_global_system_variables);
@@ -2426,7 +2445,7 @@ bool sys_var_key_cache_long::update(THD *thd, set_var *var)
   error= (bool) (ha_resize_key_cache(key_cache));
 
   pthread_mutex_lock(&LOCK_global_system_variables);
-  key_cache->in_init= 0;  
+  key_cache->in_init= 0;
 
 end:
   pthread_mutex_unlock(&LOCK_global_system_variables);
@@ -2522,7 +2541,7 @@ static int  sys_check_log_path(THD *thd,  set_var *var)
   return 0;
 
 err:
-  my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), var->var->name, 
+  my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), var->var->name,
            res ? log_file_str : "NULL");
   return 1;
 }
@@ -2593,7 +2612,7 @@ err:
 
 static bool sys_update_general_log_path(THD *thd, set_var * var)
 {
-  return update_sys_var_str_path(thd, &sys_var_general_log_path, 
+  return update_sys_var_str_path(thd, &sys_var_general_log_path,
 				 var, ".log", opt_log, QUERY_LOG_GENERAL);
 }
 
@@ -2723,7 +2742,7 @@ uchar *sys_var_timestamp::value_ptr(THD *thd, enum_var_type type,
 
 bool sys_var_last_insert_id::update(THD *thd, set_var *var)
 {
-  thd->first_successful_insert_id_in_prev_stmt= 
+  thd->first_successful_insert_id_in_prev_stmt=
     var->save_result.ulonglong_value;
   return 0;
 }
@@ -2733,10 +2752,10 @@ uchar *sys_var_last_insert_id::value_ptr(THD *thd, enum_var_type type,
 					LEX_STRING *base)
 {
   /*
-    this tmp var makes it robust againt change of type of 
+    this tmp var makes it robust againt change of type of
     read_first_successful_insert_id_in_prev_stmt().
   */
-  thd->sys_var_tmp.ulonglong_value= 
+  thd->sys_var_tmp.ulonglong_value=
     thd->read_first_successful_insert_id_in_prev_stmt();
   return (uchar*) &thd->sys_var_tmp.ulonglong_value;
 }
@@ -2752,7 +2771,7 @@ bool sys_var_insert_id::update(THD *thd, set_var *var)
 uchar *sys_var_insert_id::value_ptr(THD *thd, enum_var_type type,
 				   LEX_STRING *base)
 {
-  thd->sys_var_tmp.ulonglong_value= 
+  thd->sys_var_tmp.ulonglong_value=
     thd->auto_inc_intervals_forced.minimum();
   return (uchar*) &thd->sys_var_tmp.ulonglong_value;
 }
@@ -2804,7 +2823,7 @@ bool sys_var_thd_time_zone::update(THD *thd, set_var *var)
 uchar *sys_var_thd_time_zone::value_ptr(THD *thd, enum_var_type type,
 				       LEX_STRING *base)
 {
-  /* 
+  /*
     We can use ptr() instead of c_ptr() here because String contaning
     time zone name is guaranteed to be zero ended.
   */
@@ -2921,7 +2940,7 @@ bool sys_var_thd_lc_time_names::check(THD *thd, set_var *var)
   }
   else // STRING_RESULT
   {
-    char buff[6]; 
+    char buff[6];
     String str(buff, sizeof(buff), &my_charset_latin1), *res;
     if (!(res=var->value->val_str(&str)))
     {
@@ -3141,7 +3160,7 @@ static uchar *get_warning_count(THD *thd)
 
 static uchar *get_error_count(THD *thd)
 {
-  thd->sys_var_tmp.long_value= 
+  thd->sys_var_tmp.long_value=
     thd->warn_count[(uint) MYSQL_ERROR::WARN_LEVEL_ERROR];
   return (uchar*) &thd->sys_var_tmp.long_value;
 }
@@ -3188,7 +3207,7 @@ static uchar *get_tmpdir(THD *thd)
     ptr		pointer to option structure
 */
 
-static struct my_option *find_option(struct my_option *opt, const char *name) 
+static struct my_option *find_option(struct my_option *opt, const char *name)
 {
   uint length=strlen(name);
   for (; opt->name; opt++)
@@ -3221,12 +3240,12 @@ static uchar *get_sys_var_length(const sys_var *var, size_t *length,
 
 /*
   Add variables to the dynamic hash of system variables
-  
+
   SYNOPSIS
     mysql_add_sys_var_chain()
     first       Pointer to first system variable to add
     long_opt    (optional)command line arguments may be tied for limit checks.
-  
+
   RETURN VALUES
     0           SUCCESS
     otherwise   FAILURE
@@ -3236,9 +3255,9 @@ static uchar *get_sys_var_length(const sys_var *var, size_t *length,
 int mysql_add_sys_var_chain(sys_var *first, struct my_option *long_options)
 {
   sys_var *var;
-  
+
   /* A write lock should be held on LOCK_system_variables_hash */
-  
+
   for (var= first; var; var= var->next)
   {
     var->name_length= strlen(var->name);
@@ -3255,47 +3274,47 @@ error:
     hash_delete(&system_variable_hash, (uchar*) first);
   return 1;
 }
- 
- 
+
+
 /*
   Remove variables to the dynamic hash of system variables
-   
+
   SYNOPSIS
     mysql_del_sys_var_chain()
     first       Pointer to first system variable to remove
-   
+
   RETURN VALUES
     0           SUCCESS
     otherwise   FAILURE
 */
- 
+
 int mysql_del_sys_var_chain(sys_var *first)
 {
   int result= 0;
- 
+
   /* A write lock should be held on LOCK_system_variables_hash */
-   
+
   for (sys_var *var= first; var; var= var->next)
     result|= hash_delete(&system_variable_hash, (uchar*) var);
 
   return result;
 }
- 
- 
+
+
 static int show_cmp(SHOW_VAR *a, SHOW_VAR *b)
 {
   return strcmp(a->name, b->name);
 }
- 
- 
+
+
 /*
   Constructs an array of system variables for display to the user.
-  
+
   SYNOPSIS
     enumerate_sys_vars()
     thd         current thread
     sorted      If TRUE, the system variables should be sorted
-  
+
   RETURN VALUES
     pointer     Array of SHOW_VAR elements for display
     NULL        FAILURE
@@ -3324,7 +3343,7 @@ SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted)
     if (sorted)
       my_qsort(result, count, sizeof(SHOW_VAR),
                (qsort_cmp) show_cmp);
-    
+
     /* make last element empty */
     bzero(show, sizeof(SHOW_VAR));
   }
@@ -3334,10 +3353,10 @@ SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted)
 
 /*
   Initialize the system variables
-  
+
   SYNOPSIS
     set_var_init()
-  
+
   RETURN VALUES
     0           SUCCESS
     otherwise   FAILURE
@@ -3347,7 +3366,7 @@ int set_var_init()
 {
   uint count= 0;
   DBUG_ENTER("set_var_init");
-  
+
   for (sys_var *var=vars.first; var; var= var->next, count++);
 
   if (hash_init(&system_variable_hash, system_charset_info, count, 0,
@@ -3870,7 +3889,7 @@ void fix_sql_mode_var(THD *thd, enum_var_type type)
 ulong fix_sql_mode(ulong sql_mode)
 {
   /*
-    Note that we dont set 
+    Note that we dont set
     MODE_NO_KEY_OPTIONS | MODE_NO_TABLE_OPTIONS | MODE_NO_FIELD_OPTIONS
     to allow one to get full use of MySQL in this mode.
   */
@@ -3879,7 +3898,7 @@ ulong fix_sql_mode(ulong sql_mode)
   {
     sql_mode|= (MODE_REAL_AS_FLOAT | MODE_PIPES_AS_CONCAT | MODE_ANSI_QUOTES |
 		MODE_IGNORE_SPACE);
-    /* 
+    /*
       MODE_ONLY_FULL_GROUP_BY removed from ANSI mode because it is currently
       overly restrictive (see BUG#8510).
     */
@@ -3930,7 +3949,7 @@ symbolic_mode_representation(THD *thd, ulonglong val, LEX_STRING *rep)
   int i;
   ulonglong bit;
   tmp.length(0);
- 
+
   for (i= 0, bit=1; bit != OPTIMIZER_SWITCH_LAST; i++, bit= bit << 1)
   {
     tmp.append(optimizer_switch_typelib.type_names[i],
@@ -3978,16 +3997,16 @@ bool sys_var_thd_optimizer_switch::check(THD *thd, set_var *var)
     strmov(buff, "NULL");
     goto err;
   }
-  
+
   if (res->length() == 0)
   {
     buff[0]= 0;
     goto err;
   }
 
-  var->save_result.ulong_value= 
-    (ulong)find_set_from_flags(&optimizer_switch_typelib, 
-                               optimizer_switch_typelib.count, 
+  var->save_result.ulong_value=
+    (ulong)find_set_from_flags(&optimizer_switch_typelib,
+                               optimizer_switch_typelib.count,
                                thd->variables.optimizer_switch,
                                global_system_variables.optimizer_switch,
                                res->c_ptr_safe(), res->length(), NULL,
@@ -4055,7 +4074,7 @@ static KEY_CACHE *create_key_cache(const char *name, uint length)
   KEY_CACHE *key_cache;
   DBUG_ENTER("create_key_cache");
   DBUG_PRINT("enter",("name: %.*s", length, name));
-  
+
   if ((key_cache= (KEY_CACHE*) my_malloc(sizeof(KEY_CACHE),
 					     MYF(MY_ZEROFILL | MY_WME))))
   {

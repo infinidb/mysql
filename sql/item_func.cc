@@ -98,6 +98,7 @@ Item_func::Item_func(THD *thd, Item_func *item)
    not_null_tables_cache(item->not_null_tables_cache),
    const_item_cache(item->const_item_cache)
 {
+	fThd = thd;
   if (arg_count)
   {
     if (arg_count <=2)
@@ -149,6 +150,8 @@ bool
 Item_func::fix_fields(THD *thd, Item **ref)
 {
   DBUG_ASSERT(fixed == 0);
+  //@InfiniDB. Assign new protected field thd for some functions use.
+  fThd = thd;
   Item **arg,**arg_end;
 #ifndef EMBEDDED_LIBRARY			// Avoid compiler warning
   uchar buff[STACK_BUFF_ALLOC];			// Max argument in function

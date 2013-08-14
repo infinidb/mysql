@@ -601,9 +601,29 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
     there's no need to rollback here as all transactions must
     be rolled back already
   */
-  if (hton->state == SHOW_OPTION_YES && hton->close_connection &&
-      thd_get_ha_data(thd, hton))
-    hton->close_connection(hton, thd);
+  //Not all storage engines can handle a close_connection() on startup, so...
+  //There's got to be a better way to do this. ha_resolve_by_name() doesn't seem to work.
+  // @InfiniDB
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+  if ((*plugin)->name.length == 8 && strncmp((*plugin)->name.str, "InfiniDB", 8) == 0)
+#else
+  if (plugin->name.length == 8 && strncmp(plugin->name.str, "InfiniDB", 8) == 0)
+#endif
+  {
+    if (hton->state == SHOW_OPTION_YES && hton->close_connection)
+    {
+      hton->close_connection(hton, thd);
+    }
+  }
+  else
+  {
+    if (hton->state == SHOW_OPTION_YES && hton->close_connection &&
+        thd_get_ha_data(thd, hton))
+    {
+      hton->close_connection(hton, thd);
+    }
+  }
+
   return FALSE;
 }
 
@@ -1094,7 +1114,9 @@ int ha_commit_trans(THD *thd, bool all)
     flags will not get propagated to its normal transaction's
     counterpart.
   */
-  DBUG_ASSERT(thd->transaction.stmt.ha_list == NULL ||
+  // @InfiniDB
+	if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_ALTER_VTABLE && thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+		  DBUG_ASSERT(thd->transaction.stmt.ha_list == NULL ||
               trans == &thd->transaction.stmt);
 
   if (thd->in_sub_stmt)
@@ -1118,7 +1140,11 @@ int ha_commit_trans(THD *thd, bool all)
     DBUG_RETURN(2);
   }
 #ifdef USING_TRANSACTIONS
-  if (ha_info)
+
+	// @bug 1809. Skip commit/rollback with vtable transaction
+	// @bug 2106. Follow the normal transaction path for table mode
+  if (ha_info && (thd->infinidb_vtable.vtable_state == THD::INFINIDB_INIT || 
+  	              thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE))
   {
     uint rw_ha_count;
     bool rw_trans;

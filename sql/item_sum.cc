@@ -356,7 +356,7 @@ bool Item_sum::register_sum_func(THD *thd, Item **ref)
 
 
 Item_sum::Item_sum(List<Item> &list) :arg_count(list.elements), 
-  forced_const(FALSE)
+  forced_const(FALSE), IDB_thd(0)
 {
   if ((args=(Item**) sql_alloc(sizeof(Item*)*arg_count)))
   {
@@ -389,7 +389,8 @@ Item_sum::Item_sum(THD *thd, Item_sum *item):
   quick_group(item->quick_group),
   arg_count(item->arg_count), orig_args(NULL),
   used_tables_cache(item->used_tables_cache),
-  forced_const(item->forced_const) 
+  forced_const(item->forced_const),
+  IDB_thd(thd)
 {
   if (arg_count <= 2)
   {
@@ -414,6 +415,8 @@ void Item_sum::mark_as_sum_func()
   cur_select->n_sum_items++;
   cur_select->with_sum_func= 1;
   with_sum_func= 1;
+  // @InfiniDB. Store thd pointer for future reference.
+  IDB_thd = current_thd;
 }
 
 
@@ -3220,7 +3223,17 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   result.set_charset(collation.collation);
 }
 
-
+//@InfiniDB. Moved this function to .cc file to access select_lex.
+enum_field_types Item_func_group_concat::field_type() const
+{
+	if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB &&
+	   !(context && context->select_lex && context->select_lex->join &&
+	    context->select_lex->join->thd &&
+	    context->select_lex->join->thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE))
+	    return MYSQL_TYPE_BLOB;
+	else
+		return MYSQL_TYPE_VARCHAR;
+}
 
 void Item_func_group_concat::cleanup()
 {

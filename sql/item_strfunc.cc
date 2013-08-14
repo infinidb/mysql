@@ -2043,6 +2043,10 @@ Item_func_format::Item_func_format(Item *org, Item *dec)
 void Item_func_format::fix_length_and_dec()
 {
   uint char_length= args[0]->max_length/args[0]->collation.collation->mbmaxlen;
+  //@InfiniDB. @bug3488, update max_length for formatting double data.
+  if (args[0]->result_type() == REAL_RESULT && char_length < 310)
+    char_length = 310;
+
   uint max_sep_count= char_length/3 + (decimals ? 1 : 0) + /*sign*/1;
   collation.set(default_charset());
   max_length= (char_length + max_sep_count + decimals) *
@@ -2378,6 +2382,16 @@ void Item_func_repeat::fix_length_and_dec()
   {
     /* must be longlong to avoid truncation */
     longlong count= args[1]->val_int();
+    
+    // @InfiniDB. For negative count, MySQL returns empty string, IDB returns NULL.
+    // set length to 0 so order by can go through
+    if (count < 0 && fThd && (fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0))
+    {
+      max_length = 0;
+      maybe_null = 1;
+      return;
+    }
 
     /* Assumes that the maximum length of a String is < INT_MAX32. */
     /* Set here so that rest of code sees out-of-bound value as such. */
@@ -2392,9 +2406,15 @@ void Item_func_repeat::fix_length_and_dec()
     }
     max_length= (ulong) max_result_length;
   }
+  
   else
   {
-    max_length= MAX_BLOB_WIDTH;
+    // @InfiniDB. For dynamic (column) count, IDB sets length 256 for order by to go through
+    if (fThd && fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0)
+      max_length = 256;
+    else 
+      max_length = MAX_BLOB_WIDTH;
     maybe_null= 1;
   }
 }

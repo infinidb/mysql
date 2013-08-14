@@ -3163,7 +3163,11 @@ void Item_func_timestamp_diff::print(String *str, enum_query_type query_type)
     str->append(STRING_WITH_LEN("SECOND"));
     break;		
   case INTERVAL_MICROSECOND:
-    str->append(STRING_WITH_LEN("SECOND_FRAC"));
+    // @infinidb bug4291.
+    if (query_type == QT_INFINIDB || query_type == QT_INFINIDB_NO_QUOTE)
+	str->append(STRING_WITH_LEN("MICROSECOND"));
+    else
+	str->append(STRING_WITH_LEN("SECOND_FRAC"));
     break;
   default:
     break;

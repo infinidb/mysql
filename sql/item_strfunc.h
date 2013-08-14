@@ -584,7 +584,13 @@ public:
   {
     collation.set(default_charset());
     decimals=0;
-    max_length=args[0]->max_length*2*collation.collation->mbmaxlen;
+    // InfiniDB fix max length to be 16 for numeric argument
+    if (args[0]->result_type() == DECIMAL_RESULT ||
+    	   args[0]->result_type() == REAL_RESULT ||
+    	   args[0]->result_type() == INT_RESULT)
+    	   max_length=16*collation.collation->mbmaxlen;
+    else
+    	max_length=args[0]->max_length*2*collation.collation->mbmaxlen;
   }
 };
 

@@ -759,6 +759,8 @@ public:
   const char* cast_type() const { return "char"; };
   String *val_str(String *a);
   void fix_length_and_dec();
+  // @InfiniDB. add accessor
+  int castLength() { return (int) cast_length; }
   virtual void print(String *str, enum_query_type query_type);
 };
 
@@ -913,6 +915,9 @@ public:
       return save_date_in_field(field);
     return Item_str_func::save_in_field(field, no_conversions);
   }
+  
+  // @InfiniDB add accessor
+  int get_sign() { return sign; }
 };
 
 class Item_func_timediff :public Item_str_timefunc
@@ -958,8 +963,8 @@ public:
 
 class Item_func_timestamp_diff :public Item_int_func
 {
-  const interval_type int_type;
 public:
+  const interval_type int_type; // @InfiniDB keep in public
   Item_func_timestamp_diff(Item *a,Item *b,interval_type type_arg)
     :Item_int_func(a,b), int_type(type_arg) {}
   const char *func_name() const { return "timestampdiff"; }

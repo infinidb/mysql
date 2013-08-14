@@ -2755,20 +2755,45 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 
     if (!(sql_field->flags & NOT_NULL_FLAG))
       null_fields++;
+		
+		// @bug 2097. Trim trailing spaces for vtable
+		if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+		{
+			char* tmp = (char*)sql_field->field_name;
 
-    if (check_column_name(sql_field->field_name))
+			for (int i = strlen(tmp)-1; i >=0; i--)
+			{
+				if (tmp[i] == ' ')
+				{
+					tmp[i] = 0;
+				}
+				else
+					break;
+			} 
+		}
+		// @bug 3708. Skip the column name checking for vtable creation.
+    else if (check_column_name(sql_field->field_name))
     {
       my_error(ER_WRONG_COLUMN_NAME, MYF(0), sql_field->field_name);
       DBUG_RETURN(TRUE);
     }
 
     /* Check if we have used the same field name before */
-    for (dup_no=0; (dup_field=it2++) != sql_field; dup_no++)
+   	for (dup_no=0; (dup_field=it2++) != sql_field; dup_no++)
     {
       if (my_strcasecmp(system_charset_info,
 			sql_field->field_name,
 			dup_field->field_name) == 0)
       {
+      	// @bug 1928. Ignore duplicate field name error for now. Adjust the field name in get_plan and redo phase 1.
+      	if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE ||
+      		  thd->infinidb_vtable.vtable_state == THD::INFINIDB_ALTER_VTABLE ||
+      		  thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1 ||
+      		  thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_QUERY) // @bug 3952. non-IDB table redo query
+      	{
+      		//thd->infinidb_vtable.duplicate_field_name = true;
+      		break;
+      	}
 	/*
 	  If this was a CREATE ... SELECT statement, accept a field
 	  redefinition if we are changing a field in the SELECT part
@@ -2807,6 +2832,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	}
       }
     }
+
     /* Don't pack rows in old tables if the user has requested this */
     if ((sql_field->flags & BLOB_FLAG) ||
 	(sql_field->sql_type == MYSQL_TYPE_VARCHAR &&

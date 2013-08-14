@@ -1,3 +1,6 @@
+#
+# $Id: configure.in 9335 2013-03-24 01:38:28Z wweeks $
+#
 dnl -*- ksh -*-
 dnl Process this file with autoconf to produce a configure script.
 
@@ -1829,7 +1832,7 @@ if test "$with_comment" != "no"
 then
   COMPILATION_COMMENT=$with_comment
 else
-  COMPILATION_COMMENT="Source distribution"
+  COMPILATION_COMMENT="Calpont InfiniDB Enterprise 4.0 Alpha (Commercial)"
 fi
 AC_SUBST(COMPILATION_COMMENT)
 

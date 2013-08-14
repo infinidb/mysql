@@ -172,12 +172,13 @@ static void prepare_record_for_error_message(int error, TABLE *table)
          multi-update because of view substitution
     1  - error
 */
-
+// @InfiniDB. Make conds argument reference to pointer so the optimization
+// result can be passed in to the InfiniDB connector.
 int mysql_update(THD *thd,
                  TABLE_LIST *table_list,
                  List<Item> &fields,
 		 List<Item> &values,
-                 COND *conds,
+                 COND *& conds,
                  uint order_num, ORDER *order,
 		 ha_rows limit,
 		 enum enum_duplicates handle_duplicates, bool ignore)
@@ -746,8 +747,14 @@ int mysql_update(THD *thd,
                   {
                     thd->killed= THD::KILL_QUERY;
                   };);
-  error= (killed_status == THD::NOT_KILLED)?  error : 1;
-  
+ // @Infinidb bug2540. @bug4790. change only for InfiniDB table.
+ // @bug5117. Add isInfiniDBDML to make sure it's InfiniDB dml stmt.
+  if (thd->infinidb_vtable.isInfiniDBDML)
+    if (killed_status != THD::NOT_KILLED || thd->is_error())
+      error= 1;
+  else
+    error= (killed_status == THD::NOT_KILLED)?  error : 1;
+	
   if (error &&
       will_batch &&
       (loc_error= table->file->exec_bulk_update(&dup_key_found)))
@@ -831,8 +838,11 @@ int mysql_update(THD *thd,
     char buff[STRING_BUFFER_USUAL_SIZE];
     my_snprintf(buff, sizeof(buff), ER(ER_UPDATE_INFO), (ulong) found, (ulong) updated,
 	    (ulong) thd->cuted_fields);
-    thd->row_count_func=
-      (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated;
+    //@Infinidb bug2936. not set row count to thd to push row count to the front. 
+    // @bug4790. Only change for InfiniDB table.
+    // @bug5117. Add isInfiniDBDML to make sure it's InfiniDB dml stmt.
+    if (!(thd->infinidb_vtable.isInfiniDBDML))
+      thd->row_count_func=(thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated;
     my_ok(thd, (ulong) thd->row_count_func, id, buff);
     DBUG_PRINT("info",("%ld records updated", (long) updated));
   }
@@ -1194,12 +1204,14 @@ reopen_tables:
 /*
   Setup multi-update handling and call SELECT to do the join
 */
+// @InfiniDB. Make conds argument reference to pointer so the optimization
+// result can be passed in to the InfiniDB connector.
 
 bool mysql_multi_update(THD *thd,
                         TABLE_LIST *table_list,
                         List<Item> *fields,
                         List<Item> *values,
-                        COND *conds,
+                        COND *& conds,
                         ulonglong options,
                         enum enum_duplicates handle_duplicates, bool ignore,
                         SELECT_LEX_UNIT *unit, SELECT_LEX *select_lex)
@@ -2117,8 +2129,10 @@ bool multi_update::send_eof()
     thd->first_successful_insert_id_in_prev_stmt : 0;
   my_snprintf(buff, sizeof(buff), ER(ER_UPDATE_INFO),
               (ulong) found, (ulong) updated, (ulong) thd->cuted_fields);
-  thd->row_count_func=
-    (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated;
+  //@Infinidb bug2936. not set row count on thd to push row count to the front
+  // @bug4790. only change for InfiniDB table
+  if (!(thd->infinidb_vtable.isInfiniDBDML))
+    thd->row_count_func= (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated;
   ::my_ok(thd, (ulong) thd->row_count_func, id, buff);
   DBUG_RETURN(FALSE);
 }

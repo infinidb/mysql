@@ -28,6 +28,7 @@
 #pragma implementation				// gcc: Class implementation
 #endif
 
+#include "iostream"
 #include "mysql_priv.h"
 #include "sql_select.h"
 #include "sql_cursor.h"
@@ -229,6 +230,8 @@ static Item *remove_additional_cond(Item* conds);
 static void add_group_and_distinct_keys(JOIN *join, JOIN_TAB *join_tab);
 static bool test_if_ref(Item_field *left_item,Item *right_item);
 
+// InfiniDB error constant
+const unsigned ERR_NON_IDB_TABLE = 7001;
 
 /**
   This handles SELECT with and without UNION.
@@ -826,13 +829,35 @@ JOIN::optimize()
     if (arena)
       thd->restore_active_arena(arena, &backup);
   }
-
-  conds= optimize_cond(this, conds, join_list, &cond_value);   
-  if (thd->is_error())
+	
+	// Turn off constant optimization if this is a redo query. The original query failed
+	// at plan generation possibly becuase the optimizer re-write.
+	// @bug 2547. Turn off optimizer for union part and subselect part to avoid redo phase.
+	// turn off optimizer for join key substitute outer join
+	/*if (!thd->infinidb_vtable.mysql_optimizer_off 
+		      && !union_part 
+		      && select_lex == &thd->lex->select_lex
+		      && (!conds || !conds->with_subselect)
+		      && !outer_join)*/
+	// InfiniDB: turn off the constant and join subsitute optimization for vtable mode now.
+	// It has been found so far that this optimization brings InfiniDB more harm than good.
+	if ((thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE) && ((thd->lex)->sql_command != SQLCOM_UPDATE ) && 
+		 ( (thd->lex)->sql_command != SQLCOM_UPDATE_MULTI ) && ( (thd->lex)->sql_command != SQLCOM_DELETE ) && ( (thd->lex)->sql_command != SQLCOM_DELETE_MULTI ) )
+	{
+  	conds= optimize_cond(this, conds, join_list, &cond_value);   
+  	if (thd->is_error())
+  	{
+    	error= 1;
+    	DBUG_PRINT("error",("Error from optimize_cond"));
+    	DBUG_RETURN(1);
+  	}
+  }
+  else
   {
-    error= 1;
-    DBUG_PRINT("error",("Error from optimize_cond"));
-    DBUG_RETURN(1);
+  	// @bug 2203. This variable was not initialized and will be set in optimize_cond.
+  	// Since we skipped optimization, we need to set the variable here. Otherwise it will
+  	// randomly return COND_FALSE and cause an "Impossible Where clause".
+  	cond_value = Item::COND_OK;
   }
 
   {
@@ -847,6 +872,8 @@ JOIN::optimize()
       select_lex->cond_value= cond_value;
     if (select_lex->having)
       select_lex->having_value= having_value;
+
+
 
     if (cond_value == Item::COND_FALSE || having_value == Item::COND_FALSE || 
         (!unit->select_limit_cnt && !(select_options & OPTION_FOUND_ROWS)))
@@ -909,6 +936,7 @@ JOIN::optimize()
       }
       if (res < 0)
       {
+
         DBUG_PRINT("info",("No matching min/max row"));
         zero_result_cause= "No matching min/max row";
         tables= 0;
@@ -970,13 +998,16 @@ JOIN::optimize()
       !(select_options & SELECT_DESCRIBE) &&
       (!conds ||
        !(conds->used_tables() & RAND_TABLE_BIT) ||
-       select_lex->master_unit() == &thd->lex->unit)) // upper level SELECT
+       select_lex->master_unit() == &thd->lex->unit) &&  // upper level SELECT
+       !thd->infinidb_vtable.isUpdateWithDerive ) // @bug4027. Do not let zero_result_cause set for IDB update
   {
     zero_result_cause= "no matching row in const table";
     DBUG_PRINT("error",("Error: %s", zero_result_cause));
     error= 0;
     DBUG_RETURN(0);
   }
+  thd->infinidb_vtable.isUpdateWithDerive = false; // reset
+  
   if (!(thd->options & OPTION_BIG_SELECTS) &&
       best_read > (double) thd->variables.max_join_size &&
       !(select_options & SELECT_DESCRIBE))
@@ -1042,6 +1073,7 @@ JOIN::optimize()
   {
     conds=new Item_int((longlong) 0,1);	// Always false
   }
+
   if (make_join_select(this, select, conds))
   {
     zero_result_cause=
@@ -1054,7 +1086,11 @@ JOIN::optimize()
   /* Optimize distinct away if possible */
   {
     ORDER *org_order= order;
-    order=remove_const(this, order,conds,1, &simple_order);
+    // @bug 3961. mysql treat subquery (with other engine?) as const table so will 
+    // remove the columns from the subquery on the order by list. InfiniDB needs to 
+    // keep them for the post process. So skip remove_const optimization.
+    if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
+    	order=remove_const(this, order,conds,1, &simple_order);
     if (thd->is_error())
     {
       error= 1;
@@ -1191,8 +1227,10 @@ JOIN::optimize()
   }
   simple_group= 0;
   {
-    ORDER *old_group_list;
-    group_list= remove_const(this, (old_group_list= group_list), conds,
+    ORDER *old_group_list = 0;
+    // Calpont InfiniDB skip MySQL optimization of group by list. @bug1804.
+    if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
+    	group_list= remove_const(this, (old_group_list= group_list), conds,
                              rollup.state == ROLLUP::STATE_NONE,
 			     &simple_group);
     if (thd->is_error())
@@ -1249,7 +1287,12 @@ JOIN::optimize()
     - We are using different ORDER BY and GROUP BY orders
     - The user wants us to buffer the result.
   */
-  need_tmp= (const_tables != tables &&
+  // Calpont InfiniDB change. We don't need tmp table for vtable create phase. Plus
+  // to build tmp table may corrupt some field table_name & db_name (for some reason)
+  if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE)
+  	need_tmp = false;
+  else
+  	need_tmp= (const_tables != tables &&
 	     ((select_distinct || !simple_order || !simple_group) ||
 	      (group_list && order) ||
 	      test(select_options & OPTION_BUFFER_RESULT)));
@@ -1365,7 +1408,8 @@ JOIN::optimize()
                                     &join_tab[const_tables].table->
                                     keys_in_use_for_group_by))) ||
          select_distinct) &&
-        tmp_table_param.quick_group && !procedure)
+        tmp_table_param.quick_group && !procedure && 
+        thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
     {
       need_tmp=1; simple_order=simple_group=0;	// Force tmp table without sort
     }
@@ -1643,9 +1687,168 @@ JOIN::exec()
   List<Item> *columns_list= &fields_list;
   int      tmp_error;
   DBUG_ENTER("JOIN::exec");
-
+  
   thd_proc_info(thd, "executing");
   error= 0;
+  
+  // ------------------------------ Calpont InfiniDB ------------------------------
+	if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE/* && tables_list*/)
+	{
+		/* @InfiniDB We've found MySQL gives "Impossible Where" for such query:
+		 * select * from region where 1 in (select n_regionkey from nation);
+		 * which confused InfiniDB processing. Do not redo query if the query has subselect.
+		 */
+		if (zero_result_cause 
+			  && !union_part // not in a union unit
+			  /* && select_lex == &thd->lex->select_lex && (!conds || !conds->with_subselect)*/
+			  && !(select_lex && select_lex->master_unit() && select_lex->master_unit()->item) // not a subselect unit
+			  && !(select_lex && select_lex->first_inner_unit()) // not a query with subselect 
+                          // @bug5083. zero_result_cause was not set properly for outer join on derived
+                          // table process phase.
+                          && !(thd->derived_tables_processing)
+			 )
+		{
+			// @bug 1818. Make MySQL redo this query and return empty result set without going
+			// to Calpont engine.
+			thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
+			DBUG_VOID_RETURN;
+		}
+
+		// by pass MySQL union trips
+		if (thd->infinidb_vtable.isUnion)
+		DBUG_VOID_RETURN;
+
+		//@todo special api to send plan
+		TABLE_LIST* tl = tables_list;
+		bool hasCalpont = false;
+		bool hasNonCalpont = false;
+		TABLE_LIST* IDBtable = NULL;
+		
+		// @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
+		TABLE_LIST* global_list = thd->lex->query_tables;
+		
+		for (; global_list; global_list = global_list->next_global)
+		{
+			//if (!global_list->table || !global_list->table->s->db_plugin)
+			if (!(global_list->table && global_list->table->s && global_list->table->s->db_plugin))
+				continue;
+			//Windows never has SAFE_MUTEX defined...
+			// @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union" 
+			if (global_list->table && global_list->table->isInfiniDB())
+			{
+				hasCalpont = true;
+				IDBtable = global_list;
+				continue;
+			}
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+			else if (global_list->table &&
+				       global_list->table->s &&
+				       global_list->table->s->db_plugin &&
+				       strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+#else
+			else if (global_list->table &&
+				       global_list->table->s &&
+				       global_list->table->s->db_plugin &&
+				       strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+#endif				
+			{
+				continue;
+			}
+			else
+			{
+				hasNonCalpont = true;
+			}
+		}
+
+		// @bug 2839. only memory table in table list. redo_query.
+		if (!hasCalpont)
+		{
+			thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
+			DBUG_VOID_RETURN;
+		}
+		// @InfiniDB. Cross engine support
+		else if (/*hasNonCalpont && hasCalpont*/false)
+		{
+			const char* emsg = "IDB-7001: Non InfiniDB table(s) on the FROM clause.";
+			thd->infinidb_vtable.vtable_state = THD::INFINIDB_ERROR;
+			if (!thd->infinidb_vtable.autoswitch)
+			{
+				thd->killed = THD::KILL_QUERY;
+				thd->main_da.can_overwrite_status = true;
+				thd->main_da.set_error_status(thd, ER_UNKNOWN_ERROR, emsg);
+			}
+			else
+			{
+				thd->main_da.can_overwrite_status = true;
+				push_warning(thd, MYSQL_ERROR::WARN_LEVEL_WARN, 9999, emsg);
+			}
+			DBUG_VOID_RETURN;
+		}
+
+		if (tables_list && tables_list->table && tables_list->table->isInfiniDB())
+			// ZZ: In deriived_tables_processing phase, the plan out of mysql's optimizer may not be
+			// complete. IDB will skip the phase in case of plan error instead of error out, so
+			// MySQL will continue it's optimization. Now the first table in tables_list may not
+			// be an IDB table (could be a derived table, for example). In such case, we use an IDB table
+			// to trigger rnd_init; otherwise, still use the first table in the list.
+			// @todo always use IDBtable without checking the first table. Still have some plan
+			// mistery to solve.
+			IDBtable = tables_list;
+		if (IDBtable && IDBtable->table && IDBtable->table->file && IDBtable->table->file->ha_rnd_init(1))
+				thd->infinidb_vtable.vtable_state = THD::INFINIDB_ERROR;
+		
+		for (global_list = thd->lex->query_tables; global_list; global_list = global_list->next_global)
+		{
+			if (global_list->table && global_list->table->file)
+				global_list->table->file->inited = handler::NONE;
+		}
+
+	// @bug 2547
+	if (zero_result_cause)
+	{
+		tl = tables_list;
+		
+			for (; tl; tl= tl->next_global)
+			{
+				// @InfiniDB. Bug4422. Need to check all pointer not null
+				if (tl->table && tl->table->file)
+					tl->table->file->inited = handler::NONE;
+			}
+		}
+		DBUG_VOID_RETURN;
+	}
+  
+  // for some derived table case, mysql make tables_list empty.
+  // example: select count(*) from (select * from nation) a;
+  else if (!(thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE) && 
+  	         thd->lex &&
+  	         thd->lex->derived_tables && 
+  	         thd->infinidb_vtable.isUnion)
+  {
+  	//thd->infinidb_vtable.isUnion = false; // imply derived table
+  	DBUG_VOID_RETURN;
+  }
+  else if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE 
+  	 && !tables_list 
+  	 && !union_part
+  	 && thd->lex
+  	 && select_lex == &thd->lex->select_lex) // from dual case
+  {
+  	thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
+  	DBUG_VOID_RETURN;
+  }
+  else if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1)
+  {
+  	if (!union_part)
+  	{
+  		thd->infinidb_vtable.vtable_state = THD::INFINIDB_CREATE_VTABLE;
+  		thd->infinidb_vtable.isUnion = true; // make it skip rnd_init for redo phase.
+  	}
+  	DBUG_VOID_RETURN;
+  }
+  
   if (procedure)
   {
     procedure_fields_list= fields_list;
@@ -2207,7 +2410,7 @@ JOIN::exec()
                          *curr_fields_list),
                         Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF);
     error= do_select(curr_join, curr_fields_list, NULL, procedure);
-    thd->limit_found_rows= curr_join->send_records;
+    thd->limit_found_rows= curr_join->send_records; // ZZ : 5
   }
 
   /* Accumulate the counts from all join iterations of all join parts. */
@@ -2413,13 +2616,14 @@ mysql_select(THD *thd, Item ***rref_pointer_array,
     select_lex->having= join->having_history;
   }
 
-err:
+err: 		
   if (free_join)
   {
     thd_proc_info(thd, "end");
     err|= select_lex->cleanup();
     DBUG_RETURN(err || thd->is_error());
   }
+  
   DBUG_RETURN(join->error);
 }
 
@@ -3326,6 +3530,7 @@ add_key_fields(JOIN *join, KEY_FIELD **key_fields, uint *and_level,
                COND *cond, table_map usable_tables,
                SARGABLE_PARAM **sargables)
 {
+	if (!cond) return;
   if (cond->type() == Item_func::COND_ITEM)
   {
     List_iterator_fast<Item> li(*((Item_cond*) cond)->argument_list());
@@ -6093,10 +6298,14 @@ make_join_select(JOIN *join,SQL_SELECT *select,COND *cond)
             cond_tab->select_cond->quick_fix_field();
           }       
         }
-        if (const_cond && !const_cond->val_int())
+        // @InfiniDB skip the check for inifinidb queries
+        if (!(thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE))
         {
-	  DBUG_PRINT("info",("Found impossible WHERE condition"));
-	  DBUG_RETURN(1);	 // Impossible const condition
+          if (const_cond && !const_cond->val_int())
+          {
+	    DBUG_PRINT("info",("Found impossible WHERE condition"));
+	    DBUG_RETURN(1);	 // Impossible const condition
+          }
         }
       }
     }
@@ -6381,6 +6590,7 @@ make_join_select(JOIN *join,SQL_SELECT *select,COND *cond)
         {
           current_map= tab->table->map;
           used_tables2|= current_map;
+          if (!on_expr) continue;
           COND *tmp_cond= make_cond_for_table(on_expr, used_tables2,
                                              current_map);
           if (tmp_cond)
@@ -8177,7 +8387,8 @@ static COND* substitute_for_best_equal_field(COND *cond,
       cond_equal= 0;
     return eliminate_item_equal(0, cond_equal, item_equal);
   }
-  else
+  // Calpont InfiniDB skip MySQL optimzation for substitute_best_equal. @bug 1680.		
+  else if (current_thd && current_thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
     cond->transform(&Item::replace_equal_field, 0);
   return cond;
 }
@@ -9551,6 +9762,7 @@ Field *create_tmp_field(THD *thd, TABLE *table,Item *item, Item::Type type,
   }
   /* Fall through */
   case Item::FUNC_ITEM:
+  case Item::WINDOW_FUNC_ITEM:
     if (((Item_func *) item)->functype() == Item_func::FUNC_SP)
     {
       Item_func_sp *item_func_sp= (Item_func_sp *) item;
@@ -9603,7 +9815,7 @@ Field *create_tmp_field(THD *thd, TABLE *table,Item *item, Item::Type type,
                                       (make_copy_field ? 0 : copy_func),
                                        modify_item, convert_blob_length);
   case Item::TYPE_HOLDER:  
-    result= ((Item_type_holder *)item)->make_field_by_type(table);
+    result= ((Item_type_holder *)item)->make_field_by_type(table, thd); //@infinidb pass in thd
     result->set_derivation(item->collation.derivation);
     return result;
   default:					// Dosen't have to be stored
@@ -10198,9 +10410,9 @@ create_tmp_table(THD *thd,TMP_TABLE_PARAM *param,List<Item> &fields,
       bool maybe_null=(*cur_group->item)->maybe_null;
       key_part_info->null_bit=0;
       key_part_info->field=  field;
-      key_part_info->offset= field->offset(table->record[0]);
-      key_part_info->length= (uint16) field->key_length();
-      key_part_info->type=   (uint8) field->key_type();
+     	key_part_info->offset= field->offset(table->record[0]);
+     	key_part_info->length= (uint16) field->key_length();
+     	key_part_info->type=   (uint8) field->key_type();
       key_part_info->key_type =
 	((ha_base_keytype) key_part_info->type == HA_KEYTYPE_TEXT ||
 	 (ha_base_keytype) key_part_info->type == HA_KEYTYPE_VARTEXT1 ||
@@ -16661,6 +16873,8 @@ void st_select_lex::print(THD *thd, String *str, enum_query_type query_type)
     from clause
     TODO: support USING/FORCE/IGNORE index
   */
+  //printf("before from: %s\n\n", str->ptr());
+
   if (table_list.elements)
   {
     str->append(STRING_WITH_LEN(" from "));
@@ -16676,7 +16890,12 @@ void st_select_lex::print(THD *thd, String *str, enum_query_type query_type)
     str->append(STRING_WITH_LEN(" from DUAL "));
   }
 
+	// InfiniDB skip WHERE clause and after. the print functions are
+	// Called just for post process vtable creation. 
+	if (query_type == QT_INFINIDB_NO_QUOTE)
+		return;
   // Where
+  //printf("before where: %s\n\n", str->ptr());
   Item *cur_where= where;
   if (join)
     cur_where= join->conds;
@@ -16688,6 +16907,7 @@ void st_select_lex::print(THD *thd, String *str, enum_query_type query_type)
     else
       str->append(cond_value != Item::COND_FALSE ? "1" : "0");
   }
+  //printf("after where: %s\n\n", str->ptr());
 
   // group by & olap
   if (group_list.elements)

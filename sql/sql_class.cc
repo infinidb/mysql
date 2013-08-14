@@ -576,7 +576,7 @@ THD::THD()
   locked=some_tables_deleted=no_errors=password= 0;
   query_start_used= 0;
   count_cuted_fields= CHECK_FIELD_IGNORE;
-  killed= NOT_KILLED;
+  killed= NOT_KILLED;  
   col_access=0;
   is_slave_error= thread_specific_used= FALSE;
   hash_clear(&handler_tables_hash);
@@ -671,6 +671,25 @@ THD::THD()
   thr_lock_owner_init(&main_lock_id, &lock_info);
 
   m_internal_handler= NULL;
+  
+  // ------------------------------ Calpont InfiniDB ------------------------------
+  infinidb_vtable.vtable_state = INFINIDB_INIT;
+  infinidb_vtable.has_order_by = false;
+	infinidb_vtable.mysql_optimizer_off = false;
+	infinidb_vtable.duplicate_field_name = false;
+	infinidb_vtable.autoswitch = false;
+  if (variables.infinidb_vtable_mode == 0)
+  	infinidb_vtable.vtable_state = INFINIDB_DISABLE_VTABLE;
+  else if (variables.infinidb_vtable_mode == 2)
+		infinidb_vtable.autoswitch = true;  
+	infinidb_vtable.call_sp = false;
+	infinidb_vtable.override_largeside_estimate = false;
+	infinidb_vtable.cal_conn_info = 0;
+	infinidb_vtable.isUnion = false;
+	infinidb_vtable.impossibleWhereOnUnion = false;
+	infinidb_vtable.isUpdateWithDerive = false;
+	infinidb_vtable.isInfiniDBDML = false;
+  // ------------------------------ Calpont InfiniDB ------------------------------
 }
 
 

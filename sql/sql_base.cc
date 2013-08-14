@@ -2199,6 +2199,10 @@ bool name_lock_locked_table(THD *thd, TABLE_LIST *tables)
 {
   DBUG_ENTER("name_lock_locked_table");
 
+	// @infinidb
+	if (tables->alias && tables->alias[0] == '$')
+		DBUG_RETURN(TRUE);
+
   /* Under LOCK TABLES we must only accept write locked tables. */
   tables->table= find_locked_table(thd, tables->db, tables->table_name);
 
@@ -2682,6 +2686,8 @@ TABLE *open_table(THD *thd, TABLE_LIST *table_list, MEM_ROOT *mem_root,
       so we may only end up here if the table did not exist when
       locked tables list was created.
     */
+    if (table_list->alias && table_list->alias[0] == '$')
+    	DBUG_RETURN(table);
     if (thd->prelocked_mode == PRELOCKED)
       my_error(ER_NO_SUCH_TABLE, MYF(0), table_list->db, table_list->alias);
     else
@@ -4697,8 +4703,10 @@ int open_tables(THD *thd, TABLE_LIST **start, uint *counter, uint flags)
     }
     tables->table->grant= tables->grant;
 
+    // @InfiniDB relax checking for vtable create with prepare stmt execute
     /* Check and update metadata version of a base table. */
-    if (check_and_update_table_version(thd, tables, tables->table->s))
+    if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE &&
+        check_and_update_table_version(thd, tables, tables->table->s))
     {
       result= -1;
       goto err;

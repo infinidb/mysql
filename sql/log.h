@@ -279,8 +279,8 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   void new_file_impl(bool need_lock);
 
 public:
-  MYSQL_LOG::generate_name;
-  MYSQL_LOG::is_open;
+  using MYSQL_LOG::generate_name;
+  using MYSQL_LOG::is_open;
 
   /* This is relay log */
   bool is_relay_log;

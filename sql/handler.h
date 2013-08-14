@@ -24,6 +24,12 @@
 #include <ft_global.h>
 #include <keycache.h>
 
+#ifdef _MSC_VER
+#ifndef STDINT_H
+typedef unsigned long long uint64_t;
+#endif
+#endif
+
 #ifndef NO_HASH
 #define NO_HASH				/* Not yet implemented */
 #endif
@@ -673,6 +679,8 @@ struct handlerton
    int (*fill_files_table)(handlerton *hton, THD *thd,
                            TABLE_LIST *tables,
                            class Item *cond);
+   void (*set_error)(THD*, uint64_t errCode, LEX_STRING*, uint argCount); //@InfiniDB Window Function Error util
+
    uint32 flags;                                /* global handler flags */
    /*
       Those handlerton functions below are properly initialized at handler

@@ -1272,6 +1272,7 @@ void clean_up(bool print_message)
   item_user_lock_free();
   lex_free();				/* Free some memory */
   item_create_cleanup();
+  item_window_function_create_cleanup();  // @InfiniDB
   set_var_free();
   free_charsets();
   if (!opt_noacl)
@@ -3339,6 +3340,8 @@ static int init_common_variables(const char *conf_file_name, int argc,
   init_client_errs();
   lex_init();
   if (item_create_init())
+    return 1;
+  if (item_window_function_create_init()) //@InfiniDB
     return 1;
   item_init();
   if (set_var_init())
@@ -5662,7 +5665,17 @@ enum options_mysqld
   OPT_SLAVE_EXEC_MODE,
   OPT_GENERAL_LOG_FILE,
   OPT_SLOW_QUERY_LOG_FILE,
-  OPT_IGNORE_BUILTIN_INNODB
+  OPT_IGNORE_BUILTIN_INNODB,
+  /* InfiniDB */
+  OPT_INFINIDB_VTABLE_MODE,
+  OPT_INFINIDB_DECIMAL_SCALE,
+  OPT_INFINIDB_USE_DECIMAL_SCALE,
+  OPT_INFINIDB_ORDERED_ONLY,
+  OPT_INFINIDB_STRING_SCAN_THRESHOLD,
+  OPT_INFINIDB_COMPRESSION_TYPE,
+  OPT_INFINIDB_STRINGTABLE_THRESHOLD,
+  OPT_INFINIDB_VARBIN_ALWAYS_HEX,
+  /* InfiniDB */
 };
 
 
@@ -6871,6 +6884,107 @@ The minimum value for this variable is 4096.",
    (uchar**) &max_system_variables.read_rnd_buff_size, 0,
    GET_ULONG, REQUIRED_ARG, 256*1024L, IO_SIZE*2+MALLOC_OVERHEAD,
    INT_MAX32, MALLOC_OVERHEAD, IO_SIZE, 0},
+
+/* InfiniDB */
+  {"infinidb_vtable_mode", OPT_INFINIDB_VTABLE_MODE,
+   "The default mode in which to start InfiniDB.",
+   (uchar**) &global_system_variables.infinidb_vtable_mode,
+   (uchar**) &max_system_variables.infinidb_vtable_mode, 0,
+   GET_ULONG, REQUIRED_ARG,
+	1, /* Default value */
+	0, /* Min allowed value */
+	2, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_decimal_scale", OPT_INFINIDB_DECIMAL_SCALE,
+   "The default decimal precision for calculated column suboperations in InfiniDB.",
+   (uchar**) &global_system_variables.infinidb_decimal_scale,
+   (uchar**) &max_system_variables.infinidb_decimal_scale, 0,
+   GET_ULONG, REQUIRED_ARG,
+	8, /* Default value */
+	0, /* Min allowed value */
+	18, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+	// InfiniDB boolean variable
+  {"infinidb_use_decimal_scale", OPT_INFINIDB_USE_DECIMAL_SCALE,
+   "Enable/disable the InfiniDB decimal scale to be used internally",
+   (uchar**)&global_system_variables.infinidb_use_decimal_scale,
+   (uchar**)&max_system_variables.infinidb_use_decimal_scale,
+        0, GET_BOOL, NO_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	1, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+	// InfiniDB boolean variable - use first table in from clause as large side table in joins
+  {"infinidb_ordered_only", OPT_INFINIDB_ORDERED_ONLY,
+   "Always use the first table in the from clause as the large side table for joins",
+   NULL,  NULL, 0, GET_STR, OPT_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	0, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	0, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_string_scan_threshold", OPT_INFINIDB_STRING_SCAN_THRESHOLD,
+   "Max number of blocks in a dictionary file to be scanned for filtering",
+   (uchar**) &global_system_variables.infinidb_string_scan_threshold,
+   (uchar**) &max_system_variables.infinidb_string_scan_threshold, 0,
+   GET_ULONG, REQUIRED_ARG,
+	10, /* Default value */
+	0, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	0, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_compression_type", OPT_INFINIDB_COMPRESSION_TYPE,
+   "The column compression algorithm to use for InfiniDB tables.",
+   (uchar**) &global_system_variables.infinidb_compression_type,
+   (uchar**) &max_system_variables.infinidb_compression_type, 0,
+   GET_ULONG, REQUIRED_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_stringtable_threshold", OPT_INFINIDB_STRINGTABLE_THRESHOLD,
+   "The minimum width of a string column to be stored in a string table; min=9.",
+   (uchar**) &global_system_variables.infinidb_stringtable_threshold,
+   (uchar**) &max_system_variables.infinidb_stringtable_threshold, 0,
+   GET_ULONG, REQUIRED_ARG,
+	20, /* Default value */
+	9, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+	// InfiniDB boolean variable
+  {"infinidb_varbin_always_hex", OPT_INFINIDB_VARBIN_ALWAYS_HEX,
+   "Always display/process varbinary columns as if they have been hexified.",
+   (uchar**)&global_system_variables.infinidb_varbin_always_hex,
+   (uchar**)&max_system_variables.infinidb_varbin_always_hex,
+        0, GET_BOOL, NO_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	1, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+/* InfiniDB */
+
   {"record_buffer", OPT_RECORD_BUFFER,
    "Alias for read_buffer_size",
    (uchar**) &global_system_variables.read_buff_size,

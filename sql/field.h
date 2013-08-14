@@ -612,7 +612,7 @@ public:
      The scale of the Field's value, i.e. the number of digits to the right
      of the decimal point.
   */
-  const uint8 dec;
+  /*const*/ uint8 dec; //@InfiniDB need to adjust this field due to vtable restriction
   bool zerofill,unsigned_flag;	// Purify cannot handle bit fields
   Field_num(uchar *ptr_arg,uint32 len_arg, uchar *null_ptr_arg,
 	    uchar null_bit_arg, utype unireg_check_arg,

@@ -65,6 +65,11 @@ typedef struct st_order {
   Field  *field;			/* If tmp-table group */
   char	 *buff;				/* If tmp-table group */
   table_map used, depend_map;
+  uint   nulls;                         /* @InfiniDB. For window function order by clause 
+                                           2 -- not definied. default nulls last if ascending
+                                                default nulls first if descending
+                                           1 -- nulls first
+                                           0 -- nulls last */
 } ORDER;
 
 /**
@@ -817,6 +822,17 @@ struct st_table {
   void mark_columns_needed_for_update(void);
   void mark_columns_needed_for_delete(void);
   void mark_columns_needed_for_insert(void);
+  // @Infinidb if this is InfiniDB table.
+  inline bool isInfiniDB()
+  {
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+    if (s && s->db_plugin && (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0))
+#else
+    if (s && s->db_plugin && (strcmp(s->db_plugin->name.str, "InfiniDB") == 0))
+#endif
+      return true;
+    return false;
+  }
   inline void column_bitmaps_set(MY_BITMAP *read_set_arg,
                                  MY_BITMAP *write_set_arg)
   {
