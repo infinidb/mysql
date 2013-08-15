@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 #ifndef _my_sys_h
 #define _my_sys_h
 C_MODE_START
