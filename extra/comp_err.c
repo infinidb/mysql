@@ -684,6 +684,11 @@ static ha_checksum checksum_format_specifier(const char* msg)
   /* Add number of format specifiers to checksum as extra safeguard */
   chksum+= num_format_specifiers;
 
+//The gcc 4.4 on CentOS 6 doesn't seem to work right....
+#if defined(__GNUC__) && (GCC_VERSION == 4004)
+       chksum = 0;
+#endif
+
   return chksum;
 }
 
