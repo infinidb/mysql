@@ -217,8 +217,9 @@ static int com_quit(String *str,char*),
 
 #ifdef USE_POPEN
 static int com_nopager(String *str, char*), com_pager(String *str, char*),
-           com_edit(String *str,char*), com_shell(String *str, char *);
+           com_edit(String *str,char*);
 #endif
+static int com_shell(String *str, char *);
 
 static int read_and_execute(bool interactive);
 static int sql_connect(char *host,char *database,char *user,char *password,
@@ -279,9 +280,9 @@ static COMMANDS commands[] = {
   { "source", '.', com_source, 1,
     "Execute an SQL script file. Takes a file name as an argument."},
   { "status", 's', com_status, 0, "Get status information from the server."},
-#ifdef USE_POPEN
+//#ifdef USE_POPEN
   { "system", '!', com_shell,  1, "Execute a system shell command."},
-#endif
+//#endif
   { "tee",    'T', com_tee,    1, 
     "Set outfile [to_outfile]. Append everything into given outfile." },
   { "use",    'u', com_use,    1,
@@ -3863,7 +3864,7 @@ com_rehash(String *buffer __attribute__((unused)),
 }
 
 
-#ifdef USE_POPEN
+//#ifdef USE_POPEN
 static int
 com_shell(String *buffer, char *line __attribute__((unused)))
 {
@@ -3888,7 +3889,7 @@ com_shell(String *buffer, char *line __attribute__((unused)))
   }
   return 0;
 }
-#endif
+//#endif
 
 
 static int
