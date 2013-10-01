@@ -28692,7 +28692,7 @@ if test "$with_comment" != "no"
 then
   COMPILATION_COMMENT=$with_comment
 else
-  COMPILATION_COMMENT="Source distribution"
+  COMPILATION_COMMENT="Calpont InfiniDB 4.0 Alpha (Commercial)"
 fi
 
 
@@ -45370,7 +45370,7 @@ echo "${ECHO_T}yes" >&6
           # autoconf doesn't provide an automatic way to configure DIST_SUBDIRS of
           # a subdir; for our purposes, it's enough to just check for existing
           # Makefile.am files and add them in here
-                                                                                                                                                                                                                                                                                                                                                              ac_config_files="$ac_config_files storage/ndb/docs/Makefile storage/ndb/include/Makefile storage/ndb/test/ndbapi/bank/Makefile storage/ndb/test/ndbapi/Makefile storage/ndb/test/src/Makefile storage/ndb/test/tools/Makefile storage/ndb/test/Makefile storage/ndb/test/run-test/Makefile storage/ndb/src/ndbapi/Makefile storage/ndb/src/mgmapi/Makefile storage/ndb/src/common/debugger/signaldata/Makefile storage/ndb/src/common/debugger/Makefile storage/ndb/src/common/mgmcommon/Makefile storage/ndb/src/common/portlib/Makefile storage/ndb/src/common/transporter/Makefile storage/ndb/src/common/logger/Makefile storage/ndb/src/common/Makefile storage/ndb/src/common/util/Makefile storage/ndb/src/mgmsrv/Makefile storage/ndb/src/Makefile storage/ndb/src/cw/cpcd/Makefile storage/ndb/src/cw/Makefile storage/ndb/src/kernel/blocks/dblqh/Makefile storage/ndb/src/kernel/blocks/dbdih/Makefile storage/ndb/src/kernel/blocks/dbdict/Makefile storage/ndb/src/kernel/blocks/backup/Makefile storage/ndb/src/kernel/blocks/Makefile storage/ndb/src/kernel/blocks/dbtup/Makefile storage/ndb/src/kernel/error/Makefile storage/ndb/src/kernel/vm/Makefile storage/ndb/src/kernel/Makefile storage/ndb/src/mgmclient/Makefile storage/ndb/tools/Makefile storage/ndb/Makefile"
+                                                                                                                                                                                                                                                                                                                                                              ac_config_files="$ac_config_files storage/ndb/test/run-test/Makefile storage/ndb/test/Makefile storage/ndb/test/src/Makefile storage/ndb/test/tools/Makefile storage/ndb/test/ndbapi/Makefile storage/ndb/test/ndbapi/bank/Makefile storage/ndb/docs/Makefile storage/ndb/include/Makefile storage/ndb/Makefile storage/ndb/src/mgmsrv/Makefile storage/ndb/src/Makefile storage/ndb/src/kernel/vm/Makefile storage/ndb/src/kernel/Makefile storage/ndb/src/kernel/error/Makefile storage/ndb/src/kernel/blocks/dbdict/Makefile storage/ndb/src/kernel/blocks/backup/Makefile storage/ndb/src/kernel/blocks/Makefile storage/ndb/src/kernel/blocks/dbtup/Makefile storage/ndb/src/kernel/blocks/dbdih/Makefile storage/ndb/src/kernel/blocks/dblqh/Makefile storage/ndb/src/mgmclient/Makefile storage/ndb/src/mgmapi/Makefile storage/ndb/src/ndbapi/Makefile storage/ndb/src/common/util/Makefile storage/ndb/src/common/Makefile storage/ndb/src/common/transporter/Makefile storage/ndb/src/common/mgmcommon/Makefile storage/ndb/src/common/portlib/Makefile storage/ndb/src/common/debugger/Makefile storage/ndb/src/common/debugger/signaldata/Makefile storage/ndb/src/common/logger/Makefile storage/ndb/src/cw/Makefile storage/ndb/src/cw/cpcd/Makefile storage/ndb/tools/Makefile"
 
 
 
@@ -52065,40 +52065,40 @@ do
   "storage/innodb_plugin/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/innodb_plugin/Makefile" ;;
   "storage/myisam/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/myisam/Makefile" ;;
   "storage/myisammrg/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/myisammrg/Makefile" ;;
-  "storage/ndb/docs/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/docs/Makefile" ;;
-  "storage/ndb/include/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/include/Makefile" ;;
-  "storage/ndb/test/ndbapi/bank/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/ndbapi/bank/Makefile" ;;
-  "storage/ndb/test/ndbapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/ndbapi/Makefile" ;;
+  "storage/ndb/test/run-test/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/run-test/Makefile" ;;
+  "storage/ndb/test/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/Makefile" ;;
   "storage/ndb/test/src/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/src/Makefile" ;;
   "storage/ndb/test/tools/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/tools/Makefile" ;;
-  "storage/ndb/test/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/Makefile" ;;
-  "storage/ndb/test/run-test/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/run-test/Makefile" ;;
-  "storage/ndb/src/ndbapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/ndbapi/Makefile" ;;
-  "storage/ndb/src/mgmapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/mgmapi/Makefile" ;;
-  "storage/ndb/src/common/debugger/signaldata/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/debugger/signaldata/Makefile" ;;
-  "storage/ndb/src/common/debugger/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/debugger/Makefile" ;;
-  "storage/ndb/src/common/mgmcommon/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/mgmcommon/Makefile" ;;
-  "storage/ndb/src/common/portlib/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/portlib/Makefile" ;;
-  "storage/ndb/src/common/transporter/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/transporter/Makefile" ;;
-  "storage/ndb/src/common/logger/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/logger/Makefile" ;;
-  "storage/ndb/src/common/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/Makefile" ;;
-  "storage/ndb/src/common/util/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/util/Makefile" ;;
+  "storage/ndb/test/ndbapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/ndbapi/Makefile" ;;
+  "storage/ndb/test/ndbapi/bank/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/test/ndbapi/bank/Makefile" ;;
+  "storage/ndb/docs/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/docs/Makefile" ;;
+  "storage/ndb/include/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/include/Makefile" ;;
+  "storage/ndb/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/Makefile" ;;
   "storage/ndb/src/mgmsrv/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/mgmsrv/Makefile" ;;
   "storage/ndb/src/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/Makefile" ;;
-  "storage/ndb/src/cw/cpcd/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/cw/cpcd/Makefile" ;;
-  "storage/ndb/src/cw/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/cw/Makefile" ;;
-  "storage/ndb/src/kernel/blocks/dblqh/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dblqh/Makefile" ;;
-  "storage/ndb/src/kernel/blocks/dbdih/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dbdih/Makefile" ;;
+  "storage/ndb/src/kernel/vm/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/vm/Makefile" ;;
+  "storage/ndb/src/kernel/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/Makefile" ;;
+  "storage/ndb/src/kernel/error/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/error/Makefile" ;;
   "storage/ndb/src/kernel/blocks/dbdict/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dbdict/Makefile" ;;
   "storage/ndb/src/kernel/blocks/backup/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/backup/Makefile" ;;
   "storage/ndb/src/kernel/blocks/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/Makefile" ;;
   "storage/ndb/src/kernel/blocks/dbtup/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dbtup/Makefile" ;;
-  "storage/ndb/src/kernel/error/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/error/Makefile" ;;
-  "storage/ndb/src/kernel/vm/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/vm/Makefile" ;;
-  "storage/ndb/src/kernel/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/Makefile" ;;
+  "storage/ndb/src/kernel/blocks/dbdih/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dbdih/Makefile" ;;
+  "storage/ndb/src/kernel/blocks/dblqh/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/kernel/blocks/dblqh/Makefile" ;;
   "storage/ndb/src/mgmclient/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/mgmclient/Makefile" ;;
+  "storage/ndb/src/mgmapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/mgmapi/Makefile" ;;
+  "storage/ndb/src/ndbapi/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/ndbapi/Makefile" ;;
+  "storage/ndb/src/common/util/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/util/Makefile" ;;
+  "storage/ndb/src/common/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/Makefile" ;;
+  "storage/ndb/src/common/transporter/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/transporter/Makefile" ;;
+  "storage/ndb/src/common/mgmcommon/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/mgmcommon/Makefile" ;;
+  "storage/ndb/src/common/portlib/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/portlib/Makefile" ;;
+  "storage/ndb/src/common/debugger/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/debugger/Makefile" ;;
+  "storage/ndb/src/common/debugger/signaldata/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/debugger/signaldata/Makefile" ;;
+  "storage/ndb/src/common/logger/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/common/logger/Makefile" ;;
+  "storage/ndb/src/cw/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/cw/Makefile" ;;
+  "storage/ndb/src/cw/cpcd/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/cw/cpcd/Makefile" ;;
   "storage/ndb/tools/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/tools/Makefile" ;;
-  "storage/ndb/Makefile" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/Makefile" ;;
   "storage/ndb/src/libndb.ver" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/src/libndb.ver" ;;
   "storage/ndb/include/ndb_version.h" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/include/ndb_version.h" ;;
   "storage/ndb/include/ndb_global.h" ) CONFIG_FILES="$CONFIG_FILES storage/ndb/include/ndb_global.h" ;;

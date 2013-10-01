@@ -29,6 +29,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+# Copyright (C) 2013 Calpont Corp.
+
 #called from the top level Makefile
 
 
@@ -109,35 +111,36 @@ mysql_tzinfo_to_sql_LDADD = $(LDADD)
 mysql_tzinfo_to_sql_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am_mysqld_OBJECTS = sql_lex.$(OBJEXT) sql_handler.$(OBJEXT) \
 	sql_partition.$(OBJEXT) item.$(OBJEXT) item_sum.$(OBJEXT) \
-	item_buff.$(OBJEXT) item_func.$(OBJEXT) item_cmpfunc.$(OBJEXT) \
+	item_buff.$(OBJEXT) item_func.$(OBJEXT) \
+	item_window_function.$(OBJEXT) item_cmpfunc.$(OBJEXT) \
 	item_strfunc.$(OBJEXT) item_timefunc.$(OBJEXT) \
 	thr_malloc.$(OBJEXT) item_create.$(OBJEXT) \
-	item_subselect.$(OBJEXT) item_row.$(OBJEXT) \
-	item_geofunc.$(OBJEXT) item_xmlfunc.$(OBJEXT) field.$(OBJEXT) \
-	strfunc.$(OBJEXT) key.$(OBJEXT) sql_class.$(OBJEXT) \
-	sql_list.$(OBJEXT) net_serv.$(OBJEXT) protocol.$(OBJEXT) \
-	sql_state.$(OBJEXT) lock.$(OBJEXT) my_lock.$(OBJEXT) \
-	sql_string.$(OBJEXT) sql_manager.$(OBJEXT) sql_map.$(OBJEXT) \
-	mysqld.$(OBJEXT) password.$(OBJEXT) hash_filo.$(OBJEXT) \
-	hostname.$(OBJEXT) sql_connect.$(OBJEXT) scheduler.$(OBJEXT) \
-	sql_parse.$(OBJEXT) set_var.$(OBJEXT) sql_yacc.$(OBJEXT) \
-	sql_base.$(OBJEXT) table.$(OBJEXT) sql_select.$(OBJEXT) \
-	sql_insert.$(OBJEXT) sql_profile.$(OBJEXT) \
-	sql_prepare.$(OBJEXT) sql_error.$(OBJEXT) sql_locale.$(OBJEXT) \
-	sql_update.$(OBJEXT) sql_delete.$(OBJEXT) uniques.$(OBJEXT) \
-	sql_do.$(OBJEXT) procedure.$(OBJEXT) sql_test.$(OBJEXT) \
-	log.$(OBJEXT) init.$(OBJEXT) derror.$(OBJEXT) \
-	sql_acl.$(OBJEXT) unireg.$(OBJEXT) des_key_file.$(OBJEXT) \
-	log_event.$(OBJEXT) rpl_record.$(OBJEXT) \
-	log_event_old.$(OBJEXT) rpl_record_old.$(OBJEXT) \
-	discover.$(OBJEXT) time.$(OBJEXT) opt_range.$(OBJEXT) \
-	opt_sum.$(OBJEXT) records.$(OBJEXT) filesort.$(OBJEXT) \
-	handler.$(OBJEXT) ha_partition.$(OBJEXT) sql_db.$(OBJEXT) \
-	sql_table.$(OBJEXT) sql_rename.$(OBJEXT) sql_crypt.$(OBJEXT) \
-	sql_load.$(OBJEXT) mf_iocache.$(OBJEXT) field_conv.$(OBJEXT) \
-	sql_show.$(OBJEXT) sql_udf.$(OBJEXT) sql_analyse.$(OBJEXT) \
-	sql_cache.$(OBJEXT) slave.$(OBJEXT) sql_repl.$(OBJEXT) \
-	rpl_filter.$(OBJEXT) rpl_tblmap.$(OBJEXT) \
+	item_create_window_function.$(OBJEXT) item_subselect.$(OBJEXT) \
+	item_row.$(OBJEXT) item_geofunc.$(OBJEXT) \
+	item_xmlfunc.$(OBJEXT) field.$(OBJEXT) strfunc.$(OBJEXT) \
+	key.$(OBJEXT) sql_class.$(OBJEXT) sql_list.$(OBJEXT) \
+	net_serv.$(OBJEXT) protocol.$(OBJEXT) sql_state.$(OBJEXT) \
+	lock.$(OBJEXT) my_lock.$(OBJEXT) sql_string.$(OBJEXT) \
+	sql_manager.$(OBJEXT) sql_map.$(OBJEXT) mysqld.$(OBJEXT) \
+	password.$(OBJEXT) hash_filo.$(OBJEXT) hostname.$(OBJEXT) \
+	sql_connect.$(OBJEXT) scheduler.$(OBJEXT) sql_parse.$(OBJEXT) \
+	set_var.$(OBJEXT) sql_yacc.$(OBJEXT) sql_base.$(OBJEXT) \
+	table.$(OBJEXT) sql_select.$(OBJEXT) sql_insert.$(OBJEXT) \
+	sql_profile.$(OBJEXT) sql_prepare.$(OBJEXT) \
+	sql_error.$(OBJEXT) sql_locale.$(OBJEXT) sql_update.$(OBJEXT) \
+	sql_delete.$(OBJEXT) uniques.$(OBJEXT) sql_do.$(OBJEXT) \
+	procedure.$(OBJEXT) sql_test.$(OBJEXT) log.$(OBJEXT) \
+	init.$(OBJEXT) derror.$(OBJEXT) sql_acl.$(OBJEXT) \
+	unireg.$(OBJEXT) des_key_file.$(OBJEXT) log_event.$(OBJEXT) \
+	rpl_record.$(OBJEXT) log_event_old.$(OBJEXT) \
+	rpl_record_old.$(OBJEXT) discover.$(OBJEXT) time.$(OBJEXT) \
+	opt_range.$(OBJEXT) opt_sum.$(OBJEXT) records.$(OBJEXT) \
+	filesort.$(OBJEXT) handler.$(OBJEXT) ha_partition.$(OBJEXT) \
+	sql_db.$(OBJEXT) sql_table.$(OBJEXT) sql_rename.$(OBJEXT) \
+	sql_crypt.$(OBJEXT) sql_load.$(OBJEXT) mf_iocache.$(OBJEXT) \
+	field_conv.$(OBJEXT) sql_show.$(OBJEXT) sql_udf.$(OBJEXT) \
+	sql_analyse.$(OBJEXT) sql_cache.$(OBJEXT) slave.$(OBJEXT) \
+	sql_repl.$(OBJEXT) rpl_filter.$(OBJEXT) rpl_tblmap.$(OBJEXT) \
 	rpl_utility.$(OBJEXT) rpl_injector.$(OBJEXT) rpl_rli.$(OBJEXT) \
 	rpl_mi.$(OBJEXT) rpl_reporting.$(OBJEXT) sql_union.$(OBJEXT) \
 	sql_derived.$(OBJEXT) sql_client.$(OBJEXT) \
@@ -535,7 +538,7 @@ mysqld_LDADD = libndb.la \
 
 noinst_HEADERS = item.h item_func.h item_sum.h item_cmpfunc.h \
 			item_strfunc.h item_timefunc.h \
-			item_xmlfunc.h \
+			item_xmlfunc.h item_window_function.h \
 			item_create.h item_subselect.h item_row.h \
 			mysql_priv.h item_geofunc.h sql_bitmap.h \
 			procedure.h sql_class.h sql_lex.h sql_list.h \
@@ -563,12 +566,14 @@ noinst_HEADERS = item.h item_func.h item_sum.h item_cmpfunc.h \
 			sql_plugin.h authors.h event_parse_data.h \
 			event_data_objects.h event_scheduler.h \
 			sql_partition.h partition_info.h partition_element.h \
-			contributors.h sql_servers.h
+			contributors.h sql_servers.h \
+			item_create_window_function.h \
+			errorids.h
 
 mysqld_SOURCES = sql_lex.cc sql_handler.cc sql_partition.cc \
-			item.cc item_sum.cc item_buff.cc item_func.cc \
-			item_cmpfunc.cc item_strfunc.cc item_timefunc.cc \
-			thr_malloc.cc item_create.cc item_subselect.cc \
+			item.cc item_sum.cc item_buff.cc item_func.cc item_window_function.cc\
+			item_cmpfunc.cc item_strfunc.cc item_timefunc.cc\
+			thr_malloc.cc item_create.cc item_create_window_function.cc item_subselect.cc \
 			item_row.cc item_geofunc.cc item_xmlfunc.cc \
 			field.cc strfunc.cc key.cc sql_class.cc sql_list.cc \
 			net_serv.cc protocol.cc sql_state.c \
@@ -784,6 +789,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_buff.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_cmpfunc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_create.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_create_window_function.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_func.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_geofunc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_row.Po@am__quote@
@@ -791,6 +797,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_subselect.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_sum.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_timefunc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_window_function.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/item_xmlfunc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/key.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libndb_la-ha_ndbcluster.Plo@am__quote@
