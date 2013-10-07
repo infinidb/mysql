@@ -28692,7 +28692,7 @@ if test "$with_comment" != "no"
 then
   COMPILATION_COMMENT=$with_comment
 else
-  COMPILATION_COMMENT="Calpont InfiniDB 4.0 Alpha (Commercial)"
+  COMPILATION_COMMENT="Calpont InfiniDB 4.0 Alpha"
 fi
 
 
