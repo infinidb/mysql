@@ -81,13 +81,6 @@ extern "C" {
 extern void *(*my_str_malloc)(size_t);
 extern void (*my_str_free)(void *);
 
-#if defined(HAVE_STPCPY)
-#define strmov(A,B) stpcpy((A),(B))
-#ifndef stpcpy
-extern char *stpcpy(char *, const char *);	/* For AIX with gcc 2.95.3 */
-#endif
-#endif
-
 /* Declared in int2str() */
 extern char NEAR _dig_vec_upper[];
 extern char NEAR _dig_vec_lower[];
