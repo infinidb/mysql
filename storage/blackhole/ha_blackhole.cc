@@ -1,4 +1,6 @@
-/* Copyright 2005-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2005-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 #ifdef USE_PRAGMA_IMPLEMENTATION
@@ -105,7 +108,7 @@ int ha_blackhole::update_row(const uchar *old_data, uchar *new_data)
 {
   DBUG_ENTER("ha_blackhole::update_row");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 }
@@ -114,7 +117,7 @@ int ha_blackhole::delete_row(const uchar *buf)
 {
   DBUG_ENTER("ha_blackhole::delete_row");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 }
@@ -130,7 +133,7 @@ int ha_blackhole::rnd_next(uchar *buf)
 {
   DBUG_ENTER("ha_blackhole::rnd_next");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_END_OF_FILE);
 }
@@ -212,7 +215,7 @@ int ha_blackhole::index_read_map(uchar * buf, const uchar * key,
 {
   DBUG_ENTER("ha_blackhole::index_read");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_END_OF_FILE);
 }
@@ -224,7 +227,7 @@ int ha_blackhole::index_read_idx_map(uchar * buf, uint idx, const uchar * key,
 {
   DBUG_ENTER("ha_blackhole::index_read_idx");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_END_OF_FILE);
 }
@@ -235,7 +238,7 @@ int ha_blackhole::index_read_last_map(uchar * buf, const uchar * key,
 {
   DBUG_ENTER("ha_blackhole::index_read_last");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query == NULL)
+  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_END_OF_FILE);
 }

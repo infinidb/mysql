@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -121,6 +121,8 @@ btr_pcur_store_position(
 
 		ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
 		ut_a(btr_page_get_prev(page, mtr) == FIL_NULL);
+		ut_ad(page_is_leaf(page));
+		ut_ad(page_get_page_no(page) == index->page);
 
 		cursor->old_stored = BTR_PCUR_OLD_STORED;
 
@@ -205,10 +207,12 @@ record and it can be restored on a user record whose ordering fields
 are identical to the ones of the original user record */
 UNIV_INTERN
 ibool
-btr_pcur_restore_position(
-/*======================*/
+btr_pcur_restore_position_func(
+/*===========================*/
 	ulint		latch_mode,	/*!< in: BTR_SEARCH_LEAF, ... */
 	btr_pcur_t*	cursor,		/*!< in: detached persistent cursor */
+	const char*	file,		/*!< in: file name */
+	ulint		line,		/*!< in: line where called */
 	mtr_t*		mtr)		/*!< in: mtr */
 {
 	dict_index_t*	index;
@@ -216,6 +220,9 @@ btr_pcur_restore_position(
 	ulint		mode;
 	ulint		old_mode;
 	mem_heap_t*	heap;
+
+	ut_ad(mtr);
+	ut_ad(mtr->state == MTR_ACTIVE);
 
 	index = btr_cur_get_index(btr_pcur_get_btr_cur(cursor));
 
@@ -242,6 +249,8 @@ btr_pcur_restore_position(
 			cursor->rel_pos == BTR_PCUR_BEFORE_FIRST_IN_TREE,
 			index, latch_mode, btr_pcur_get_btr_cur(cursor), mtr);
 
+		cursor->latch_mode = latch_mode;
+		cursor->pos_state = BTR_PCUR_IS_POSITIONED;
 		cursor->block_when_stored = btr_pcur_get_block(cursor);
 
 		return(FALSE);
@@ -257,11 +266,14 @@ btr_pcur_restore_position(
 		if (UNIV_LIKELY(buf_page_optimistic_get(
 					latch_mode,
 					cursor->block_when_stored,
-					cursor->modify_clock, mtr))) {
+					cursor->modify_clock,
+					file, line, mtr))) {
 			cursor->pos_state = BTR_PCUR_IS_POSITIONED;
 
-			buf_block_dbg_add_level(btr_pcur_get_block(cursor),
-						SYNC_TREE_NODE);
+			buf_block_dbg_add_level(
+				btr_pcur_get_block(cursor),
+				dict_index_is_ibuf(index)
+				? SYNC_IBUF_TREE_NODE : SYNC_TREE_NODE);
 
 			if (cursor->rel_pos == BTR_PCUR_ON) {
 #ifdef UNIV_DEBUG
@@ -303,40 +315,60 @@ btr_pcur_restore_position(
 	/* Save the old search mode of the cursor */
 	old_mode = cursor->search_mode;
 
-	if (UNIV_LIKELY(cursor->rel_pos == BTR_PCUR_ON)) {
+	switch (cursor->rel_pos) {
+	case BTR_PCUR_ON:
 		mode = PAGE_CUR_LE;
-	} else if (cursor->rel_pos == BTR_PCUR_AFTER) {
+		break;
+	case BTR_PCUR_AFTER:
 		mode = PAGE_CUR_G;
-	} else {
-		ut_ad(cursor->rel_pos == BTR_PCUR_BEFORE);
+		break;
+	case BTR_PCUR_BEFORE:
 		mode = PAGE_CUR_L;
+		break;
+	default:
+		ut_error;
+		mode = 0;
 	}
 
-	btr_pcur_open_with_no_init(index, tuple, mode, latch_mode,
-				   cursor, 0, mtr);
+	btr_pcur_open_with_no_init_func(index, tuple, mode, latch_mode,
+					cursor, 0, file, line, mtr);
 
 	/* Restore the old search mode */
 	cursor->search_mode = old_mode;
 
-	if (cursor->rel_pos == BTR_PCUR_ON
-	    && btr_pcur_is_on_user_rec(cursor)
-	    && 0 == cmp_dtuple_rec(tuple, btr_pcur_get_rec(cursor),
-				   rec_get_offsets(
-					   btr_pcur_get_rec(cursor), index,
-					   NULL, ULINT_UNDEFINED, &heap))) {
+	switch (cursor->rel_pos) {
+	case BTR_PCUR_ON:
+		if (btr_pcur_is_on_user_rec(cursor)
+		    && !cmp_dtuple_rec(
+			    tuple, btr_pcur_get_rec(cursor),
+			    rec_get_offsets(btr_pcur_get_rec(cursor),
+					    index, NULL,
+					    ULINT_UNDEFINED, &heap))) {
 
-		/* We have to store the NEW value for the modify clock, since
-		the cursor can now be on a different page! But we can retain
-		the value of old_rec */
+			/* We have to store the NEW value for
+			the modify clock, since the cursor can
+			now be on a different page! But we can
+			retain the value of old_rec */
 
-		cursor->block_when_stored = btr_pcur_get_block(cursor);
-		cursor->modify_clock = buf_block_get_modify_clock(
-			cursor->block_when_stored);
-		cursor->old_stored = BTR_PCUR_OLD_STORED;
+			cursor->block_when_stored =
+				btr_pcur_get_block(cursor);
+			cursor->modify_clock =
+				buf_block_get_modify_clock(
+					cursor->block_when_stored);
+			cursor->old_stored = BTR_PCUR_OLD_STORED;
 
-		mem_heap_free(heap);
+			mem_heap_free(heap);
 
-		return(TRUE);
+			return(TRUE);
+		}
+#ifdef UNIV_DEBUG
+		/* fall through */
+	case BTR_PCUR_BEFORE:
+	case BTR_PCUR_AFTER:
+		break;
+	default:
+		ut_error;
+#endif /* UNIV_DEBUG */
 	}
 
 	mem_heap_free(heap);
@@ -348,33 +380,6 @@ btr_pcur_restore_position(
 	btr_pcur_store_position(cursor, mtr);
 
 	return(FALSE);
-}
-
-/**************************************************************//**
-If the latch mode of the cursor is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY,
-releases the page latch and bufferfix reserved by the cursor.
-NOTE! In the case of BTR_LEAF_MODIFY, there should not exist changes
-made by the current mini-transaction to the data protected by the
-cursor latch, as then the latch must not be released until mtr_commit. */
-UNIV_INTERN
-void
-btr_pcur_release_leaf(
-/*==================*/
-	btr_pcur_t*	cursor, /*!< in: persistent cursor */
-	mtr_t*		mtr)	/*!< in: mtr */
-{
-	buf_block_t*	block;
-
-	ut_a(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
-	ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
-
-	block = btr_pcur_get_block(cursor);
-
-	btr_leaf_page_release(block, cursor->latch_mode, mtr);
-
-	cursor->latch_mode = BTR_NO_LATCHES;
-
-	cursor->pos_state = BTR_PCUR_WAS_POSITIONED;
 }
 
 /*********************************************************//**
@@ -411,7 +416,8 @@ btr_pcur_move_to_next_page(
 	ut_ad(next_page_no != FIL_NULL);
 
 	next_block = btr_block_get(space, zip_size, next_page_no,
-				   cursor->latch_mode, mtr);
+				   cursor->latch_mode,
+				   btr_pcur_get_btr_cur(cursor)->index, mtr);
 	next_page = buf_block_get_frame(next_block);
 #ifdef UNIV_BTR_DEBUG
 	ut_a(page_is_comp(next_page) == page_is_comp(page));
@@ -446,7 +452,6 @@ btr_pcur_move_backward_from_page(
 	mtr_t*		mtr)	/*!< in: mtr */
 {
 	ulint		prev_page_no;
-	ulint		space;
 	page_t*		page;
 	buf_block_t*	prev_block;
 	ulint		latch_mode;
@@ -482,7 +487,6 @@ btr_pcur_move_backward_from_page(
 	page = btr_pcur_get_page(cursor);
 
 	prev_page_no = btr_page_get_prev(page, mtr);
-	space = buf_block_get_space(btr_pcur_get_block(cursor));
 
 	if (prev_page_no == FIL_NULL) {
 	} else if (btr_pcur_is_before_first_on_page(cursor)) {
@@ -553,8 +557,8 @@ before first in tree. The latching mode must be BTR_SEARCH_LEAF or
 BTR_MODIFY_LEAF. */
 UNIV_INTERN
 void
-btr_pcur_open_on_user_rec(
-/*======================*/
+btr_pcur_open_on_user_rec_func(
+/*===========================*/
 	dict_index_t*	index,		/*!< in: index */
 	const dtuple_t*	tuple,		/*!< in: tuple on which search done */
 	ulint		mode,		/*!< in: PAGE_CUR_L, ... */
@@ -562,9 +566,12 @@ btr_pcur_open_on_user_rec(
 					BTR_MODIFY_LEAF */
 	btr_pcur_t*	cursor,		/*!< in: memory buffer for persistent
 					cursor */
+	const char*	file,		/*!< in: file name */
+	ulint		line,		/*!< in: line where called */
 	mtr_t*		mtr)		/*!< in: mtr */
 {
-	btr_pcur_open(index, tuple, mode, latch_mode, cursor, mtr);
+	btr_pcur_open_func(index, tuple, mode, latch_mode, cursor,
+			   file, line, mtr);
 
 	if ((mode == PAGE_CUR_GE) || (mode == PAGE_CUR_G)) {
 

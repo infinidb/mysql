@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2002, 2004-2006 MySQL AB
+/*
+   Copyright (c) 2000-2002, 2004-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Write a record to heap-databas */
 
@@ -196,12 +199,9 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
   HP_SHARE *share = info->s;
   int flag;
   ulong halfbuff,hashnr,first_index;
-  uchar *ptr_to_rec,*ptr_to_rec2;
-  HASH_INFO *empty,*gpos,*gpos2,*pos;
+  uchar *UNINIT_VAR(ptr_to_rec),*UNINIT_VAR(ptr_to_rec2);
+  HASH_INFO *empty,*UNINIT_VAR(gpos),*UNINIT_VAR(gpos2),*pos;
   DBUG_ENTER("hp_write_key");
-
-  LINT_INIT(gpos); LINT_INIT(gpos2);
-  LINT_INIT(ptr_to_rec); LINT_INIT(ptr_to_rec2);
 
   flag=0;
   if (!(empty= hp_find_free_hash(share,&keyinfo->block,share->records)))

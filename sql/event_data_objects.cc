@@ -1,4 +1,5 @@
-/* Copyright (C) 2004-2006 MySQL AB
+/*
+   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #define MYSQL_LEX 1
 #include "mysql_priv.h"
@@ -834,8 +836,9 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
   }
   else
   {
-    long diff_months= (long) (local_now.year - local_start.year)*12 +
-                      (local_now.month - local_start.month);
+    long diff_months= ((long) local_now.year - (long) local_start.year)*12 +
+                      ((long) local_now.month - (long) local_start.month);
+
     /*
       Unlike for seconds above, the formula below returns the interval
       that, when added to the local_start, will give the time in the
@@ -1401,7 +1404,7 @@ Event_job_data::execute(THD *thd, bool drop)
 #endif
 
   if (check_access(thd, EVENT_ACL, dbname.str,
-                   0, 0, 0, is_schema_db(dbname.str)))
+                   0, 0, 0, is_schema_db(dbname.str, dbname.length)))
   {
     /*
       This aspect of behavior is defined in the worklog,
@@ -1433,7 +1436,10 @@ Event_job_data::execute(THD *thd, bool drop)
   thd->set_query(sp_sql.c_ptr_safe(), sp_sql.length());
 
   {
-    Parser_state parser_state(thd, thd->query, thd->query_length);
+    Parser_state parser_state;
+    if (parser_state.init(thd, thd->query(), thd->query_length()))
+      goto end;
+
     lex_start(thd);
 
     if (parse_sql(thd, & parser_state, creation_ctx))

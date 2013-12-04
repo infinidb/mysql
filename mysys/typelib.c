@@ -1,4 +1,6 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000-2004, 2006, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Functions to handle typelib */
 
@@ -182,7 +185,10 @@ my_ulonglong find_typeset(char *x, TYPELIB *lib, int *err)
   {
     (*err)++;
     i= x;
-    while (*x && *x != field_separator) x++;
+    while (*x && *x != field_separator)
+      x++;
+    if (x[0] && x[1])                            /* skip separator if found */
+      x++;
     if ((find= find_type(i, lib, 2 | 8) - 1) < 0)
       DBUG_RETURN(0);
     result|= (ULL(1) << find);

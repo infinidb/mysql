@@ -15,8 +15,8 @@ insert into t1 values (5);
 
 grant select on test.* to ssl_user1@localhost require SSL;
 grant select on test.* to ssl_user2@localhost require cipher "DHE-RSA-AES256-SHA";
-grant select on test.* to ssl_user3@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Uppsala/O=MySQL AB/emailAddress=abstract.mysql.developer@mysql.com";
-grant select on test.* to ssl_user4@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Uppsala/O=MySQL AB/emailAddress=abstract.mysql.developer@mysql.com" ISSUER "/C=SE/ST=Uppsala/L=Uppsala/O=MySQL AB";
+grant select on test.* to ssl_user3@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Uppsala/O=MySQL AB";
+grant select on test.* to ssl_user4@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Uppsala/O=MySQL AB" ISSUER "/C=SE/ST=Uppsala/L=Uppsala/O=MySQL AB";
 grant select on test.* to ssl_user5@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "xxx";
 flush privileges;
 
@@ -73,22 +73,28 @@ drop table t1;
 # a different cacert
 #
 --exec echo "this query should not execute;" > $MYSQLTEST_VARDIR/tmp/test.sql
+--replace_regex /2026 SSL connection error.*/2026 SSL connection error: xxxx/
 --error 1
 --exec $MYSQL_TEST --ssl-ca=$MYSQL_TEST_DIR/std_data/untrusted-cacert.pem --max-connect-retries=1 < $MYSQLTEST_VARDIR/tmp/test.sql 2>&1
+--echo
 
 #
 # Test that we can't open connection to server if we are using
 # a blank ca
 #
+--replace_regex /2026 SSL connection error.*/2026 SSL connection error: xxxx/
 --error 1
 --exec $MYSQL_TEST --ssl-ca= --max-connect-retries=1 < $MYSQLTEST_VARDIR/tmp/test.sql 2>&1
+--echo
 
 #
 # Test that we can't open connection to server if we are using
 # a nonexistent ca file
 #
+--replace_regex /2026 SSL connection error.*/2026 SSL connection error: xxxx/
 --error 1
 --exec $MYSQL_TEST --ssl-ca=nonexisting_file.pem --max-connect-retries=1 < $MYSQLTEST_VARDIR/tmp/test.sql 2>&1
+--echo
 
 #
 # Test that we can't open connection to server if we are using

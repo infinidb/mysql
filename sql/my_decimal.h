@@ -1,4 +1,5 @@
-/* Copyright (C) 2005-2006 MySQL AB
+/*
+   Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @file
@@ -48,16 +50,14 @@ C_MODE_END
   digits * number of decimal digits in one our big digit - number of decimal
   digits in one our big digit decreased by 1 (because we always put decimal
   point on the border of our big digits))
-
-  This value is 65 due to historical reasons partly due to it being used
-  as the maximum allowed precision and not the actual maximum precision.
 */
 #define DECIMAL_MAX_PRECISION (DECIMAL_MAX_POSSIBLE_PRECISION - 8*2)
 #define DECIMAL_MAX_SCALE 30
+#define DECIMAL_NOT_SPECIFIED 31
 
 /**
   maximum length of string representation (number of maximum decimal
-  digits + 1 position for sign + 1 position for decimal point)
+  digits + 1 position for sign + 1 position for decimal point, no terminator)
 */
 #define DECIMAL_MAX_STR_LENGTH (DECIMAL_MAX_POSSIBLE_PRECISION + 2)
 
@@ -77,6 +77,12 @@ inline uint my_decimal_size(uint precision, uint scale)
 }
 
 
+inline int my_decimal_int_part(uint precision, uint decimals)
+{
+  return precision - ((decimals == DECIMAL_NOT_SPECIFIED) ? 0 : decimals);
+}
+
+
 /**
   my_decimal class limits 'decimal_t' type to what we need in MySQL.
 
@@ -87,24 +93,75 @@ inline uint my_decimal_size(uint precision, uint scale)
 
 class my_decimal :public decimal_t
 {
+  /*
+    Several of the routines in strings/decimal.c have had buffer
+    overrun/underrun problems. These are *not* caught by valgrind.
+    To catch them, we allocate dummy fields around the buffer,
+    and test that their values do not change.
+   */
+#if !defined(DBUG_OFF)
+  int foo1;
+#endif
+
   decimal_digit_t buffer[DECIMAL_BUFF_LENGTH];
 
+#if !defined(DBUG_OFF)
+  int foo2;
+  static const int test_value= 123;
+#endif
+
 public:
+  my_decimal(const my_decimal &rhs) : decimal_t(rhs)
+  {
+#if !defined(DBUG_OFF)
+    foo1= test_value;
+    foo2= test_value;
+#endif
+    for (uint i= 0; i < DECIMAL_BUFF_LENGTH; i++)
+      buffer[i]= rhs.buffer[i];
+    fix_buffer_pointer();
+  }
+
+  my_decimal& operator=(const my_decimal &rhs)
+  {
+#if !defined(DBUG_OFF)
+    foo1= test_value;
+    foo2= test_value;
+#endif
+    if (this == &rhs)
+      return *this;
+    decimal_t::operator=(rhs);
+    for (uint i= 0; i < DECIMAL_BUFF_LENGTH; i++)
+      buffer[i]= rhs.buffer[i];
+    fix_buffer_pointer();
+    return *this;
+  }
 
   void init()
   {
+#if !defined(DBUG_OFF)
+    foo1= test_value;
+    foo2= test_value;
+#endif
     len= DECIMAL_BUFF_LENGTH;
     buf= buffer;
-#if !defined (HAVE_purify) && !defined(DBUG_OFF)
-    /* Set buffer to 'random' value to find wrong buffer usage */
-    for (uint i= 0; i < DECIMAL_BUFF_LENGTH; i++)
-      buffer[i]= i;
-#endif
   }
+
   my_decimal()
   {
     init();
   }
+  ~my_decimal()
+  {
+    sanity_check();
+  }
+
+  void sanity_check()
+  {
+    DBUG_ASSERT(foo1 == test_value);
+    DBUG_ASSERT(foo2 == test_value);
+  }
+
   void fix_buffer_pointer() { buf= buffer; }
 
   bool sign() const { return decimal_t::sign; }
@@ -115,8 +172,6 @@ public:
   void swap(my_decimal &rhs)
   {
     swap_variables(my_decimal, *this, rhs);
-    /* Swap the buffer pointers back */
-    swap_variables(decimal_digit_t *, buf, rhs.buf);
   }
 };
 
@@ -180,7 +235,7 @@ inline uint my_decimal_length_to_precision(uint length, uint scale,
 }
 
 inline uint32 my_decimal_precision_to_length_no_truncation(uint precision,
-                                                           uint scale,
+                                                           uint8 scale,
                                                            bool unsigned_flag)
 {
   /*
@@ -192,7 +247,7 @@ inline uint32 my_decimal_precision_to_length_no_truncation(uint precision,
                   (unsigned_flag || !precision ? 0 : 1));
 }
 
-inline uint32 my_decimal_precision_to_length(uint precision, uint scale,
+inline uint32 my_decimal_precision_to_length(uint precision, uint8 scale,
                                              bool unsigned_flag)
 {
   /*
@@ -208,6 +263,7 @@ inline uint32 my_decimal_precision_to_length(uint precision, uint scale,
 inline
 int my_decimal_string_length(const my_decimal *d)
 {
+  /* length of string representation including terminating '\0' */
   return decimal_string_size(d);
 }
 
@@ -304,7 +360,7 @@ int my_decimal2int(uint mask, const my_decimal *d, my_bool unsigned_flag,
 
 
 inline
-int my_decimal2double(uint mask, const my_decimal *d, double *result)
+int my_decimal2double(uint, const my_decimal *d, double *result)
 {
   /* No need to call check_result as this will always succeed */
   return decimal2double((decimal_t*) d, result);

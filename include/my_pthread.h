@@ -1,4 +1,4 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Defines to make different thread packages compatible */
 
@@ -69,6 +69,11 @@ typedef int pthread_mutexattr_t;
 #define pthread_handler_t EXTERNC void * __cdecl
 typedef void * (__cdecl *pthread_handler)(void *);
 
+typedef volatile LONG my_pthread_once_t;
+#define MY_PTHREAD_ONCE_INIT  0
+#define MY_PTHREAD_ONCE_INPROGRESS 1
+#define MY_PTHREAD_ONCE_DONE 2
+
 /*
   Struct and macros to be used in combination with the
   windows implementation of pthread_cond_timedwait
@@ -114,13 +119,16 @@ int pthread_attr_init(pthread_attr_t *connect_att);
 int pthread_attr_setstacksize(pthread_attr_t *connect_att,DWORD stack);
 int pthread_attr_setprio(pthread_attr_t *connect_att,int priority);
 int pthread_attr_destroy(pthread_attr_t *connect_att);
+int my_pthread_once(my_pthread_once_t *once_control,void (*init_routine)(void));
 struct tm *localtime_r(const time_t *timep,struct tm *tmp);
 struct tm *gmtime_r(const time_t *timep,struct tm *tmp);
 
 
 void pthread_exit(void *a);	 /* was #define pthread_exit(A) ExitThread(A)*/
 
-#define ETIMEDOUT 145		    /* Win32 doesn't have this */
+#ifndef ETIMEDOUT
+#define ETIMEDOUT 145		    /* Win32 might not have this */
+#endif
 #define getpid() GetCurrentThreadId()
 #define HAVE_LOCALTIME_R		1
 #define _REENTRANT			1
@@ -210,6 +218,10 @@ extern int my_pthread_getprio(pthread_t thread_id);
 #define pthread_handler_t EXTERNC void *
 typedef void *(* pthread_handler)(void *);
 
+#define my_pthread_once_t pthread_once_t
+#define MY_PTHREAD_ONCE_INIT PTHREAD_ONCE_INIT
+#define my_pthread_once(C,F) pthread_once(C,F)
+
 /* Test first for RTS or FSU threads */
 
 #if defined(PTHREAD_SCOPE_GLOBAL) && !defined(PTHREAD_SCOPE_SYSTEM)
@@ -259,13 +271,14 @@ int sigwait(sigset_t *setp, int *sigp);		/* Use our implemention */
   we want to make sure that no such flags are set.
 */
 #if defined(HAVE_SIGACTION) && !defined(my_sigset)
-#define my_sigset(A,B) do { struct sigaction l_s; sigset_t l_set; int l_rc; \
+#define my_sigset(A,B) do { struct sigaction l_s; sigset_t l_set;           \
+                            IF_DBUG(int l_rc);                              \
                             DBUG_ASSERT((A) != 0);                          \
                             sigemptyset(&l_set);                            \
                             l_s.sa_handler = (B);                           \
                             l_s.sa_mask   = l_set;                          \
                             l_s.sa_flags   = 0;                             \
-                            l_rc= sigaction((A), &l_s, (struct sigaction *) NULL);\
+                            IF_DBUG(l_rc=) sigaction((A), &l_s, NULL);      \
                             DBUG_ASSERT(l_rc == 0);                         \
                           } while (0)
 #elif defined(HAVE_SIGSET) && !defined(my_sigset)
@@ -481,7 +494,8 @@ int safe_mutex_destroy(safe_mutex_t *mp,const char *file, uint line);
 int safe_cond_wait(pthread_cond_t *cond, safe_mutex_t *mp,const char *file,
 		   uint line);
 int safe_cond_timedwait(pthread_cond_t *cond, safe_mutex_t *mp,
-			struct timespec *abstime, const char *file, uint line);
+                        const struct timespec *abstime,
+                        const char *file, uint line);
 void safe_mutex_global_init(void);
 void safe_mutex_end(FILE *file);
 
@@ -705,7 +719,7 @@ extern uint thd_lib_detected;
   The implementation is guaranteed to be thread safe, on all platforms.
   Note that the calling code should *not* assume the counter is protected
   by the mutex given, as the implementation of these helpers may change
-  to use my_atomic operations instead.
+  to use atomic operations instead.
 */
 
 /*

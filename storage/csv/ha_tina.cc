@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/*
+   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Make sure to look at ha_tina.h for more details.
@@ -468,7 +470,7 @@ int ha_tina::encode_quote(uchar *buf)
     const char *ptr;
     const char *end_ptr;
     const bool was_null= (*field)->is_null();
-    
+
     /*
       assistance for backwards compatibility in production builds.
       note: this will not work for ENUM columns.
@@ -480,7 +482,7 @@ int ha_tina::encode_quote(uchar *buf)
     }
 
     (*field)->val_str(&attribute,&attribute);
-    
+
     if (was_null)
       (*field)->set_null();
 
@@ -491,34 +493,30 @@ int ha_tina::encode_quote(uchar *buf)
 
       buffer.append('"');
 
-      while (ptr < end_ptr) 
+      for (; ptr < end_ptr; ptr++)
       {
         if (*ptr == '"')
         {
           buffer.append('\\');
           buffer.append('"');
-          *ptr++;
         }
         else if (*ptr == '\r')
         {
           buffer.append('\\');
           buffer.append('r');
-          *ptr++;
         }
         else if (*ptr == '\\')
         {
           buffer.append('\\');
           buffer.append('\\');
-          *ptr++;
         }
         else if (*ptr == '\n')
         {
           buffer.append('\\');
           buffer.append('n');
-          *ptr++;
         }
         else
-          buffer.append(*ptr++);
+          buffer.append(*ptr);
       }
       buffer.append('"');
     }
@@ -679,9 +677,21 @@ int ha_tina::find_current_row(uchar *buf)
 
     if (read_all || bitmap_is_set(table->read_set, (*field)->field_index))
     {
+      bool is_enum= ((*field)->real_type() ==  MYSQL_TYPE_ENUM);
+      /*
+        Here CHECK_FIELD_WARN checks that all values in the csv file are valid
+        which is normally the case, if they were written  by
+        INSERT -> ha_tina::write_row. '0' values on ENUM fields are considered
+        invalid by Field_enum::store() but it can store them on INSERT anyway.
+        Thus, for enums we silence the warning, as it doesn't really mean
+        an invalid value.
+      */
       if ((*field)->store(buffer.ptr(), buffer.length(), buffer.charset(),
-                          CHECK_FIELD_WARN))
-        goto err;
+                          is_enum ? CHECK_FIELD_IGNORE : CHECK_FIELD_WARN))
+      {
+        if (!is_enum)
+          goto err;
+      }
       if ((*field)->flags & BLOB_FLAG)
       {
         Field_blob *blob= *(Field_blob**) field;
@@ -1598,8 +1608,8 @@ int ha_tina::check(THD* thd, HA_CHECK_OPT* check_opt)
     share->crashed= TRUE;
     DBUG_RETURN(HA_ADMIN_CORRUPT);
   }
-  else
-    DBUG_RETURN(HA_ADMIN_OK);
+
+  DBUG_RETURN(HA_ADMIN_OK);
 }
 
 

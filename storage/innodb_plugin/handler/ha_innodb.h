@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2000, 2009, MySQL AB & Innobase Oy. All Rights Reserved.
+Copyright (c) 2000, 2010, MySQL AB & Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -27,15 +27,31 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #pragma interface			/* gcc class implementation */
 #endif
 
+/* Structure defines translation table between mysql index and innodb
+index structures */
+typedef struct innodb_idx_translate_struct {
+	ulint		index_count;	/*!< number of valid index entries
+					in the index_mapping array */
+	ulint		array_size;	/*!< array size of index_mapping */
+	dict_index_t**	index_mapping;	/*!< index pointer array directly
+					maps to index in Innodb from MySQL
+					array index */
+} innodb_idx_translate_t;
+
+
 /** InnoDB table share */
 typedef struct st_innobase_share {
-	THR_LOCK	lock;		/*!< MySQL lock protecting
-					this structure */
-	const char*	table_name;	/*!< InnoDB table name */
-	uint		use_count;	/*!< reference count,
-					incremented in get_share()
-					and decremented in free_share() */
-	void*		table_name_hash;/*!< hash table chain node */
+	THR_LOCK		lock;		/*!< MySQL lock protecting
+						this structure */
+	const char*		table_name;	/*!< InnoDB table name */
+	uint			use_count;	/*!< reference count,
+						incremented in get_share()
+						and decremented in
+						free_share() */
+	void*			table_name_hash;/*!< hash table chain node */
+	innodb_idx_translate_t	idx_trans_tbl;	/*!< index translation
+						table between MySQL and
+						Innodb */
 } INNOBASE_SHARE;
 
 
@@ -91,9 +107,9 @@ class ha_innobase: public handler
 	ulint innobase_reset_autoinc(ulonglong auto_inc);
 	ulint innobase_get_autoinc(ulonglong* value);
 	ulint innobase_update_autoinc(ulonglong	auto_inc);
-	ulint innobase_initialize_autoinc();
+	void innobase_initialize_autoinc();
 	dict_index_t* innobase_get_index(uint keynr);
- 	ulonglong innobase_get_int_col_max_value(const Field* field);
+	int info_low(uint flag, bool called_from_analyze);
 
 	/* Init values for the class: */
  public:
@@ -116,6 +132,7 @@ class ha_innobase: public handler
 	const key_map* keys_to_use_for_scanning();
 
 	int open(const char *name, int mode, uint test_if_locked);
+	handler* clone(const char *name, MEM_ROOT *mem_root);
 	int close(void);
 	double scan_time();
 	double read_time(uint index, uint ranges, ha_rows rows);
@@ -216,7 +233,11 @@ the definitions are bracketed with #ifdef INNODB_COMPATIBILITY_HOOKS */
 
 extern "C" {
 struct charset_info_st *thd_charset(MYSQL_THD thd);
+#if MYSQL_VERSION_ID >= 50142
+LEX_STRING *thd_query_string(MYSQL_THD thd);
+#else
 char **thd_query(MYSQL_THD thd);
+#endif
 
 /** Get the file name of the MySQL binlog.
  * @return the name of the binlog file
@@ -257,6 +278,15 @@ int thd_binlog_format(const MYSQL_THD thd);
   @param  all   TRUE <=> rollback main transaction.
 */
 void thd_mark_transaction_to_rollback(MYSQL_THD thd, bool all);
+
+#if MYSQL_VERSION_ID > 50140
+/**
+  Check if binary logging is filtered for thread's current db.
+  @param  thd   Thread handle
+  @retval 1 the query is not filtered, 0 otherwise.
+*/
+bool thd_binlog_filter_ok(const MYSQL_THD thd);
+#endif /* MYSQL_VERSION_ID > 50140 */
 }
 
 typedef struct trx_struct trx_t;
@@ -282,3 +312,20 @@ trx_t*
 innobase_trx_allocate(
 /*==================*/
 	MYSQL_THD	thd);	/*!< in: user thread handle */
+
+
+/*********************************************************************//**
+This function checks each index name for a table against reserved
+system default primary index name 'GEN_CLUST_INDEX'. If a name
+matches, this function pushes an warning message to the client,
+and returns true.
+@return true if the index name matches the reserved name */
+extern "C"
+bool
+innobase_index_name_is_reserved(
+/*============================*/
+	THD*		thd,		/*!< in/out: MySQL connection */
+	const KEY*	key_info,	/*!< in: Indexes to be created */
+	ulint		num_of_keys);	/*!< in: Number of indexes to
+					be created. */
+

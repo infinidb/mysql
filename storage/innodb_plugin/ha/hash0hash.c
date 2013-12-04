@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -119,7 +119,7 @@ hash_create(
 	table->heaps = NULL;
 #endif /* !UNIV_HOTBACKUP */
 	table->heap = NULL;
-	table->magic_n = HASH_TABLE_MAGIC_N;
+	ut_d(table->magic_n = HASH_TABLE_MAGIC_N);
 
 	/* Initialize the cell array */
 	hash_table_clear(table);
@@ -135,6 +135,8 @@ hash_table_free(
 /*============*/
 	hash_table_t*	table)	/*!< in, own: hash table */
 {
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 #ifndef UNIV_HOTBACKUP
 	ut_a(table->mutexes == NULL);
 #endif /* !UNIV_HOTBACKUP */
@@ -160,6 +162,8 @@ hash_create_mutexes_func(
 {
 	ulint	i;
 
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 	ut_a(n_mutexes > 0);
 	ut_a(ut_is_2pow(n_mutexes));
 

@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 51 Franklin St,
+Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -518,6 +518,7 @@ que_graph_free_recursive(
 	upd_node_t*	upd;
 	tab_node_t*	cre_tab;
 	ind_node_t*	cre_ind;
+	purge_node_t*	purge;
 
 	if (node == NULL) {
 
@@ -579,6 +580,13 @@ que_graph_free_recursive(
 		mem_heap_free(ins->entry_sys_heap);
 
 		break;
+	case QUE_NODE_PURGE:
+		purge = node;
+
+		mem_heap_free(purge->heap);
+
+		break;
+
 	case QUE_NODE_UPDATE:
 
 		upd = node;
@@ -1276,18 +1284,13 @@ que_run_threads_low(
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	que_thr_t*	next_thr;
-	ulint		cumul_resource;
 	ulint		loop_count;
 
 	ut_ad(thr->state == QUE_THR_RUNNING);
 	ut_a(thr_get_trx(thr)->error_state == DB_SUCCESS);
 	ut_ad(!mutex_own(&kernel_mutex));
 
-	/* cumul_resource counts how much resources the OS thread (NOT the
-	query thread) has spent in this function */
-
 	loop_count = QUE_MAX_LOOPS_WITHOUT_CHECK;
-	cumul_resource = 0;
 loop:
 	/* Check that there is enough space in the log to accommodate
 	possible log entries by this query step; if the operation can touch

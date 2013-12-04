@@ -1,4 +1,4 @@
-# Copyright (C) 2000 MySQL AB
+# Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 noinst_PROGRAMS = mysql
 bin_PROGRAMS    = mysqltest_embedded mysql_client_test_embedded
@@ -35,14 +35,15 @@ link_sources:
 DEFS = 		-DEMBEDDED_LIBRARY
 INCLUDES =	-I$(top_builddir)/include -I$(top_srcdir)/include -I$(srcdir) \
 		-I$(top_srcdir) -I$(top_srcdir)/client -I$(top_srcdir)/regex \
-		$(openssl_includes)
+		-I$(top_srcdir)/tests $(openssl_includes)
 LIBS =		@LIBS@ @WRAPLIBS@ @CLIENT_LIBS@ $(yassl_libs)
 LDADD =		@CLIENT_EXTRA_LDFLAGS@ ../libmysqld.a @LIBDL@ $(CXXLDFLAGS) \
                 @NDB_SCI_LIBS@
 
 mysqltest_embedded_LINK = $(CXXLINK)
 nodist_mysqltest_embedded_SOURCES =	mysqltest.cc
-mysqltest_embedded_LDADD =	$(LDADD) $(top_builddir)/regex/libregex.a
+mysqltest_embedded_LDADD =	$(LDADD) $(top_builddir)/regex/libregex.a \
+				@MYSQLD_EXTRA_LDFLAGS@
 
 nodist_mysql_SOURCES = mysql.cc readline.cc completion_hash.cc \
                 my_readline.h sql_string.h completion_hash.h
@@ -50,6 +51,7 @@ mysql_LDADD = @readline_link@ @TERMCAP_LIB@ $(LDADD)
 
 mysql_client_test_embedded_LINK = $(CXXLINK)
 nodist_mysql_client_test_embedded_SOURCES = mysql_client_test.c
+mysql_client_test.o:	$(top_srcdir)/tests/mysql_client_fw.c
 
 # Don't update the files from bitkeeper
 %::SCCS/s.%

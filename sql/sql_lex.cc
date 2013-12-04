@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2013 Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* A lexical scanner on a temporary buffer with a yacc interface */
@@ -110,39 +112,31 @@ st_parsing_options::reset()
   allows_derived= TRUE;
 }
 
-Lex_input_stream::Lex_input_stream(THD *thd,
-                                   const char* buffer,
-                                   unsigned int length)
-: m_thd(thd),
-  yylineno(1),
-  yytoklen(0),
-  yylval(NULL),
-  m_ptr(buffer),
-  m_tok_start(NULL),
-  m_tok_end(NULL),
-  m_end_of_query(buffer + length),
-  m_tok_start_prev(NULL),
-  m_buf(buffer),
-  m_buf_length(length),
-  m_echo(TRUE),
-  m_cpp_tok_start(NULL),
-  m_cpp_tok_start_prev(NULL),
-  m_cpp_tok_end(NULL),
-  m_body_utf8(NULL),
-  m_cpp_utf8_processed_ptr(NULL),
-  next_state(MY_LEX_START),
-  found_semicolon(NULL),
-  ignore_space(test(thd->variables.sql_mode & MODE_IGNORE_SPACE)),
-  stmt_prepare_mode(FALSE),
-  in_comment(NO_COMMENT),
-  m_underscore_cs(NULL)
+
+bool Lex_input_stream::init(THD *thd, char *buff, unsigned int length)
 {
+  DBUG_EXECUTE_IF("bug42064_simulate_oom",
+                  DBUG_SET("+d,simulate_out_of_memory"););
+
   m_cpp_buf= (char*) thd->alloc(length + 1);
+
+  DBUG_EXECUTE_IF("bug42064_simulate_oom",
+                  DBUG_SET("-d,bug42064_simulate_oom");); 
+
+  if (m_cpp_buf == NULL)
+    return TRUE;
+
   m_cpp_ptr= m_cpp_buf;
+  m_thd= thd;
+  m_ptr= buff;
+  m_end_of_query= buff + length;
+  m_buf= buff;
+  m_buf_length= length;
+  ignore_space= test(thd->variables.sql_mode & MODE_IGNORE_SPACE);
+
+  return FALSE;
 }
 
-Lex_input_stream::~Lex_input_stream()
-{}
 
 /**
   The operation is called from the parser in order to
@@ -311,9 +305,11 @@ void lex_start(THD *thd)
   lex->select_lex.sql_cache= SELECT_LEX::SQL_CACHE_UNSPECIFIED;
   lex->select_lex.init_order();
   lex->select_lex.group_list.empty();
+  if (lex->select_lex.group_list_ptrs)
+    lex->select_lex.group_list_ptrs->clear();
   lex->describe= 0;
   lex->subqueries= FALSE;
-  lex->view_prepare_mode= FALSE;
+  lex->context_analysis_only= 0;
   lex->derived_tables= 0;
   lex->lock_option= TL_READ;
   lex->safe_to_cache_query= 1;
@@ -366,6 +362,7 @@ void lex_start(THD *thd)
   lex->server_options.port= -1;
 
   lex->is_lex_started= TRUE;
+  lex->used_tables= 0;
   DBUG_VOID_RETURN;
 }
 
@@ -1300,11 +1297,10 @@ int MYSQLlex(void *arg, void *yythd)
           ulong version;
           version=strtol(version_str, NULL, 10);
 
-          /* Accept 'M' 'm' 'm' 'd' 'd' */
-          lip->yySkipn(5);
-
           if (version <= MYSQL_VERSION_ID)
           {
+            /* Accept 'M' 'm' 'm' 'd' 'd' */
+            lip->yySkipn(5);
             /* Expand the content of the special comment as real code */
             lip->set_echo(TRUE);
             state=MY_LEX_START;
@@ -1312,7 +1308,16 @@ int MYSQLlex(void *arg, void *yythd)
           }
           else
           {
+            /*
+              Patch and skip the conditional comment to avoid it
+              being propagated infinitely (eg. to a slave).
+            */
+            char *pcom= lip->yyUnput(' ');
             comment_closed= ! consume_comment(lip, 1);
+            if (! comment_closed)
+            {
+              *pcom= '!';
+            }
             /* version allowed to have one level of comment inside. */
           }
         }
@@ -1592,6 +1597,7 @@ void st_select_lex::init_query()
   having= prep_having= where= prep_where= 0;
   olap= UNSPECIFIED_OLAP_TYPE;
   having_fix_field= 0;
+  group_fix_field= 0;
   context.select_lex= this;
   context.init();
   /*
@@ -1610,6 +1616,7 @@ void st_select_lex::init_query()
   ref_pointer_array= 0;
   select_n_where_fields= 0;
   select_n_having_items= 0;
+  n_child_sum_items= 0;
   subquery_in_having= explicit_limit= 0;
   is_item_list_lookup= 0;
   first_execution= 1;
@@ -1620,12 +1627,16 @@ void st_select_lex::init_query()
   nest_level= 0;
   link_next= 0;
   lock_option= TL_READ_DEFAULT;
+  m_non_agg_field_used= false;
+  m_agg_func_used= false;
 }
 
 void st_select_lex::init_select()
 {
   st_select_lex_node::init_select();
   group_list.empty();
+  if (group_list_ptrs)
+    group_list_ptrs->clear();
   type= db= 0;
   having= 0;
   table_join_options= 0;
@@ -1640,7 +1651,7 @@ void st_select_lex::init_select()
   linkage= UNSPECIFIED_TYPE;
   order_list.elements= 0;
   order_list.first= 0;
-  order_list.next= (uchar**) &order_list.first;
+  order_list.next= &order_list.first;
   /* Set limit and offset to default values */
   select_limit= 0;      /* denotes the default limit = HA_POS_ERROR */
   offset_limit= 0;      /* denotes the default offset = 0 */
@@ -1650,7 +1661,8 @@ void st_select_lex::init_select()
   non_agg_fields.empty();
   cond_value= having_value= Item::COND_UNDEF;
   inner_refs_list.empty();
-  full_group_by_flag= 0;
+  m_non_agg_field_used= false;
+  m_agg_func_used= false;
 }
 
 /*
@@ -1908,6 +1920,11 @@ bool st_select_lex::add_order_to_list(THD *thd, Item *item, bool asc)
 }
 
 
+bool st_select_lex::add_gorder_to_list(THD *thd, Item *item, bool asc)
+{
+  return add_to_list(thd, gorder_list, item, asc);
+}
+
 bool st_select_lex::add_item_to_list(THD *thd, Item *item)
 {
   DBUG_ENTER("st_select_lex::add_item_to_list");
@@ -1962,7 +1979,7 @@ uint st_select_lex::get_in_sum_expr()
 
 TABLE_LIST* st_select_lex::get_table_list()
 {
-  return (TABLE_LIST*) table_list.first;
+  return table_list.first;
 }
 
 List<Item>* st_select_lex::get_item_list()
@@ -1980,6 +1997,9 @@ bool st_select_lex::setup_ref_array(THD *thd, uint order_group_num)
 {
   if (ref_pointer_array)
     return 0;
+
+  // find_order_in_list() may need some extra space, so multiply by two.
+  order_group_num*= 2;
 
   /*
     We have to create array in prepared statement memory if it is
@@ -2019,9 +2039,8 @@ void st_select_lex_unit::print(String *str, enum_query_type query_type)
     if (fake_select_lex->order_list.elements)
     {
       str->append(STRING_WITH_LEN(" order by "));
-      fake_select_lex->print_order(
-        str,
-        (ORDER *) fake_select_lex->order_list.first,
+      fake_select_lex->print_order(str,
+        fake_select_lex->order_list.first,
         query_type);
     }
     fake_select_lex->print_limit(thd, str, query_type);
@@ -2105,6 +2124,7 @@ void st_lex::cleanup_lex_after_parse_error(THD *thd)
   */
   if (thd->lex->sphead)
   {
+    thd->lex->sphead->restore_thd_mem_root(thd);
     delete thd->lex->sphead;
     thd->lex->sphead= NULL;
   }
@@ -2665,7 +2685,7 @@ TABLE_LIST *st_lex::unlink_first_table(bool *link_to_local)
     {
       select_lex.context.table_list= 
         select_lex.context.first_name_resolution_table= first->next_local;
-      select_lex.table_list.first= (uchar*) (first->next_local);
+      select_lex.table_list.first= first->next_local;
       select_lex.table_list.elements--;	//safety
       first->next_local= 0;
       /*
@@ -2697,7 +2717,7 @@ TABLE_LIST *st_lex::unlink_first_table(bool *link_to_local)
 
 void st_lex::first_lists_tables_same()
 {
-  TABLE_LIST *first_table= (TABLE_LIST*) select_lex.table_list.first;
+  TABLE_LIST *first_table= select_lex.table_list.first;
   if (query_tables != first_table && first_table != 0)
   {
     TABLE_LIST *next;
@@ -2744,9 +2764,9 @@ void st_lex::link_first_table_back(TABLE_LIST *first,
 
     if (link_to_local)
     {
-      first->next_local= (TABLE_LIST*) select_lex.table_list.first;
+      first->next_local= select_lex.table_list.first;
       select_lex.context.table_list= first;
-      select_lex.table_list.first= (uchar*) first;
+      select_lex.table_list.first= first;
       select_lex.table_list.elements++;	//safety
     }
   }
@@ -2891,6 +2911,8 @@ static void fix_prepare_info_in_table_list(THD *thd, TABLE_LIST *tbl)
     The passed WHERE and HAVING are to be saved for the future executions.
     This function saves it, and returns a copy which can be thrashed during
     this execution of the statement. By saving/thrashing here we mean only
+    We also save the chain of ORDER::next in group_list, in case
+    the list is modified by remove_const().
     AND/OR trees.
     The function also calls fix_prepare_info_in_table_list that saves all
     ON expressions.    
@@ -2902,6 +2924,19 @@ void st_select_lex::fix_prepare_information(THD *thd, Item **conds,
   if (!thd->stmt_arena->is_conventional() && first_execution)
   {
     first_execution= 0;
+    if (group_list.first)
+    {
+      if (!group_list_ptrs)
+      {
+        void *mem= thd->stmt_arena->alloc(sizeof(Group_list_ptrs));
+        group_list_ptrs= new (mem) Group_list_ptrs(thd->stmt_arena->mem_root);
+      }
+      group_list_ptrs->reserve(group_list.elements);
+      for (ORDER *order= group_list.first; order; order= order->next)
+      {
+        group_list_ptrs->push_back(order);
+      }
+    }
     if (*conds)
     {
       prep_where= *conds;
@@ -2912,7 +2947,7 @@ void st_select_lex::fix_prepare_information(THD *thd, Item **conds,
       prep_having= *having_conds;
       *having_conds= having= prep_having->copy_andor_structure(thd);
     }
-    fix_prepare_info_in_table_list(thd, (TABLE_LIST *)table_list.first);
+    fix_prepare_info_in_table_list(thd, table_list.first);
   }
 }
 
@@ -3006,3 +3041,6 @@ bool st_lex::is_partition_management() const
            alter_info.flags == ALTER_REORGANIZE_PARTITION));
 }
 
+#ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
+template class Mem_root_array<ORDER*, true>;
+#endif

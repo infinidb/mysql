@@ -9,11 +9,8 @@ source include/master-slave.inc;
 connection master;
 grant replication slave on *.* to replssl@localhost require ssl;
 create table t1 (t int);
-save_master_pos;
 
-#syncing with master
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 
 #trying to use this user without ssl
 stop slave;
@@ -37,17 +34,15 @@ start slave;
 
 #avoiding unneeded sleeps
 connection master;
-save_master_pos;
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 
 #checking that replication is ok
 select * from t1;
 
 #checking show slave status
---replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR $MASTER_MYPORT MASTER_MYPORT
---replace_column 1 # 6 # 7 # 8 # 9 # 10 # 11 # 16 # 22 # 23 # 33 # 35 # 36 #
-query_vertical show slave status;
+let $status_items= Master_SSL_Allowed, Master_SSL_CA_Path, Master_SSL_CA_File, Master_SSL_Cert, Master_SSL_Key;
+source include/show_slave_status.inc;
+source include/check_slave_is_running.inc;
 
 #checking if replication works without ssl also performing clean up
 stop slave;
@@ -56,13 +51,10 @@ start slave;
 connection master;
 drop user replssl@localhost;
 drop table t1;
-save_master_pos;
-connection slave;
-sync_with_master;
---replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR $MASTER_MYPORT MASTER_MYPORT
---replace_column 1 # 6 # 7 # 8 # 9 # 10 # 11 # 16 # 22 # 23 # 33 # 35 # 36 #
-query_vertical show slave status;
 
+sync_slave_with_master;
+source include/show_slave_status.inc;
+source include/check_slave_is_running.inc;
 # End of 4.1 tests
 
 # Start replication with ssl_verify_server_cert turned on
@@ -89,10 +81,22 @@ echo on slave;
 select * from t1;
 
 #checking show slave status
---replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR $MASTER_MYPORT MASTER_MYPORT
---replace_column 1 # 6 # 7 # 8 # 9 # 10 # 11 # 16 # 22 # 23 # 33 # 35 # 36 #
-query_vertical show slave status;
+source include/show_slave_status.inc;
+--source include/check_slave_is_running.inc
+
+# ==== Clean up ====
 
 connection master;
 drop table t1;
 sync_slave_with_master;
+--source include/stop_slave.inc
+CHANGE MASTER TO
+ master_host="127.0.0.1",
+ master_ssl_ca ='',
+ master_ssl_cert='',
+ master_ssl_key='',
+ master_ssl_verify_server_cert=0,
+ master_ssl=0;
+
+--let $rpl_only_running_threads= 1
+--source include/rpl_end.inc

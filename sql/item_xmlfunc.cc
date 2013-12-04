@@ -1,4 +1,5 @@
-/* Copyright (C) 2005-2006 MySQL AB
+/*
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifdef __GNUC__
 #pragma implementation
@@ -941,14 +943,16 @@ static Item *create_comparator(MY_XPATH *xpath,
      in a loop through all of the nodes in the node set.
     */
 
-    Item *fake= new Item_string("", 0, xpath->cs);
+    Item_string *fake= new Item_string("", 0, xpath->cs);
+    /* Don't cache fake because its value will be changed during comparison.*/
+    fake->set_used_tables(RAND_TABLE_BIT);
     Item_nodeset_func *nodeset;
     Item *scalar, *comp;
     if (a->type() == Item::XPATH_NODESET)
     {
       nodeset= (Item_nodeset_func*) a;
       scalar= b;
-      comp= eq_func(oper, fake, scalar);
+      comp= eq_func(oper, (Item*)fake, scalar);
     }
     else
     {
@@ -1354,7 +1358,7 @@ my_xpath_lex_scan(MY_XPATH *xpath,
                   MY_XPATH_LEX *lex, const char *beg, const char *end)
 {
   int ch, ctype, length;
-  for ( ; beg < end && *beg == ' ' ; beg++); // skip leading spaces
+  for ( ; beg < end && *beg == ' ' ; beg++) ; // skip leading spaces
   lex->beg= beg;
   
   if (beg >= end)
@@ -1423,7 +1427,7 @@ my_xpath_lex_scan(MY_XPATH *xpath,
 
   if (my_xdigit(ch)) // a sequence of digits
   {
-    for ( ; beg < end && my_xdigit(*beg) ; beg++);
+    for ( ; beg < end && my_xdigit(*beg) ; beg++) ;
     lex->end= beg;
     lex->term= MY_XPATH_LEX_DIGITS;
     return;
@@ -1431,7 +1435,7 @@ my_xpath_lex_scan(MY_XPATH *xpath,
 
   if (ch == '"' || ch == '\'')  // a string: either '...' or "..."
   {
-    for ( ; beg < end && *beg != ch ; beg++);
+    for ( ; beg < end && *beg != ch ; beg++) ;
     if (beg < end)
     {
       lex->end= beg+1;
@@ -2665,8 +2669,12 @@ int xml_enter(MY_XML_PARSER *st,const char *attr, size_t len)
 
   node.parent= data->parent; // Set parent for the new node to old parent
   data->parent= numnodes;    // Remember current node as new parent
+  DBUG_ASSERT(data->level <= MAX_LEVEL);
   data->pos[data->level]= numnodes;
-  node.level= data->level++;
+  if (data->level < MAX_LEVEL)
+    node.level= data->level++;
+  else
+    return MY_XML_ERROR;
   node.type= st->current_node_type; // TAG or ATTR
   node.beg= attr;
   node.end= attr + len;
@@ -2788,12 +2796,12 @@ String *Item_func_xml_extractvalue::val_str(String *str)
   null_value= 0;
   if (!nodeset_func ||
       !(res= args[0]->val_str(str)) || 
-      !parse_xml(res, &pxml))
+      !parse_xml(res, &pxml) ||
+      !(res= nodeset_func->val_str(&tmp_value)))
   {
     null_value= 1;
     return 0;
   }
-  res= nodeset_func->val_str(&tmp_value);
   return res;  
 }
 

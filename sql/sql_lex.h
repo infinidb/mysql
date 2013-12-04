@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @defgroup Semantic_Analysis Semantic Analysis
@@ -38,13 +40,18 @@ class Event_parse_data;
 */
 
 #include "set_var.h"
+#include "mem_root_array.h"
 
 #ifdef MYSQL_YACC
 #define LEX_YYSTYPE void *
 #else
 #include "lex_symbol.h"
 #if MYSQL_LEX
-#include "sql_yacc.h"
+#  if YACC_HEXT_HH
+#    include "sql_yacc.hh"
+#  else
+#    include "sql_yacc.h"
+#  endif
 #define LEX_YYSTYPE YYSTYPE *
 #else
 #define LEX_YYSTYPE void *
@@ -181,6 +188,7 @@ enum enum_drop_mode
 };
 
 typedef List<Item> List_item;
+typedef Mem_root_array<ORDER*, true> Group_list_ptrs;
 
 /* SERVERS CACHE CHANGES */
 typedef struct st_lex_server_options
@@ -587,8 +595,17 @@ public:
   st_lex *parent_lex;
   enum olap_type olap;
   /* FROM clause - points to the beginning of the TABLE_LIST::next_local list. */
-  SQL_LIST	      table_list;
-  SQL_LIST	      group_list; /* GROUP BY clause. */
+  SQL_I_List<TABLE_LIST>  table_list;
+
+  /*
+    GROUP BY clause.
+    This list may be mutated during optimization (by remove_const()),
+    so for prepared statements, we keep a copy of the ORDER.next pointers in
+    group_list_ptrs, and re-establish the original list before each execution.
+  */
+  SQL_I_List<ORDER>       group_list;
+  Group_list_ptrs        *group_list_ptrs;
+
   List<Item>          item_list;  /* list of fields & expressions */
   List<String>        interval_list;
   bool	              is_item_list_lookup;
@@ -610,8 +627,8 @@ public:
   TABLE_LIST *leaf_tables;
   const char *type;               /* type of select for EXPLAIN          */
 
-  SQL_LIST order_list;                /* ORDER clause */
-  SQL_LIST *gorder_list;
+  SQL_I_List<ORDER> order_list;   /* ORDER clause */
+  SQL_I_List<ORDER> gorder_list;
   Item *select_limit, *offset_limit;  /* LIMIT clause parameters */
   // Arrays of pointers to top elements of all_fields list
   Item **ref_pointer_array;
@@ -647,6 +664,8 @@ public:
   bool  braces;   	/* SELECT ... UNION (SELECT ... ) <- this braces */
   /* TRUE when having fix field called in processing of this SELECT */
   bool having_fix_field;
+  /* TRUE when GROUP BY fix field called in processing of this SELECT */
+  bool group_fix_field;
   /* List of references to fields referenced from inner selects */
   List<Item_outer_ref> inner_refs_list;
   /* Number of Item_sum-derived objects in this SELECT */
@@ -711,16 +730,7 @@ public:
     joins on the right.
   */
   List<String> *prev_join_using;
-  /*
-    Bitmap used in the ONLY_FULL_GROUP_BY_MODE to prevent mixture of aggregate
-    functions and non aggregated fields when GROUP BY list is absent.
-    Bits:
-      0 - non aggregated fields are used in this select,
-          defined as NON_AGG_FIELD_USED.
-      1 - aggregate functions are used in this select,
-          defined as SUM_FUNC_USED.
-  */
-  uint8 full_group_by_flag;
+
   void init_query();
   void init_select();
   st_select_lex_unit* master_unit();
@@ -753,6 +763,7 @@ public:
   bool add_group_to_list(THD *thd, Item *item, bool asc);
   bool add_ftfunc_to_list(Item_func_match *func);
   bool add_order_to_list(THD *thd, Item *item, bool asc);
+  bool add_gorder_to_list(THD *thd, Item *item, bool asc);
   TABLE_LIST* add_table_to_list(THD *thd, Table_ident *table,
 				LEX_STRING *alias,
 				ulong table_options,
@@ -772,7 +783,7 @@ public:
   {
     order_list.elements= 0;
     order_list.first= 0;
-    order_list.next= (uchar**) &order_list.first;
+    order_list.next= &order_list.first;
   }
   /*
     This method created for reiniting LEX in mysql_admin_table() and can be
@@ -784,7 +795,8 @@ public:
   bool test_limit();
 
   friend void lex_start(THD *thd);
-  st_select_lex() : n_sum_items(0), n_child_sum_items(0) {}
+  st_select_lex() : group_list_ptrs(NULL), n_sum_items(0), n_child_sum_items(0)
+  {}
   void make_empty_select()
   {
     init_query();
@@ -828,7 +840,22 @@ public:
 
   void clear_index_hints(void) { index_hints= NULL; }
 
-private:  
+  /*
+    For MODE_ONLY_FULL_GROUP_BY we need to maintain two flags:
+     - Non-aggregated fields are used in this select.
+     - Aggregate functions are used in this select.
+    In MODE_ONLY_FULL_GROUP_BY only one of these may be true.
+  */
+  bool non_agg_field_used() const { return m_non_agg_field_used; }
+  bool agg_func_used()      const { return m_agg_func_used; }
+
+  void set_non_agg_field_used(bool val) { m_non_agg_field_used= val; }
+  void set_agg_func_used(bool val)      { m_agg_func_used= val; }
+
+private:
+  bool m_non_agg_field_used;
+  bool m_agg_func_used;
+
   /* current index hint kind. used in filling up index_hints */
   enum index_hint_type current_index_hint_type;
   index_clause_map current_index_hint_clause;
@@ -951,6 +978,8 @@ enum xa_option_words {XA_NONE, XA_JOIN, XA_RESUME, XA_ONE_PHASE,
                       XA_SUSPEND, XA_FOR_MIGRATE};
 
 
+struct Sroutine_hash_entry;
+
 /*
   Class representing list of all tables used by statement.
   It also contains information about stored functions used by statement
@@ -991,9 +1020,9 @@ public:
     We use these two members for restoring of 'sroutines_list' to the state
     in which it was right after query parsing.
   */
-  SQL_LIST sroutines_list;
-  uchar    **sroutines_list_own_last;
-  uint     sroutines_list_own_elements;
+  SQL_I_List<Sroutine_hash_entry> sroutines_list;
+  Sroutine_hash_entry **sroutines_list_own_last;
+  uint sroutines_list_own_elements;
 
   /*
     These constructor and destructor serve for creation/destruction
@@ -1145,9 +1174,38 @@ enum enum_comment_state
 class Lex_input_stream
 {
 public:
-  Lex_input_stream(THD *thd, const char* buff, unsigned int length);
-  ~Lex_input_stream();
+  Lex_input_stream() :
+    yylineno(1),
+    yytoklen(0),
+    yylval(NULL),
+    m_tok_start(NULL),
+    m_tok_end(NULL),
+    m_tok_start_prev(NULL),
+    m_echo(TRUE),
+    m_cpp_tok_start(NULL),
+    m_cpp_tok_start_prev(NULL),
+    m_cpp_tok_end(NULL),
+    m_body_utf8(NULL),
+    m_cpp_utf8_processed_ptr(NULL),
+    next_state(MY_LEX_START),
+    found_semicolon(NULL),
+    stmt_prepare_mode(FALSE),
+    in_comment(NO_COMMENT),
+    m_underscore_cs(NULL)
+  {
+  }
 
+  ~Lex_input_stream()
+  {
+  }
+
+  /**
+     Object initializer. Must be called before usage.
+
+     @retval FALSE OK
+     @retval TRUE  Error
+  */
+  bool init(THD *thd, char *buff, unsigned int length);
   /**
     Set the echo mode.
 
@@ -1259,6 +1317,20 @@ public:
       m_cpp_ptr += n;
     }
     m_ptr += n;
+  }
+
+  /**
+    Puts a character back into the stream, canceling
+    the effect of the last yyGet() or yySkip().
+    Note that the echo mode should not change between calls
+    to unput, get, or skip from the stream.
+  */
+  char *yyUnput(char ch)
+  {
+    *--m_ptr= ch;
+    if (m_echo)
+      m_cpp_ptr--;
+    return m_ptr;
   }
 
   /**
@@ -1407,7 +1479,7 @@ public:
 
 private:
   /** Pointer to the current position in the raw input stream. */
-  const char *m_ptr;
+  char *m_ptr;
 
   /** Starting position of the last token parsed, in the raw buffer. */
   const char *m_tok_start;
@@ -1597,7 +1669,8 @@ typedef struct st_lex : public Query_tables_list
   */
   List<Name_resolution_context> context_stack;
 
-  SQL_LIST	      proc_list, auxiliary_table_list, save_list;
+  SQL_I_List<ORDER> proc_list;
+  SQL_I_List<TABLE_LIST> auxiliary_table_list, save_list;
   Create_field	      *last_field;
   Item_sum *in_sum_func;
   udf_func udf;
@@ -1667,14 +1740,8 @@ typedef struct st_lex : public Query_tables_list
   bool verbose, no_write_to_binlog;
 
   bool tx_chain, tx_release;
-  /*
-    Special JOIN::prepare mode: changing of query is prohibited.
-    When creating a view, we need to just check its syntax omitting
-    any optimizations: afterwards definition of the view will be
-    reconstructed by means of ::print() methods and written to
-    to an .frm file. We need this definition to stay untouched.
-  */
-  bool view_prepare_mode;
+
+  uint8 context_analysis_only;
   bool safe_to_cache_query;
   bool subqueries, ignore;
   st_parsing_options parsing_options;
@@ -1719,7 +1786,7 @@ typedef struct st_lex : public Query_tables_list
     fields to TABLE object at table open (altough for latter pointer to table
     being opened is probably enough).
   */
-  SQL_LIST trg_table_fields;
+  SQL_I_List<Item_trigger_field> trg_table_fields;
 
   /*
     stmt_definition_begin is intended to point to the next word after
@@ -1727,6 +1794,7 @@ typedef struct st_lex : public Query_tables_list
       - CREATE TRIGGER (points to "TRIGGER");
       - CREATE PROCEDURE (points to "PROCEDURE");
       - CREATE FUNCTION (points to "FUNCTION" or "AGGREGATE");
+      - CREATE EVENT (points to "EVENT")
 
     This pointer is required to add possibly omitted DEFINER-clause to the
     DDL-statement before dumping it to the binlog.
@@ -1735,13 +1803,6 @@ typedef struct st_lex : public Query_tables_list
 
   const char *stmt_definition_end;
 
-  /*
-    Pointers to part of LOAD DATA statement that should be rewritten
-    during replication ("LOCAL 'filename' REPLACE INTO" part).
-  */
-  const char *fname_start;
-  const char *fname_end;
-  
   /**
     During name resolution search only in the table list given by 
     Name_resolution_context::first_name_resolution_table and
@@ -1775,6 +1836,33 @@ typedef struct st_lex : public Query_tables_list
   */
   bool protect_against_global_read_lock;
 
+  /*
+    The following three variables are used in 'CREATE TABLE IF NOT EXISTS ...
+    SELECT' statement. They are used to binlog the statement.
+
+    create_select_start_with_brace will be set if there is a '(' before
+    the first SELECT clause
+
+    create_select_pos records the relative position of the SELECT clause
+    in the whole statement.
+
+    create_select_in_comment will be set if SELECT keyword is in conditional
+    comment.
+   */
+  bool create_select_start_with_brace;
+  uint create_select_pos;
+  bool create_select_in_comment;
+
+  /*
+    The set of those tables whose fields are referenced in all subqueries
+    of the query.
+    TODO: possibly this it is incorrect to have used tables in LEX because
+    with subquery, it is not clear what does the field mean. To fix this
+    we should aggregate used tables information for selected expressions
+    into the select_lex.
+  */
+  table_map  used_tables;
+
   st_lex();
 
   virtual ~st_lex()
@@ -1782,6 +1870,13 @@ typedef struct st_lex : public Query_tables_list
     destroy_query_tables_list();
     plugin_unlock_list(NULL, (plugin_ref *)plugins.buffer, plugins.elements);
     delete_dynamic(&plugins);
+  }
+
+  inline bool is_ps_or_view_context_analysis()
+  {
+    return (context_analysis_only &
+            (CONTEXT_ANALYSIS_ONLY_PREPARE |
+             CONTEXT_ANALYSIS_ONLY_VIEW));
   }
 
   inline void uncacheable(uint8 cause)
@@ -1934,9 +2029,20 @@ public:
 class Parser_state
 {
 public:
-  Parser_state(THD *thd, const char* buff, unsigned int length)
-    : m_lip(thd, buff, length), m_yacc()
+  Parser_state()
+    : m_yacc()
   {}
+
+  /**
+     Object initializer. Must be called before usage.
+
+     @retval FALSE OK
+     @retval TRUE  Error
+  */
+  bool init(THD *thd, char *buff, unsigned int length)
+  {
+    return m_lip.init(thd, buff, length);
+  }
 
   ~Parser_state()
   {}

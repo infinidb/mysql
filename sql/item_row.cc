@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 
@@ -30,7 +32,8 @@
 */
 
 Item_row::Item_row(List<Item> &arg):
-  Item(), used_tables_cache(0), const_item_cache(1), with_null(0)
+  Item(), used_tables_cache(0), not_null_tables_cache(0),
+  const_item_cache(1), with_null(0)
 {
 
   //TODO: think placing 2-3 component items in item (as it done for function)
@@ -71,6 +74,8 @@ bool Item_row::fix_fields(THD *thd, Item **ref)
     Item *item= *arg;
     used_tables_cache |= item->used_tables();
     const_item_cache&= item->const_item() && !with_null;
+    not_null_tables_cache|= item->not_null_tables();
+
     if (const_item_cache)
     {
       if (item->cols() > 1)

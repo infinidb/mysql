@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2000, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2000, 2013, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -51,6 +51,15 @@ Created 9/17/2000 Heikki Tuuri
 #include "btr0sea.h"
 #include "fil0fil.h"
 #include "ibuf0ibuf.h"
+#include "ha_prototypes.h"
+
+#ifdef __WIN__
+/* error LNK2001: unresolved external symbol _debug_sync_C_callback_ptr */
+# define DEBUG_SYNC_C(dummy) ((void) 0)
+#else
+# include "m_string.h" /* for my_sys.h */
+# include "my_sys.h" /* DEBUG_SYNC_C */
+#endif
 
 /** Provide optional 4.x backwards compatibility for 5.0 and above */
 UNIV_INTERN ibool	row_rollback_on_timeout	= FALSE;
@@ -444,7 +453,7 @@ row_mysql_convert_row_to_innobase(
 					row is used, as row may contain
 					pointers to this record! */
 {
-	mysql_row_templ_t*	templ;
+	const mysql_row_templ_t*templ;
 	dfield_t*		dfield;
 	ulint			i;
 
@@ -485,7 +494,7 @@ next_column:
 /****************************************************************//**
 Handles user errors and lock waits detected by the database engine.
 @return TRUE if it was a lock wait and we should continue running the
-query thread */
+query thread and in that case the thr is ALREADY in the running state. */
 UNIV_INTERN
 ibool
 row_mysql_handle_errors(
@@ -510,7 +519,7 @@ handle_new_error:
 	switch (err) {
 	case DB_LOCK_WAIT_TIMEOUT:
 		if (row_rollback_on_timeout) {
-			trx_general_rollback_for_mysql(trx, FALSE, NULL);
+			trx_general_rollback_for_mysql(trx, NULL);
 			break;
 		}
 		/* fall through */
@@ -522,11 +531,12 @@ handle_new_error:
 	case DB_CANNOT_ADD_CONSTRAINT:
 	case DB_TOO_MANY_CONCURRENT_TRXS:
 	case DB_OUT_OF_FILE_SPACE:
+	case DB_INTERRUPTED:
 		if (savept) {
 			/* Roll back the latest, possibly incomplete
 			insertion or update */
 
-			trx_general_rollback_for_mysql(trx, TRUE, savept);
+			trx_general_rollback_for_mysql(trx, savept);
 		}
 		/* MySQL will roll back the latest SQL statement */
 		break;
@@ -548,7 +558,7 @@ handle_new_error:
 		/* Roll back the whole transaction; this resolution was added
 		to version 3.23.43 */
 
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 		break;
 
 	case DB_MUST_GET_MORE_FILE_SPACE:
@@ -572,8 +582,15 @@ handle_new_error:
 		      "InnoDB: If the mysqld server crashes"
 		      " after the startup or when\n"
 		      "InnoDB: you dump the tables, look at\n"
-		      "InnoDB: " REFMAN "forcing-recovery.html"
+		      "InnoDB: " REFMAN "forcing-innodb-recovery.html"
 		      " for help.\n", stderr);
+		break;
+	case DB_FOREIGN_EXCEED_MAX_CASCADE:
+		fprintf(stderr, "InnoDB: Cannot delete/update rows with"
+			" cascading foreign key constraints that exceed max"
+			" depth of %lu\n"
+			"Please drop excessive foreign constraints"
+			" and try again\n", (ulong) DICT_FK_MAX_RECURSIVE_LOAD);
 		break;
 	default:
 		fprintf(stderr, "InnoDB: unknown error code %lu\n",
@@ -624,6 +641,8 @@ row_create_prebuilt(
 
 	prebuilt->select_lock_type = LOCK_NONE;
 	prebuilt->stored_select_lock_type = 99999999;
+	UNIV_MEM_INVALID(&prebuilt->stored_select_lock_type,
+			 sizeof prebuilt->stored_select_lock_type);
 
 	prebuilt->search_tuple = dtuple_create(
 		heap, 2 * dict_table_get_n_cols(table));
@@ -861,23 +880,28 @@ row_update_statistics_if_needed(
 	if (counter > 2000000000
 	    || ((ib_int64_t)counter > 16 + table->stat_n_rows / 16)) {
 
-		dict_update_statistics(table);
+		dict_update_statistics(table, FALSE /* update even if stats
+						    are initialized */);
 	}
 }
 
 /*********************************************************************//**
-Unlocks AUTO_INC type locks that were possibly reserved by a trx. */
+Unlocks AUTO_INC type locks that were possibly reserved by a trx. This
+function should be called at the the end of an SQL statement, by the
+connection thread that owns the transaction (trx->mysql_thd). */
 UNIV_INTERN
 void
 row_unlock_table_autoinc_for_mysql(
 /*===============================*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
-	mutex_enter(&kernel_mutex);
+	if (lock_trx_holds_autoinc_locks(trx)) {
+		mutex_enter(&kernel_mutex);
 
-	lock_release_autoinc_locks(trx);
+		lock_release_autoinc_locks(trx);
 
-	mutex_exit(&kernel_mutex);
+		mutex_exit(&kernel_mutex);
+	}
 }
 
 /*********************************************************************//**
@@ -1335,6 +1359,8 @@ row_update_for_mysql(
 		return(DB_ERROR);
 	}
 
+	DEBUG_SYNC_C("innodb_row_update_for_mysql_begin");
+
 	trx->op_info = "updating or deleting";
 
 	row_mysql_delay_if_needed();
@@ -1374,10 +1400,14 @@ row_update_for_mysql(
 run_again:
 	thr->run_node = node;
 	thr->prev_node = node;
+	thr->fk_cascade_depth = 0;
 
 	row_upd_step(thr);
 
 	err = trx->error_state;
+
+	/* Reset fk_cascade_depth back to 0 */
+	thr->fk_cascade_depth = 0;
 
 	if (err != DB_SUCCESS) {
 		que_thr_stop_for_mysql(thr);
@@ -1415,7 +1445,12 @@ run_again:
 		srv_n_rows_updated++;
 	}
 
-	row_update_statistics_if_needed(prebuilt->table);
+	/* We update table statistics only if it is a DELETE or UPDATE
+	that changes indexed columns, UPDATEs that change only non-indexed
+	columns would not affect statistics. */
+	if (node->is_delete || !(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
+		row_update_statistics_if_needed(prebuilt->table);
+	}
 
 	trx->op_info = "";
 
@@ -1423,27 +1458,26 @@ run_again:
 }
 
 /*********************************************************************//**
-This can only be used when srv_locks_unsafe_for_binlog is TRUE or
-this session is using a READ COMMITTED isolation level. Before
-calling this function we must use trx_reset_new_rec_lock_info() and
-trx_register_new_rec_lock() to store the information which new record locks
-really were set. This function removes a newly set lock under prebuilt->pcur,
-and also under prebuilt->clust_pcur. Currently, this is only used and tested
-in the case of an UPDATE or a DELETE statement, where the row lock is of the
-LOCK_X type.
-Thus, this implements a 'mini-rollback' that releases the latest record
-locks we set.
-@return	error code or DB_SUCCESS */
+This can only be used when srv_locks_unsafe_for_binlog is TRUE or this
+session is using a READ COMMITTED or READ UNCOMMITTED isolation level.
+Before calling this function row_search_for_mysql() must have
+initialized prebuilt->new_rec_locks to store the information which new
+record locks really were set. This function removes a newly set
+clustered index record lock under prebuilt->pcur or
+prebuilt->clust_pcur.  Thus, this implements a 'mini-rollback' that
+releases the latest clustered index record lock we set.
+@return error code or DB_SUCCESS */
 UNIV_INTERN
 int
 row_unlock_for_mysql(
 /*=================*/
-	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct in MySQL
+	row_prebuilt_t*	prebuilt,	/*!< in/out: prebuilt struct in MySQL
 					handle */
-	ibool		has_latches_on_recs)/*!< TRUE if called so that we have
-					the latches on the records under pcur
-					and clust_pcur, and we do not need to
-					reposition the cursors. */
+	ibool		has_latches_on_recs)/*!< in: TRUE if called so
+					that we have the latches on
+					the records under pcur and
+					clust_pcur, and we do not need
+					to reposition the cursors. */
 {
 	btr_pcur_t*	pcur		= prebuilt->pcur;
 	btr_pcur_t*	clust_pcur	= prebuilt->clust_pcur;
@@ -1454,7 +1488,7 @@ row_unlock_for_mysql(
 
 	if (UNIV_UNLIKELY
 	    (!srv_locks_unsafe_for_binlog
-	     && trx->isolation_level != TRX_ISO_READ_COMMITTED)) {
+	     && trx->isolation_level > TRX_ISO_READ_COMMITTED)) {
 
 		fprintf(stderr,
 			"InnoDB: Error: calling row_unlock_for_mysql though\n"
@@ -1570,11 +1604,26 @@ row_update_cascade_for_mysql(
 	trx_t*	trx;
 
 	trx = thr_get_trx(thr);
+
+	/* Increment fk_cascade_depth to record the recursive call depth on
+	a single update/delete that affects multiple tables chained
+	together with foreign key relations. */
+	thr->fk_cascade_depth++;
+
+	if (thr->fk_cascade_depth > FK_MAX_CASCADE_DEL) {
+		return (DB_FOREIGN_EXCEED_MAX_CASCADE);
+	}
 run_again:
 	thr->run_node = node;
 	thr->prev_node = node;
 
 	row_upd_step(thr);
+
+	/* The recursive call for cascading update/delete happens
+	in above row_upd_step(), reset the counter once we come
+	out of the recursive call, so it does not accumulate for
+	different row deletes */
+	thr->fk_cascade_depth = 0;
 
 	err = trx->error_state;
 
@@ -1638,37 +1687,6 @@ row_table_got_default_clust_index(
 	clust_index = dict_table_get_first_index(table);
 
 	return(dict_index_get_nth_col(clust_index, 0)->mtype == DATA_SYS);
-}
-
-/*********************************************************************//**
-Calculates the key number used inside MySQL for an Innobase index. We have
-to take into account if we generated a default clustered index for the table
-@return	the key number used inside MySQL */
-UNIV_INTERN
-ulint
-row_get_mysql_key_number_for_index(
-/*===============================*/
-	const dict_index_t*	index)	/*!< in: index */
-{
-	const dict_index_t*	ind;
-	ulint			i;
-
-	ut_a(index);
-
-	i = 0;
-	ind = dict_table_get_first_index(index->table);
-
-	while (index != ind) {
-		ind = dict_table_get_next_index(ind);
-		i++;
-	}
-
-	if (row_table_got_default_clust_index(index->table)) {
-		ut_a(i > 0);
-		i--;
-	}
-
-	return(i);
 }
 
 /*********************************************************************//**
@@ -1751,7 +1769,8 @@ Creates a table for MySQL. If the name of the table ends in
 one of "innodb_monitor", "innodb_lock_monitor", "innodb_tablespace_monitor",
 "innodb_table_monitor", then this will also start the printing of monitor
 output by the master thread. If the table name ends in "innodb_mem_validate",
-InnoDB will try to invoke mem_validate().
+InnoDB will try to invoke mem_validate(). On failure the transaction will
+be rolled back and the 'table' object will be freed.
 @return	error code or DB_SUCCESS */
 UNIV_INTERN
 int
@@ -1767,7 +1786,6 @@ row_create_table_for_mysql(
 	const char*	table_name;
 	ulint		table_name_len;
 	ulint		err;
-	ulint		i;
 
 	ut_ad(trx->mysql_thread_id == os_thread_get_curr_id());
 #ifdef UNIV_SYNC_DEBUG
@@ -1800,15 +1818,6 @@ err_exit:
 			" of the MyISAM type!\n",
 			table->name);
 		goto err_exit;
-	}
-
-	/* Check that no reserved column names are used. */
-	for (i = 0; i < dict_table_get_n_user_cols(table); i++) {
-		if (dict_col_name_is_reserved(
-			    dict_table_get_col_name(table, i))) {
-
-			goto err_exit;
-		}
 	}
 
 	trx_start_if_not_started(trx);
@@ -1883,13 +1892,13 @@ err_exit:
 
 	err = trx->error_state;
 
-	if (UNIV_UNLIKELY(err != DB_SUCCESS)) {
-		trx->error_state = DB_SUCCESS;
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
-	}
-
 	switch (err) {
+	case DB_SUCCESS:
+		break;
 	case DB_OUT_OF_FILE_SPACE:
+		trx->error_state = DB_SUCCESS;
+		trx_general_rollback_for_mysql(trx, NULL);
+
 		ut_print_timestamp(stderr);
 		fputs("  InnoDB: Warning: cannot create table ",
 		      stderr);
@@ -1900,38 +1909,33 @@ err_exit:
 
 			row_drop_table_for_mysql(table->name, trx, FALSE);
 			trx_commit_for_mysql(trx);
+		} else {
+			dict_mem_table_free(table);
 		}
 		break;
 
-	case DB_DUPLICATE_KEY:
-		ut_print_timestamp(stderr);
-		fputs("  InnoDB: Error: table ", stderr);
-		ut_print_name(stderr, trx, TRUE, table->name);
-		fputs(" already exists in InnoDB internal\n"
-		      "InnoDB: data dictionary. Have you deleted"
-		      " the .frm file\n"
-		      "InnoDB: and not used DROP TABLE?"
-		      " Have you used DROP DATABASE\n"
-		      "InnoDB: for InnoDB tables in"
-		      " MySQL version <= 3.23.43?\n"
-		      "InnoDB: See the Restrictions section"
-		      " of the InnoDB manual.\n"
-		      "InnoDB: You can drop the orphaned table"
-		      " inside InnoDB by\n"
-		      "InnoDB: creating an InnoDB table with"
-		      " the same name in another\n"
-		      "InnoDB: database and copying the .frm file"
-		      " to the current database.\n"
-		      "InnoDB: Then MySQL thinks the table exists,"
-		      " and DROP TABLE will\n"
-		      "InnoDB: succeed.\n"
-		      "InnoDB: You can look for further help from\n"
-		      "InnoDB: " REFMAN "innodb-troubleshooting.html\n",
-		      stderr);
+	case DB_TOO_MANY_CONCURRENT_TRXS:
+		/* We already have .ibd file here. it should be deleted. */
 
+		if (table->space && !fil_delete_tablespace(table->space)) {
+			ut_print_timestamp(stderr);
+			fprintf(stderr,
+				"  InnoDB: Error: not able to"
+				" delete tablespace %lu of table ",
+				(ulong) table->space);
+			ut_print_name(stderr, trx, TRUE, table->name);
+			fputs("!\n", stderr);
+		}
+		/* fall through */
+
+	case DB_DUPLICATE_KEY:
+	default:
 		/* We may also get err == DB_ERROR if the .ibd file for the
 		table already exists */
 
+		trx->error_state = DB_SUCCESS;
+		trx_general_rollback_for_mysql(trx, NULL);
+		dict_mem_table_free(table);
 		break;
 	}
 
@@ -2053,7 +2057,7 @@ error_handling:
 
 		trx->error_state = DB_SUCCESS;
 
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 
 		row_drop_table_for_mysql(table_name, trx, FALSE);
 
@@ -2074,7 +2078,7 @@ Scans a table create SQL string and adds to the data dictionary
 the foreign key constraints declared in the string. This function
 should be called after the indexes for a table have been created.
 Each foreign key constraint must be accompanied with indexes in
-bot participating tables. The indexes are allowed to contain more
+both participating tables. The indexes are allowed to contain more
 fields than mentioned in the constraint. Check also that foreign key
 constraints which reference this table are ok.
 @return	error code or DB_SUCCESS */
@@ -2088,6 +2092,7 @@ row_table_add_foreign_constraints(
 				FOREIGN KEY (a, b) REFERENCES table2(c, d),
 					table2 can be written also with the
 					database name before it: test.table2 */
+	size_t		sql_length,	/*!< in: length of sql_string */
 	const char*	name,		/*!< in: table full name in the
 					normalized form
 					database_name/table_name */
@@ -2109,11 +2114,11 @@ row_table_add_foreign_constraints(
 
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
-	err = dict_create_foreign_constraints(trx, sql_string, name,
-					      reject_fks);
+	err = dict_create_foreign_constraints(trx, sql_string, sql_length,
+					      name, reject_fks);
 	if (err == DB_SUCCESS) {
 		/* Check that also referencing constraints are ok */
-		err = dict_load_foreigns(name, TRUE);
+		err = dict_load_foreigns(name, FALSE, TRUE);
 	}
 
 	if (err != DB_SUCCESS) {
@@ -2121,7 +2126,7 @@ row_table_add_foreign_constraints(
 
 		trx->error_state = DB_SUCCESS;
 
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 
 		row_drop_table_for_mysql(name, trx, FALSE);
 
@@ -2454,7 +2459,7 @@ row_discard_tablespace_for_mysql(
 		goto funct_exit;
 	}
 
-	new_id = dict_hdr_get_new_id(DICT_HDR_TABLE_ID);
+	dict_hdr_get_new_id(&new_id, NULL, NULL);
 
 	/* Remove all locks except the table-level S and X locks. */
 	lock_remove_all_on_table(table, FALSE);
@@ -2488,7 +2493,7 @@ row_discard_tablespace_for_mysql(
 
 	if (err != DB_SUCCESS) {
 		trx->error_state = DB_SUCCESS;
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 		trx->error_state = DB_SUCCESS;
 	} else {
 		dict_table_change_id_in_cache(table, new_id);
@@ -2497,7 +2502,7 @@ row_discard_tablespace_for_mysql(
 
 		if (!success) {
 			trx->error_state = DB_SUCCESS;
-			trx_general_rollback_for_mysql(trx, FALSE, NULL);
+			trx_general_rollback_for_mysql(trx, NULL);
 			trx->error_state = DB_SUCCESS;
 
 			err = DB_ERROR;
@@ -2816,11 +2821,18 @@ row_truncate_table_for_mysql(
 
 			dict_index_t*	index;
 
-			space = 0;
+			dict_hdr_get_new_id(NULL, NULL, &space);
 
-			if (fil_create_new_single_table_tablespace(
-				    &space, table->name, FALSE, flags,
+			/* Lock all index trees for this table. We must
+			do so after dict_hdr_get_new_id() to preserve
+			the latch order */
+			dict_table_x_lock_indexes(table);
+
+			if (space == ULINT_UNDEFINED
+			    || fil_create_new_single_table_tablespace(
+				    space, table->name, FALSE, flags,
 				    FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
+				dict_table_x_unlock_indexes(table);
 				ut_print_timestamp(stderr);
 				fprintf(stderr,
 					"  InnoDB: TRUNCATE TABLE %s failed to"
@@ -2849,6 +2861,15 @@ row_truncate_table_for_mysql(
 					FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 			mtr_commit(&mtr);
 		}
+	} else {
+		/* Lock all index trees for this table, as we will
+		truncate the table/index and possibly change their metadata.
+		All DML/DDL are blocked by table level lock, with
+		a few exceptions such as queries into information schema
+		about the table, MySQL could try to access index stats
+		for this kind of query, we need to use index locks to
+		sync up */
+		dict_table_x_lock_indexes(table);
 	}
 
 	/* scan SYS_INDEXES for all indexes of the table */
@@ -2924,7 +2945,11 @@ next_rec:
 
 	mem_heap_free(heap);
 
-	new_id = dict_hdr_get_new_id(DICT_HDR_TABLE_ID);
+	/* Done with index truncation, release index tree locks,
+	subsequent work relates to table level metadata change */
+	dict_table_x_unlock_indexes(table);
+
+	dict_hdr_get_new_id(&new_id, NULL, NULL);
 
 	info = pars_info_create();
 
@@ -2949,7 +2974,7 @@ next_rec:
 
 	if (err != DB_SUCCESS) {
 		trx->error_state = DB_SUCCESS;
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 		trx->error_state = DB_SUCCESS;
 		ut_print_timestamp(stderr);
 		fputs("  InnoDB: Unable to assign a new identifier to table ",
@@ -2968,7 +2993,8 @@ next_rec:
 	dict_table_autoinc_lock(table);
 	dict_table_autoinc_initialize(table, 1);
 	dict_table_autoinc_unlock(table);
-	dict_update_statistics(table);
+	dict_update_statistics(table, FALSE /* update even if stats are
+					    initialized */);
 
 	trx_commit_for_mysql(trx);
 
@@ -3001,6 +3027,7 @@ row_drop_table_for_mysql(
 {
 	dict_foreign_t*	foreign;
 	dict_table_t*	table;
+	dict_index_t*	index;
 	ulint		space_id;
 	ulint		err;
 	const char*	table_name;
@@ -3207,6 +3234,18 @@ check_next_foreign:
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 	trx->table_id = table->id;
 
+	/* Mark all indexes unavailable in the data dictionary cache
+	before starting to drop the table. */
+
+	for (index = dict_table_get_first_index(table);
+	     index != NULL;
+	     index = dict_table_get_next_index(index)) {
+		rw_lock_x_lock(dict_index_get_lock(index));
+		ut_ad(!index->to_be_dropped);
+		index->to_be_dropped = TRUE;
+		rw_lock_x_unlock(dict_index_get_lock(index));
+	}
+
 	/* We use the private SQL parser of Innobase to generate the
 	query graphs needed in deleting the dictionary data from system
 	tables in Innobase. Deleting a row from SYS_INDEXES table also
@@ -3223,6 +3262,19 @@ check_next_foreign:
 			   "index_id CHAR;\n"
 			   "foreign_id CHAR;\n"
 			   "found INT;\n"
+
+			   "DECLARE CURSOR cur_fk IS\n"
+			   "SELECT ID FROM SYS_FOREIGN\n"
+			   "WHERE FOR_NAME = :table_name\n"
+			   "AND TO_BINARY(FOR_NAME)\n"
+			   "  = TO_BINARY(:table_name)\n"
+			   "LOCK IN SHARE MODE;\n"
+
+			   "DECLARE CURSOR cur_idx IS\n"
+			   "SELECT ID FROM SYS_INDEXES\n"
+			   "WHERE TABLE_ID = table_id\n"
+			   "LOCK IN SHARE MODE;\n"
+
 			   "BEGIN\n"
 			   "SELECT ID INTO table_id\n"
 			   "FROM SYS_TABLES\n"
@@ -3245,13 +3297,9 @@ check_next_foreign:
 			   "IF (:table_name = 'SYS_FOREIGN_COLS') THEN\n"
 			   "       found := 0;\n"
 			   "END IF;\n"
+			   "OPEN cur_fk;\n"
 			   "WHILE found = 1 LOOP\n"
-			   "       SELECT ID INTO foreign_id\n"
-			   "       FROM SYS_FOREIGN\n"
-			   "       WHERE FOR_NAME = :table_name\n"
-			   "               AND TO_BINARY(FOR_NAME)\n"
-			   "                 = TO_BINARY(:table_name)\n"
-			   "               LOCK IN SHARE MODE;\n"
+			   "       FETCH cur_fk INTO foreign_id;\n"
 			   "       IF (SQL % NOTFOUND) THEN\n"
 			   "               found := 0;\n"
 			   "       ELSE\n"
@@ -3261,12 +3309,11 @@ check_next_foreign:
 			   "               WHERE ID = foreign_id;\n"
 			   "       END IF;\n"
 			   "END LOOP;\n"
+			   "CLOSE cur_fk;\n"
 			   "found := 1;\n"
+			   "OPEN cur_idx;\n"
 			   "WHILE found = 1 LOOP\n"
-			   "       SELECT ID INTO index_id\n"
-			   "       FROM SYS_INDEXES\n"
-			   "       WHERE TABLE_ID = table_id\n"
-			   "       LOCK IN SHARE MODE;\n"
+			   "       FETCH cur_idx INTO index_id;\n"
 			   "       IF (SQL % NOTFOUND) THEN\n"
 			   "               found := 0;\n"
 			   "       ELSE\n"
@@ -3277,6 +3324,7 @@ check_next_foreign:
 			   "               AND TABLE_ID = table_id;\n"
 			   "       END IF;\n"
 			   "END LOOP;\n"
+			   "CLOSE cur_idx;\n"
 			   "DELETE FROM SYS_COLUMNS\n"
 			   "WHERE TABLE_ID = table_id;\n"
 			   "DELETE FROM SYS_TABLES\n"
@@ -3284,18 +3332,12 @@ check_next_foreign:
 			   "END;\n"
 			   , FALSE, trx);
 
-	if (err != DB_SUCCESS) {
-		ut_a(err == DB_OUT_OF_FILE_SPACE);
-
-		err = DB_MUST_GET_MORE_FILE_SPACE;
-
-		row_mysql_handle_errors(&err, trx, NULL, NULL);
-
-		ut_error;
-	} else {
-		ibool		is_path;
+	switch (err) {
+		ibool		is_temp;
 		const char*	name_or_path;
 		mem_heap_t*	heap;
+
+	case DB_SUCCESS:
 
 		heap = mem_heap_create(200);
 
@@ -3306,12 +3348,13 @@ check_next_foreign:
 		space_id = table->space;
 
 		if (table->dir_path_of_temp_table != NULL) {
-			is_path = TRUE;
 			name_or_path = mem_heap_strdup(
 				heap, table->dir_path_of_temp_table);
+			is_temp = TRUE;
 		} else {
-			is_path = FALSE;
 			name_or_path = name;
+			is_temp = (table->flags >> DICT_TF2_SHIFT)
+				& DICT_TF2_TEMPORARY;
 		}
 
 		dict_table_remove_from_cache(table);
@@ -3331,8 +3374,8 @@ check_next_foreign:
 		if (err == DB_SUCCESS && space_id > 0) {
 			if (!fil_space_for_table_exists_in_mem(space_id,
 							       name_or_path,
-							       is_path,
-							       FALSE, TRUE)) {
+							       is_temp, FALSE,
+							       !is_temp)) {
 				err = DB_SUCCESS;
 
 				fprintf(stderr,
@@ -3361,7 +3404,38 @@ check_next_foreign:
 		}
 
 		mem_heap_free(heap);
+		break;
+
+	case DB_TOO_MANY_CONCURRENT_TRXS:
+		/* Cannot even find a free slot for the
+		the undo log. We can directly exit here
+		and return the DB_TOO_MANY_CONCURRENT_TRXS
+		error. */
+
+		/* Mark all indexes available in the data dictionary
+		cache again. */
+
+		for (index = dict_table_get_first_index(table);
+		     index != NULL;
+		     index = dict_table_get_next_index(index)) {
+			rw_lock_x_lock(dict_index_get_lock(index));
+			index->to_be_dropped = FALSE;
+			rw_lock_x_unlock(dict_index_get_lock(index));
+		}
+		break;
+
+	case DB_OUT_OF_FILE_SPACE:
+		err = DB_MUST_GET_MORE_FILE_SPACE;
+
+		row_mysql_handle_errors(&err, trx, NULL, NULL);
+
+		/* Fall through to raise error */
+
+	default:
+		/* No other possible error returns */
+		ut_error;
 	}
+
 funct_exit:
 
 	if (locked_dictionary) {
@@ -3375,6 +3449,90 @@ funct_exit:
 	srv_wake_master_thread();
 
 	return((int) err);
+}
+
+/*********************************************************************//**
+Drop all temporary tables during crash recovery. */
+UNIV_INTERN
+void
+row_mysql_drop_temp_tables(void)
+/*============================*/
+{
+	trx_t*		trx;
+	btr_pcur_t	pcur;
+	mtr_t		mtr;
+	mem_heap_t*	heap;
+
+	trx = trx_allocate_for_background();
+	trx->op_info = "dropping temporary tables";
+	row_mysql_lock_data_dictionary(trx);
+
+	heap = mem_heap_create(200);
+
+	mtr_start(&mtr);
+
+	btr_pcur_open_at_index_side(
+		TRUE,
+		dict_table_get_first_index(dict_sys->sys_tables),
+		BTR_SEARCH_LEAF, &pcur, TRUE, &mtr);
+
+	for (;;) {
+		const rec_t*	rec;
+		const byte*	field;
+		ulint		len;
+		const char*	table_name;
+		dict_table_t*	table;
+
+		btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+
+		if (!btr_pcur_is_on_user_rec(&pcur)) {
+			break;
+		}
+
+		rec = btr_pcur_get_rec(&pcur);
+		field = rec_get_nth_field_old(rec, 4/*N_COLS*/, &len);
+		if (len != 4 || !(mach_read_from_4(field) & 0x80000000UL)) {
+			continue;
+		}
+
+		/* Because this is not a ROW_FORMAT=REDUNDANT table,
+		the is_temp flag is valid.  Examine it. */
+
+		field = rec_get_nth_field_old(rec, 7/*MIX_LEN*/, &len);
+		if (len != 4
+		    || !(mach_read_from_4(field) & DICT_TF2_TEMPORARY)) {
+			continue;
+		}
+
+		/* This is a temporary table. */
+		field = rec_get_nth_field_old(rec, 0/*NAME*/, &len);
+		if (len == UNIV_SQL_NULL || len == 0) {
+			/* Corrupted SYS_TABLES.NAME */
+			continue;
+		}
+
+		table_name = mem_heap_strdupl(heap, (const char*) field, len);
+
+		btr_pcur_store_position(&pcur, &mtr);
+		btr_pcur_commit_specify_mtr(&pcur, &mtr);
+
+		table = dict_load_table(table_name);
+
+		if (table) {
+			row_drop_table_for_mysql(table_name, trx, FALSE);
+			trx_commit_for_mysql(trx);
+		}
+
+		mtr_start(&mtr);
+		btr_pcur_restore_position(BTR_SEARCH_LEAF,
+					  &pcur, &mtr);
+	}
+
+	btr_pcur_close(&pcur);
+	mtr_commit(&mtr);
+	mem_heap_free(heap);
+	row_mysql_unlock_data_dictionary(trx);
+	trx_free_for_background(trx);
 }
 
 /*******************************************************************//**
@@ -3590,7 +3748,7 @@ row_delete_constraint(
 
 	if ((err == DB_SUCCESS) && !strchr(id, '/')) {
 		/* Old format < 4.0.18 constraints have constraint ids
-		<number>_<number>. We only try deleting them if the
+		NUMBER_NUMBER. We only try deleting them if the
 		constraint name does not contain a '/' character, otherwise
 		deleting a new format constraint named 'foo/bar' from
 		database 'baz' would remove constraint 'bar' from database
@@ -3621,6 +3779,7 @@ row_rename_table_for_mysql(
 	ulint		n_constraints_to_drop	= 0;
 	ibool		old_is_tmp, new_is_tmp;
 	pars_info_t*	info			= NULL;
+	ulint		retry			= 0;
 
 	ut_ad(trx->mysql_thread_id == os_thread_get_curr_id());
 	ut_a(old_name != NULL);
@@ -3704,6 +3863,25 @@ row_rename_table_for_mysql(
 		}
 	}
 
+	/* Is a foreign key check running on this table? */
+	for (retry = 0; retry < 100
+	     && table->n_foreign_key_checks_running > 0; ++retry) {
+		row_mysql_unlock_data_dictionary(trx);
+		os_thread_yield();
+		row_mysql_lock_data_dictionary(trx);
+	}
+
+	if (table->n_foreign_key_checks_running > 0) {
+		ut_print_timestamp(stderr);
+		fputs(" InnoDB: Error: in ALTER TABLE ", stderr);
+		ut_print_name(stderr, trx, TRUE, old_name);
+		fprintf(stderr, "\n"
+			"InnoDB: a FOREIGN KEY check is running.\n"
+			"InnoDB: Cannot rename table.\n");
+		err = DB_TABLE_IN_FK_CHECK;
+		goto funct_exit;
+	}
+
 	/* We use the private SQL parser of Innobase to generate the query
 	graphs needed in updating the dictionary data from system tables. */
 
@@ -3725,11 +3903,44 @@ row_rename_table_for_mysql(
 		goto end;
 	} else if (!new_is_tmp) {
 		/* Rename all constraints. */
+		char	new_table_name[MAX_TABLE_NAME_LEN] = "";
+		char	old_table_utf8[MAX_TABLE_NAME_LEN] = "";
+		uint	errors = 0;
+
+		strncpy(old_table_utf8, old_name, MAX_TABLE_NAME_LEN);
+		innobase_convert_to_system_charset(
+			strchr(old_table_utf8, '/') + 1,
+			strchr(old_name, '/') +1,
+			MAX_TABLE_NAME_LEN, &errors);
+
+		if (errors) {
+			/* Table name could not be converted from charset
+			my_charset_filename to UTF-8. This means that the
+			table name is already in UTF-8 (#mysql#50). */
+			strncpy(old_table_utf8, old_name, MAX_TABLE_NAME_LEN);
+		}
 
 		info = pars_info_create();
 
 		pars_info_add_str_literal(info, "new_table_name", new_name);
 		pars_info_add_str_literal(info, "old_table_name", old_name);
+		pars_info_add_str_literal(info, "old_table_name_utf8",
+					  old_table_utf8);
+
+		strncpy(new_table_name, new_name, MAX_TABLE_NAME_LEN);
+		innobase_convert_to_system_charset(
+			strchr(new_table_name, '/') + 1,
+			strchr(new_name, '/') +1,
+			MAX_TABLE_NAME_LEN, &errors);
+
+		if (errors) {
+			/* Table name could not be converted from charset
+			my_charset_filename to UTF-8. This means that the
+			table name is already in UTF-8 (#mysql#50). */
+			strncpy(new_table_name, new_name, MAX_TABLE_NAME_LEN);
+		}
+
+		pars_info_add_str_literal(info, "new_table_utf8", new_table_name);
 
 		err = que_eval_sql(
 			info,
@@ -3742,6 +3953,7 @@ row_rename_table_for_mysql(
 			"old_t_name_len INT;\n"
 			"new_db_name_len INT;\n"
 			"id_len INT;\n"
+			"offset INT;\n"
 			"found INT;\n"
 			"BEGIN\n"
 			"found := 1;\n"
@@ -3750,8 +3962,8 @@ row_rename_table_for_mysql(
 			"new_db_name := SUBSTR(:new_table_name, 0,\n"
 			"                      new_db_name_len);\n"
 			"old_t_name_len := LENGTH(:old_table_name);\n"
-			"gen_constr_prefix := CONCAT(:old_table_name,\n"
-			"                            '_ibfk_');\n"
+			"gen_constr_prefix := CONCAT(:old_table_name_utf8,\n"
+			"			     '_ibfk_');\n"
 			"WHILE found = 1 LOOP\n"
 			"       SELECT ID INTO foreign_id\n"
 			"        FROM SYS_FOREIGN\n"
@@ -3770,10 +3982,11 @@ row_rename_table_for_mysql(
 			"               IF (INSTR(foreign_id,\n"
 			"                         gen_constr_prefix) > 0)\n"
 			"               THEN\n"
+                        "                offset := INSTR(foreign_id, '_ibfk_') - 1;\n"
 			"                new_foreign_id :=\n"
-			"                CONCAT(:new_table_name,\n"
-			"                SUBSTR(foreign_id, old_t_name_len,\n"
-			"                       id_len - old_t_name_len));\n"
+			"                CONCAT(:new_table_utf8,\n"
+			"                SUBSTR(foreign_id, offset,\n"
+			"                       id_len - offset));\n"
 			"               ELSE\n"
 			"                new_foreign_id :=\n"
 			"                CONCAT(new_db_name,\n"
@@ -3854,7 +4067,7 @@ end:
 			      "InnoDB: succeed.\n", stderr);
 		}
 		trx->error_state = DB_SUCCESS;
-		trx_general_rollback_for_mysql(trx, FALSE, NULL);
+		trx_general_rollback_for_mysql(trx, NULL);
 		trx->error_state = DB_SUCCESS;
 	} else {
 		/* The following call will also rename the .ibd data file if
@@ -3863,8 +4076,9 @@ end:
 		if (!dict_table_rename_in_cache(table, new_name,
 						!new_is_tmp)) {
 			trx->error_state = DB_SUCCESS;
-			trx_general_rollback_for_mysql(trx, FALSE, NULL);
+			trx_general_rollback_for_mysql(trx, NULL);
 			trx->error_state = DB_SUCCESS;
+			err = DB_ERROR;
 			goto funct_exit;
 		}
 
@@ -3872,7 +4086,7 @@ end:
 		an ALTER, not in a RENAME. */
 
 		err = dict_load_foreigns(
-			new_name, !old_is_tmp || trx->check_foreigns);
+			new_name, FALSE, !old_is_tmp || trx->check_foreigns);
 
 		if (err != DB_SUCCESS) {
 			ut_print_timestamp(stderr);
@@ -3903,8 +4117,15 @@ end:
 			ut_a(dict_table_rename_in_cache(table,
 							old_name, FALSE));
 			trx->error_state = DB_SUCCESS;
-			trx_general_rollback_for_mysql(trx, FALSE, NULL);
+			trx_general_rollback_for_mysql(trx, NULL);
 			trx->error_state = DB_SUCCESS;
+		} else {
+			if (old_is_tmp && !new_is_tmp) {
+				/* After ALTER TABLE the table statistics
+				needs to be rebuilt.  It will be rebuilt
+				when the table is loaded again. */
+				table->stat_initialized = FALSE;
+			}
 		}
 	}
 
@@ -3928,14 +4149,15 @@ Checks that the index contains entries in an ascending order, unique
 constraint is not broken, and calculates the number of index entries
 in the read view of the current transaction.
 @return	TRUE if ok */
-static
+UNIV_INTERN
 ibool
-row_scan_and_check_index(
-/*=====================*/
-	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct in MySQL */
-	dict_index_t*	index,		/*!< in: index */
-	ulint*		n_rows)		/*!< out: number of entries seen in the
-					current consistent read */
+row_check_index_for_mysql(
+/*======================*/
+	row_prebuilt_t*		prebuilt,	/*!< in: prebuilt struct
+						in MySQL handle */
+	const dict_index_t*	index,		/*!< in: index */
+	ulint*			n_rows)		/*!< out: number of entries
+						seen in the consistent read */
 {
 	dtuple_t*	prev_entry	= NULL;
 	ulint		matched_fields;
@@ -3956,31 +4178,9 @@ row_scan_and_check_index(
 
 	*n_rows = 0;
 
-	if (!row_merge_is_index_usable(prebuilt->trx, index)) {
-		/* A newly created index may lack some delete-marked
-		records that may exist in the read view of
-		prebuilt->trx.  Thus, such indexes must not be
-		accessed by consistent read. */
-		return(is_ok);
-	}
-
 	buf = mem_alloc(UNIV_PAGE_SIZE);
 	heap = mem_heap_create(100);
 
-	/* Make a dummy template in prebuilt, which we will use
-	in scanning the index entries */
-
-	prebuilt->index = index;
-	/* row_merge_is_index_usable() was already checked above. */
-	prebuilt->index_usable = TRUE;
-	prebuilt->sql_stat_start = TRUE;
-	prebuilt->template_type = ROW_MYSQL_DUMMY_TEMPLATE;
-	prebuilt->n_template = 0;
-	prebuilt->need_to_access_clustered = FALSE;
-
-	dtuple_set_n_fields(prebuilt->search_tuple, 0);
-
-	prebuilt->select_lock_type = LOCK_NONE;
 	cnt = 1000;
 
 	ret = row_search_for_mysql(buf, PAGE_CUR_G, prebuilt, 0, 0);
@@ -4096,118 +4296,6 @@ not_ok:
 	ret = row_search_for_mysql(buf, PAGE_CUR_G, prebuilt, 0, ROW_SEL_NEXT);
 
 	goto loop;
-}
-
-/*********************************************************************//**
-Checks a table for corruption.
-@return	DB_ERROR or DB_SUCCESS */
-UNIV_INTERN
-ulint
-row_check_table_for_mysql(
-/*======================*/
-	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct in MySQL
-					handle */
-{
-	dict_table_t*	table		= prebuilt->table;
-	dict_index_t*	index;
-	ulint		n_rows;
-	ulint		n_rows_in_table	= ULINT_UNDEFINED;
-	ulint		ret		= DB_SUCCESS;
-	ulint		old_isolation_level;
-
-	if (table->ibd_file_missing) {
-		ut_print_timestamp(stderr);
-		fprintf(stderr, "  InnoDB: Error:\n"
-			"InnoDB: MySQL is trying to use a table handle"
-			" but the .ibd file for\n"
-			"InnoDB: table %s does not exist.\n"
-			"InnoDB: Have you deleted the .ibd file"
-			" from the database directory under\n"
-			"InnoDB: the MySQL datadir, or have you"
-			" used DISCARD TABLESPACE?\n"
-			"InnoDB: Look from\n"
-			"InnoDB: " REFMAN "innodb-troubleshooting.html\n"
-			"InnoDB: how you can resolve the problem.\n",
-			table->name);
-		return(DB_ERROR);
-	}
-
-	prebuilt->trx->op_info = "checking table";
-
-	old_isolation_level = prebuilt->trx->isolation_level;
-
-	/* We must run the index record counts at an isolation level
-	>= READ COMMITTED, because a dirty read can see a wrong number
-	of records in some index; to play safe, we use always
-	REPEATABLE READ here */
-
-	prebuilt->trx->isolation_level = TRX_ISO_REPEATABLE_READ;
-
-	/* Enlarge the fatal lock wait timeout during CHECK TABLE. */
-	mutex_enter(&kernel_mutex);
-	srv_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
-	mutex_exit(&kernel_mutex);
-
-	index = dict_table_get_first_index(table);
-
-	while (index != NULL) {
-		/* fputs("Validating index ", stderr);
-		ut_print_name(stderr, trx, FALSE, index->name);
-		putc('\n', stderr); */
-
-		if (!btr_validate_index(index, prebuilt->trx)) {
-			ret = DB_ERROR;
-		} else {
-			if (!row_scan_and_check_index(prebuilt,index, &n_rows)){
-				ret = DB_ERROR;
-			}
-
-			if (trx_is_interrupted(prebuilt->trx)) {
-				break;
-			}
-
-			/* fprintf(stderr, "%lu entries in index %s\n", n_rows,
-			index->name); */
-
-			if (index == dict_table_get_first_index(table)) {
-				n_rows_in_table = n_rows;
-			} else if (n_rows != n_rows_in_table) {
-
-				ret = DB_ERROR;
-
-				fputs("Error: ", stderr);
-				dict_index_name_print(stderr,
-						      prebuilt->trx, index);
-				fprintf(stderr,
-					" contains %lu entries,"
-					" should be %lu\n",
-					(ulong) n_rows,
-					(ulong) n_rows_in_table);
-			}
-		}
-
-		index = dict_table_get_next_index(index);
-	}
-
-	/* Restore the original isolation level */
-	prebuilt->trx->isolation_level = old_isolation_level;
-
-	/* We validate also the whole adaptive hash index for all tables
-	at every CHECK TABLE */
-
-	if (!btr_search_validate()) {
-
-		ret = DB_ERROR;
-	}
-
-	/* Restore the fatal lock wait timeout after CHECK TABLE. */
-	mutex_enter(&kernel_mutex);
-	srv_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
-	mutex_exit(&kernel_mutex);
-
-	prebuilt->trx->op_info = "";
-
-	return(ret);
 }
 
 /*********************************************************************//**

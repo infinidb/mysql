@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -347,7 +347,7 @@ mem_heap_create_block(
 				return(NULL);
 			}
 		} else {
-			buf_block = buf_block_alloc(0);
+			buf_block = buf_block_alloc();
 		}
 
 		block = (mem_block_t*) buf_block->frame;
@@ -367,7 +367,7 @@ mem_heap_create_block(
 	block->line = line;
 
 #ifdef MEM_PERIODIC_CHECK
-	mem_pool_mutex_enter();
+	mutex_enter(&(mem_comm_pool->mutex));
 
 	if (!mem_block_list_inited) {
 		mem_block_list_inited = TRUE;
@@ -376,12 +376,26 @@ mem_heap_create_block(
 
 	UT_LIST_ADD_LAST(mem_block_list, mem_block_list, block);
 
-	mem_pool_mutex_exit();
+	mutex_exit(&(mem_comm_pool->mutex));
 #endif
 	mem_block_set_len(block, len);
 	mem_block_set_type(block, type);
 	mem_block_set_free(block, MEM_BLOCK_HEADER_SIZE);
 	mem_block_set_start(block, MEM_BLOCK_HEADER_SIZE);
+
+	if (UNIV_UNLIKELY(heap == NULL)) {
+		/* This is the first block of the heap. The field
+		total_size should be initialized here */
+		block->total_size = len;
+	} else {
+		/* Not the first allocation for the heap. This block's
+		total_length field should be set to undefined. */
+		ut_d(block->total_size = ULINT_UNDEFINED);
+		UNIV_MEM_INVALID(&block->total_size,
+				 sizeof block->total_size);
+
+		heap->total_size += len;
+	}
 
 	ut_ad((ulint)MEM_BLOCK_HEADER_SIZE < len);
 
@@ -465,26 +479,32 @@ mem_heap_block_free(
 	UT_LIST_REMOVE(list, heap->base, block);
 
 #ifdef MEM_PERIODIC_CHECK
-	mem_pool_mutex_enter();
+	mutex_enter(&(mem_comm_pool->mutex));
 
 	UT_LIST_REMOVE(mem_block_list, mem_block_list, block);
 
-	mem_pool_mutex_exit();
+	mutex_exit(&(mem_comm_pool->mutex));
 #endif
+
+	ut_ad(heap->total_size >= block->len);
+	heap->total_size -= block->len;
+
 	type = heap->type;
 	len = block->len;
 	block->magic_n = MEM_FREED_BLOCK_MAGIC_N;
 
+#ifndef UNIV_HOTBACKUP
+	if (!srv_use_sys_malloc) {
 #ifdef UNIV_MEM_DEBUG
-	/* In the debug version we set the memory to a random combination
-	of hex 0xDE and 0xAD. */
+		/* In the debug version we set the memory to a random
+		combination of hex 0xDE and 0xAD. */
 
-	mem_erase_buf((byte*)block, len);
+		mem_erase_buf((byte*)block, len);
 #else /* UNIV_MEM_DEBUG */
-	UNIV_MEM_ASSERT_AND_FREE(block, len);
+		UNIV_MEM_ASSERT_AND_FREE(block, len);
 #endif /* UNIV_MEM_DEBUG */
 
-#ifndef UNIV_HOTBACKUP
+	}
 	if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
 
 		ut_ad(!buf_block);
@@ -495,6 +515,14 @@ mem_heap_block_free(
 		buf_block_free(buf_block);
 	}
 #else /* !UNIV_HOTBACKUP */
+#ifdef UNIV_MEM_DEBUG
+	/* In the debug version we set the memory to a random
+	combination of hex 0xDE and 0xAD. */
+
+	mem_erase_buf((byte*)block, len);
+#else /* UNIV_MEM_DEBUG */
+	UNIV_MEM_ASSERT_AND_FREE(block, len);
+#endif /* UNIV_MEM_DEBUG */
 	ut_free(block);
 #endif /* !UNIV_HOTBACKUP */
 }
@@ -528,7 +556,7 @@ mem_validate_all_blocks(void)
 {
 	mem_block_t*	block;
 
-	mem_pool_mutex_enter();
+	mutex_enter(&(mem_comm_pool->mutex));
 
 	block = UT_LIST_GET_FIRST(mem_block_list);
 
@@ -540,6 +568,6 @@ mem_validate_all_blocks(void)
 		block = UT_LIST_GET_NEXT(mem_block_list, block);
 	}
 
-	mem_pool_mutex_exit();
+	mutex_exit(&(mem_comm_pool->mutex));
 }
 #endif

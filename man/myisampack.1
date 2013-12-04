@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmyisampack\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 09/09/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYISAMPACK\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYISAMPACK\FR" "1" "09/09/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -37,7 +46,7 @@ tables\&.
 \fBmyisampack\fR
 works by compressing each column in the table separately\&. Usually,
 \fBmyisampack\fR
-packs the data file 40%\(en70%\&.
+packs the data file 40% to 70%\&.
 .PP
 When the table is used later, the server reads into memory the information needed to decompress columns\&. This results in much better performance when accessing individual rows, because you only have to uncompress exactly one row\&.
 .PP
@@ -72,7 +81,7 @@ if the table might be updated by the server during the packing process\&. It is 
 .sp -1
 .IP \(bu 2.3
 .\}
-After packing a table, it becomes read only\&. This is generally intended (such as when accessing packed tables on a CD)\&. Allowing writes to a packed table is on our TODO list, but with low priority\&.
+After packing a table, it becomes read only\&. This is generally intended (such as when accessing packed tables on a CD)\&.
 .RE
 .PP
 Invoke
@@ -100,8 +109,8 @@ to rebuild its indexes\&.
 \fBmyisamchk\fR(1)\&.
 .PP
 \fBmyisampack\fR
-supports the options in the following list\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+supports the following options\&. It also reads option files and supports the options for processing them described at
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .sp
 .RS 4
 .ie n \{\
@@ -132,7 +141,7 @@ Display a help message and exit\&.
 \fB\-\-backup\fR,
 \fB\-b\fR
 .sp
-Make a backup of each table\'s data file using the name
+Make a backup of each table\*(Aqs data file using the name
 \fItbl_name\fR\&.OLD\&.
 .RE
 .sp
@@ -149,7 +158,7 @@ Make a backup of each table\'s data file using the name
 \fB\-\-character\-sets\-dir=\fR\fB\fIpath\fR\fR
 .sp
 The directory where character sets are installed\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
 .RE
 .sp
 .RS 4
@@ -168,8 +177,8 @@ Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. The default is
-\'d:t:o\'\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. The default is
+\*(Aqd:t:o\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -832,7 +841,7 @@ option to
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -845,4 +854,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

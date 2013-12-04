@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 
@@ -33,17 +35,19 @@ Relay_log_info::Relay_log_info()
   :Slave_reporting_capability("SQL"),
    no_storage(FALSE), replicate_same_server_id(::replicate_same_server_id),
    info_fd(-1), cur_log_fd(-1), save_temporary_tables(0),
+   cur_log_old_open_count(0), group_relay_log_pos(0), event_relay_log_pos(0),
 #if HAVE_purify
    is_fake(FALSE),
 #endif
-   cur_log_old_open_count(0), group_relay_log_pos(0), event_relay_log_pos(0),
    group_master_log_pos(0), log_space_total(0), ignore_log_space_limit(0),
    last_master_timestamp(0), slave_skip_counter(0),
    abort_pos_wait(0), slave_run_id(0), sql_thd(0),
    inited(0), abort_slave(0), slave_running(0), until_condition(UNTIL_NONE),
    until_log_pos(0), retried_trans(0),
    tables_to_lock(0), tables_to_lock_count(0),
-   last_event_start_time(0), m_flags(0)
+   last_event_start_time(0),
+   deferred_events(NULL),
+   m_flags(0)
 {
   DBUG_ENTER("Relay_log_info::Relay_log_info");
 
@@ -105,7 +109,8 @@ int init_relay_log_info(Relay_log_info* rli,
   rli->tables_to_lock_count= 0;
 
   char pattern[FN_REFLEN];
-  if (fn_format(pattern, PREFIX_SQL_LOAD, slave_load_tmpdir, "",
+  (void) my_realpath(pattern, slave_load_tmpdir, 0);
+  if (fn_format(pattern, PREFIX_SQL_LOAD, pattern, "",
             MY_SAFE_PATH | MY_RETURN_REAL_PATH) == NullS)
   {
     pthread_mutex_unlock(&rli->data_lock);
@@ -119,7 +124,7 @@ int init_relay_log_info(Relay_log_info* rli,
   /*
     The relay log will now be opened, as a SEQ_READ_APPEND IO_CACHE.
     Note that the I/O thread flushes it to disk after writing every
-    event, in flush_master_info(mi, 1).
+    event, in flush_master_info(mi, 1, ?).
   */
 
   /*
@@ -132,6 +137,29 @@ int init_relay_log_info(Relay_log_info* rli,
     rli->relay_log.max_size (and mysql_bin_log.max_size).
   */
   {
+    /* Reports an error and returns, if the --relay-log's path 
+       is a directory.*/
+    if (opt_relay_logname && 
+        opt_relay_logname[strlen(opt_relay_logname) - 1] == FN_LIBCHAR)
+    {
+      pthread_mutex_unlock(&rli->data_lock);
+      sql_print_error("Path '%s' is a directory name, please specify \
+a file name for --relay-log option", opt_relay_logname);
+      DBUG_RETURN(1);
+    }
+
+    /* Reports an error and returns, if the --relay-log-index's path 
+       is a directory.*/
+    if (opt_relaylog_index_name && 
+        opt_relaylog_index_name[strlen(opt_relaylog_index_name) - 1] 
+        == FN_LIBCHAR)
+    {
+      pthread_mutex_unlock(&rli->data_lock);
+      sql_print_error("Path '%s' is a directory name, please specify \
+a file name for --relay-log-index option", opt_relaylog_index_name);
+      DBUG_RETURN(1);
+    }
+
     char buf[FN_REFLEN];
     const char *ln;
     static bool name_warning_sent= 0;
@@ -158,10 +186,10 @@ int init_relay_log_info(Relay_log_info* rli,
       note, that if open() fails, we'll still have index file open
       but a destructor will take care of that
     */
-    if (rli->relay_log.open_index_file(opt_relaylog_index_name, ln) ||
+    if (rli->relay_log.open_index_file(opt_relaylog_index_name, ln, TRUE) ||
         rli->relay_log.open(ln, LOG_BIN, 0, SEQ_READ_APPEND, 0,
                             (max_relay_log_size ? max_relay_log_size :
-                            max_binlog_size), 1))
+                            max_binlog_size), 1, TRUE))
     {
       pthread_mutex_unlock(&rli->data_lock);
       sql_print_error("Failed in open_log() called from init_relay_log_info()");
@@ -300,7 +328,7 @@ Failed to open the existing relay log info file '%s' (errno %d)",
   DBUG_RETURN(error);
 
 err:
-  sql_print_error(msg);
+  sql_print_error("%s", msg);
   end_io_cache(&rli->info_file);
   if (info_fd >= 0)
     my_close(info_fd, MYF(0));
@@ -998,7 +1026,7 @@ err:
      false - condition not met
 */
 
-bool Relay_log_info::is_until_satisfied(my_off_t master_beg_pos)
+bool Relay_log_info::is_until_satisfied(THD *thd, Log_event *ev)
 {
   const char *log_name;
   ulonglong log_pos;
@@ -1008,8 +1036,12 @@ bool Relay_log_info::is_until_satisfied(my_off_t master_beg_pos)
 
   if (until_condition == UNTIL_MASTER_POS)
   {
+    if (ev && ev->server_id == (uint32) ::server_id && !replicate_same_server_id)
+      DBUG_RETURN(FALSE);
     log_name= group_master_log_name;
-    log_pos= master_beg_pos;
+    log_pos= (!ev)? group_master_log_pos :
+      ((thd->options & OPTION_BEGIN || !ev->log_pos) ?
+       group_master_log_pos : ev->log_pos - ev->data_written);
   }
   else
   { /* until_condition == UNTIL_RELAY_POS */
@@ -1092,8 +1124,7 @@ bool Relay_log_info::cached_charset_compare(char *charset) const
 {
   DBUG_ENTER("Relay_log_info::cached_charset_compare");
 
-  if (bcmp((uchar*) cached_charset, (uchar*) charset,
-           sizeof(cached_charset)))
+  if (memcmp(cached_charset, charset, sizeof(cached_charset)))
   {
     memcpy(const_cast<char*>(cached_charset), charset, sizeof(cached_charset));
     DBUG_RETURN(1);

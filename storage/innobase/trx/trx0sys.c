@@ -54,6 +54,10 @@ InnoDB. */
 char		trx_sys_mysql_bin_log_name[TRX_SYS_MYSQL_LOG_NAME_LEN];
 ib_longlong	trx_sys_mysql_bin_log_pos	= -1;
 
+#ifdef UNIV_DEBUG
+/* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
+uint		trx_rseg_n_slots_debug = 0;
+#endif
 
 /********************************************************************
 Determines if a page number is located inside the doublewrite buffer. */
@@ -165,7 +169,9 @@ trx_sys_create_doublewrite_buf(void)
 {
 	page_t*	page;
 	page_t*	page2;
+#ifdef UNIV_SYNC_DEBUG
 	page_t*	new_page;
+#endif /* UNIV_SYNC_DEBUG */
 	byte*	doublewrite;
 	byte*	fseg_header;
 	ulint	page_no;
@@ -271,8 +277,11 @@ start_again:
 			the page position in the tablespace, then the page
 			has not been written to in doublewrite. */
 
-			new_page = buf_page_get(TRX_SYS_SPACE, page_no,
-						RW_X_LATCH, &mtr);
+#ifdef UNIV_SYNC_DEBUG
+			new_page =
+#endif /* UNIV_SYNC_DEBUG */
+			buf_page_get(TRX_SYS_SPACE, page_no,
+				     RW_X_LATCH, &mtr);
 #ifdef UNIV_SYNC_DEBUG
 			buf_page_dbg_add_level(new_page, SYNC_NO_ORDER_CHECK);
 #endif /* UNIV_SYNC_DEBUG */
@@ -507,8 +516,8 @@ trx_sys_doublewrite_init_or_restore_pages(
 						" recover the database"
 						" with the my.cnf\n"
 						"InnoDB: option:\n"
-						"InnoDB: set-variable="
-						"innodb_force_recovery=6\n");
+						"InnoDB:"
+						" innodb_force_recovery=6\n");
 					exit(1);
 				}
 

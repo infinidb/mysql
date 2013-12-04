@@ -1,5 +1,22 @@
 #!/bin/sh
 
+# Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; version 2
+# of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the Free
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
+
 ########################################################################
 
 get_key_value()
@@ -90,22 +107,19 @@ SSL_LIBRARY=--with-ssl
 
 if [ "x$warning_mode" != "xpedantic" ]; then
 # Both C and C++ warnings
-  warnings="-Wimplicit -Wreturn-type -Wswitch -Wtrigraphs -Wcomment -W"
-  warnings="$warnings -Wchar-subscripts -Wformat -Wparentheses -Wsign-compare"
-  warnings="$warnings -Wwrite-strings -Wunused-function -Wunused-label -Wunused-value -Wunused-variable"
+  warnings="-Wall -Wextra -Wunused -Wwrite-strings"
 
 # For more warnings, uncomment the following line
-# warnings="$global_warnings -Wshadow"
+# warnings="$warnings -Wshadow"
 
 # C warnings
-  c_warnings="$warnings -Wunused-parameter"
+  c_warnings="$warnings"
 # C++ warnings
-  cxx_warnings="$warnings"
+  cxx_warnings="$warnings -Wno-unused-parameter"
 # cxx_warnings="$cxx_warnings -Woverloaded-virtual -Wsign-promo"
-  cxx_warnings="$cxx_warnings -Wreorder"
-  cxx_warnings="$cxx_warnings -Wctor-dtor-privacy -Wnon-virtual-dtor"
+  cxx_warnings="$cxx_warnings -Wnon-virtual-dtor"
 # Added unless --with-debug=full
-  debug_extra_cflags="-O0 -g3 -gdwarf-2" #1 -Wuninitialized"
+  debug_extra_cflags="-O0 -g3 -gdwarf-2"
 else
   warnings="-W -Wall -ansi -pedantic -Wno-long-long -Wno-unused -D_POSIX_SOURCE"
   c_warnings="$warnings"
@@ -119,8 +133,12 @@ fi
 
 # Set flags for various build configurations.
 # Used in -valgrind builds
+# Override -DFORCE_INIT_OF_VARS from debug_cflags. It enables the macro
+# LINT_INIT(), which is only useful for silencing spurious warnings
+# of static analysis tools. We want LINT_INIT() to be a no-op in Valgrind.
 valgrind_flags="-USAFEMALLOC -UFORCE_INIT_OF_VARS -DHAVE_purify "
 valgrind_flags="$valgrind_flags -DMYSQL_SERVER_SUFFIX=-valgrind-max"
+valgrind_configs="--with-valgrind"
 #
 # Used in -debug builds
 debug_cflags="-DUNIV_MUST_NOT_INLINE -DEXTRA_DEBUG -DFORCE_INIT_OF_VARS "

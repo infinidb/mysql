@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -208,10 +208,6 @@ mem_heap_alloc(
 	caller */
 	buf = (byte*)buf + MEM_FIELD_HEADER_SIZE;
 
-#endif
-#ifdef UNIV_SET_MEM_TO_ZERO
-	UNIV_MEM_ALLOC(buf, n);
-	memset(buf, '\0', n);
 #endif
 	UNIV_MEM_ALLOC(buf, n);
 	return(buf);
@@ -579,18 +575,12 @@ mem_heap_get_size(
 /*==============*/
 	mem_heap_t*	heap)	/*!< in: heap */
 {
-	mem_block_t*	block;
 	ulint		size	= 0;
 
 	ut_ad(mem_heap_check(heap));
 
-	block = heap;
+	size = heap->total_size;
 
-	while (block != NULL) {
-
-		size += mem_block_get_len(block);
-		block = UT_LIST_GET_NEXT(list, block);
-	}
 #ifndef UNIV_HOTBACKUP
 	if (heap->free_block) {
 		size += UNIV_PAGE_SIZE;

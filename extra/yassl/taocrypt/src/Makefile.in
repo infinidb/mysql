@@ -14,6 +14,21 @@
 
 @SET_MAKE@
 
+# Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
+
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
@@ -40,7 +55,8 @@ target_triplet = @target@
 subdir = extra/yassl/taocrypt/src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -71,7 +87,8 @@ am_libtaocrypt_la_OBJECTS = libtaocrypt_la-aes.lo \
 	libtaocrypt_la-misc.lo libtaocrypt_la-random.lo \
 	libtaocrypt_la-ripemd.lo libtaocrypt_la-rsa.lo \
 	libtaocrypt_la-sha.lo libtaocrypt_la-template_instnt.lo \
-	libtaocrypt_la-tftables.lo libtaocrypt_la-twofish.lo
+	libtaocrypt_la-tftables.lo libtaocrypt_la-twofish.lo \
+	libtaocrypt_la-rabbit.lo libtaocrypt_la-hc128.lo
 libtaocrypt_la_OBJECTS = $(am_libtaocrypt_la_OBJECTS)
 DEFAULT_INCLUDES = -I. -I$(srcdir) -I$(top_builddir)/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -95,6 +112,8 @@ ALLOCA = @ALLOCA@
 AMDEP_FALSE = @AMDEP_FALSE@
 AMDEP_TRUE = @AMDEP_TRUE@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -200,6 +219,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -217,6 +237,8 @@ NDB_VERSION_BUILD = @NDB_VERSION_BUILD@
 NDB_VERSION_MAJOR = @NDB_VERSION_MAJOR@
 NDB_VERSION_MINOR = @NDB_VERSION_MINOR@
 NDB_VERSION_STATUS = @NDB_VERSION_STATUS@
+NEED_THREAD_FALSE = @NEED_THREAD_FALSE@
+NEED_THREAD_TRUE = @NEED_THREAD_TRUE@
 NM = @NM@
 NOINST_LDFLAGS = @NOINST_LDFLAGS@
 NON_THREADED_LIBS = @NON_THREADED_LIBS@
@@ -261,6 +283,7 @@ THREAD_SAFE_CLIENT_TRUE = @THREAD_SAFE_CLIENT_TRUE@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -363,8 +386,6 @@ plugin_partition_shared_target = @plugin_partition_shared_target@
 plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -389,6 +410,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 INCLUDES = -I$(srcdir)/../include -I$(srcdir)/../mySTL
 noinst_LTLIBRARIES = libtaocrypt.la
@@ -396,9 +418,11 @@ libtaocrypt_la_SOURCES = aes.cpp aestables.cpp algebra.cpp arc4.cpp \
         asn.cpp bftables.cpp blowfish.cpp coding.cpp des.cpp dh.cpp \
         dsa.cpp file.cpp hash.cpp integer.cpp md2.cpp md4.cpp md5.cpp misc.cpp \
         random.cpp ripemd.cpp rsa.cpp sha.cpp template_instnt.cpp \
-        tftables.cpp twofish.cpp
+        tftables.cpp twofish.cpp rabbit.cpp hc128.cpp
 
-libtaocrypt_la_CXXFLAGS = @yassl_taocrypt_extra_cxxflags@ -DYASSL_PURE_C
+libtaocrypt_la_CXXFLAGS = @yassl_taocrypt_extra_cxxflags@ -DYASSL_PURE_C \
+			  @yassl_thread_cxxflags@
+
 EXTRA_DIST = $(wildcard ../include/*.hpp)
 all: all-am
 
@@ -464,11 +488,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-dsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-hash.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-hc128.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-integer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-md2.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-md4.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-md5.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-misc.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-rabbit.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-random.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-ripemd.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libtaocrypt_la-rsa.Plo@am__quote@
@@ -672,6 +698,20 @@ libtaocrypt_la-twofish.lo: twofish.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='twofish.cpp' object='libtaocrypt_la-twofish.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(LIBTOOL) --tag=CXX --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libtaocrypt_la_CXXFLAGS) $(CXXFLAGS) -c -o libtaocrypt_la-twofish.lo `test -f 'twofish.cpp' || echo '$(srcdir)/'`twofish.cpp
+
+libtaocrypt_la-rabbit.lo: rabbit.cpp
+@am__fastdepCXX_TRUE@	if $(LIBTOOL) --tag=CXX --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libtaocrypt_la_CXXFLAGS) $(CXXFLAGS) -MT libtaocrypt_la-rabbit.lo -MD -MP -MF "$(DEPDIR)/libtaocrypt_la-rabbit.Tpo" -c -o libtaocrypt_la-rabbit.lo `test -f 'rabbit.cpp' || echo '$(srcdir)/'`rabbit.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/libtaocrypt_la-rabbit.Tpo" "$(DEPDIR)/libtaocrypt_la-rabbit.Plo"; else rm -f "$(DEPDIR)/libtaocrypt_la-rabbit.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='rabbit.cpp' object='libtaocrypt_la-rabbit.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(LIBTOOL) --tag=CXX --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libtaocrypt_la_CXXFLAGS) $(CXXFLAGS) -c -o libtaocrypt_la-rabbit.lo `test -f 'rabbit.cpp' || echo '$(srcdir)/'`rabbit.cpp
+
+libtaocrypt_la-hc128.lo: hc128.cpp
+@am__fastdepCXX_TRUE@	if $(LIBTOOL) --tag=CXX --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libtaocrypt_la_CXXFLAGS) $(CXXFLAGS) -MT libtaocrypt_la-hc128.lo -MD -MP -MF "$(DEPDIR)/libtaocrypt_la-hc128.Tpo" -c -o libtaocrypt_la-hc128.lo `test -f 'hc128.cpp' || echo '$(srcdir)/'`hc128.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/libtaocrypt_la-hc128.Tpo" "$(DEPDIR)/libtaocrypt_la-hc128.Plo"; else rm -f "$(DEPDIR)/libtaocrypt_la-hc128.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='hc128.cpp' object='libtaocrypt_la-hc128.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(LIBTOOL) --tag=CXX --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libtaocrypt_la_CXXFLAGS) $(CXXFLAGS) -c -o libtaocrypt_la-hc128.lo `test -f 'hc128.cpp' || echo '$(srcdir)/'`hc128.cpp
 
 mostlyclean-libtool:
 	-rm -f *.lo

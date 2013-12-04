@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2004, 2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Read and write key blocks */
 
@@ -49,7 +51,7 @@ uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
   {
     DBUG_PRINT("error",("page %lu had wrong page length: %u",
 			(ulong) page, page_size));
-    DBUG_DUMP("page", (char*) tmp, keyinfo->block_length);
+    DBUG_DUMP("page", tmp, keyinfo->block_length);
     info->last_keypage = HA_OFFSET_ERROR;
     mi_print_error(info->s, HA_ERR_CRASHED);
     my_errno = HA_ERR_CRASHED;
@@ -86,13 +88,6 @@ int _mi_write_keypage(register MI_INFO *info, register MI_KEYDEF *keyinfo,
   if ((length=keyinfo->block_length) > IO_SIZE*2 &&
       info->state->key_file_length != page+length)
     length= ((mi_getint(buff)+IO_SIZE-1) & (uint) ~(IO_SIZE-1));
-#ifdef HAVE_purify
-  {
-    length=mi_getint(buff);
-    bzero((uchar*) buff+length,keyinfo->block_length-length);
-    length=keyinfo->block_length;
-  }
-#endif
   DBUG_RETURN((key_cache_write(info->s->key_cache,
                          info->s->kfile,page, level, (uchar*) buff,length,
 			 (uint) keyinfo->block_length,

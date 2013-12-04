@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -114,17 +114,13 @@ trx_rseg_list_and_array_init(
 /*=========================*/
 	trx_sysf_t*	sys_header,	/*!< in: trx system header */
 	mtr_t*		mtr);		/*!< in: mtr */
-/****************************************************************//**
-Creates a new rollback segment to the database.
-@return	the created segment object, NULL if fail */
+/***************************************************************************
+Free's an instance of the rollback segment in memory. */
 UNIV_INTERN
-trx_rseg_t*
-trx_rseg_create(
-/*============*/
-	ulint	space,		/*!< in: space id */
-	ulint	max_size,	/*!< in: max size in pages */
-	ulint*	id,		/*!< out: rseg id */
-	mtr_t*	mtr);		/*!< in: mtr */
+void
+trx_rseg_mem_free(
+/*==============*/
+	trx_rseg_t*	rseg);		/* in, own: instance to free */
 
 
 /* Number of undo log slots in a rollback segment file copy */
@@ -139,9 +135,7 @@ struct trx_rseg_struct{
 	ulint		id;	/*!< rollback segment id == the index of
 				its slot in the trx system file copy */
 	mutex_t		mutex;	/*!< mutex protecting the fields in this
-				struct except id; NOTE that the latching
-				order must always be kernel mutex ->
-				rseg mutex */
+				struct except id, which is constant */
 	ulint		space;	/*!< space where the rollback segment is
 				header is placed */
 	ulint		zip_size;/* compressed page size of space

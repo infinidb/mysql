@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -42,6 +42,22 @@ Created 1/8/1996 Heikki Tuuri
 #include "trx0roll.h"
 #include "usr0sess.h"
 #include "ut0vec.h"
+#include "ha_prototypes.h"
+
+/*************************************************************************
+Checks if a table name contains the string TEMP_TABLE_PATH_PREFIX which
+denotes temporary tables in MySQL. */
+static
+ibool
+row_is_mysql_tmp_table_name(
+/*========================*/
+				/* out: TRUE if temporary table */
+	const char*     name)   /* in: table name in the form
+				'database/tablename' */
+{
+	return(strstr(name, TEMP_TABLE_PATH_PREFIX) != NULL);
+}
+
 
 /*****************************************************************//**
 Based on a table object, this function builds the entry to be inserted
@@ -51,16 +67,18 @@ static
 dtuple_t*
 dict_create_sys_tables_tuple(
 /*=========================*/
-	dict_table_t*	table,	/*!< in: table */
-	mem_heap_t*	heap)	/*!< in: memory heap from which the memory for
-				the built tuple is allocated */
+	const dict_table_t*	table,	/*!< in: table */
+	mem_heap_t*		heap)	/*!< in: memory heap from
+					which the memory for the built
+					tuple is allocated */
 {
 	dict_table_t*	sys_tables;
 	dtuple_t*	entry;
 	dfield_t*	dfield;
 	byte*		ptr;
 
-	ut_ad(table && heap);
+	ut_ad(table);
+	ut_ad(heap);
 
 	sys_tables = dict_sys->sys_tables;
 
@@ -69,18 +87,18 @@ dict_create_sys_tables_tuple(
 	dict_table_copy_types(entry, sys_tables);
 
 	/* 0: NAME -----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 0);
+	dfield = dtuple_get_nth_field(entry, 0/*NAME*/);
 
 	dfield_set_data(dfield, table->name, ut_strlen(table->name));
 	/* 3: ID -------------------------------*/
-	dfield = dtuple_get_nth_field(entry, 1);
+	dfield = dtuple_get_nth_field(entry, 1/*ID*/);
 
 	ptr = mem_heap_alloc(heap, 8);
 	mach_write_to_8(ptr, table->id);
 
 	dfield_set_data(dfield, ptr, 8);
 	/* 4: N_COLS ---------------------------*/
-	dfield = dtuple_get_nth_field(entry, 2);
+	dfield = dtuple_get_nth_field(entry, 2/*N_COLS*/);
 
 #if DICT_TF_COMPACT != 1
 #error
@@ -91,40 +109,41 @@ dict_create_sys_tables_tuple(
 			| ((table->flags & DICT_TF_COMPACT) << 31));
 	dfield_set_data(dfield, ptr, 4);
 	/* 5: TYPE -----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 3);
+	dfield = dtuple_get_nth_field(entry, 3/*TYPE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
-	if (table->flags & ~DICT_TF_COMPACT) {
+	if (table->flags & (~DICT_TF_COMPACT & ~(~0 << DICT_TF_BITS))) {
 		ut_a(table->flags & DICT_TF_COMPACT);
 		ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
 		ut_a((table->flags & DICT_TF_ZSSIZE_MASK)
 		     <= (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT));
-		ut_a(!(table->flags & (~0 << DICT_TF_BITS)));
-		mach_write_to_4(ptr, table->flags);
+		ut_a(!(table->flags & (~0 << DICT_TF2_BITS)));
+		mach_write_to_4(ptr, table->flags & ~(~0 << DICT_TF_BITS));
 	} else {
 		mach_write_to_4(ptr, DICT_TABLE_ORDINARY);
 	}
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 6: MIX_ID (obsolete) ---------------------------*/
-	dfield = dtuple_get_nth_field(entry, 4);
+	dfield = dtuple_get_nth_field(entry, 4/*MIX_ID*/);
 
 	ptr = mem_heap_zalloc(heap, 8);
 
 	dfield_set_data(dfield, ptr, 8);
-	/* 7: MIX_LEN (obsolete) --------------------------*/
+	/* 7: MIX_LEN (additional flags) --------------------------*/
 
-	dfield = dtuple_get_nth_field(entry, 5);
+	dfield = dtuple_get_nth_field(entry, 5/*MIX_LEN*/);
 
-	ptr = mem_heap_zalloc(heap, 4);
+	ptr = mem_heap_alloc(heap, 4);
+	mach_write_to_4(ptr, table->flags >> DICT_TF2_SHIFT);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 8: CLUSTER_NAME ---------------------*/
-	dfield = dtuple_get_nth_field(entry, 6);
+	dfield = dtuple_get_nth_field(entry, 6/*CLUSTER_NAME*/);
 	dfield_set_null(dfield); /* not supported */
 
 	/* 9: SPACE ----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 7);
+	dfield = dtuple_get_nth_field(entry, 7/*SPACE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, table->space);
@@ -143,19 +162,21 @@ static
 dtuple_t*
 dict_create_sys_columns_tuple(
 /*==========================*/
-	dict_table_t*	table,	/*!< in: table */
-	ulint		i,	/*!< in: column number */
-	mem_heap_t*	heap)	/*!< in: memory heap from which the memory for
-				the built tuple is allocated */
+	const dict_table_t*	table,	/*!< in: table */
+	ulint			i,	/*!< in: column number */
+	mem_heap_t*		heap)	/*!< in: memory heap from
+					which the memory for the built
+					tuple is allocated */
 {
 	dict_table_t*		sys_columns;
 	dtuple_t*		entry;
 	const dict_col_t*	column;
 	dfield_t*		dfield;
 	byte*			ptr;
-	const char*	col_name;
+	const char*		col_name;
 
-	ut_ad(table && heap);
+	ut_ad(table);
+	ut_ad(heap);
 
 	column = dict_table_get_nth_col(table, i);
 
@@ -166,47 +187,47 @@ dict_create_sys_columns_tuple(
 	dict_table_copy_types(entry, sys_columns);
 
 	/* 0: TABLE_ID -----------------------*/
-	dfield = dtuple_get_nth_field(entry, 0);
+	dfield = dtuple_get_nth_field(entry, 0/*TABLE_ID*/);
 
 	ptr = mem_heap_alloc(heap, 8);
 	mach_write_to_8(ptr, table->id);
 
 	dfield_set_data(dfield, ptr, 8);
 	/* 1: POS ----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 1);
+	dfield = dtuple_get_nth_field(entry, 1/*POS*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, i);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 4: NAME ---------------------------*/
-	dfield = dtuple_get_nth_field(entry, 2);
+	dfield = dtuple_get_nth_field(entry, 2/*NAME*/);
 
 	col_name = dict_table_get_col_name(table, i);
 	dfield_set_data(dfield, col_name, ut_strlen(col_name));
 	/* 5: MTYPE --------------------------*/
-	dfield = dtuple_get_nth_field(entry, 3);
+	dfield = dtuple_get_nth_field(entry, 3/*MTYPE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, column->mtype);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 6: PRTYPE -------------------------*/
-	dfield = dtuple_get_nth_field(entry, 4);
+	dfield = dtuple_get_nth_field(entry, 4/*PRTYPE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, column->prtype);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 7: LEN ----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 5);
+	dfield = dtuple_get_nth_field(entry, 5/*LEN*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, column->len);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 8: PREC ---------------------------*/
-	dfield = dtuple_get_nth_field(entry, 6);
+	dfield = dtuple_get_nth_field(entry, 6/*PREC*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, 0/* unused */);
@@ -230,19 +251,38 @@ dict_build_table_def_step(
 	dict_table_t*	table;
 	dtuple_t*	row;
 	ulint		error;
+	ulint		flags;
 	const char*	path_or_name;
 	ibool		is_path;
 	mtr_t		mtr;
+	ulint		space = 0;
+	ibool		file_per_table;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
 
 	table = node->table;
 
-	table->id = dict_hdr_get_new_id(DICT_HDR_TABLE_ID);
+	/* Cache the global variable "srv_file_per_table" to
+	a local variable before using it. Please note
+	"srv_file_per_table" is not under dict_sys mutex
+	protection, and could be changed while executing
+	this function. So better to cache the current value
+	to a local variable, and all future reference to
+	"srv_file_per_table" should use this local variable. */
+	file_per_table = srv_file_per_table;
+
+	dict_hdr_get_new_id(&table->id, NULL, NULL);
 
 	thr_get_trx(thr)->table_id = table->id;
 
-	if (srv_file_per_table) {
+	if (file_per_table) {
+		/* Get a new space id if srv_file_per_table is set */
+		dict_hdr_get_new_id(NULL, NULL, &space);
+
+		if (UNIV_UNLIKELY(space == ULINT_UNDEFINED)) {
+			return(DB_ERROR);
+		}
+
 		/* We create a new single-table tablespace for the table.
 		We initially let it be 4 pages:
 		- page 0 is the fsp header and an extent descriptor page,
@@ -250,8 +290,6 @@ dict_build_table_def_step(
 		- page 2 is the first inode page,
 		- page 3 will contain the root of the clustered index of the
 		table we create here. */
-
-		ulint	space = 0;	/* reset to zero for the call below */
 
 		if (table->dir_path_of_temp_table) {
 			/* We place tables created with CREATE TEMPORARY
@@ -268,9 +306,10 @@ dict_build_table_def_step(
 		ut_ad(!dict_table_zip_size(table)
 		      || dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
 
+		flags = table->flags & ~(~0 << DICT_TF_BITS);
 		error = fil_create_new_single_table_tablespace(
-			&space, path_or_name, is_path,
-			table->flags == DICT_TF_COMPACT ? 0 : table->flags,
+			space, path_or_name, is_path,
+			flags == DICT_TF_COMPACT ? 0 : flags,
 			FIL_IBD_FILE_INITIAL_SIZE);
 		table->space = (unsigned int) space;
 
@@ -286,7 +325,7 @@ dict_build_table_def_step(
 		mtr_commit(&mtr);
 	} else {
 		/* Create in the system tablespace: disallow new features */
-		table->flags &= DICT_TF_COMPACT;
+		table->flags &= (~0 << DICT_TF_BITS) | DICT_TF_COMPACT;
 	}
 
 	row = dict_create_sys_tables_tuple(table, node->heap);
@@ -322,9 +361,10 @@ static
 dtuple_t*
 dict_create_sys_indexes_tuple(
 /*==========================*/
-	dict_index_t*	index,	/*!< in: index */
-	mem_heap_t*	heap)	/*!< in: memory heap from which the memory for
-				the built tuple is allocated */
+	const dict_index_t*	index,	/*!< in: index */
+	mem_heap_t*		heap)	/*!< in: memory heap from
+					which the memory for the built
+					tuple is allocated */
 {
 	dict_table_t*	sys_indexes;
 	dict_table_t*	table;
@@ -333,7 +373,8 @@ dict_create_sys_indexes_tuple(
 	byte*		ptr;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
-	ut_ad(index && heap);
+	ut_ad(index);
+	ut_ad(heap);
 
 	sys_indexes = dict_sys->sys_indexes;
 
@@ -344,32 +385,32 @@ dict_create_sys_indexes_tuple(
 	dict_table_copy_types(entry, sys_indexes);
 
 	/* 0: TABLE_ID -----------------------*/
-	dfield = dtuple_get_nth_field(entry, 0);
+	dfield = dtuple_get_nth_field(entry, 0/*TABLE_ID*/);
 
 	ptr = mem_heap_alloc(heap, 8);
 	mach_write_to_8(ptr, table->id);
 
 	dfield_set_data(dfield, ptr, 8);
 	/* 1: ID ----------------------------*/
-	dfield = dtuple_get_nth_field(entry, 1);
+	dfield = dtuple_get_nth_field(entry, 1/*ID*/);
 
 	ptr = mem_heap_alloc(heap, 8);
 	mach_write_to_8(ptr, index->id);
 
 	dfield_set_data(dfield, ptr, 8);
 	/* 4: NAME --------------------------*/
-	dfield = dtuple_get_nth_field(entry, 2);
+	dfield = dtuple_get_nth_field(entry, 2/*NAME*/);
 
 	dfield_set_data(dfield, index->name, ut_strlen(index->name));
 	/* 5: N_FIELDS ----------------------*/
-	dfield = dtuple_get_nth_field(entry, 3);
+	dfield = dtuple_get_nth_field(entry, 3/*N_FIELDS*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, index->n_fields);
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 6: TYPE --------------------------*/
-	dfield = dtuple_get_nth_field(entry, 4);
+	dfield = dtuple_get_nth_field(entry, 4/*TYPE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, index->type);
@@ -381,7 +422,7 @@ dict_create_sys_indexes_tuple(
 #error "DICT_SYS_INDEXES_SPACE_NO_FIELD != 7"
 #endif
 
-	dfield = dtuple_get_nth_field(entry, 5);
+	dfield = dtuple_get_nth_field(entry, 5/*SPACE*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, index->space);
@@ -393,7 +434,7 @@ dict_create_sys_indexes_tuple(
 #error "DICT_SYS_INDEXES_PAGE_NO_FIELD != 8"
 #endif
 
-	dfield = dtuple_get_nth_field(entry, 6);
+	dfield = dtuple_get_nth_field(entry, 6/*PAGE_NO*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 	mach_write_to_4(ptr, FIL_NULL);
@@ -412,10 +453,11 @@ static
 dtuple_t*
 dict_create_sys_fields_tuple(
 /*=========================*/
-	dict_index_t*	index,	/*!< in: index */
-	ulint		i,	/*!< in: field number */
-	mem_heap_t*	heap)	/*!< in: memory heap from which the memory for
-				the built tuple is allocated */
+	const dict_index_t*	index,	/*!< in: index */
+	ulint			i,	/*!< in: field number */
+	mem_heap_t*		heap)	/*!< in: memory heap from
+					which the memory for the built
+					tuple is allocated */
 {
 	dict_table_t*	sys_fields;
 	dtuple_t*	entry;
@@ -425,7 +467,8 @@ dict_create_sys_fields_tuple(
 	ibool		index_contains_column_prefix_field	= FALSE;
 	ulint		j;
 
-	ut_ad(index && heap);
+	ut_ad(index);
+	ut_ad(heap);
 
 	for (j = 0; j < index->n_fields; j++) {
 		if (dict_index_get_nth_field(index, j)->prefix_len > 0) {
@@ -443,7 +486,7 @@ dict_create_sys_fields_tuple(
 	dict_table_copy_types(entry, sys_fields);
 
 	/* 0: INDEX_ID -----------------------*/
-	dfield = dtuple_get_nth_field(entry, 0);
+	dfield = dtuple_get_nth_field(entry, 0/*INDEX_ID*/);
 
 	ptr = mem_heap_alloc(heap, 8);
 	mach_write_to_8(ptr, index->id);
@@ -451,7 +494,7 @@ dict_create_sys_fields_tuple(
 	dfield_set_data(dfield, ptr, 8);
 	/* 1: POS + PREFIX LENGTH ----------------------------*/
 
-	dfield = dtuple_get_nth_field(entry, 1);
+	dfield = dtuple_get_nth_field(entry, 1/*POS*/);
 
 	ptr = mem_heap_alloc(heap, 4);
 
@@ -471,7 +514,7 @@ dict_create_sys_fields_tuple(
 
 	dfield_set_data(dfield, ptr, 4);
 	/* 4: COL_NAME -------------------------*/
-	dfield = dtuple_get_nth_field(entry, 2);
+	dfield = dtuple_get_nth_field(entry, 2/*COL_NAME*/);
 
 	dfield_set_data(dfield, field->name,
 			ut_strlen(field->name));
@@ -550,7 +593,7 @@ dict_build_index_def_step(
 	ut_ad((UT_LIST_GET_LEN(table->indexes) > 0)
 	      || dict_index_is_clust(index));
 
-	index->id = dict_hdr_get_new_id(DICT_HDR_INDEX_ID);
+	dict_hdr_get_new_id(NULL, &index->id, NULL);
 
 	/* Inherit the space id from the table; we store all indexes of a
 	table in the same tablespace */
@@ -600,15 +643,14 @@ dict_create_index_tree_step(
 {
 	dict_index_t*	index;
 	dict_table_t*	sys_indexes;
-	dict_table_t*	table;
 	dtuple_t*	search_tuple;
+	ulint		zip_size;
 	btr_pcur_t	pcur;
 	mtr_t		mtr;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
 
 	index = node->index;
-	table = node->table;
 
 	sys_indexes = dict_sys->sys_indexes;
 
@@ -626,8 +668,9 @@ dict_create_index_tree_step(
 
 	btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 
-	node->page_no = btr_create(index->type, index->space,
-				   dict_table_zip_size(index->table),
+	zip_size = dict_table_zip_size(index->table);
+
+	node->page_no = btr_create(index->type, index->space, zip_size,
 				   index->id, index, &mtr);
 	/* printf("Created a new index tree in space %lu root page %lu\n",
 	index->space, index->page_no); */
@@ -801,7 +844,7 @@ dict_truncate_index_tree(
 	appropriate field in the SYS_INDEXES record: this mini-transaction
 	marks the B-tree totally truncated */
 
-	btr_page_get(space, zip_size, root_page_no, RW_X_LATCH, mtr);
+	btr_block_get(space, zip_size, root_page_no, RW_X_LATCH, NULL, mtr);
 
 	btr_free_root(space, zip_size, root_page_no, mtr);
 create:
@@ -1092,8 +1135,11 @@ dict_create_index_step(
 
 		dulint	index_id = node->index->id;
 
-		err = dict_index_add_to_cache(node->table, node->index,
-					      FIL_NULL, TRUE);
+		err = dict_index_add_to_cache(
+			node->table, node->index, FIL_NULL,
+			trx_is_strict(trx)
+			|| dict_table_get_format(node->table)
+			>= DICT_TF_FORMAT_ZIP);
 
 		node->index = dict_index_get_if_in_cache_low(index_id);
 		ut_a(!node->index == (err != DB_SUCCESS));
@@ -1379,7 +1425,7 @@ dict_create_add_foreign_field_to_dictionary(
 Add a single foreign key definition to the data dictionary tables in the
 database. We also generate names to constraints that were not named by the
 user. A generated constraint has a name of the format
-databasename/tablename_ibfk_<number>, where the numbers start from 1, and
+databasename/tablename_ibfk_NUMBER, where the numbers start from 1, and
 are given locally for this table, that is, the number is not global, as in
 the old format constraints < 4.0.18 it used to be.
 @return	error code or DB_SUCCESS */
@@ -1395,17 +1441,46 @@ dict_create_add_foreign_to_dictionary(
 {
 	ulint		error;
 	ulint		i;
-
-	pars_info_t*	info = pars_info_create();
+	pars_info_t*	info;
 
 	if (foreign->id == NULL) {
 		/* Generate a new constraint id */
 		ulint	namelen	= strlen(table->name);
 		char*	id	= mem_heap_alloc(foreign->heap, namelen + 20);
-		/* no overflow if number < 1e13 */
-		sprintf(id, "%s_ibfk_%lu", table->name, (ulong) (*id_nr)++);
+
+		if (row_is_mysql_tmp_table_name(table->name)) {
+			sprintf(id, "%s_ibfk_%lu", table->name,
+				(ulong) (*id_nr)++);
+		} else {
+			char	table_name[MAX_TABLE_NAME_LEN + 20] = "";
+			uint	errors = 0;
+
+			strncpy(table_name, table->name,
+				MAX_TABLE_NAME_LEN + 20);
+
+			innobase_convert_to_system_charset(
+				strchr(table_name, '/') + 1,
+				strchr(table->name, '/') + 1,
+				MAX_TABLE_NAME_LEN, &errors);
+
+			if (errors) {
+				strncpy(table_name, table->name,
+					MAX_TABLE_NAME_LEN + 20);
+			}
+
+			sprintf(id, "%s_ibfk_%lu", table_name,
+				(ulong) (*id_nr)++);
+
+			if (innobase_check_identifier_length(
+				strchr(id,'/') + 1)) {
+				return(DB_IDENTIFIER_TOO_LONG);
+			}
+		}
 		foreign->id = id;
+
 	}
+
+	info = pars_info_create();
 
 	pars_info_add_str_literal(info, "id", foreign->id);
 

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -105,17 +105,6 @@ row_fetch_print(
 /*============*/
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg);	/*!< in:  not used */
-/****************************************************************//**
-Callback function for fetch that stores an unsigned 4 byte integer to the
-location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
-= 4.
-@return	always returns NULL */
-UNIV_INTERN
-void*
-row_fetch_store_uint4(
-/*==================*/
-	void*	row,		/*!< in:  sel_node_t* */
-	void*	user_arg);	/*!< in:  data pointer */
 /***********************************************************//**
 Prints a row in a select result.
 @return	query thread to run next or NULL */

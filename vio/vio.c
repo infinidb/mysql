@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2000-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Note that we can't have assertion on file descriptors;  The reason for
@@ -43,7 +44,7 @@ static void vio_init(Vio* vio, enum enum_vio_type type,
   if ((flags & VIO_BUFFERED_READ) &&
       !(vio->read_buffer= (char*)my_malloc(VIO_READ_BUFFER_SIZE, MYF(MY_WME))))
     flags&= ~VIO_BUFFERED_READ;
-#ifdef __WIN__ 
+#ifdef _WIN32
   if (type == VIO_TYPE_NAMEDPIPE)
   {
     vio->viodelete	=vio_delete;
@@ -59,9 +60,14 @@ static void vio_init(Vio* vio, enum enum_vio_type type,
     vio->in_addr	=vio_in_addr;
     vio->vioblocking	=vio_blocking;
     vio->is_blocking	=vio_is_blocking;
-    vio->timeout	=vio_ignore_timeout;
+
+    vio->timeout=vio_win32_timeout;
+    /* Set default timeout */
+    vio->read_timeout_ms= INFINITE;
+    vio->write_timeout_ms= INFINITE;
+    vio->pipe_overlapped.hEvent= CreateEvent(NULL, TRUE, FALSE, NULL);
+    DBUG_VOID_RETURN;
   }
-  else					/* default is VIO_TYPE_TCPIP */
 #endif
 #ifdef HAVE_SMEM 
   if (type == VIO_TYPE_SHARED_MEMORY)
@@ -79,9 +85,14 @@ static void vio_init(Vio* vio, enum enum_vio_type type,
     vio->in_addr	=vio_in_addr;
     vio->vioblocking	=vio_blocking;
     vio->is_blocking	=vio_is_blocking;
-    vio->timeout	=vio_ignore_timeout;
+
+    /* Currently, shared memory is on Windows only, hence the below is ok*/
+    vio->timeout= vio_win32_timeout; 
+    /* Set default timeout */
+    vio->read_timeout_ms= INFINITE;
+    vio->write_timeout_ms= INFINITE;
+    DBUG_VOID_RETURN;
   }
-  else
 #endif   
 #ifdef HAVE_OPENSSL 
   if (type == VIO_TYPE_SSL)
@@ -100,25 +111,23 @@ static void vio_init(Vio* vio, enum enum_vio_type type,
     vio->vioblocking	=vio_ssl_blocking;
     vio->is_blocking	=vio_is_blocking;
     vio->timeout	=vio_timeout;
+    DBUG_VOID_RETURN;
   }
-  else					/* default is VIO_TYPE_TCPIP */
 #endif /* HAVE_OPENSSL */
-  {
-    vio->viodelete	=vio_delete;
-    vio->vioerrno	=vio_errno;
-    vio->read= (flags & VIO_BUFFERED_READ) ? vio_read_buff : vio_read;
-    vio->write		=vio_write;
-    vio->fastsend	=vio_fastsend;
-    vio->viokeepalive	=vio_keepalive;
-    vio->should_retry	=vio_should_retry;
-    vio->was_interrupted=vio_was_interrupted;
-    vio->vioclose	=vio_close;
-    vio->peer_addr	=vio_peer_addr;
-    vio->in_addr	=vio_in_addr;
-    vio->vioblocking	=vio_blocking;
-    vio->is_blocking	=vio_is_blocking;
-    vio->timeout	=vio_timeout;
-  }
+  vio->viodelete	=vio_delete;
+  vio->vioerrno	=vio_errno;
+  vio->read= (flags & VIO_BUFFERED_READ) ? vio_read_buff : vio_read;
+  vio->write		=vio_write;
+  vio->fastsend	=vio_fastsend;
+  vio->viokeepalive	=vio_keepalive;
+  vio->should_retry	=vio_should_retry;
+  vio->was_interrupted=vio_was_interrupted;
+  vio->vioclose	=vio_close;
+  vio->peer_addr	=vio_peer_addr;
+  vio->in_addr	=vio_in_addr;
+  vio->vioblocking	=vio_blocking;
+  vio->is_blocking	=vio_is_blocking;
+  vio->timeout	=vio_timeout;
   DBUG_VOID_RETURN;
 }
 
@@ -193,7 +202,7 @@ Vio *vio_new_win32pipe(HANDLE hPipe)
 }
 
 #ifdef HAVE_SMEM
-Vio *vio_new_win32shared_memory(NET *net,HANDLE handle_file_map, HANDLE handle_map,
+Vio *vio_new_win32shared_memory(HANDLE handle_file_map, HANDLE handle_map,
                                 HANDLE event_server_wrote, HANDLE event_server_read,
                                 HANDLE event_client_wrote, HANDLE event_client_read,
                                 HANDLE event_conn_closed)
@@ -212,7 +221,6 @@ Vio *vio_new_win32shared_memory(NET *net,HANDLE handle_file_map, HANDLE handle_m
     vio->event_conn_closed= event_conn_closed;
     vio->shared_memory_remain= 0;
     vio->shared_memory_pos= handle_map;
-    vio->net= net;
     strmov(vio->desc, "shared memory");
   }
   DBUG_RETURN(vio);

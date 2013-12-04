@@ -24,18 +24,21 @@ innobase_convert_string(
 	CHARSET_INFO*	from_cs,
 	uint*		errors);
 
-/*********************************************************************
-Display an SQL identifier. */
+/*****************************************************************//**
+Convert a table or index name to the MySQL system_charset_info (UTF-8)
+and quote it if needed.
+@return	pointer to the end of buf */
 
-void
-innobase_print_identifier(
-/*======================*/
-	FILE*		f,	/* in: output stream */
-	trx_t*		trx,	/* in: transaction */
-	ibool		table_id,/* in: TRUE=print a table name,
-				FALSE=print other identifier */
-	const char*	name,	/* in: name to print */
-	ulint		namelen);/* in: length of name */
+char*
+innobase_convert_name(
+/*==================*/
+	char*		buf,	/*!< out: buffer for converted identifier */
+	ulint		buflen,	/*!< in: length of buf, in bytes */
+	const char*	id,	/*!< in: identifier to convert */
+	ulint		idlen,	/*!< in: length of id, in bytes */
+	void*		thd,	/*!< in: MySQL connection thread, or NULL */
+	ibool		table_id);/*!< in: TRUE=id is a table or database name;
+				FALSE=id is an index name */
 
 /**********************************************************************
 Returns true if the thread is the replication thread on the slave
@@ -71,6 +74,37 @@ thd_is_select(
 /*==========*/
 				/* out: true if thd is executing SELECT */
 	const void*	thd);	/* in: thread handle (THD*) */
+
+/**********************************************************************
+Check if the length of the identifier exceeds the maximum allowed.
+The input to this function is an identifier in charset my_charset_filename.
+return true when length of identifier is too long. */
+
+my_bool
+innobase_check_identifier_length(
+/*=============================*/
+	const char*	id);	/* in: identifier to check.  it must belong
+				to charset my_charset_filename */
+
+/**********************************************************************
+Converts an identifier from my_charset_filename to UTF-8 charset. */
+
+uint
+innobase_convert_to_system_charset(
+/*===============================*/
+	char*		to,		/* out: converted identifier */
+	const char*	from,		/* in: identifier to convert */
+	ulint		len,		/* in: length of 'to', in bytes */
+        uint*		errors);	/* out: error return */
+
+/**********************************************************************
+Converts an identifier from my_charset_filename to UTF-8 charset. */
+uint
+innobase_convert_to_filename_charset(
+/*=================================*/
+        char*           to,     /* out: converted identifier */
+        const char*     from,   /* in: identifier to convert */
+        ulint           len);   /* in: length of 'to', in bytes */
 
 #endif
 #endif

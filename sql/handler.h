@@ -1,20 +1,20 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; version 2 of
+   the License.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
-
-/* Copyright (C) 2013 Calpont Corp. */
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Definitions for parameters to do with handler-routines */
 
@@ -22,7 +22,6 @@
 #pragma interface			/* gcc class implementation */
 #endif
 
-#include <my_handler.h>
 #include <ft_global.h>
 #include <keycache.h>
 
@@ -65,7 +64,7 @@ typedef unsigned long long uint64_t;
   a table with rnd_next()
   - We will see all rows (including deleted ones)
   - Row positions are 'table->s->db_record_offset' apart
-  If this flag is not set, filesort will do a postion() call for each matched
+  If this flag is not set, filesort will do a position() call for each matched
   row to be able to find the row later.
 */
 #define HA_REC_NOT_IN_SEQ      (1 << 3)
@@ -101,7 +100,10 @@ typedef unsigned long long uint64_t;
 #define HA_PRIMARY_KEY_IN_READ_INDEX (1 << 15)
 /*
   If HA_PRIMARY_KEY_REQUIRED_FOR_POSITION is set, it means that to position()
-  uses a primary key. Without primary key, we can't call position().
+  uses a primary key given by the record argument.
+  Without primary key, we can't call position().
+  If not set, the position is returned as the current rows position
+  regardless of what argument is given.
 */ 
 #define HA_PRIMARY_KEY_REQUIRED_FOR_POSITION (1 << 16) 
 #define HA_CAN_RTREEKEYS       (1 << 17)
@@ -406,7 +408,6 @@ struct xid_t {
   my_xid get_my_xid()
   {
     return gtrid_length == MYSQL_XID_GTRID_LEN && bqual_length == 0 &&
-           !memcmp(data+MYSQL_XID_PREFIX_LEN, &server_id, sizeof(server_id)) &&
            !memcmp(data, MYSQL_XID_PREFIX, MYSQL_XID_PREFIX_LEN) ?
            quick_get_my_xid() : 0;
   }
@@ -548,6 +549,8 @@ struct handler_log_file_data {
   LEX_STRING filename;
   enum log_status status;
 };
+
+/* Copyright (C) 2013 Calpont Corp. */
 
 
 enum handler_iterator_type
@@ -921,8 +924,17 @@ typedef struct st_ha_create_information
   ulong avg_row_length;
   ulong used_fields;
   ulong key_block_size;
-  SQL_LIST merge_list;
+  SQL_I_List<TABLE_LIST> merge_list;
   handlerton *db_type;
+  /**
+    Row type of the table definition.
+
+    Defaults to ROW_TYPE_DEFAULT for all non-ALTER statements.
+    For ALTER TABLE defaults to ROW_TYPE_NOT_USED (means "keep the current").
+
+    Can be changed either explicitly by the parser.
+    If nothing speficied inherits the value of the original table (if present).
+  */
   enum row_type row_type;
   uint null_bits;                       /* NULL bits at start of record */
   uint options;				/* OR of HA_CREATE_ options */
@@ -1165,7 +1177,7 @@ public:
     DBUG_ASSERT(locked == FALSE);
     /* TODO: DBUG_ASSERT(inited == NONE); */
   }
-  virtual handler *clone(MEM_ROOT *mem_root);
+  virtual handler *clone(const char *name, MEM_ROOT *mem_root);
   /** This is called after create to allow us to set up cached variables */
   void init()
   {
@@ -1448,10 +1460,9 @@ public:
   virtual int rnd_next(uchar *buf)=0;
   virtual int rnd_pos(uchar * buf, uchar *pos)=0;
   /**
-    One has to use this method when to find
-    random position by record as the plain
-    position() call doesn't work for some
-    handlers for random position.
+    This function only works for handlers having
+    HA_PRIMARY_KEY_REQUIRED_FOR_POSITION set.
+    It will return the row with the PK given in the record argument.
   */
   virtual int rnd_pos_by_record(uchar *record)
     {
@@ -1469,6 +1480,12 @@ public:
     { return HA_ERR_WRONG_COMMAND; }
   virtual ha_rows records_in_range(uint inx, key_range *min_key, key_range *max_key)
     { return (ha_rows) 10; }
+  /*
+    If HA_PRIMARY_KEY_REQUIRED_FOR_POSITION is set, then it sets ref
+    (reference to the row, aka position, with the primary key given in
+    the record).
+    Otherwise it set ref to the current row.
+  */
   virtual void position(const uchar *record)=0;
   virtual int info(uint)=0; // see my_base.h for full description
   virtual void get_dynamic_partition_info(PARTITION_INFO *stat_info,
@@ -1958,7 +1975,7 @@ extern ulong total_ha, total_ha_2pc;
 /* lookups */
 handlerton *ha_default_handlerton(THD *thd);
 plugin_ref ha_resolve_by_name(THD *thd, const LEX_STRING *name);
-plugin_ref ha_lock_engine(THD *thd, handlerton *hton);
+plugin_ref ha_lock_engine(THD *thd, const handlerton *hton);
 handlerton *ha_resolve_by_legacy_type(THD *thd, enum legacy_db_type db_type);
 handler *get_new_handler(TABLE_SHARE *share, MEM_ROOT *alloc,
                          handlerton *db_type);

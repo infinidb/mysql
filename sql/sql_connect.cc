@@ -1,4 +1,5 @@
-/* Copyright (C) 2007 MySQL AB
+/*
+   Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Functions to autenticate and handle reqests for a connection
@@ -20,23 +21,10 @@
 
 #include "mysql_priv.h"
 
-#ifdef HAVE_OPENSSL
-/*
-  Without SSL the handshake consists of one packet. This packet
-  has both client capabilites and scrambled password.
-  With SSL the handshake might consist of two packets. If the first
-  packet (client capabilities) has CLIENT_SSL flag set, we have to
-  switch to SSL and read the second packet. The scrambled password
-  is in the second packet and client_capabilites field will be ignored.
-  Maybe it is better to accept flags other than CLIENT_SSL from the
-  second packet?
-*/
-#define SSL_HANDSHAKE_SIZE      2
-#define NORMAL_HANDSHAKE_SIZE   6
-#define MIN_HANDSHAKE_SIZE      2
-#else
-#define MIN_HANDSHAKE_SIZE      6
-#endif /* HAVE_OPENSSL */
+/** Size of the header fields of an authentication packet. */
+#define AUTH_PACKET_HEADER_SIZE_PROTO_41    32
+#define AUTH_PACKET_HEADER_SIZE_PROTO_40    5  
+#define AUTH_PACKET_HEADER_SIZE_CONNJ_SSL   4
 
 #ifdef __WIN__
 extern void win_install_sigabrt_handler();
@@ -342,12 +330,13 @@ check_user(THD *thd, enum enum_server_command command,
       passwd_len != SCRAMBLE_LENGTH &&
       passwd_len != SCRAMBLE_LENGTH_323)
   {
-    my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
+    my_error(ER_HANDSHAKE_ERROR, MYF(0));
     DBUG_RETURN(1);
   }
 
   USER_RESOURCES ur;
   int res= acl_getroot(thd, &ur, passwd, passwd_len);
+  DBUG_EXECUTE_IF("password_format_mismatch",{res= -1;};);
 #ifndef EMBEDDED_LIBRARY
   if (res == -1)
   {
@@ -358,6 +347,12 @@ check_user(THD *thd, enum enum_server_command command,
       in old format.
     */
     NET *net= &thd->net;
+    DBUG_EXECUTE_IF("password_format_mismatch",
+                    {
+                      inc_host_errors(&thd->remote.sin_addr);
+                      my_error(ER_HANDSHAKE_ERROR, MYF(0));
+                      DBUG_RETURN(1);
+                    };);
     if (opt_secure_auth_local)
     {
       my_error(ER_SERVER_IS_IN_SECURE_AUTH_MODE, MYF(0),
@@ -373,7 +368,7 @@ check_user(THD *thd, enum enum_server_command command,
         my_net_read(net) != SCRAMBLE_LENGTH_323 + 1)
     {
       inc_host_errors(&thd->remote.sin_addr);
-      my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
+      my_error(ER_HANDSHAKE_ERROR, MYF(0));
       DBUG_RETURN(1);
     }
     /* Final attempt to check the user based on reply */
@@ -471,6 +466,15 @@ check_user(THD *thd, enum enum_server_command command,
       }
       my_ok(thd);
       thd->password= test(passwd_len);          // remember for error messages 
+#ifndef EMBEDDED_LIBRARY
+      /*
+        Allow the network layer to skip big packets. Although a malicious
+        authenticated session might use this to trick the server to read
+        big packets indefinitely, this is a previously established behavior
+        that needs to be preserved as to not break backwards compatibility.
+      */
+      thd->net.skip_big_packet= TRUE;
+#endif
       /* Ready to handle queries */
       DBUG_RETURN(0);
     }
@@ -573,8 +577,23 @@ void reset_mqh(LEX_USER *lu, bool get_them= 0)
 }
 
 
-void thd_init_client_charset(THD *thd, uint cs_number)
+/**
+  Set thread character set variables from the given ID
+
+  @param  thd         thread handle
+  @param  cs_number   character set and collation ID
+
+  @retval  0  OK; character_set_client, collation_connection and
+              character_set_results are set to the new value,
+              or to the default global values.
+
+  @retval  1  error, e.g. the given ID is not supported by parser.
+              Corresponding SQL error is sent.
+*/
+
+bool thd_init_client_charset(THD *thd, uint cs_number)
 {
+  CHARSET_INFO *cs;
   /*
    Use server character set and collation if
    - opt_character_set_client_handshake is not set
@@ -583,10 +602,10 @@ void thd_init_client_charset(THD *thd, uint cs_number)
    - client character set doesn't exists in server
   */
   if (!opt_character_set_client_handshake ||
-      !(thd->variables.character_set_client= get_charset(cs_number, MYF(0))) ||
+      !(cs= get_charset(cs_number, MYF(0))) ||
       !my_strcasecmp(&my_charset_latin1,
                      global_system_variables.character_set_client->name,
-                     thd->variables.character_set_client->name))
+                     cs->name))
   {
     thd->variables.character_set_client=
       global_system_variables.character_set_client;
@@ -597,10 +616,18 @@ void thd_init_client_charset(THD *thd, uint cs_number)
   }
   else
   {
+    if (!is_supported_parser_charset(cs))
+    {
+      /* Disallow non-supported parser character sets: UCS2, UTF16, UTF32 */
+      my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "character_set_client",
+               cs->csname);
+      return true;
+    }
     thd->variables.character_set_results=
       thd->variables.collation_connection= 
-      thd->variables.character_set_client;
+      thd->variables.character_set_client= cs;
   }
+  return false;
 }
 
 
@@ -621,6 +648,154 @@ bool init_new_connection_handler_thread()
   return 0;
 }
 
+#ifndef EMBEDDED_LIBRARY
+
+/** Get a string according to the protocol of the underlying buffer. */
+typedef char * (*get_proto_string_func_t) (char **, size_t *, size_t *);
+
+/**
+  Get a string formatted according to the 4.1 version of the MySQL protocol.
+
+  @param buffer[in, out]    Pointer to the user-supplied buffer to be scanned.
+  @param max_bytes_available[in, out]  Limit the bytes to scan.
+  @param string_length[out] The number of characters scanned not including
+                            the null character.
+
+  @remark Strings are always null character terminated in this version of the
+          protocol.
+
+  @remark The string_length does not include the terminating null character.
+          However, after the call, the buffer is increased by string_length+1
+          bytes, beyond the null character if there still available bytes to
+          scan.
+
+  @return pointer to beginning of the string scanned.
+    @retval NULL The buffer content is malformed
+*/
+
+static
+char *get_41_protocol_string(char **buffer,
+                             size_t *max_bytes_available,
+                             size_t *string_length)
+{
+  char *str= (char *)memchr(*buffer, '\0', *max_bytes_available);
+
+  if (str == NULL)
+    return NULL;
+
+  *string_length= (size_t)(str - *buffer);
+  *max_bytes_available-= *string_length + 1;
+  str= *buffer;
+  *buffer += *string_length + 1;
+
+  return str;
+}
+
+
+/**
+  Get a string formatted according to the 4.0 version of the MySQL protocol.
+
+  @param buffer[in, out]    Pointer to the user-supplied buffer to be scanned.
+  @param max_bytes_available[in, out]  Limit the bytes to scan.
+  @param string_length[out] The number of characters scanned not including
+                            the null character.
+
+  @remark If there are not enough bytes left after the current position of
+          the buffer to satisfy the current string, the string is considered
+          to be empty and a pointer to empty_c_string is returned.
+
+  @remark A string at the end of the packet is not null terminated.
+
+  @return Pointer to beginning of the string scanned, or a pointer to a empty
+          string.
+*/
+static
+char *get_40_protocol_string(char **buffer,
+                             size_t *max_bytes_available,
+                             size_t *string_length)
+{
+  char *str;
+  size_t len;
+
+  /* No bytes to scan left, treat string as empty. */
+  if ((*max_bytes_available) == 0)
+  {
+    *string_length= 0;
+    return empty_c_string;
+  }
+
+  str= (char *) memchr(*buffer, '\0', *max_bytes_available);
+
+  /*
+    If the string was not null terminated by the client,
+    the remainder of the packet is the string. Otherwise,
+    advance the buffer past the end of the null terminated
+    string.
+  */
+  if (str == NULL)
+    len= *string_length= *max_bytes_available;
+  else
+    len= (*string_length= (size_t)(str - *buffer)) + 1;
+
+  str= *buffer;
+  *buffer+= len;
+  *max_bytes_available-= len;
+
+  return str;
+}
+
+
+/**
+  Get a length encoded string from a user-supplied buffer.
+
+  @param buffer[in, out] The buffer to scan; updates position after scan.
+  @param max_bytes_available[in, out] Limit the number of bytes to scan
+  @param string_length[out] Number of characters scanned
+
+  @remark In case the length is zero, then the total size of the string is
+    considered to be 1 byte; the size byte.
+
+  @return pointer to first byte after the header in buffer.
+    @retval NULL The buffer content is malformed
+*/
+
+static
+char *get_length_encoded_string(char **buffer,
+                                size_t *max_bytes_available,
+                                size_t *string_length)
+{
+  if (*max_bytes_available == 0)
+    return NULL;
+
+  /* Do double cast to prevent overflow from signed / unsigned conversion */
+  size_t str_len= (size_t)(unsigned char)**buffer;
+
+  /*
+    If the length encoded string has the length 0
+    the total size of the string is only one byte long (the size byte)
+  */
+  if (str_len == 0)
+  {
+    ++*buffer;
+    *string_length= 0;
+    /*
+      Return a pointer to the 0 character so the return value will be
+      an empty string.
+    */
+    return *buffer-1;
+  }
+
+  if (str_len >= *max_bytes_available)
+    return NULL;
+
+  char *str= *buffer+1;
+  *string_length= str_len;
+  *max_bytes_available-= *string_length + 1;
+  *buffer+= *string_length + 1;
+  return str;
+}
+
+
 /*
   Perform handshake, authorize client and update thd ACL variables.
 
@@ -634,13 +809,22 @@ bool init_new_connection_handler_thread()
    > 0  error code (not sent to user)
 */
 
-#ifndef EMBEDDED_LIBRARY
 static int check_connection(THD *thd)
 {
   uint connect_errors= 0;
   NET *net= &thd->net;
   ulong pkt_len= 0;
   char *end;
+
+  bool packet_has_required_size= false;
+  char *db;
+  size_t db_len;
+  char *passwd;
+  size_t passwd_len;
+  char *user;
+  size_t user_len;
+  uint charset_code= 0;
+  size_t bytes_remaining_in_packet= 0;
 
   DBUG_PRINT("info",
              ("New connection received on %s", vio_description(net->vio)));
@@ -654,9 +838,22 @@ static int check_connection(THD *thd)
 
     if (vio_peer_addr(net->vio, ip, &thd->peer_port))
     {
-      my_error(ER_BAD_HOST_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
+      my_error(ER_BAD_HOST_ERROR, MYF(0));
       return 1;
     }
+    /* BEGIN : DEBUG */
+    DBUG_EXECUTE_IF("addr_fake_ipv4",
+                    {
+                      struct sockaddr *sa= (sockaddr *) &net->vio->remote;
+                      sa->sa_family= AF_INET;
+                      struct in_addr *ip4= &((struct sockaddr_in *)sa)->sin_addr;
+                      /* See RFC 5737, 192.0.2.0/23 is reserved */
+                      const char* fake= "192.0.2.4";
+                      ip4->s_addr= inet_addr(fake);
+                      strcpy(ip, fake);
+                    };);
+    /* END   : DEBUG */
+
     if (!(thd->main_security_ctx.ip= my_strdup(ip,MYF(MY_WME))))
       return 1; /* The error is set by my_strdup(). */
     thd->main_security_ctx.host_or_ip= thd->main_security_ctx.ip;
@@ -705,7 +902,7 @@ static int check_connection(THD *thd)
   ulong server_capabilites;
   {
     /* buff[] needs to big enough to hold the server_version variable */
-    char buff[SERVER_VERSION_LENGTH + SCRAMBLE_LENGTH + 64];
+    char buff[SERVER_VERSION_LENGTH + 1 + SCRAMBLE_LENGTH + 1 + 64];
     server_capabilites= CLIENT_BASIC_FLAGS;
 
     if (opt_using_transactions)
@@ -736,7 +933,7 @@ static int check_connection(THD *thd)
       part at the end of packet.
     */
     end= strmake(end, thd->scramble, SCRAMBLE_LENGTH_323) + 1;
-   
+
     int2store(end, server_capabilites);
     /* write server characteristics: up to 16 bytes allowed */
     end[2]=(char) default_charset_info->number;
@@ -750,38 +947,100 @@ static int check_connection(THD *thd)
     /* At this point we write connection message and read reply */
     if (net_write_command(net, (uchar) protocol_version, (uchar*) "", 0,
                           (uchar*) buff, (size_t) (end-buff)) ||
-	(pkt_len= my_net_read(net)) == packet_error ||
-	pkt_len < MIN_HANDSHAKE_SIZE)
+	(pkt_len= my_net_read(net)) == packet_error)
     {
-      inc_host_errors(&thd->remote.sin_addr);
-      my_error(ER_HANDSHAKE_ERROR, MYF(0),
-               thd->main_security_ctx.host_or_ip);
-      return 1;
+      goto error;
     }
   }
 #ifdef _CUSTOMCONFIG_
 #include "_cust_sql_parse.h"
 #endif
-  if (connect_errors)
-    reset_host_errors(&thd->remote.sin_addr);
   if (thd->packet.alloc(thd->variables.net_buffer_length))
     return 1; /* The error is set by alloc(). */
 
-  thd->client_capabilities= uint2korr(net->read_pos);
+  end= (char *)net->read_pos;
+  /*
+    In order to safely scan a head for '\0' string terminators
+    we must keep track of how many bytes remain in the allocated
+    buffer or we might read past the end of the buffer.
+  */
+  bytes_remaining_in_packet= pkt_len;
+  
+  /*
+    Peek ahead on the client capability packet and determine which version of
+    the protocol should be used.
+  */
+  DBUG_EXECUTE_IF("host_error_packet_length",
+                  {
+                    bytes_remaining_in_packet= 0;
+                  };);
+  if (bytes_remaining_in_packet < 2)
+    goto error;
+  
+  thd->client_capabilities= uint2korr(end);
+
+  /*
+    Connector/J only sends client capabilities (4 bytes) before starting SSL
+    negotiation so we don't have char_set and other information for client in
+    packet read. In that case, skip reading those information. The below code 
+    is patch for this.
+  */
+  if(bytes_remaining_in_packet == AUTH_PACKET_HEADER_SIZE_CONNJ_SSL &&
+     (thd->client_capabilities & CLIENT_SSL))
+  {
+    thd->client_capabilities= uint4korr(end);
+    thd->max_client_packet_length= global_system_variables.max_allowed_packet;
+    charset_code= default_charset_info->number;
+    end+= AUTH_PACKET_HEADER_SIZE_CONNJ_SSL;
+    bytes_remaining_in_packet-= AUTH_PACKET_HEADER_SIZE_CONNJ_SSL;
+    goto skip_to_ssl;
+  }
+
+  if (thd->client_capabilities & CLIENT_PROTOCOL_41)
+    packet_has_required_size= bytes_remaining_in_packet >= 
+      AUTH_PACKET_HEADER_SIZE_PROTO_41;
+  else
+    packet_has_required_size= bytes_remaining_in_packet >=
+      AUTH_PACKET_HEADER_SIZE_PROTO_40;
+  
+  if (!packet_has_required_size)
+    goto error;
+  
   if (thd->client_capabilities & CLIENT_PROTOCOL_41)
   {
-    thd->client_capabilities|= ((ulong) uint2korr(net->read_pos+2)) << 16;
-    thd->max_client_packet_length= uint4korr(net->read_pos+4);
-    DBUG_PRINT("info", ("client_character_set: %d", (uint) net->read_pos[8]));
-    thd_init_client_charset(thd, (uint) net->read_pos[8]);
-    thd->update_charset();
-    end= (char*) net->read_pos+32;
+    thd->client_capabilities= uint4korr(end);
+    thd->max_client_packet_length= uint4korr(end + 4);
+    charset_code= (uint)(uchar)*(end + 8);
+    /*
+      Skip 23 remaining filler bytes which have no particular meaning.
+    */
+    end+= AUTH_PACKET_HEADER_SIZE_PROTO_41;
+    bytes_remaining_in_packet-= AUTH_PACKET_HEADER_SIZE_PROTO_41;
   }
   else
   {
-    thd->max_client_packet_length= uint3korr(net->read_pos+2);
-    end= (char*) net->read_pos+5;
+    thd->client_capabilities= uint2korr(end);
+    thd->max_client_packet_length= uint3korr(end + 2);
+    end+= AUTH_PACKET_HEADER_SIZE_PROTO_40;
+    bytes_remaining_in_packet-= AUTH_PACKET_HEADER_SIZE_PROTO_40;
+    /**
+      Old clients didn't have their own charset. Instead the assumption
+      was that they used what ever the server used.
+    */
+    charset_code= default_charset_info->number;
   }
+
+skip_to_ssl:
+
+  DBUG_EXECUTE_IF("host_error_charset",
+                  {
+                    goto error;
+                  };);
+  DBUG_PRINT("info", ("client_character_set: %u", charset_code));
+  if (thd_init_client_charset(thd, charset_code))
+    goto error;
+  thd->update_charset();
+
   /*
     Disable those bits which are not supported by the server.
     This is a precautionary measure, if the client lies. See Bug#27944.
@@ -792,42 +1051,67 @@ static int check_connection(THD *thd)
     thd->variables.sql_mode|= MODE_IGNORE_SPACE;
 #ifdef HAVE_OPENSSL
   DBUG_PRINT("info", ("client capabilities: %lu", thd->client_capabilities));
+  
+  /*
+    If client requested SSL then we must stop parsing, try to switch to SSL,
+    and wait for the client to send a new handshake packet.
+    The client isn't expected to send any more bytes until SSL is initialized.
+  */
   if (thd->client_capabilities & CLIENT_SSL)
   {
     /* Do the SSL layering. */
     if (!ssl_acceptor_fd)
-    {
-      inc_host_errors(&thd->remote.sin_addr);
-      my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
-      return 1;
-    }
+      goto error;
+
     DBUG_PRINT("info", ("IO layer change in progress..."));
     if (sslaccept(ssl_acceptor_fd, net->vio, net->read_timeout))
     {
       DBUG_PRINT("error", ("Failed to accept new SSL connection"));
-      inc_host_errors(&thd->remote.sin_addr);
-      my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
-      return 1;
+      goto error;
     }
+    
     DBUG_PRINT("info", ("Reading user information over SSL layer"));
-    if ((pkt_len= my_net_read(net)) == packet_error ||
-	pkt_len < NORMAL_HANDSHAKE_SIZE)
+    if ((pkt_len= my_net_read(net)) == packet_error)
     {
       DBUG_PRINT("error", ("Failed to read user information (pkt_len= %lu)",
 			   pkt_len));
-      inc_host_errors(&thd->remote.sin_addr);
-      my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
-      return 1;
+      goto error;
     }
+    /*
+      A new packet was read and the statistics reflecting the remaining bytes
+      in the packet must be updated.
+    */
+    bytes_remaining_in_packet= pkt_len;
+
+    /*
+      After the SSL handshake is performed the client resends the handshake
+      packet but because of legacy reasons we chose not to parse the packet
+      fields a second time and instead only assert the length of the packet.
+    */
+    if (thd->client_capabilities & CLIENT_PROTOCOL_41)
+    {
+      
+      packet_has_required_size= bytes_remaining_in_packet >= 
+        AUTH_PACKET_HEADER_SIZE_PROTO_41;
+      end= (char *)net->read_pos + AUTH_PACKET_HEADER_SIZE_PROTO_41;
+      bytes_remaining_in_packet -= AUTH_PACKET_HEADER_SIZE_PROTO_41;
+    }
+    else
+    {
+      packet_has_required_size= bytes_remaining_in_packet >= 
+        AUTH_PACKET_HEADER_SIZE_PROTO_40;
+      end= (char *)net->read_pos + AUTH_PACKET_HEADER_SIZE_PROTO_40;
+      bytes_remaining_in_packet -= AUTH_PACKET_HEADER_SIZE_PROTO_40;
+    }
+  
+    DBUG_EXECUTE_IF("host_error_SSL_layering",
+                    {
+                      packet_has_required_size= 0;
+                    };);
+    if (!packet_has_required_size)
+      goto error;
   }
 #endif /* HAVE_OPENSSL */
-
-  if (end >= (char*) net->read_pos+ pkt_len +2)
-  {
-    inc_host_errors(&thd->remote.sin_addr);
-    my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
-    return 1;
-  }
 
   if (thd->client_capabilities & CLIENT_INTERACTIVE)
     thd->variables.net_wait_timeout= thd->variables.net_interactive_timeout;
@@ -835,51 +1119,92 @@ static int check_connection(THD *thd)
       opt_using_transactions)
     net->return_status= &thd->server_status;
 
-  char *user= end;
-  char *passwd= strend(user)+1;
-  uint user_len= passwd - user - 1;
-  char *db= passwd;
+  /*
+    The 4.0 and 4.1 versions of the protocol differ on how strings
+    are terminated. In the 4.0 version, if a string is at the end
+    of the packet, the string is not null terminated. Do not assume
+    that the returned string is always null terminated.
+  */
+  get_proto_string_func_t get_string;
+
+  if (thd->client_capabilities & CLIENT_PROTOCOL_41)
+    get_string= get_41_protocol_string;
+  else
+    get_string= get_40_protocol_string;
+
+  user= get_string(&end, &bytes_remaining_in_packet, &user_len);
+  DBUG_EXECUTE_IF("host_error_user",
+                  {
+                    user= NULL;
+                  };);
+
+  if (user == NULL)
+    goto error;
+
+  /*
+    Old clients send a null-terminated string as password; new clients send
+    the size (1 byte) + string (not null-terminated). Hence in case of empty
+    password both send '\0'.
+  */
+  passwd_len= 0;
+  passwd= NULL;
+
+  if (thd->client_capabilities & CLIENT_SECURE_CONNECTION)
+  {
+    /*
+      4.1+ password. First byte is password length.
+    */
+    passwd= get_length_encoded_string(&end, &bytes_remaining_in_packet,
+                                      &passwd_len);
+  }
+  else
+  {
+    /*
+      Old passwords are zero terminated strings.
+    */
+    passwd= get_string(&end, &bytes_remaining_in_packet, &passwd_len);
+  }
+
+  DBUG_EXECUTE_IF("host_error_password",
+                  {
+                    passwd= NULL;
+                  };);
+
+  if (passwd == NULL)
+    goto error;
+
+  db_len= 0;
+  db= NULL;
+
+  if (thd->client_capabilities & CLIENT_CONNECT_WITH_DB)
+  {
+    db= get_string(&end, &bytes_remaining_in_packet, &db_len);
+    if (db == NULL)
+      goto error;
+  }
+
   char db_buff[NAME_LEN + 1];           // buffer to store db in utf8
   char user_buff[USERNAME_LENGTH + 1];	// buffer to store user in utf8
   uint dummy_errors;
 
   /*
-    Old clients send null-terminated string as password; new clients send
-    the size (1 byte) + string (not null-terminated). Hence in case of empty
-    password both send '\0'.
-
-    This strlen() can't be easily deleted without changing protocol.
-
-    Cast *passwd to an unsigned char, so that it doesn't extend the sign for
-    *passwd > 127 and become 2**32-127+ after casting to uint.
+    Copy and convert the user and database names to the character set used
+    by the server. Since 4.1 all database names are stored in UTF-8. Also,
+    ensure that the names are properly null-terminated as this is relied
+    upon later.
   */
-  uint passwd_len= thd->client_capabilities & CLIENT_SECURE_CONNECTION ?
-    (uchar)(*passwd++) : strlen(passwd);
-  db= thd->client_capabilities & CLIENT_CONNECT_WITH_DB ?
-    db + passwd_len + 1 : 0;
-  /* strlen() can't be easily deleted without changing protocol */
-  uint db_len= db ? strlen(db) : 0;
-
-  if (passwd + passwd_len + db_len > (char *)net->read_pos + pkt_len)
-  {
-    inc_host_errors(&thd->remote.sin_addr);
-    my_error(ER_HANDSHAKE_ERROR, MYF(0), thd->main_security_ctx.host_or_ip);
-    return 1;
-  }
-
-  /* Since 4.1 all database names are stored in utf8 */
   if (db)
   {
-    db_buff[copy_and_convert(db_buff, sizeof(db_buff)-1,
-                             system_charset_info,
-                             db, db_len,
-                             thd->charset(), &dummy_errors)]= 0;
+    db_len= copy_and_convert(db_buff, sizeof(db_buff)-1, system_charset_info,
+                             db, db_len, thd->charset(), &dummy_errors);
+    db_buff[db_len]= '\0';
     db= db_buff;
   }
 
-  user_buff[user_len= copy_and_convert(user_buff, sizeof(user_buff)-1,
-                                       system_charset_info, user, user_len,
-                                       thd->charset(), &dummy_errors)]= '\0';
+  user_len= copy_and_convert(user_buff, sizeof(user_buff)-1,
+                             system_charset_info, user, user_len,
+                             thd->charset(), &dummy_errors);
+  user_buff[user_len]= '\0';
   user= user_buff;
 
   /* If username starts and ends in "'", chop them off */
@@ -890,11 +1215,40 @@ static int check_connection(THD *thd)
     user_len-= 2;
   }
 
-  if (thd->main_security_ctx.user)
-    x_free(thd->main_security_ctx.user);
+  /*
+    Clip username to allowed length in characters (not bytes).  This is
+    mostly for backward compatibility.
+  */
+  {
+    CHARSET_INFO *cs= system_charset_info;
+    int           err;
+
+    user_len= (uint) cs->cset->well_formed_len(cs, user, user + user_len,
+                                               USERNAME_CHAR_LENGTH, &err);
+    user[user_len]= '\0';
+  }
+
   if (!(thd->main_security_ctx.user= my_strdup(user, MYF(MY_WME))))
     return 1; /* The error is set by my_strdup(). */
-  return check_user(thd, COM_CONNECT, passwd, passwd_len, db, TRUE);
+
+  if (!check_user(thd, COM_CONNECT, passwd, passwd_len, db, TRUE))
+  {
+    /*
+      Call to reset_host_errors() should be made only when all sanity checks
+      are done and connection is going to be a successful.
+    */
+    reset_host_errors(&thd->remote.sin_addr);
+    return 0;
+  }
+  else
+  {
+    return 1;
+  }
+  
+error:
+  inc_host_errors(&thd->remote.sin_addr);
+  my_error(ER_HANDSHAKE_ERROR, MYF(0));
+  return 1;
 }
 
 
@@ -985,7 +1339,7 @@ static void end_connection(THD *thd)
   if (thd->user_connect)
     decrease_user_connections(thd->user_connect);
 
-  if (thd->killed || net->error && net->vio != 0)
+  if (thd->killed || (net->error && net->vio != 0))
   {
     statistic_increment(aborted_threads,&LOCK_status);
   }
@@ -1040,13 +1394,38 @@ static void prepare_new_connection_state(THD* thd)
     execute_init_command(thd, &sys_init_connect, &LOCK_sys_init_connect);
     if (thd->is_error())
     {
-      thd->killed= THD::KILL_CONNECTION;
+      ulong packet_length;
+      NET *net= &thd->net;
+
       sql_print_warning(ER(ER_NEW_ABORTING_CONNECTION),
-                        thd->thread_id,(thd->db ? thd->db : "unconnected"),
+                        thd->thread_id,
+                        thd->db ? thd->db : "unconnected",
                         sctx->user ? sctx->user : "unauthenticated",
                         sctx->host_or_ip, "init_connect command failed");
       sql_print_warning("%s", thd->main_da.message());
+
+      thd->lex->current_select= 0;
+      my_net_set_read_timeout(net, thd->variables.net_wait_timeout);
+      thd->clear_error();
+      net_new_transaction(net);
+      packet_length= my_net_read(net);
+      /*
+        If my_net_read() failed, my_error() has been already called,
+        and the main Diagnostics Area contains an error condition.
+      */
+      if (packet_length != packet_error)
+        my_error(ER_NEW_ABORTING_CONNECTION, MYF(0),
+                 thd->thread_id,
+                 thd->db ? thd->db : "unconnected",
+                 sctx->user ? sctx->user : "unauthenticated",
+                 sctx->host_or_ip, "init_connect command failed");
+
+      thd->server_status&= ~SERVER_STATUS_CLEAR_SET;
+      net_end_statement(thd);
+      thd->killed = THD::KILL_CONNECTION;
+      return;
     }
+
     thd->proc_info=0;
     thd->set_time();
     thd->init_for_queries();
@@ -1144,3 +1523,4 @@ end_thread:
   }
 }
 #endif /* EMBEDDED_LIBRARY */
+

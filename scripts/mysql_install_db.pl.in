@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# Copyright (C) 2007 MySQL AB
+# Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -61,10 +61,15 @@ Usage: $0 [OPTIONS]
   --cross-bootstrap    For internal use.  Used when building the MySQL system
                        tables on a different host than the target.
   --datadir=path       The path to the MySQL data directory.
+  --defaults-extra-file=name
+                       Read this file after the global files are read.
+  --defaults-file=name Only read default options from the given file name.
   --force              Causes mysql_install_db to run even if DNS does not
                        work.  In that case, grant table entries that normally
                        use hostnames will use IP addresses.
+  --help               Display this help and exit.                     
   --ldata=path         The path to the MySQL data directory. Same as --datadir.
+  --no-defaults        Don't read default options from any option file.
   --rpm                For internal use.  This option is used by RPM files
                        during the MySQL installation process.
   --skip-name-resolve  Use IP addresses rather than hostnames when creating
@@ -418,10 +423,11 @@ my $mysqld_install_cmd_line = quote_options($mysqld_bootstrap,
                                             "--bootstrap",
                                             "--basedir=$opt->{basedir}",
                                             "--datadir=$opt->{ldata}",
-                                            "--skip-innodb",
-                                            "--skip-bdb",
-                                            "--skip-ndbcluster",
+                                            "--log-warnings=0",
+                                            "--loose-skip-innodb",
+                                            "--loose-skip-ndbcluster",
                                             "--max_allowed_packet=8M",
+                                            "--default-storage-engine=MyISAM",
                                             "--net_buffer_length=16K",
                                             @args,
                                           );
@@ -434,6 +440,8 @@ report_verbose_wait($opt,"Installing MySQL system tables...");
 
 open(SQL, $create_system_tables)
   or error($opt,"can't open $create_system_tables for reading: $!");
+open(SQL2, $fill_system_tables)
+  or error($opt,"can't open $fill_system_tables for reading: $!");
 # FIXME  > /dev/null ?
 if ( open(PIPE, "| $mysqld_install_cmd_line") )
 {
@@ -447,8 +455,20 @@ if ( open(PIPE, "| $mysqld_install_cmd_line") )
 
     print PIPE $_;
   }
+  while ( <SQL2> )
+  {
+    # TODO: make it similar to the above condition when we're sure 
+    #   @@hostname returns a fqdn
+    # When doing a "cross bootstrap" install, no reference to the current
+    # host should be added to the system tables.  So we filter out any
+    # lines which contain the current host name.
+    next if /\@current_hostname/;
+
+    print PIPE $_;
+  }
   close PIPE;
   close SQL;
+  close SQL2;
 
   report_verbose($opt,"OK");
 

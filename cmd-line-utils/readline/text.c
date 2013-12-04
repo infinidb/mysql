@@ -18,7 +18,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA. */
 #define READLINE_LIBRARY
 
 #if defined (HAVE_CONFIG_H)
@@ -614,7 +614,7 @@ rl_arrow_keys (count, c)
 #ifdef HANDLE_MULTIBYTE
 static char pending_bytes[MB_LEN_MAX];
 static int pending_bytes_length = 0;
-static mbstate_t ps = {0};
+static mbstate_t ps;
 #endif
 
 /* Insert the character C at the current location, moving point forward.
@@ -811,11 +811,10 @@ _rl_overwrite_char (count, c)
   int i;
 #if defined (HANDLE_MULTIBYTE)
   char mbkey[MB_LEN_MAX];
-  int k;
 
   /* Read an entire multibyte character sequence to insert COUNT times. */
   if (count > 0 && MB_CUR_MAX > 1 && rl_byte_oriented == 0)
-    k = _rl_read_mbstring (c, mbkey, MB_LEN_MAX);
+    _rl_read_mbstring (c, mbkey, MB_LEN_MAX);
 #endif
 
   rl_begin_undo_group ();

@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/*
+  Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /** @file ha_example.h
 
@@ -155,7 +157,8 @@ public:
   /** @brief
     This method will never be called if you do not implement indexes.
   */
-  virtual double read_time(ha_rows rows) { return (double) rows /  20.0+1; }
+  virtual double read_time(uint, uint, ha_rows rows)
+  { return (double) rows /  20.0+1; }
 
   /*
     Everything below are methods that we implement in ha_example.cc.

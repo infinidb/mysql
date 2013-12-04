@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -199,9 +199,25 @@ row_undo_search_clust_to_pcur(
 
 		ret = FALSE;
 	} else {
+		row_ext_t**	ext;
+
+		if (dict_table_get_format(node->table) >= DICT_TF_FORMAT_ZIP) {
+			/* In DYNAMIC or COMPRESSED format, there is
+			no prefix of externally stored columns in the
+			clustered index record. Build a cache of
+			column prefixes. */
+			ext = &node->ext;
+		} else {
+			/* REDUNDANT and COMPACT formats store a local
+			768-byte prefix of each externally stored
+			column. No cache is needed. */
+			ext = NULL;
+			node->ext = NULL;
+		}
+
 		node->row = row_build(ROW_COPY_DATA, clust_index, rec,
-				      offsets, NULL, &node->ext, node->heap);
-		if (node->update) {
+				      offsets, NULL, ext, node->heap);
+		if (node->rec_type == TRX_UNDO_UPD_EXIST_REC) {
 			node->undo_row = dtuple_copy(node->row, node->heap);
 			row_upd_replace(node->undo_row, &node->undo_ext,
 					clust_index, node->update, node->heap);
@@ -267,25 +283,6 @@ row_undo(
 		} else {
 			node->state = UNDO_NODE_MODIFY;
 		}
-
-	} else if (node->state == UNDO_NODE_PREV_VERS) {
-
-		/* Undo should be done to the same clustered index record
-		again in this same rollback, restoring the previous version */
-
-		roll_ptr = node->new_roll_ptr;
-
-		node->undo_rec = trx_undo_get_undo_rec_low(roll_ptr,
-							   node->heap);
-		node->roll_ptr = roll_ptr;
-		node->undo_no = trx_undo_rec_get_undo_no(node->undo_rec);
-
-		if (trx_undo_roll_ptr_is_insert(roll_ptr)) {
-
-			node->state = UNDO_NODE_INSERT;
-		} else {
-			node->state = UNDO_NODE_MODIFY;
-		}
 	}
 
 	/* Prevent DROP TABLE etc. while we are rolling back this row.
@@ -297,7 +294,7 @@ row_undo(
 
 	if (locked_data_dict) {
 
-		row_mysql_lock_data_dictionary(trx);
+		row_mysql_freeze_data_dictionary(trx);
 	}
 
 	if (node->state == UNDO_NODE_INSERT) {
@@ -312,7 +309,7 @@ row_undo(
 
 	if (locked_data_dict) {
 
-		row_mysql_unlock_data_dictionary(trx);
+		row_mysql_unfreeze_data_dictionary(trx);
 	}
 
 	/* Do some cleanup */

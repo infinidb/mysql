@@ -371,16 +371,6 @@ DELETE FROM mysql.user WHERE User='mysqltest_1';
 FLUSH PRIVILEGES;
 
 
-#
-# Restore global concurrent_insert value. Keep in the end of the test file.
-#
-
-set @@global.concurrent_insert= @old_concurrent_insert;
-
-# Wait till all disconnects are completed
---source include/wait_until_count_sessions.inc
-
-
 --echo #
 --echo # Bug#44521 Prepared Statement: CALL p() - crashes: `! thd->main_da.is_sent' failed et.al.
 --echo #
@@ -413,6 +403,76 @@ let $wait_condition=
 --source include/wait_condition.inc 
 DROP PROCEDURE p;
 
+#
+# Bug#47736 killing a select from a view when the view is processing a function, asserts
+#
+CREATE TABLE t1(a int);
+INSERT INTO t1 VALUES (1);
+CREATE FUNCTION f1 (inp TEXT) RETURNS INT NO SQL RETURN sleep(60);
+CREATE VIEW v1 AS SELECT f1('a') FROM t1;
+
+--connect (con1, localhost, root,,)
+--let $ID_1= `SELECT connection_id()`
+--send SELECT * FROM v1;
+
+--connect (con2, localhost, root,,)
+--let $ID_2= `SELECT connection_id()`
+--send SELECT * FROM v1
+
+--connection default
+--disable_query_log
+--eval KILL QUERY $ID_2
+--eval KILL QUERY $ID_1
+--enable_query_log
+
+--connection con1
+--error ER_QUERY_INTERRUPTED
+--reap
+--connection con2
+--error ER_QUERY_INTERRUPTED
+--reap
+
+--connection default
+DROP VIEW v1;
+DROP TABLE t1;
+DROP FUNCTION f1;
+--disconnect con1
+--disconnect con2
+
+--echo #
+--echo # Bug#11763507 - 56224: FUNCTION NAME IS CASE-SENSITIVE
+--echo #
+SET @@SQL_MODE = '';
+DELIMITER $;
+
+CREATE EVENT teste_bug11763507 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR 
+DO SELECT 1 $
+
+DELIMITER ;$
+# EVENTS
+--replace_column 6 # 7 # 8 # 9 #
+SHOW EVENTS LIKE 'teste_bug11763507';
+--replace_column 6 # 7 # 8 # 9 #
+SHOW EVENTS LIKE 'TESTE_bug11763507';
+
+--replace_column 4 # 
+SHOW CREATE EVENT teste_bug11763507;
+--replace_column 4 # 
+SHOW CREATE EVENT TESTE_bug11763507;
+
+DROP EVENT teste_bug11763507;
+--echo #END OF BUG#11763507 test.
+
 --echo # ------------------------------------------------------------------
 --echo # -- End of 5.1 tests
 --echo # ------------------------------------------------------------------
+
+
+#
+# Restore global concurrent_insert value. Keep in the end of the test file.
+#
+
+set @@global.concurrent_insert= @old_concurrent_insert;
+
+# Wait till all disconnects are completed
+--source include/wait_until_count_sessions.inc

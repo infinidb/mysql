@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2013, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -80,20 +80,53 @@ combination of types */
 /** File format */
 /* @{ */
 #define DICT_TF_FORMAT_SHIFT		5	/* file format */
-#define DICT_TF_FORMAT_MASK		(127 << DICT_TF_FORMAT_SHIFT)
+#define DICT_TF_FORMAT_MASK		\
+((~(~0 << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT))) << DICT_TF_FORMAT_SHIFT)
 #define DICT_TF_FORMAT_51		0	/*!< InnoDB/MySQL up to 5.1 */
 #define DICT_TF_FORMAT_ZIP		1	/*!< InnoDB plugin for 5.1:
 						compressed tables,
 						new BLOB treatment */
 /** Maximum supported file format */
 #define DICT_TF_FORMAT_MAX		DICT_TF_FORMAT_ZIP
-
+/* @} */
 #define DICT_TF_BITS			6	/*!< number of flag bits */
 #if (1 << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT)) <= DICT_TF_FORMAT_MAX
 # error "DICT_TF_BITS is insufficient for DICT_TF_FORMAT_MAX"
 #endif
 /* @} */
+
+/** @brief Additional table flags.
+
+These flags will be stored in SYS_TABLES.MIX_LEN.  All unused flags
+will be written as 0.  The column may contain garbage for tables
+created with old versions of InnoDB that only implemented
+ROW_FORMAT=REDUNDANT. */
+/* @{ */
+#define DICT_TF2_SHIFT			DICT_TF_BITS
+						/*!< Shift value for
+						table->flags. */
+#define DICT_TF2_TEMPORARY		1	/*!< TRUE for tables from
+						CREATE TEMPORARY TABLE. */
+#define DICT_TF2_BITS			(DICT_TF2_SHIFT + 1)
+						/*!< Total number of bits
+						in table->flags. */
 /* @} */
+
+/** Tables could be chained together with Foreign key constraint. When
+first load the parent table, we would load all of its descedents.
+This could result in rescursive calls and out of stack error eventually.
+DICT_FK_MAX_RECURSIVE_LOAD defines the maximum number of recursive loads,
+when exceeded, the child table will not be loaded. It will be loaded when
+the foreign constraint check needs to be run. */
+#define DICT_FK_MAX_RECURSIVE_LOAD	20
+
+/** Similarly, when tables are chained together with foreign key constraints
+with on cascading delete/update clause, delete from parent table could
+result in recursive cascading calls. This defines the maximum number of
+such cascading deletes/updates allowed. When exceeded, the delete from
+parent table will fail, and user has to drop excessive foreign constraint
+before proceeds. */
+#define FK_MAX_CASCADE_DEL		300
 
 /**********************************************************************//**
 Creates a table memory object.
@@ -253,10 +286,15 @@ struct dict_index_struct{
 #endif /* !UNIV_HOTBACKUP */
 	unsigned	type:4;	/*!< index type (DICT_CLUSTERED, DICT_UNIQUE,
 				DICT_UNIVERSAL, DICT_IBUF) */
-	unsigned	trx_id_offset:10;/*!< position of the trx id column
+#define MAX_KEY_LENGTH_BITS 12
+	unsigned	trx_id_offset:MAX_KEY_LENGTH_BITS;
+				/*!< position of the trx id column
 				in a clustered index record, if the fields
 				before it are known to be of a fixed size,
 				0 otherwise */
+#if (1<<MAX_KEY_LENGTH_BITS) < MAX_KEY_LENGTH
+# error (1<<MAX_KEY_LENGTH_BITS) < MAX_KEY_LENGTH
+#endif
 	unsigned	n_user_defined_cols:10;
 				/*!< number of columns the user defined to
 				be in the index: in the internal
@@ -272,7 +310,9 @@ struct dict_index_struct{
 	unsigned	to_be_dropped:1;
 				/*!< TRUE if this index is marked to be
 				dropped in ha_innobase::prepare_drop_index(),
-				otherwise FALSE */
+				otherwise FALSE. Protected by
+				dict_sys->mutex, dict_operation_lock and
+				index->lock.*/
 	dict_field_t*	fields;	/*!< array of field descriptions */
 #ifndef UNIV_HOTBACKUP
 	UT_LIST_NODE_T(dict_index_t)
@@ -288,6 +328,12 @@ struct dict_index_struct{
 				dict_get_n_unique(index); we
 				periodically calculate new
 				estimates */
+	ib_int64_t*	stat_n_non_null_key_vals;
+				/* approximate number of non-null key values
+				for this index, for each column where
+				n < dict_get_n_unique(index); This
+				is used when innodb_stats_method is
+				"nulls_ignored". */
 	ulint		stat_index_size;
 				/*!< approximate index size in
 				database pages */
@@ -301,6 +347,13 @@ struct dict_index_struct{
 				index, or 0 if the index existed
 				when InnoDB was started up */
 #endif /* !UNIV_HOTBACKUP */
+#ifdef UNIV_BLOB_DEBUG
+	mutex_t		blobs_mutex;
+				/*!< mutex protecting blobs */
+	void*		blobs;	/*!< map of (page_no,heap_no,field_no)
+				to first_blob_page_no; protected by
+				blobs_mutex; @see btr_blob_dbg_t */
+#endif /* UNIV_BLOB_DEBUG */
 #ifdef UNIV_DEBUG
 	ulint		magic_n;/*!< magic number */
 /** Value of dict_index_struct::magic_n */
@@ -317,7 +370,7 @@ struct dict_foreign_struct{
 	char*		id;		/*!< id of the constraint as a
 					null-terminated string */
 	unsigned	n_fields:10;	/*!< number of indexes' first fields
-					for which the the foreign key
+					for which the foreign key
 					constraint is defined: we allow the
 					indexes to contain more fields than
 					mentioned in the constraint, as long
@@ -364,7 +417,7 @@ initialized to 0, NULL or FALSE in dict_mem_table_create(). */
 struct dict_table_struct{
 	dulint		id;	/*!< id of the table */
 	mem_heap_t*	heap;	/*!< memory heap */
-	const char*	name;	/*!< table name */
+	char*		name;	/*!< table name */
 	const char*	dir_path_of_temp_table;/*!< NULL or the directory path
 				where a TEMPORARY table that was explicitly
 				created by a user should be placed if
@@ -374,7 +427,7 @@ struct dict_table_struct{
 	unsigned	space:32;
 				/*!< space where the clustered index of the
 				table is placed */
-	unsigned	flags:DICT_TF_BITS;/*!< DICT_TF_COMPACT, ... */
+	unsigned	flags:DICT_TF2_BITS;/*!< DICT_TF_COMPACT, ... */
 	unsigned	ibd_file_missing:1;
 				/*!< TRUE if this is in a single-table
 				tablespace and the .ibd file is missing; then
@@ -416,6 +469,12 @@ struct dict_table_struct{
 				NOT allowed until this count gets to zero;
 				MySQL does NOT itself check the number of
 				open handles at drop */
+	unsigned	fk_max_recusive_level:8;
+				/*!< maximum recursive level we support when
+				loading tables chained together with FK
+				constraints. If exceeds this level, we will
+				stop loading child table into memory along with
+				its parent table */
 	ulint		n_foreign_key_checks_running;
 				/*!< count of how many foreign key check
 				operations are currently being performed

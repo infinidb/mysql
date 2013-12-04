@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/* Copyright (c) 2003-2007 MySQL AB, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef NdbEventOperation_H
 #define NdbEventOperation_H
@@ -178,22 +179,22 @@ public:
   /**
    * Check if table name has changed, for event TE_ALTER
    */
-  const bool tableNameChanged() const;
+  bool tableNameChanged() const;
 
   /**
    * Check if table frm has changed, for event TE_ALTER
    */
-  const bool tableFrmChanged() const;
+  bool tableFrmChanged() const;
 
   /**
    * Check if table fragmentation has changed, for event TE_ALTER
    */
-  const bool tableFragmentationChanged() const;
+  bool tableFragmentationChanged() const;
 
   /**
    * Check if table range partition list name has changed, for event TE_ALTER
    */
-  const bool tableRangeListChanged() const;
+  bool tableRangeListChanged() const;
 
   /**
    * Retrieve the GCI of the latest retrieved event

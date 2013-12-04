@@ -518,21 +518,21 @@ SUCCESS
 # 12. Read-write statement: IODKU, change 0 rows. 
 #
 insert t1 set a=2 on duplicate key update a=2;
-call p_verify_status_increment(1, 0, 1, 0);
+call p_verify_status_increment(2, 2, 1, 0);
 SUCCESS
 
 commit;
-call p_verify_status_increment(1, 0, 1, 0);
+call p_verify_status_increment(2, 2, 1, 0);
 SUCCESS
 
 # 13. Read-write statement: INSERT IGNORE, change 0 rows. 
 #
 insert ignore t1 set a=2;
-call p_verify_status_increment(1, 0, 1, 0);
+call p_verify_status_increment(2, 2, 1, 0);
 SUCCESS
 
 commit;
-call p_verify_status_increment(1, 0, 1, 0);
+call p_verify_status_increment(2, 2, 1, 0);
 SUCCESS
 
 # 14. Read-write statement: INSERT IGNORE, change 1 row. 
@@ -841,11 +841,11 @@ call p_verify_status_increment(2, 0, 2, 0);
 SUCCESS
 
 alter table t3 rename t4;
-call p_verify_status_increment(2, 2, 2, 2);
+call p_verify_status_increment(1, 0, 1, 0);
 SUCCESS
 
 rename table t4 to t3;
-call p_verify_status_increment(2, 2, 2, 2);
+call p_verify_status_increment(1, 0, 1, 0);
 SUCCESS
 
 truncate table t3;

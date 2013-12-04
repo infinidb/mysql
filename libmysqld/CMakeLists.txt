@@ -1,4 +1,4 @@
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -90,10 +90,11 @@ ENDFOREACH(rpath)
 
 
 FOREACH (ENGINE_LIB ${MYSQLD_STATIC_ENGINE_LIBS})
-  INCLUDE(${CMAKE_SOURCE_DIR}/storage/${ENGINE_LIB}/CMakeLists.txt)
   STRING(TOUPPER ${ENGINE_LIB} ENGINE_LIB_UPPER)
+  SET(ENGINE_DIR ${${ENGINE_LIB_UPPER}_DIR})
+  INCLUDE(${CMAKE_SOURCE_DIR}/storage/${ENGINE_DIR}/CMakeLists.txt)
   FOREACH(rpath ${${ENGINE_LIB_UPPER}_SOURCES})
-    SET(LIB_SOURCES ${LIB_SOURCES} ${CMAKE_SOURCE_DIR}/storage/${ENGINE_LIB}/${rpath})
+    SET(LIB_SOURCES ${LIB_SOURCES} ${CMAKE_SOURCE_DIR}/storage/${ENGINE_DIR}/${rpath})
   ENDFOREACH(rpath)
 ENDFOREACH(ENGINE_LIB)
 
@@ -107,6 +108,7 @@ SET(LIBMYSQLD_SOURCES emb_qcache.cc libmysqld.c lib_sql.cc
            ../sql/password.c ../sql/discover.cc ../sql/derror.cc 
            ../sql/field.cc ../sql/field_conv.cc
            ../sql/filesort.cc ../sql/gstream.cc ../sql/ha_partition.cc 
+           ../sql/signal_handler.cc
            ../sql/handler.cc ../sql/hash_filo.cc ../sql/hostname.cc 
            ../sql/init.cc ../sql/item_buff.cc ../sql/item_cmpfunc.cc 
            ../sql/item.cc ../sql/item_create.cc ../sql/item_func.cc 
@@ -129,6 +131,7 @@ SET(LIBMYSQLD_SOURCES emb_qcache.cc libmysqld.c lib_sql.cc
            ../sql/sql_list.cc ../sql/sql_load.cc ../sql/sql_locale.cc 
            ../sql/sql_binlog.cc ../sql/sql_manager.cc ../sql/sql_map.cc 
            ../sql/sql_parse.cc ../sql/sql_partition.cc ../sql/sql_plugin.cc 
+           ../sql/debug_sync.cc
            ../sql/sql_prepare.cc ../sql/sql_rename.cc ../sql/sql_repl.cc 
            ../sql/sql_select.cc ../sql/sql_servers.cc
            ../sql/sql_show.cc ../sql/sql_state.c ../sql/sql_string.cc
@@ -153,6 +156,14 @@ FILE(WRITE cmake_dummy.c " ")
 ADD_LIBRARY(mysqlserver STATIC ${LIBMYSQLD_SOURCES})
 ADD_DEPENDENCIES(mysqlserver GenServerSource GenError)
 TARGET_LINK_LIBRARIES(mysqlserver)
+
+# Add any additional libraries requested by engine(s)
+FOREACH (ENGINE_LIB ${MYSQLD_STATIC_ENGINE_LIBS})
+  STRING(TOUPPER ${ENGINE_LIB} ENGINE_LIB_UPPER)
+  IF(${ENGINE_LIB_UPPER}_LIBS)
+    TARGET_LINK_LIBRARIES(mysqlserver ${${ENGINE_LIB_UPPER}_LIBS})
+  ENDIF(${ENGINE_LIB_UPPER}_LIBS)
+ENDFOREACH(ENGINE_LIB)
 
 ADD_LIBRARY(libmysqld SHARED cmake_dummy.c libmysqld.def)
 ADD_DEPENDENCIES(libmysqld mysqlserver)

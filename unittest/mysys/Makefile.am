@@ -1,4 +1,4 @@
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@ LDADD 		= $(top_builddir)/unittest/mytap/libmytap.a \
 		  $(top_builddir)/dbug/libdbug.a \
 		  $(top_builddir)/strings/libmystrings.a
 
-noinst_PROGRAMS  = bitmap-t base64-t my_atomic-t
+noinst_PROGRAMS  = bitmap-t base64-t
 
 # Don't update the files from bitkeeper
 %::SCCS/s.%

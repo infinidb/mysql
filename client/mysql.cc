@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2008 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* mysql command tool
  * Commands compatible with mSQL by David J. Hughes
@@ -54,6 +56,9 @@ static char *server_version= NULL;
 /* Array of options to pass to libemysqld */
 #define MAX_SERVER_ARGS               64
 
+/* Version numbers for deprecation messages */
+#define VER_CELOSIA "5.6"
+
 void* sql_alloc(unsigned size);	     // Don't use mysqld alloc for these
 void sql_element_free(void *ptr);
 #include "sql_string.h"
@@ -85,7 +90,6 @@ extern "C" {
 #endif
 #endif
 
-#undef bcmp				// Fix problem with new readline
 #if defined(__WIN__)
 #include <conio.h>
 #elif !defined(__NETWARE__)
@@ -111,6 +115,7 @@ extern "C" {
 #endif
 
 #include "completion_hash.h"
+#include <welcome_copyright_notice.h> // ORACLE_WELCOME_COPYRIGHT_NOTICE
 
 #define PROMPT_CHAR '\\'
 #define DEFAULT_DELIMITER ";"
@@ -238,6 +243,8 @@ static const char* construct_prompt();
 static char *get_arg(char *line, my_bool get_next_arg);
 static void init_username();
 static void add_int_to_prompt(int toadd);
+static int normalize_dbname(const char *line, char *buff, uint buff_size);
+static int get_quote_count(const char *line);
 
 /* A structure which contains information on the commands this program
    can understand. */
@@ -1125,6 +1132,8 @@ int main(int argc,char *argv[])
   if (status.batch && !status.line_buff &&
       !(status.line_buff= batch_readline_init(MAX_BATCH_BUFFER_SIZE, stdin)))
   {
+    put_info("Can't initialize batch_readline - may be the input source is "
+             "a directory or a block device.", INFO_ERROR, 0);
     free_defaults(defaults_argv);
     my_end(0);
     exit(1);
@@ -1163,6 +1172,8 @@ int main(int argc,char *argv[])
 	  "Your MySQL connection id is %lu\nServer version: %s\n",
 	  mysql_thread_id(&mysql), server_version_string(&mysql));
   put_info((char*) glob_buffer.ptr(),INFO_INFO);
+
+  put_info(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"), INFO_INFO);
 
 #ifdef HAVE_READLINE
   initialize_readline((char*) my_progname);
@@ -1206,13 +1217,11 @@ int main(int argc,char *argv[])
       sprintf(histfile_tmp, "%s.TMP", histfile);
     }
   }
+
 #endif
+
   sprintf(buff, "%s",
-#ifndef NOT_YET
 	  "Type 'help;' or '\\h' for help. Type '\\c' to clear the current input statement.\n");
-#else
-	  "Type 'help [[%]function name[%]]' to get help on usage of function.\n");
-#endif
   put_info(buff,INFO_INFO);
   status.exit_status= read_and_execute(!status.batch);
   if (opt_outfile)
@@ -1281,21 +1290,35 @@ sig_handler handle_sigint(int sig)
   MYSQL *kill_mysql= NULL;
 
   /* terminate if no query being executed, or we already tried interrupting */
-  if (!executing_query || interrupted_query)
+  /* terminate if no query being executed, or we already tried interrupting */
+  if (!executing_query || (interrupted_query == 2))
+  {
+    tee_fprintf(stdout, "Ctrl-C -- exit!\n");
     goto err;
+  }
 
   kill_mysql= mysql_init(kill_mysql);
   if (!mysql_real_connect(kill_mysql,current_host, current_user, opt_password,
                           "", opt_mysql_port, opt_mysql_unix_port,0))
+  {
+    tee_fprintf(stdout, "Ctrl-C -- sorry, cannot connect to server to kill query, giving up ...\n");
     goto err;
+  }
+
+  interrupted_query++;
+
+  /* mysqld < 5 does not understand KILL QUERY, skip to KILL CONNECTION */
+  if ((interrupted_query == 1) && (mysql_get_server_version(&mysql) < 50000))
+    interrupted_query= 2;
 
   /* kill_buffer is always big enough because max length of %lu is 15 */
-  sprintf(kill_buffer, "KILL /*!50000 QUERY */ %lu", mysql_thread_id(&mysql));
-  mysql_real_query(kill_mysql, kill_buffer, strlen(kill_buffer));
+  sprintf(kill_buffer, "KILL %s%lu",
+          (interrupted_query == 1) ? "QUERY " : "",
+          mysql_thread_id(&mysql));
+  tee_fprintf(stdout, "Ctrl-C -- sending \"%s\" to server ...\n", kill_buffer);
+  mysql_real_query(kill_mysql, kill_buffer, (uint) strlen(kill_buffer));
   mysql_close(kill_mysql);
-  tee_fprintf(stdout, "Query aborted by Ctrl+C\n");
-
-  interrupted_query= 1;
+  tee_fprintf(stdout, "Ctrl-C -- query aborted.\n");
 
   return;
 
@@ -1322,108 +1345,127 @@ static struct my_option my_long_options[] =
   {"help", 'I', "Synonym for -?", 0, 0, 0, GET_NO_ARG, NO_ARG, 0,
    0, 0, 0, 0, 0},
 #ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Auto close the screen on exit for Netware.",
+  {"autoclose", OPT_AUTO_CLOSE, "Automatically close the screen on exit for Netware.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"auto-rehash", OPT_AUTO_REHASH,
-   "Enable automatic rehashing. One doesn't need to use 'rehash' to get table and field completion, but startup and reconnecting may take a longer time. Disable with --disable-auto-rehash.",
-   (uchar**) &opt_rehash, (uchar**) &opt_rehash, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0,
+   "Enable automatic rehashing. One doesn't need to use 'rehash' to get table "
+   "and field completion, but startup and reconnecting may take a longer time. "
+   "Disable with --disable-auto-rehash.",
+   &opt_rehash, &opt_rehash, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0,
    0, 0},
   {"no-auto-rehash", 'A',
-   "No automatic rehashing. One has to use 'rehash' to get table and field completion. This gives a quicker start of mysql and disables rehashing on reconnect. WARNING: options deprecated; use --disable-auto-rehash instead.",
+   "No automatic rehashing. One has to use 'rehash' to get table and field "
+   "completion. This gives a quicker start of mysql and disables rehashing "
+   "on reconnect.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"batch", 'B',
-   "Don't use history file. Disable interactive behavior. (Enables --silent)", 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
+   "Don't use history file. Disable interactive behavior. (Enables --silent.)",
+   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"character-sets-dir", OPT_CHARSETS_DIR,
-   "Directory where character sets are.", (uchar**) &charsets_dir,
-   (uchar**) &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   "Directory for character set files.", &charsets_dir,
+   &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"column-type-info", OPT_COLUMN_TYPES, "Display column type information.",
-   (uchar**) &column_types_flag, (uchar**) &column_types_flag,
+   &column_types_flag, &column_types_flag,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"comments", 'c', "Preserve comments. Send comments to the server."
-   " The default is --skip-comments (discard comments), enable with --comments",
-   (uchar**) &preserve_comments, (uchar**) &preserve_comments,
+   " The default is --skip-comments (discard comments), enable with --comments.",
+   &preserve_comments, &preserve_comments,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"compress", 'C', "Use compression in server/client protocol.",
-   (uchar**) &opt_compress, (uchar**) &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   &opt_compress, &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
    0, 0, 0},
-
 #ifdef DBUG_OFF
-  {"debug", '#', "This is a non-debug version. Catch this and exit",
+  {"debug", '#', "This is a non-debug version. Catch this and exit.",
    0,0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
-  {"debug", '#', "Output debug log", (uchar**) &default_dbug_option,
-   (uchar**) &default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug", '#', "Output debug log.", &default_dbug_option,
+   &default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"debug-check", OPT_DEBUG_CHECK, "Check memory and open file usage at exit.",
-   (uchar**) &debug_check_flag, (uchar**) &debug_check_flag, 0,
+   &debug_check_flag, &debug_check_flag, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"debug-info", 'T', "Print some debug info at exit.", (uchar**) &debug_info_flag,
-   (uchar**) &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"database", 'D', "Database to use.", (uchar**) &current_db,
-   (uchar**) &current_db, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug-info", 'T', "Print some debug info at exit.", &debug_info_flag,
+   &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"database", 'D', "Database to use.", &current_db,
+   &current_db, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"default-character-set", OPT_DEFAULT_CHARSET,
-   "Set the default character set.", (uchar**) &default_charset,
-   (uchar**) &default_charset, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"delimiter", OPT_DELIMITER, "Delimiter to be used.", (uchar**) &delimiter_str,
-   (uchar**) &delimiter_str, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"execute", 'e', "Execute command and quit. (Disables --force and history file)", 0,
+   "Set the default character set.", &default_charset,
+   &default_charset, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"delimiter", OPT_DELIMITER, "Delimiter to be used.", &delimiter_str,
+   &delimiter_str, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"execute", 'e', "Execute command and quit. (Disables --force and history file.)", 0,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"vertical", 'E', "Print the output of a query (rows) vertically.",
-   (uchar**) &vertical, (uchar**) &vertical, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0,
+   &vertical, &vertical, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0,
    0},
-  {"force", 'f', "Continue even if we get an sql error.",
-   (uchar**) &ignore_errors, (uchar**) &ignore_errors, 0, GET_BOOL, NO_ARG, 0, 0,
+  {"force", 'f', "Continue even if we get an SQL error.",
+   &ignore_errors, &ignore_errors, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"named-commands", 'G',
-   "Enable named commands. Named commands mean this program's internal commands; see mysql> help . When enabled, the named commands can be used from any line of the query, otherwise only from the first line, before an enter. Disable with --disable-named-commands. This option is disabled by default.",
-   (uchar**) &named_cmds, (uchar**) &named_cmds, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0,
+   "Enable named commands. Named commands mean this program's internal "
+   "commands; see mysql> help . When enabled, the named commands can be "
+   "used from any line of the query, otherwise only from the first line, "
+   "before an enter. Disable with --disable-named-commands. This option "
+   "is disabled by default.",
+   &named_cmds, &named_cmds, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0,
    0, 0},
   {"no-named-commands", 'g',
-   "Named commands are disabled. Use \\* form only, or use named commands only in the beginning of a line ending with a semicolon (;) Since version 10.9 the client now starts with this option ENABLED by default! Disable with '-G'. Long format commands still work from the first line. WARNING: option deprecated; use --disable-named-commands instead.",
+   "Named commands are disabled. Use \\* form only, or use named commands "
+   "only in the beginning of a line ending with a semicolon (;). Since "
+   "version 10.9, the client now starts with this option ENABLED by default. "
+   "Disable with '-G'. Long format commands still work from the first line. "
+   "WARNING: option deprecated; use --disable-named-commands instead.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"ignore-spaces", 'i', "Ignore space after function names.",
-   (uchar**) &ignore_spaces, (uchar**) &ignore_spaces, 0, GET_BOOL, NO_ARG, 0, 0,
+   &ignore_spaces, &ignore_spaces, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"local-infile", OPT_LOCAL_INFILE, "Enable/disable LOAD DATA LOCAL INFILE.",
-   (uchar**) &opt_local_infile,
-   (uchar**) &opt_local_infile, 0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
-  {"no-beep", 'b', "Turn off beep on error.", (uchar**) &opt_nobeep,
-   (uchar**) &opt_nobeep, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0}, 
-  {"host", 'h', "Connect to host.", (uchar**) &current_host,
-   (uchar**) &current_host, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"html", 'H', "Produce HTML output.", (uchar**) &opt_html, (uchar**) &opt_html,
+   &opt_local_infile,
+   &opt_local_infile, 0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
+  {"no-beep", 'b', "Turn off beep on error.", &opt_nobeep,
+   &opt_nobeep, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0}, 
+  {"host", 'h', "Connect to host.", &current_host,
+   &current_host, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"html", 'H', "Produce HTML output.", &opt_html, &opt_html,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"xml", 'X', "Produce XML output", (uchar**) &opt_xml, (uchar**) &opt_xml, 0,
+  {"xml", 'X', "Produce XML output.", &opt_xml, &opt_xml, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"line-numbers", OPT_LINE_NUMBERS, "Write line numbers for errors.",
-   (uchar**) &line_numbers, (uchar**) &line_numbers, 0, GET_BOOL,
+   &line_numbers, &line_numbers, 0, GET_BOOL,
    NO_ARG, 1, 0, 0, 0, 0, 0},  
-  {"skip-line-numbers", 'L', "Don't write line number for errors. WARNING: -L is deprecated, use long version of this option instead.", 0, 0, 0, GET_NO_ARG,
+  {"skip-line-numbers", 'L', "Don't write line number for errors.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"unbuffered", 'n', "Flush buffer after each query.", (uchar**) &unbuffered,
-   (uchar**) &unbuffered, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"unbuffered", 'n', "Flush buffer after each query.", &unbuffered,
+   &unbuffered, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"column-names", OPT_COLUMN_NAMES, "Write column names in results.",
-   (uchar**) &column_names, (uchar**) &column_names, 0, GET_BOOL,
+   &column_names, &column_names, 0, GET_BOOL,
    NO_ARG, 1, 0, 0, 0, 0, 0},
   {"skip-column-names", 'N',
-   "Don't write column names in results. WARNING: -N is deprecated, use long version of this options instead.",
+   "Don't write column names in results.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"set-variable", 'O',
-   "Change the value of a variable. Please note that this option is deprecated; you can set variables directly with --variable-name=value.",
+   "Change the value of a variable. Please note that this option is "
+   "deprecated; you can set variables directly with --variable-name=value.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"sigint-ignore", OPT_SIGINT_IGNORE, "Ignore SIGINT (CTRL-C)",
-   (uchar**) &opt_sigint_ignore,  (uchar**) &opt_sigint_ignore, 0, GET_BOOL,
+  {"sigint-ignore", OPT_SIGINT_IGNORE, "Ignore SIGINT (CTRL-C).",
+   &opt_sigint_ignore,  &opt_sigint_ignore, 0, GET_BOOL,
    NO_ARG, 0, 0, 0, 0, 0, 0},
   {"one-database", 'o',
-   "Only update the default database. This is useful for skipping updates to other database in the update log.",
+   "Ignore statements except those that occur while the default "
+   "database is the one named at the command line.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef USE_POPEN
   {"pager", OPT_PAGER,
-   "Pager to use to display results. If you don't supply an option the default pager is taken from your ENV variable PAGER. Valid pagers are less, more, cat [> filename], etc. See interactive help (\\h) also. This option does not work in batch mode. Disable with --disable-pager. This option is disabled by default.",
+   "Pager to use to display results. If you don't supply an option, the "
+   "default pager is taken from your ENV variable PAGER. Valid pagers are "
+   "less, more, cat [> filename], etc. See interactive help (\\h) also. "
+   "This option does not work in batch mode. Disable with --disable-pager. "
+   "This option is disabled by default.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"no-pager", OPT_NOPAGER,
-   "Disable pager and print to stdout. See interactive help (\\h) also. WARNING: option deprecated; use --disable-pager instead.",
+   "Disable pager and print to stdout. See interactive help (\\h) also. "
+   "WARNING: option deprecated; use --disable-pager instead.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"password", 'p',
@@ -1439,48 +1481,53 @@ static struct my_option my_long_options[] =
    "/etc/services, "
 #endif
    "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
-   (uchar**) &opt_mysql_port,
-   (uchar**) &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0,  0},
+   &opt_mysql_port,
+   &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0,  0},
   {"prompt", OPT_PROMPT, "Set the mysql prompt to this value.",
-   (uchar**) &current_prompt, (uchar**) &current_prompt, 0, GET_STR_ALLOC,
+   &current_prompt, &current_prompt, 0, GET_STR_ALLOC,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"protocol", OPT_MYSQL_PROTOCOL, "The protocol of connection (tcp,socket,pipe,memory).",
+  {"protocol", OPT_MYSQL_PROTOCOL, "The protocol to use for connection (tcp, socket, pipe, memory).",
    0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"quick", 'q',
-   "Don't cache result, print it row by row. This may slow down the server if the output is suspended. Doesn't use history file.",
-   (uchar**) &quick, (uchar**) &quick, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+   "Don't cache result, print it row by row. This may slow down the server "
+   "if the output is suspended. Doesn't use history file.",
+   &quick, &quick, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"raw", 'r', "Write fields without conversion. Used with --batch.",
-   (uchar**) &opt_raw_data, (uchar**) &opt_raw_data, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   &opt_raw_data, &opt_raw_data, 0, GET_BOOL, NO_ARG, 0, 0, 0,
    0, 0, 0},
-  {"reconnect", OPT_RECONNECT, "Reconnect if the connection is lost. Disable with --disable-reconnect. This option is enabled by default.", 
-   (uchar**) &opt_reconnect, (uchar**) &opt_reconnect, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
-  {"silent", 's', "Be more silent. Print results with a tab as separator, each row on new line.", 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0,
-   0, 0},
+  {"reconnect", OPT_RECONNECT, "Reconnect if the connection is lost. Disable "
+   "with --disable-reconnect. This option is enabled by default.",
+   &opt_reconnect, &opt_reconnect, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
+  {"silent", 's', "Be more silent. Print results with a tab as separator, "
+   "each row on new line.", 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
-   "Base name of shared memory.", (uchar**) &shared_memory_base_name, (uchar**) &shared_memory_base_name, 
-   0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   "Base name of shared memory.", &shared_memory_base_name,
+   &shared_memory_base_name, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"socket", 'S', "Socket file to use for connection.",
-   (uchar**) &opt_mysql_unix_port, (uchar**) &opt_mysql_unix_port, 0, GET_STR_ALLOC,
+  {"socket", 'S', "The socket file to use for connection.",
+   &opt_mysql_unix_port, &opt_mysql_unix_port, 0, GET_STR_ALLOC,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #include "sslopt-longopts.h"
-  {"table", 't', "Output in table format.", (uchar**) &output_tables,
-   (uchar**) &output_tables, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"table", 't', "Output in table format.", &output_tables,
+   &output_tables, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"tee", OPT_TEE,
-   "Append everything into outfile. See interactive help (\\h) also. Does not work in batch mode. Disable with --disable-tee. This option is disabled by default.",
+   "Append everything into outfile. See interactive help (\\h) also. "
+   "Does not work in batch mode. Disable with --disable-tee. "
+   "This option is disabled by default.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"no-tee", OPT_NOTEE, "Disable outfile. See interactive help (\\h) also. WARNING: option deprecated; use --disable-tee instead", 0, 0, 0, GET_NO_ARG,
-   NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"no-tee", OPT_NOTEE, "Disable outfile. See interactive help (\\h) also. "
+   "WARNING: Option deprecated; use --disable-tee instead.",
+   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #ifndef DONT_ALLOW_USER_CHANGE
-  {"user", 'u', "User for login if not current user.", (uchar**) &current_user,
-   (uchar**) &current_user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"user", 'u', "User for login if not current user.", &current_user,
+   &current_user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"safe-updates", 'U', "Only allow UPDATE and DELETE that uses keys.",
-   (uchar**) &safe_updates, (uchar**) &safe_updates, 0, GET_BOOL, NO_ARG, 0, 0,
+   &safe_updates, &safe_updates, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"i-am-a-dummy", 'U', "Synonym for option --safe-updates, -U.",
-   (uchar**) &safe_updates, (uchar**) &safe_updates, 0, GET_BOOL, NO_ARG, 0, 0,
+   &safe_updates, &safe_updates, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"verbose", 'v', "Write more. (-v -v -v gives the table output format).", 0,
    0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -1490,35 +1537,32 @@ static struct my_option my_long_options[] =
    NO_ARG, 0, 0, 0, 0, 0, 0},
   {"connect_timeout", OPT_CONNECT_TIMEOUT,
    "Number of seconds before connection timeout.",
-   (uchar**) &opt_connect_timeout,
-   (uchar**) &opt_connect_timeout, 0, GET_ULONG, REQUIRED_ARG, 0, 0, 3600*12, 0,
-   0, 0},
+   &opt_connect_timeout, &opt_connect_timeout, 0, GET_ULONG, REQUIRED_ARG,
+   0, 0, 3600*12, 0, 0, 0},
   {"max_allowed_packet", OPT_MAX_ALLOWED_PACKET,
-   "Max packet length to send to, or receive from server",
-   (uchar**) &opt_max_allowed_packet, (uchar**) &opt_max_allowed_packet, 0,
+   "The maximum packet length to send to or receive from server.",
+   &opt_max_allowed_packet, &opt_max_allowed_packet, 0,
    GET_ULONG, REQUIRED_ARG, 16 *1024L*1024L, 4096,
    (longlong) 2*1024L*1024L*1024L, MALLOC_OVERHEAD, 1024, 0},
   {"net_buffer_length", OPT_NET_BUFFER_LENGTH,
-   "Buffer for TCP/IP and socket communication",
-   (uchar**) &opt_net_buffer_length, (uchar**) &opt_net_buffer_length, 0, GET_ULONG,
+   "The buffer size for TCP/IP and socket communication.",
+   &opt_net_buffer_length, &opt_net_buffer_length, 0, GET_ULONG,
    REQUIRED_ARG, 16384, 1024, 512*1024*1024L, MALLOC_OVERHEAD, 1024, 0},
   {"select_limit", OPT_SELECT_LIMIT,
-   "Automatic limit for SELECT when using --safe-updates",
-   (uchar**) &select_limit,
-   (uchar**) &select_limit, 0, GET_ULONG, REQUIRED_ARG, 1000L, 1, ULONG_MAX,
-   0, 1, 0},
+   "Automatic limit for SELECT when using --safe-updates.",
+   &select_limit, &select_limit, 0, GET_ULONG, REQUIRED_ARG, 1000L,
+   1, ULONG_MAX, 0, 1, 0},
   {"max_join_size", OPT_MAX_JOIN_SIZE,
-   "Automatic limit for rows in a join when using --safe-updates",
-   (uchar**) &max_join_size,
-   (uchar**) &max_join_size, 0, GET_ULONG, REQUIRED_ARG, 1000000L, 1, ULONG_MAX,
-   0, 1, 0},
+   "Automatic limit for rows in a join when using --safe-updates.",
+   &max_join_size, &max_join_size, 0, GET_ULONG, REQUIRED_ARG, 1000000L,
+   1, ULONG_MAX, 0, 1, 0},
   {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
-    " uses old (pre-4.1.1) protocol", (uchar**) &opt_secure_auth,
-    (uchar**) &opt_secure_auth, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+    " uses old (pre-4.1.1) protocol.", &opt_secure_auth,
+    &opt_secure_auth, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"server-arg", OPT_SERVER_ARG, "Send embedded server this as a parameter.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"show-warnings", OPT_SHOW_WARNINGS, "Show warnings after every statement.",
-    (uchar**) &show_warnings, (uchar**) &show_warnings, 0, GET_BOOL, NO_ARG, 
+    &show_warnings, &show_warnings, 0, GET_BOOL, NO_ARG,
     0, 0, 0, 0, 0, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
@@ -1548,10 +1592,7 @@ static void usage(int version)
 
   if (version)
     return;
-  printf("\
-Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.\n\
-This software comes with ABSOLUTELY NO WARRANTY. This is free software,\n\
-and you are welcome to modify and redistribute it under the GPL license\n");
+  puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   printf("Usage: %s [OPTIONS] [database]\n", my_progname);
   my_print_help(my_long_options);
   print_defaults("my", load_default_groups);
@@ -1614,7 +1655,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
       init_tee(argument);
     break;
   case OPT_NOTEE:
-    printf("WARNING: option deprecated; use --disable-tee instead.\n");
+    WARN_DEPRECATED(VER_CELOSIA, "--no-tee", "--disable-tee");
     if (opt_outfile)
       end_tee();
     break;
@@ -1637,7 +1678,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     }
     break;
   case OPT_NOPAGER:
-    printf("WARNING: option deprecated; use --disable-pager instead.\n");
+    WARN_DEPRECATED(VER_CELOSIA, "--no-pager", "--disable-pager");
     opt_nopager= 1;
     break;
   case OPT_MYSQL_PROTOCOL:
@@ -1683,11 +1724,17 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     if (!(status.line_buff= batch_readline_command(status.line_buff, argument)))
       return 1;
     break;
+  case 'g':
+    WARN_DEPRECATED(VER_CELOSIA, "-g, --no-named-commands", "--skip-named-commands");
+    break;
   case 'o':
     if (argument == disabled_my_option)
       one_database= 0;
     else
       one_database= skip_updates= 1;
+    break;
+  case 'O':
+    WARN_DEPRECATED(VER_CELOSIA, "-O, --set-variable", "--variable-name=value");
     break;
   case 'p':
     if (argument == disabled_my_option)
@@ -1823,19 +1870,18 @@ static int read_and_execute(bool interactive)
   String buffer;
 #endif
 
-  char	*line;
+  char	*line= NULL;
   char	in_string=0;
   ulong line_number=0;
   bool ml_comment= 0;  
   COMMANDS *com;
-  bool truncated= 0;
   status.exit_status=1;
-  
+
   for (;;)
   {
     if (!interactive)
     {
-      line=batch_readline(status.line_buff, &truncated);
+      line=batch_readline(status.line_buff);
       /*
         Skip UTF8 Byte Order Marker (BOM) 0xEFBBBF.
         Editors like "notepad" put this marker in
@@ -1899,6 +1945,13 @@ static int read_and_execute(bool interactive)
 #else
       if (opt_outfile)
 	fputs(prompt, OUTFILE);
+      /*
+        free the previous entered line.
+        Note: my_free() cannot be used here as the memory was allocated under
+        the readline/libedit library.
+      */
+      if (line)
+        free(line);
       line= readline(prompt);
 #endif /* defined(__WIN__) || defined(__NETWARE__) */
 
@@ -1909,9 +1962,13 @@ static int read_and_execute(bool interactive)
       if (opt_outfile && line)
 	fprintf(OUTFILE, "%s\n", line);
     }
-    if (!line)					// End of file
+    // End of file or system error
+    if (!line)
     {
-      status.exit_status=0;
+      if (status.line_buff && status.line_buff->error)
+        status.exit_status= 1;
+      else
+        status.exit_status= 0;
       break;
     }
 
@@ -1932,7 +1989,8 @@ static int read_and_execute(bool interactive)
 #endif
       continue;
     }
-    if (add_line(glob_buffer,line,&in_string,&ml_comment, truncated))
+    if (add_line(glob_buffer, line, &in_string, &ml_comment,
+                 status.line_buff ? status.line_buff->truncated : 0))
       break;
   }
   /* if in batch mode, send last query even if it doesn't end with \g or go */
@@ -1953,7 +2011,16 @@ static int read_and_execute(bool interactive)
 #endif
 #if defined(__WIN__)
   tmpbuf.free();
+#else
+  if (interactive)
+    /*
+      free the last entered line.
+      Note: my_free() cannot be used here as the memory was allocated under
+      the readline/libedit library.
+    */
+    free(line);
 #endif
+
 
   return status.exit_status;
 }
@@ -2692,6 +2759,10 @@ static void get_current_db()
 {
   MYSQL_RES *res;
 
+  /* If one_database is set, current_db is not supposed to change. */
+  if (one_database)
+    return;
+
   my_free(current_db, MYF(MY_ALLOW_ZERO_PTR));
   current_db= NULL;
   /* In case of error below current_db will be NULL */
@@ -2751,7 +2822,7 @@ static int com_server_help(String *buffer __attribute__((unused)),
 			   char *line __attribute__((unused)), char *help_arg)
 {
   MYSQL_ROW cur;
-  const char *server_cmd= buffer->ptr();
+  const char *server_cmd;
   char cmd_buf[100 + 1];
   MYSQL_RES *result;
   int error;
@@ -2766,9 +2837,12 @@ static int com_server_help(String *buffer __attribute__((unused)),
 		*++end_arg= '\0';
 	}
 	(void) strxnmov(cmd_buf, sizeof(cmd_buf), "help '", help_arg, "'", NullS);
-    server_cmd= cmd_buf;
   }
-  
+  else
+    (void) strxnmov(cmd_buf, sizeof(cmd_buf), "help ", help_arg, NullS);
+
+  server_cmd= cmd_buf;
+
   if (!status.batch)
   {
     old_buffer= *buffer;
@@ -2836,6 +2910,11 @@ static int com_server_help(String *buffer __attribute__((unused)),
     else
     {
       put_info("\nNothing found", INFO_INFO);
+      if (strncasecmp(server_cmd, "help 'contents'", 15) == 0)
+      {
+         put_info("\nPlease check if 'help tables' are loaded.\n", INFO_INFO); 
+         goto err;
+      }
       put_info("Please try to run 'help contents' for a list of all accessible topics\n", INFO_INFO);
     }
   }
@@ -2864,7 +2943,7 @@ com_help(String *buffer __attribute__((unused)),
            "For developer information, including the MySQL Reference Manual, "
            "visit:\n"
            "   http://dev.mysql.com/\n"
-           "To buy MySQL Network Support, training, or other products, visit:\n"
+           "To buy MySQL Enterprise support, training, or other products, visit:\n"
            "   https://shop.mysql.com/\n", INFO_INFO);
   put_info("List of all MySQL commands:", INFO_INFO);
   if (!named_cmds)
@@ -3511,7 +3590,8 @@ print_table_data_vertically(MYSQL_RES *result)
     for (uint off=0; off < mysql_num_fields(result); off++)
     {
       field= mysql_fetch_field(result);
-      tee_fprintf(PAGER, "%*s: ",(int) max_length,field->name);
+      if (column_names)
+        tee_fprintf(PAGER, "%*s: ",(int) max_length,field->name);
       if (cur[off])
       {
         unsigned int i;
@@ -3562,7 +3642,7 @@ static void print_warnings()
     messages.  To be safe, skip printing the duplicate only if it is the only
     warning.
   */
-  if (!cur || num_rows == 1 && error == (uint) strtoul(cur[1], NULL, 10))
+  if (!cur || (num_rows == 1 && error == (uint) strtoul(cur[1], NULL, 10)))
     goto end;
 
   /* Print the warnings */
@@ -3594,7 +3674,7 @@ xmlencode_print(const char *src, uint length)
     tee_fputs("NULL", PAGER);
   else
   {
-    for (const char *p = src; length; *p++, length--)
+    for (const char *p = src; length; p++, length--)
     {
       const char *t;
       if ((t = array_value(xmlmeta, *p)))
@@ -3680,7 +3760,8 @@ print_tab_data(MYSQL_RES *result)
 }
 
 static int
-com_tee(String *buffer, char *line __attribute__((unused)))
+com_tee(String *buffer __attribute__((unused)),
+        char *line __attribute__((unused)))
 {
   char file_name[FN_REFLEN], *end, *param;
 
@@ -3739,7 +3820,8 @@ com_notee(String *buffer __attribute__((unused)),
 
 #ifdef USE_POPEN
 static int
-com_pager(String *buffer, char *line __attribute__((unused)))
+com_pager(String *buffer __attribute__((unused)),
+          char *line __attribute__((unused)))
 {
   char pager_name[FN_REFLEN], *end, *param;
 
@@ -3864,9 +3946,10 @@ com_rehash(String *buffer __attribute__((unused)),
 }
 
 
-//#ifdef USE_POPEN
+#ifdef USE_POPEN
 static int
-com_shell(String *buffer, char *line __attribute__((unused)))
+com_shell(String *buffer __attribute__((unused)),
+          char *line __attribute__((unused)))
 {
   char *shell_cmd;
 
@@ -3889,7 +3972,7 @@ com_shell(String *buffer, char *line __attribute__((unused)))
   }
   return 0;
 }
-//#endif
+#endif
 
 
 static int
@@ -3958,7 +4041,8 @@ com_connect(String *buffer, char *line)
 }
 
 
-static int com_source(String *buffer, char *line)
+static int com_source(String *buffer __attribute__((unused)),
+                      char *line)
 {
   char source_name[FN_REFLEN], *end, *param;
   LINE_BUFFER *line_buff;
@@ -4047,8 +4131,23 @@ com_use(String *buffer __attribute__((unused)), char *line)
   int select_db;
 
   bzero(buff, sizeof(buff));
-  strmake(buff, line, sizeof(buff) - 1);
-  tmp= get_arg(buff, 0);
+
+  /*
+    In case number of quotes exceed 2, we try to get
+    the normalized db name.
+  */
+  if (get_quote_count(line) > 2)
+  {
+    if (normalize_dbname(line, buff, sizeof(buff)))
+      return put_error(&mysql);
+    tmp= buff;
+  }
+  else
+  {
+    strmake(buff, line, sizeof(buff) - 1);
+    tmp= get_arg(buff, 0);
+  }
+
   if (!tmp || !*tmp)
   {
     put_info("USE must be followed by a database name", INFO_ERROR);
@@ -4111,6 +4210,62 @@ com_use(String *buffer __attribute__((unused)), char *line)
   }
 
   put_info("Database changed",INFO_INFO);
+  return 0;
+}
+
+/**
+  Normalize database name.
+
+  @param line [IN]          The command.
+  @param buff [OUT]         Normalized db name.
+  @param buff_size [IN]     Buffer size.
+
+  @return Operation status
+      @retval 0    Success
+      @retval 1    Failure
+
+  @note Sometimes server normilizes the database names
+        & APIs like mysql_select_db() expect normalized
+        database names. Since it is difficult to perform
+        the name conversion/normalization on the client
+        side, this function tries to get the normalized
+        dbname (indirectly) from the server.
+*/
+
+static int
+normalize_dbname(const char *line, char *buff, uint buff_size)
+{
+  MYSQL_RES *res= NULL;
+
+  /* Send the "USE db" commmand to the server. */
+  if (mysql_query(&mysql, line))
+    return 1;
+
+  /*
+    Now, get the normalized database name and store it
+    into the buff.
+  */
+  if (!mysql_query(&mysql, "SELECT DATABASE()") &&
+      (res= mysql_use_result(&mysql)))
+  {
+    MYSQL_ROW row= mysql_fetch_row(res);
+    if (row && row[0])
+    {
+      size_t len= strlen(row[0]);
+      /* Make sure there is enough room to store the dbname. */
+      if ((len > buff_size) || ! memcpy(buff, row[0], len))
+      {
+        mysql_free_result(res);
+        return 1;
+      }
+    }
+    mysql_free_result(res);
+  }
+
+  /* Restore the original database. */
+  if (current_db && mysql_select_db(&mysql, current_db))
+    return 1;
+
   return 0;
 }
 
@@ -4181,7 +4336,7 @@ char *get_arg(char *line, my_bool get_next_arg)
     if (*ptr == '\\' && ptr[1]) // escaped character
     {
       // Remove the backslash
-      strmov(ptr, ptr+1);
+      strmov_overlapp(ptr, ptr+1);
     }
     else if ((!quoted && *ptr == ' ') || (quoted && *ptr == qtype))
     {
@@ -4193,6 +4348,20 @@ char *get_arg(char *line, my_bool get_next_arg)
   return valid_arg ? start : NullS;
 }
 
+/*
+  Number of quotes present in the command's argument.
+*/
+static int
+get_quote_count(const char *line)
+{
+  int quote_count;
+  const char *ptr= line;
+
+  for(quote_count= 0; ptr ++ && *ptr; ptr= strpbrk(ptr, "\"\'`"))
+    quote_count ++;
+
+  return quote_count;
+}
 
 static int
 sql_real_connect(char *host,char *database,char *user,char *password,
@@ -4233,7 +4402,7 @@ sql_real_connect(char *host,char *database,char *user,char *password,
   {
     char init_command[100];
     sprintf(init_command,
-	    "SET SQL_SAFE_UPDATES=1,SQL_SELECT_LIMIT=%lu,SQL_MAX_JOIN_SIZE=%lu",
+	    "SET SQL_SAFE_UPDATES=1,SQL_SELECT_LIMIT=%lu,MAX_JOIN_SIZE=%lu",
 	    select_limit,max_join_size);
     mysql_options(&mysql, MYSQL_INIT_COMMAND, init_command);
   }
@@ -4322,7 +4491,7 @@ com_status(String *buffer __attribute__((unused)),
     Don't remove "limit 1",
     it is protection againts SQL_SELECT_LIMIT=0
   */
-  if (mysql_store_result_for_lazy(&result))
+  if (!mysql_store_result_for_lazy(&result))
   {
     MYSQL_ROW cur=mysql_fetch_row(result);
     if (cur)
@@ -4366,7 +4535,7 @@ com_status(String *buffer __attribute__((unused)),
     if (mysql_errno(&mysql) == CR_SERVER_GONE_ERROR)
       return 0;
   }
-  if (mysql_store_result_for_lazy(&result))
+  if (!mysql_store_result_for_lazy(&result))
   {
     MYSQL_ROW cur=mysql_fetch_row(result);
     if (cur)
@@ -4461,9 +4630,7 @@ server_version_string(MYSQL *con)
     */
 
     if (server_version == NULL)
-    {
-      server_version= strdup(mysql_get_server_info(con));
-    }
+      server_version= my_strdup(mysql_get_server_info(con), MYF(MY_WME));
   }
 
   return server_version ? server_version : "";
@@ -4683,7 +4850,7 @@ static const char* construct_prompt()
   struct tm *t = localtime(&lclock);
 
   /* parse thru the settings for the prompt */
-  for (char *c = current_prompt; *c ; *c++)
+  for (char *c = current_prompt; *c ; c++)
   {
     if (*c != PROMPT_CHAR)
 	processed_prompt.append(*c);
@@ -4865,7 +5032,8 @@ static void init_username()
   }
 }
 
-static int com_prompt(String *buffer, char *line)
+static int com_prompt(String *buffer __attribute__((unused)),
+                      char *line)
 {
   char *ptr=strchr(line, ' ');
   prompt_counter = 0;

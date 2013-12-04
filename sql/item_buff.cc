@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /**
@@ -58,7 +60,9 @@ Cached_item::~Cached_item() {}
 */
 
 Cached_item_str::Cached_item_str(THD *thd, Item *arg)
-  :item(arg), value(min(arg->max_length, thd->variables.max_sort_length))
+  :item(arg),
+   value_max_length(min(arg->max_length, thd->variables.max_sort_length)),
+   value(value_max_length)
 {}
 
 bool Cached_item_str::cmp(void)
@@ -67,7 +71,7 @@ bool Cached_item_str::cmp(void)
   bool tmp;
 
   if ((res=item->val_str(&tmp_value)))
-    res->length(min(res->length(), value.alloced_length()));
+    res->length(min(res->length(), value_max_length));
   if (null_value != item->null_value)
   {
     if ((null_value= item->null_value))

@@ -11,7 +11,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 # Process this file with automake to create Makefile.in
 
@@ -31,7 +31,6 @@ DEFS=			@DEFS@
 
 noinst_HEADERS=		\
 			handler/ha_innodb.h	\
-			handler/handler0vars.h	\
 			handler/i_s.h		\
 			include/btr0btr.h	\
 			include/btr0btr.ic	\
@@ -218,6 +217,7 @@ noinst_HEADERS=		\
 			include/ut0lst.h	\
 			include/ut0mem.h	\
 			include/ut0mem.ic	\
+			include/ut0rbt.h	\
 			include/ut0rnd.h	\
 			include/ut0rnd.ic	\
 			include/ut0sort.h	\
@@ -319,19 +319,20 @@ libinnobase_a_SOURCES=	\
 			ut/ut0dbg.c			\
 			ut/ut0list.c			\
 			ut/ut0mem.c			\
+			ut/ut0rbt.c			\
 			ut/ut0rnd.c			\
 			ut/ut0ut.c			\
 			ut/ut0vec.c			\
 			ut/ut0wqueue.c
 
-libinnobase_a_CXXFLAGS=	$(AM_CFLAGS)
+libinnobase_a_CXXFLAGS=	$(AM_CXXFLAGS)
 libinnobase_a_CFLAGS=	$(AM_CFLAGS)
 
 EXTRA_LTLIBRARIES=	ha_innodb_plugin.la
 pkgplugin_LTLIBRARIES=	@plugin_innodb_plugin_shared_target@
 
 ha_innodb_plugin_la_LDFLAGS=	-module -rpath $(pkgplugindir)
-ha_innodb_plugin_la_CXXFLAGS=	$(AM_CFLAGS) $(INNODB_DYNAMIC_CFLAGS)
+ha_innodb_plugin_la_CXXFLAGS=	$(AM_CXXFLAGS) $(INNODB_DYNAMIC_CFLAGS)
 ha_innodb_plugin_la_CFLAGS=	$(AM_CFLAGS) $(INNODB_DYNAMIC_CFLAGS)
 ha_innodb_plugin_la_SOURCES=	$(libinnobase_a_SOURCES)
 

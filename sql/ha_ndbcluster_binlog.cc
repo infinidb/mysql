@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,8 +11,7 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysql_priv.h"
 #include "sql_show.h"
@@ -23,6 +22,7 @@
 #include "rpl_injector.h"
 #include "rpl_filter.h"
 #include "slave.h"
+#include "log_event.h"
 #include "ha_ndbcluster_binlog.h"
 #include "NdbDictionary.hpp"
 #include "ndb_cluster_connection.hpp"
@@ -241,8 +241,8 @@ static void dbug_print_table(const char *info, TABLE *table)
 static void run_query(THD *thd, char *buf, char *end,
                       const int *no_print_error, my_bool disable_binlog)
 {
-  ulong save_thd_query_length= thd->query_length;
-  char *save_thd_query= thd->query;
+  ulong save_thd_query_length= thd->query_length();
+  char *save_thd_query= thd->query();
   ulong save_thread_id= thd->variables.pseudo_thread_id;
   struct system_status_var save_thd_status_var= thd->status_var;
   THD_TRANS save_thd_transaction_all= thd->transaction.all;
@@ -259,12 +259,12 @@ static void run_query(THD *thd, char *buf, char *end,
   if (disable_binlog)
     thd->options&= ~OPTION_BIN_LOG;
     
-  DBUG_PRINT("query", ("%s", thd->query));
+  DBUG_PRINT("query", ("%s", thd->query()));
 
   DBUG_ASSERT(!thd->in_sub_stmt);
   DBUG_ASSERT(!thd->prelocked_mode);
 
-  mysql_parse(thd, thd->query, thd->query_length, &found_semicolon);
+  mysql_parse(thd, thd->query(), thd->query_length(), &found_semicolon);
 
   if (no_print_error && thd->is_slave_error)
   {
@@ -1198,12 +1198,14 @@ ndbcluster_update_slock(THD *thd,
   }
 
   if (ndb_error)
+  {
+    char buf[1024];
+    my_snprintf(buf, sizeof(buf), "Could not release lock on '%s.%s'",
+                db, table_name);
     push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
                         ER_GET_ERRMSG, ER(ER_GET_ERRMSG),
-                        ndb_error->code,
-                        ndb_error->message,
-                        "Could not release lock on '%s.%s'",
-                        db, table_name);
+                        ndb_error->code, ndb_error->message, buf);
+  }
   if (trans)
     ndb->closeTransaction(trans);
   ndb->setDatabaseName(save_db);
@@ -1268,6 +1270,11 @@ int ndbcluster_log_schema_op(THD *thd, NDB_SHARE *share,
   }
 
   char tmp_buf2[FN_REFLEN];
+  char quoted_table1[2 + 2 * FN_REFLEN + 1];
+  char quoted_db1[2 + 2 * FN_REFLEN + 1];
+  char quoted_db2[2 + 2 * FN_REFLEN + 1];
+  char quoted_table2[2 + 2 * FN_REFLEN + 1];
+  int id_length= 0;
   const char *type_str;
   switch (type)
   {
@@ -1277,16 +1284,31 @@ int ndbcluster_log_schema_op(THD *thd, NDB_SHARE *share,
       DBUG_RETURN(0);
     /* redo the drop table query as is may contain several tables */
     query= tmp_buf2;
-    query_length= (uint) (strxmov(tmp_buf2, "drop table `",
-                                  table_name, "`", NullS) - tmp_buf2);
+    id_length= my_strmov_quoted_identifier (thd, (char *) quoted_table1,
+                                            table_name, 0);
+    quoted_table1[id_length]= '\0';
+    query_length= (uint) (strxmov(tmp_buf2, "drop table ",
+                                  quoted_table1, NullS) - tmp_buf2);
     type_str= "drop table";
     break;
   case SOT_RENAME_TABLE:
     /* redo the rename table query as is may contain several tables */
     query= tmp_buf2;
-    query_length= (uint) (strxmov(tmp_buf2, "rename table `",
-                                  db, ".", table_name, "` to `",
-                                  new_db, ".", new_table_name, "`", NullS) - tmp_buf2);
+    id_length= my_strmov_quoted_identifier (thd, (char *) quoted_db1,
+                                            db, 0);
+    quoted_db1[id_length]= '\0';
+    id_length= my_strmov_quoted_identifier (thd, (char *) quoted_table1,
+                                            table_name, 0);
+    quoted_table1[id_length]= '\0';
+    id_length= my_strmov_quoted_identifier (thd, (char *) quoted_db2,
+                                            new_db, 0);
+    quoted_db2[id_length]= '\0';
+    id_length= my_strmov_quoted_identifier (thd, (char *) quoted_table2,
+                                            new_table_name, 0);
+    quoted_table2[id_length]= '\0';
+    query_length= (uint) (strxmov(tmp_buf2, "rename table ",
+                                  quoted_db1, ".", quoted_table1, " to ",
+                                  quoted_db2, ".", quoted_table2, NullS) - tmp_buf2);
     type_str= "rename table";
     break;
   case SOT_CREATE_TABLE:
@@ -3663,9 +3685,11 @@ pthread_handler_t ndb_binlog_thread_func(void *arg)
     ndb_binlog_thread_running= -1;
     pthread_mutex_unlock(&injector_mutex);
     pthread_cond_signal(&injector_cond);
+
+    DBUG_LEAVE;                               // Must match DBUG_ENTER()
     my_thread_end();
     pthread_exit(0);
-    DBUG_RETURN(NULL);
+    return NULL;                              // Avoid compiler warnings
   }
   lex_start(thd);
 
@@ -4376,10 +4400,11 @@ err:
   (void) pthread_cond_signal(&injector_cond);
 
   DBUG_PRINT("exit", ("ndb_binlog_thread"));
-  my_thread_end();
 
+  DBUG_LEAVE;                               // Must match DBUG_ENTER()
+  my_thread_end();
   pthread_exit(0);
-  DBUG_RETURN(NULL);
+  return NULL;                              // Avoid compiler warnings
 }
 
 bool

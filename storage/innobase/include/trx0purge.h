@@ -120,9 +120,9 @@ struct trx_purge_struct{
 	read_view_t*	view;		/* The purge will not remove undo logs
 					which are >= this view (purge view) */
 	mutex_t		mutex;		/* Mutex protecting the fields below */
-	ulint		n_pages_handled;/* Approximate number of undo log
+	ulonglong	n_pages_handled;/* Approximate number of undo log
 					pages processed in purge */
-	ulint		handle_limit;	/* Target of how many pages to get
+	ulonglong	handle_limit;	/* Target of how many pages to get
 					processed in the current purge */
 	/*------------------------------*/
 	/* The following two fields form the 'purge pointer' which advances
@@ -133,6 +133,10 @@ struct trx_purge_struct{
 					than this */
 	dulint		purge_undo_no;	/* Purge has advanced past all records
 					whose undo number is less than this */
+#ifdef UNIV_DEBUG
+	dulint		done_trx_no;	/* Indicate 'purge pointer' which have
+					purged already accurately. */
+#endif /* UNIV_DEBUG */
 	/*-----------------------------*/
 	ibool		next_stored;	/* TRUE if the info of the next record
 					to purge is stored below: if yes, then

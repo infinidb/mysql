@@ -1,4 +1,4 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /*
   TODO:
@@ -446,9 +446,9 @@ public:
                                   range_key, *range_key_flag);
     *range_key_flag|= key_tree->min_flag;
     if (key_tree->next_key_part &&
+	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
 	key_tree->next_key_part->part == key_tree->part+1 &&
-	!(*range_key_flag & (NO_MIN_RANGE | NEAR_MIN)) &&
-	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE)
+	!(*range_key_flag & (NO_MIN_RANGE | NEAR_MIN)))
       res+= key_tree->next_key_part->store_min_key(key, range_key,
                                                    range_key_flag);
     return res;
@@ -462,9 +462,9 @@ public:
                                  range_key, *range_key_flag);
     (*range_key_flag)|= key_tree->max_flag;
     if (key_tree->next_key_part &&
+	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
 	key_tree->next_key_part->part == key_tree->part+1 &&
-	!(*range_key_flag & (NO_MAX_RANGE | NEAR_MAX)) &&
-	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE)
+	!(*range_key_flag & (NO_MAX_RANGE | NEAR_MAX)))
       res+= key_tree->next_key_part->store_max_key(key, range_key,
                                                    range_key_flag);
     return res;
@@ -1171,11 +1171,7 @@ QUICK_RANGE_SELECT::~QUICK_RANGE_SELECT()
     if (file) 
     {
       range_end();
-      if (head->key_read)
-      {
-        head->key_read= 0;
-        file->extra(HA_EXTRA_NO_KEYREAD);
-      }
+      head->set_keyread(FALSE);
       if (free_file)
       {
         DBUG_PRINT("info", ("Freeing separate handler 0x%lx (free: %d)", (long) file,
@@ -1198,7 +1194,7 @@ QUICK_RANGE_SELECT::~QUICK_RANGE_SELECT()
 
 QUICK_INDEX_MERGE_SELECT::QUICK_INDEX_MERGE_SELECT(THD *thd_param,
                                                    TABLE *table)
-  :pk_quick_select(NULL), thd(thd_param)
+  :unique(NULL), pk_quick_select(NULL), thd(thd_param)
 {
   DBUG_ENTER("QUICK_INDEX_MERGE_SELECT::QUICK_INDEX_MERGE_SELECT");
   index= MAX_KEY;
@@ -1240,6 +1236,7 @@ QUICK_INDEX_MERGE_SELECT::~QUICK_INDEX_MERGE_SELECT()
   List_iterator_fast<QUICK_RANGE_SELECT> quick_it(quick_selects);
   QUICK_RANGE_SELECT* quick;
   DBUG_ENTER("QUICK_INDEX_MERGE_SELECT::~QUICK_INDEX_MERGE_SELECT");
+  delete unique;
   quick_it.rewind();
   while ((quick= quick_it++))
     quick->file= NULL;
@@ -1338,7 +1335,7 @@ int QUICK_RANGE_SELECT::init_ror_merged_scan(bool reuse_handler)
   }
 
   thd= head->in_use;
-  if (!(file= head->file->clone(thd->mem_root)))
+  if (!(file= head->file->clone(head->s->normalized_path.str, thd->mem_root)))
   {
     /* 
       Manually set the error flag. Note: there seems to be quite a few
@@ -1377,10 +1374,7 @@ end:
   head->file= file;
   /* We don't have to set 'head->keyread' here as the 'file' is unique */
   if (!head->no_keyread)
-  {
-    head->key_read= 1;
     head->mark_columns_used_by_index(index);
-  }
   head->prepare_for_position();
   head->file= org_file;
   bitmap_copy(&column_bitmap, head->read_set);
@@ -1700,6 +1694,7 @@ SEL_ARG *SEL_ARG::clone(RANGE_OPT_PARAM *param, SEL_ARG *new_parent,
     tmp->prev= *next_arg;			// Link into next/prev chain
     (*next_arg)->next=tmp;
     (*next_arg)= tmp;
+    tmp->part= this->part;
   }
   else
   {
@@ -5531,7 +5526,11 @@ static SEL_TREE *get_mm_tree(RANGE_OPT_PARAM *param,COND *cond)
         SEL_TREE *tmp= get_full_func_mm_tree(param, cond_func, 
                                     field_item, (Item*)(intptr)i, inv);
         if (inv)
+        {
           tree= !tree ? tmp : tree_or(param, tree, tmp);
+          if (tree == NULL)
+            break;
+        }
         else 
           tree= tree_and(param, tree, tmp);
       }
@@ -5709,6 +5708,27 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
       !(conf_func->compare_collation()->state & MY_CS_BINSORT))
     goto end;
 
+  if (key_part->image_type == Field::itMBR)
+  {
+    switch (type) {
+    case Item_func::SP_EQUALS_FUNC:
+    case Item_func::SP_DISJOINT_FUNC:
+    case Item_func::SP_INTERSECTS_FUNC:
+    case Item_func::SP_TOUCHES_FUNC:
+    case Item_func::SP_CROSSES_FUNC:
+    case Item_func::SP_WITHIN_FUNC:
+    case Item_func::SP_CONTAINS_FUNC:
+    case Item_func::SP_OVERLAPS_FUNC:
+      break;
+    default:
+      /* 
+        We cannot involve spatial indexes for queries that
+        don't use MBREQUALS(), MBRDISJOINT(), etc. functions.
+      */
+      goto end;
+    }
+  }
+
   if (param->using_real_indexes)
     optimize_range= field->optimize_range(param->real_keynr[key_part->key],
                                           key_part->part);
@@ -5876,6 +5896,7 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
       if (type == Item_func::LT_FUNC && (value->val_int() > 0))
         type = Item_func::LE_FUNC;
       else if (type == Item_func::GT_FUNC &&
+               (field->type() != FIELD_TYPE_BIT) &&
                !((Field_num*)field)->unsigned_flag &&
                !((Item_int*)value)->unsigned_flag &&
                (value->val_int() < 0))
@@ -5890,6 +5911,17 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
     goto end;
   }
   field->table->in_use->variables.sql_mode= orig_sql_mode;
+
+  /*
+    Any sargable predicate except "<=>" involving NULL as a constant is always
+    FALSE
+  */
+  if (type != Item_func::EQUAL_FUNC && field->is_real_null())
+  {
+    tree= &null_element;
+    goto end;
+  }
+  
   str= (uchar*) alloc_root(alloc, key_part->store_length+1);
   if (!str)
     goto end;
@@ -5913,7 +5945,9 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
    */
   if (field->result_type() == INT_RESULT &&
       value->result_type() == INT_RESULT &&
-      ((Field_num*)field)->unsigned_flag && !((Item_int*)value)->unsigned_flag)
+      ((field->type() == FIELD_TYPE_BIT || 
+       ((Field_num *) field)->unsigned_flag) && 
+       !((Item_int*) value)->unsigned_flag))
   {
     longlong item_val= value->val_int();
     if (item_val < 0)
@@ -5933,7 +5967,7 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
 
   switch (type) {
   case Item_func::LT_FUNC:
-    if (stored_field_cmp_to_item(field,value) == 0)
+    if (stored_field_cmp_to_item(param->thd, field, value) == 0)
       tree->max_flag=NEAR_MAX;
     /* fall through */
   case Item_func::LE_FUNC:
@@ -5948,14 +5982,14 @@ get_mm_leaf(RANGE_OPT_PARAM *param, COND *conf_func, Field *field,
   case Item_func::GT_FUNC:
     /* Don't use open ranges for partial key_segments */
     if ((!(key_part->flag & HA_PART_KEY_SEG)) &&
-        (stored_field_cmp_to_item(field, value) <= 0))
+        (stored_field_cmp_to_item(param->thd, field, value) <= 0))
       tree->min_flag=NEAR_MIN;
     tree->max_flag= NO_MAX_RANGE;
     break;
   case Item_func::GE_FUNC:
     /* Don't use open ranges for partial key_segments */
     if ((!(key_part->flag & HA_PART_KEY_SEG)) &&
-        (stored_field_cmp_to_item(field,value) < 0))
+        (stored_field_cmp_to_item(param->thd, field, value) < 0))
       tree->min_flag= NEAR_MIN;
     tree->max_flag=NO_MAX_RANGE;
     break;
@@ -6509,6 +6543,63 @@ get_range(SEL_ARG **e1,SEL_ARG **e2,SEL_ARG *root1)
 }
 
 
+/**
+   Combine two range expression under a common OR. On a logical level, the
+   transformation is key_or( expr1, expr2 ) => expr1 OR expr2.
+
+   Both expressions are assumed to be in the SEL_ARG format. In a logic sense,
+   theformat is reminiscent of DNF, since an expression such as the following
+
+   ( 1 < kp1 < 10 AND p1 ) OR ( 10 <= kp2 < 20 AND p2 )
+
+   where there is a key consisting of keyparts ( kp1, kp2, ..., kpn ) and p1
+   and p2 are valid SEL_ARG expressions over keyparts kp2 ... kpn, is a valid
+   SEL_ARG condition. The disjuncts appear ordered by the minimum endpoint of
+   the first range and ranges must not overlap. It follows that they are also
+   ordered by maximum endpoints. Thus
+
+   ( 1 < kp1 <= 2 AND ( kp2 = 2 OR kp2 = 3 ) ) OR kp1 = 3
+
+   Is a a valid SER_ARG expression for a key of at least 2 keyparts.
+   
+   For simplicity, we will assume that expr2 is a single range predicate,
+   i.e. on the form ( a < x < b AND ... ). It is easy to generalize to a
+   disjunction of several predicates by subsequently call key_or for each
+   disjunct.
+
+   The algorithm iterates over each disjunct of expr1, and for each disjunct
+   where the first keypart's range overlaps with the first keypart's range in
+   expr2:
+   
+   If the predicates are equal for the rest of the keyparts, or if there are
+   no more, the range in expr2 has its endpoints copied in, and the SEL_ARG
+   node in expr2 is deallocated. If more ranges became connected in expr1, the
+   surplus is also dealocated. If they differ, two ranges are created.
+   
+   - The range leading up to the overlap. Empty if endpoints are equal.
+
+   - The overlapping sub-range. May be the entire range if they are equal.
+
+   Finally, there may be one more range if expr2's first keypart's range has a
+   greater maximum endpoint than the last range in expr1.
+
+   For the overlapping sub-range, we recursively call key_or. Thus in order to
+   compute key_or of
+
+     (1) ( 1 < kp1 < 10 AND 1 < kp2 < 10 ) 
+
+     (2) ( 2 < kp1 < 20 AND 4 < kp2 < 20 )
+
+   We create the ranges 1 < kp <= 2, 2 < kp1 < 10, 10 <= kp1 < 20. For the
+   first one, we simply hook on the condition for the second keypart from (1)
+   : 1 < kp2 < 10. For the second range 2 < kp1 < 10, key_or( 1 < kp2 < 10, 4
+   < kp2 < 20 ) is called, yielding 1 < kp2 < 20. For the last range, we reuse
+   the range 4 < kp2 < 20 from (2) for the second keypart. The result is thus
+   
+   ( 1  <  kp1 <= 2 AND 1 < kp2 < 10 ) OR
+   ( 2  <  kp1 < 10 AND 1 < kp2 < 20 ) OR
+   ( 10 <= kp1 < 20 AND 4 < kp2 < 20 )
+*/
 static SEL_ARG *
 key_or(RANGE_OPT_PARAM *param, SEL_ARG *key1,SEL_ARG *key2)
 {
@@ -6579,6 +6670,7 @@ key_or(RANGE_OPT_PARAM *param, SEL_ARG *key1,SEL_ARG *key2)
     else if ((cmp=tmp->cmp_max_to_min(key2)) < 0)
     {						// Found tmp.max < key2.min
       SEL_ARG *next=tmp->next;
+      /* key1 on the left of key2 non-overlapping */
       if (cmp == -2 && eq_tree(tmp->next_key_part,key2->next_key_part))
       {
 	// Join near ranges like tmp.max < 0 and key2.min >= 0
@@ -6607,6 +6699,7 @@ key_or(RANGE_OPT_PARAM *param, SEL_ARG *key1,SEL_ARG *key2)
       int tmp_cmp;
       if ((tmp_cmp=tmp->cmp_min_to_max(key2)) > 0) // if tmp.min > key2.max
       {
+        /* tmp is on the right of key2 non-overlapping */
 	if (tmp_cmp == 2 && eq_tree(tmp->next_key_part,key2->next_key_part))
 	{					// ranges are connected
 	  tmp->copy_min_to_min(key2);
@@ -6641,26 +6734,67 @@ key_or(RANGE_OPT_PARAM *param, SEL_ARG *key1,SEL_ARG *key2)
       }
     }
 
-    // tmp.max >= key2.min && tmp.min <= key.max  (overlapping ranges)
+    /* 
+      tmp.min >= key2.min && tmp.min <= key.max  (overlapping ranges)
+      key2.min <= tmp.min <= key2.max 
+    */  
     if (eq_tree(tmp->next_key_part,key2->next_key_part))
     {
       if (tmp->is_same(key2))
       {
+        /* 
+          Found exact match of key2 inside key1. 
+          Use the relevant range in key1.
+        */
 	tmp->merge_flags(key2);			// Copy maybe flags
 	key2->increment_use_count(-1);		// Free not used tree
       }
       else
       {
 	SEL_ARG *last=tmp;
+        SEL_ARG *first=tmp;
+        /* 
+          Find the last range in tmp that overlaps key2 and has the same 
+          condition on the rest of the keyparts.
+        */
 	while (last->next && last->next->cmp_min_to_max(key2) <= 0 &&
 	       eq_tree(last->next->next_key_part,key2->next_key_part))
 	{
+          /*
+            We've found the last overlapping key1 range in last.
+            This means that the ranges between (and including) the 
+            first overlapping range (tmp) and the last overlapping range
+            (last) are fully nested into the current range of key2 
+            and can safely be discarded. We just need the minimum endpoint
+            of the first overlapping range (tmp) so we can compare it with
+            the minimum endpoint of the enclosing key2 range.
+          */
 	  SEL_ARG *save=last;
 	  last=last->next;
 	  key1=key1->tree_delete(save);
 	}
-        last->copy_min(tmp);
-	if (last->copy_min(key2) || last->copy_max(key2))
+        /*
+          The tmp range (the first overlapping range) could have been discarded
+          by the previous loop. We should re-direct tmp to the new united range 
+          that's taking its place.
+        */
+        tmp= last;
+        last->copy_min(first);
+        bool full_range= last->copy_min(key2);
+        if (!full_range)
+        {
+          if (last->next && key2->cmp_max_to_min(last->next) >= 0)
+          {
+            last->max_value= last->next->min_value;
+            if (last->next->min_flag & NEAR_MIN)
+              last->max_flag&= ~NEAR_MAX;
+            else
+              last->max_flag|= NEAR_MAX;
+          }
+          else
+            full_range= last->copy_max(key2);
+        }
+	if (full_range)
 	{					// Full range
 	  key1->free_tree();
 	  for (; key2 ; key2=key2->next)
@@ -6670,8 +6804,6 @@ key_or(RANGE_OPT_PARAM *param, SEL_ARG *key1,SEL_ARG *key2)
 	  return 0;
 	}
       }
-      key2=key2->next;
-      continue;
     }
 
     if (cmp >= 0 && tmp->cmp_min_to_min(key2) < 0)
@@ -7157,27 +7289,25 @@ int test_rb_tree(SEL_ARG *element,SEL_ARG *parent)
 }
 
 
-/*
-  Count how many times SEL_ARG graph "root" refers to its part "key"
+/**
+  Count how many times SEL_ARG graph "root" refers to its part "key" via
+  transitive closure.
   
-  SYNOPSIS
-    count_key_part_usage()
-      root  An RB-Root node in a SEL_ARG graph.
-      key   Another RB-Root node in that SEL_ARG graph.
+  @param root  An RB-Root node in a SEL_ARG graph.
+  @param key   Another RB-Root node in that SEL_ARG graph.
 
-  DESCRIPTION
-    The passed "root" node may refer to "key" node via root->next_key_part,
-    root->next->n
+  The passed "root" node may refer to "key" node via root->next_key_part,
+  root->next->n
 
-    This function counts how many times the node "key" is referred (via
-    SEL_ARG::next_key_part) by 
-     - intervals of RB-tree pointed by "root", 
-     - intervals of RB-trees that are pointed by SEL_ARG::next_key_part from 
-       intervals of RB-tree pointed by "root",
-     - and so on.
+  This function counts how many times the node "key" is referred (via
+  SEL_ARG::next_key_part) by 
+  - intervals of RB-tree pointed by "root", 
+  - intervals of RB-trees that are pointed by SEL_ARG::next_key_part from 
+  intervals of RB-tree pointed by "root",
+  - and so on.
     
-    Here is an example (horizontal links represent next_key_part pointers, 
-    vertical links - next/prev prev pointers):  
+  Here is an example (horizontal links represent next_key_part pointers, 
+  vertical links - next/prev prev pointers):  
     
          +----+               $
          |root|-----------------+
@@ -7197,8 +7327,8 @@ int test_rb_tree(SEL_ARG *element,SEL_ARG *parent)
           ...     +---+       $    |
                   |   |------------+
                   +---+       $
-  RETURN 
-    Number of links to "key" from nodes reachable from "root".
+  @return 
+  Number of links to "key" from nodes reachable from "root".
 */
 
 static ulong count_key_part_usage(SEL_ARG *root, SEL_ARG *key)
@@ -7453,8 +7583,8 @@ check_quick_keys(PARAM *param, uint idx, SEL_ARG *key_tree,
     param->first_null_comp= key_tree->part+1;
 
   if (key_tree->next_key_part &&
-      key_tree->next_key_part->part == key_tree->part+1 &&
-      key_tree->next_key_part->type == SEL_ARG::KEY_RANGE)
+      key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
+      key_tree->next_key_part->part == key_tree->part+1)
   {						// const key as prefix
     if (min_key_length == max_key_length &&
 	!memcmp(min_key, max_key, (uint) (tmp_max_key - max_key)) &&
@@ -7493,7 +7623,7 @@ check_quick_keys(PARAM *param, uint idx, SEL_ARG *key_tree,
 
   if (unlikely(param->thd->killed != 0))
     return HA_POS_ERROR;
-  
+
   keynr=param->real_keynr[idx];
   param->range_count++;
   if (!tmp_min_flag && ! tmp_max_flag &&
@@ -7735,8 +7865,8 @@ get_quick_keys(PARAM *param,QUICK_RANGE_SELECT *quick,KEY_PART *key,
                                  &tmp_max_key,max_key_flag);
 
   if (key_tree->next_key_part &&
-      key_tree->next_key_part->part == key_tree->part+1 &&
-      key_tree->next_key_part->type == SEL_ARG::KEY_RANGE)
+      key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
+      key_tree->next_key_part->part == key_tree->part+1)
   {						  // const key as prefix
     if ((tmp_min_key - min_key) == (tmp_max_key - max_key) &&
          memcmp(min_key, max_key, (uint)(tmp_max_key - max_key))==0 &&
@@ -8028,12 +8158,11 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
   List_iterator_fast<QUICK_RANGE_SELECT> cur_quick_it(quick_selects);
   QUICK_RANGE_SELECT* cur_quick;
   int result;
-  Unique *unique;
   handler *file= head->file;
   DBUG_ENTER("QUICK_INDEX_MERGE_SELECT::read_keys_and_merge");
 
   /* We're going to just read rowids. */
-  file->extra(HA_EXTRA_KEYREAD);
+  head->set_keyread(TRUE);
   head->prepare_for_position();
 
   cur_quick_it.rewind();
@@ -8047,9 +8176,22 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
   if (cur_quick->init() || cur_quick->reset())
     DBUG_RETURN(1);
 
-  unique= new Unique(refpos_order_cmp, (void *)file,
-                     file->ref_length,
-                     thd->variables.sortbuff_size);
+  if (unique == NULL)
+  {
+    DBUG_EXECUTE_IF("index_merge_may_not_create_a_Unique", abort(); );
+    DBUG_EXECUTE_IF("only_one_Unique_may_be_created", 
+                    DBUG_SET("+d,index_merge_may_not_create_a_Unique"); );
+
+    unique= new Unique(refpos_order_cmp, (void *)file,
+                       file->ref_length,
+                       thd->variables.sortbuff_size);
+  }
+  else
+    unique->reset();
+
+  DBUG_ASSERT(file->ref_length == unique->get_size());
+  DBUG_ASSERT(thd->variables.sortbuff_size == unique->get_max_in_memory_size());
+
   if (!unique)
     DBUG_RETURN(1);
   for (;;)
@@ -8064,10 +8206,7 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
       if (cur_quick->file->inited != handler::NONE) 
         cur_quick->file->ha_index_end();
       if (cur_quick->init() || cur_quick->reset())
-      {
-        delete unique;
         DBUG_RETURN(1);
-      }
     }
 
     if (result)
@@ -8075,17 +8214,13 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
       if (result != HA_ERR_END_OF_FILE)
       {
         cur_quick->range_end();
-        delete unique;
         DBUG_RETURN(result);
       }
       break;
     }
 
     if (thd->killed)
-    {
-      delete unique;
       DBUG_RETURN(1);
-    }
 
     /* skip row if it will be retrieved by clustered PK scan */
     if (pk_quick_select && pk_quick_select->row_in_ranges())
@@ -8094,10 +8229,7 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
     cur_quick->file->position(cur_quick->record);
     result= unique->unique_add((char*)cur_quick->file->ref);
     if (result)
-    {
-      delete unique;
       DBUG_RETURN(1);
-    }
   }
 
   /*
@@ -8106,10 +8238,9 @@ int QUICK_INDEX_MERGE_SELECT::read_keys_and_merge()
     sequence.
   */
   result= unique->get(head);
-  delete unique;
   doing_pk_scan= FALSE;
   /* index_merge currently doesn't support "using index" at all */
-  file->extra(HA_EXTRA_NO_KEYREAD);
+  head->set_keyread(FALSE);
   init_read_record(&read_record, thd, head, (SQL_SELECT*) 0, 1 , 1, TRUE);
   DBUG_RETURN(result);
 }
@@ -8224,6 +8355,7 @@ int QUICK_ROR_INTERSECT_SELECT::get_next()
             if ((error= quick->get_next()))
               DBUG_RETURN(error);
           }
+          quick->file->position(quick->record);
         }
         memcpy(last_rowid, quick->file->ref, head->file->ref_length);
         last_rowid_count= 1;
@@ -8319,9 +8451,14 @@ int QUICK_RANGE_SELECT::reset()
   in_range= FALSE;
   cur_range= (QUICK_RANGE**) ranges.buffer;
 
-  if (file->inited == handler::NONE && (error= file->ha_index_init(index,1)))
-    DBUG_RETURN(error);
- 
+  if (file->inited == handler::NONE)
+  {
+    if (in_ror_merged_scan)
+      head->column_bitmaps_set_no_signal(&column_bitmap, &column_bitmap);
+    if ((error= file->ha_index_init(index,1)))
+        DBUG_RETURN(error);
+  }
+
   /* Do not allocate the buffers twice. */
   if (multi_range_length)
   {
@@ -8407,8 +8544,6 @@ int QUICK_RANGE_SELECT::get_next()
 {
   int             result;
   KEY_MULTI_RANGE *mrange;
-  key_range       *start_key;
-  key_range       *end_key;
   DBUG_ENTER("QUICK_RANGE_SELECT::get_next");
   DBUG_ASSERT(multi_range_length && multi_range &&
               (cur_range >= (QUICK_RANGE**) ranges.buffer) &&
@@ -8448,26 +8583,9 @@ int QUICK_RANGE_SELECT::get_next()
          mrange_slot < mrange_end;
          mrange_slot++)
     {
-      start_key= &mrange_slot->start_key;
-      end_key= &mrange_slot->end_key;
       last_range= *(cur_range++);
-
-      start_key->key=    (const uchar*) last_range->min_key;
-      start_key->length= last_range->min_length;
-      start_key->flag=   ((last_range->flag & NEAR_MIN) ? HA_READ_AFTER_KEY :
-                          (last_range->flag & EQ_RANGE) ?
-                          HA_READ_KEY_EXACT : HA_READ_KEY_OR_NEXT);
-      start_key->keypart_map= last_range->min_keypart_map;
-      end_key->key=      (const uchar*) last_range->max_key;
-      end_key->length=   last_range->max_length;
-      /*
-        We use HA_READ_AFTER_KEY here because if we are reading on a key
-        prefix. We want to find all keys with this prefix.
-      */
-      end_key->flag=     (last_range->flag & NEAR_MAX ? HA_READ_BEFORE_KEY :
-                          HA_READ_AFTER_KEY);
-      end_key->keypart_map= last_range->max_keypart_map;
-
+      last_range->make_min_endpoint(&mrange_slot->start_key);
+      last_range->make_max_endpoint(&mrange_slot->end_key);
       mrange_slot->range_flag= last_range->flag;
     }
 
@@ -8491,49 +8609,52 @@ end:
 /*
   Get the next record with a different prefix.
 
-  SYNOPSIS
-    QUICK_RANGE_SELECT::get_next_prefix()
-    prefix_length  length of cur_prefix
-    cur_prefix     prefix of a key to be searched for
+  @param prefix_length   length of cur_prefix
+  @param group_key_parts The number of key parts in the group prefix
+  @param cur_prefix      prefix of a key to be searched for
 
-  DESCRIPTION
-    Each subsequent call to the method retrieves the first record that has a
-    prefix with length prefix_length different from cur_prefix, such that the
-    record with the new prefix is within the ranges described by
-    this->ranges. The record found is stored into the buffer pointed by
-    this->record.
-    The method is useful for GROUP-BY queries with range conditions to
-    discover the prefix of the next group that satisfies the range conditions.
+  Each subsequent call to the method retrieves the first record that has a
+  prefix with length prefix_length and which is different from cur_prefix,
+  such that the record with the new prefix is within the ranges described by
+  this->ranges. The record found is stored into the buffer pointed by
+  this->record. The method is useful for GROUP-BY queries with range
+  conditions to discover the prefix of the next group that satisfies the range
+  conditions.
 
-  TODO
+  @todo
+
     This method is a modified copy of QUICK_RANGE_SELECT::get_next(), so both
     methods should be unified into a more general one to reduce code
     duplication.
 
-  RETURN
-    0                  on success
-    HA_ERR_END_OF_FILE if returned all keys
-    other              if some error occurred
+  @retval 0                  on success
+  @retval HA_ERR_END_OF_FILE if returned all keys
+  @retval other              if some error occurred
 */
 
 int QUICK_RANGE_SELECT::get_next_prefix(uint prefix_length,
-                                        key_part_map keypart_map,
+                                        uint group_key_parts,
                                         uchar *cur_prefix)
 {
   DBUG_ENTER("QUICK_RANGE_SELECT::get_next_prefix");
+  const key_part_map keypart_map= make_prev_keypart_map(group_key_parts);
 
   for (;;)
   {
     int result;
-    key_range start_key, end_key;
     if (last_range)
     {
       /* Read the next record in the same range with prefix after cur_prefix. */
-      DBUG_ASSERT(cur_prefix != 0);
+      DBUG_ASSERT(cur_prefix != NULL);
       result= file->index_read_map(record, cur_prefix, keypart_map,
                                    HA_READ_AFTER_KEY);
-      if (result || (file->compare_key(file->end_range) <= 0))
+      if (result || last_range->max_keypart_map == 0)
         DBUG_RETURN(result);
+
+      key_range previous_endpoint;
+      last_range->make_max_endpoint(&previous_endpoint, prefix_length, keypart_map);
+      if (file->compare_key(&previous_endpoint) <= 0)
+        DBUG_RETURN(0);
     }
 
     uint count= ranges.elements - (cur_range - (QUICK_RANGE**) ranges.buffer);
@@ -8545,21 +8666,9 @@ int QUICK_RANGE_SELECT::get_next_prefix(uint prefix_length,
     }
     last_range= *(cur_range++);
 
-    start_key.key=    (const uchar*) last_range->min_key;
-    start_key.length= min(last_range->min_length, prefix_length);
-    start_key.keypart_map= last_range->min_keypart_map & keypart_map;
-    start_key.flag=   ((last_range->flag & NEAR_MIN) ? HA_READ_AFTER_KEY :
-		       (last_range->flag & EQ_RANGE) ?
-		       HA_READ_KEY_EXACT : HA_READ_KEY_OR_NEXT);
-    end_key.key=      (const uchar*) last_range->max_key;
-    end_key.length=   min(last_range->max_length, prefix_length);
-    end_key.keypart_map= last_range->max_keypart_map & keypart_map;
-    /*
-      We use READ_AFTER_KEY here because if we are reading on a key
-      prefix we want to find all keys with this prefix
-    */
-    end_key.flag=     (last_range->flag & NEAR_MAX ? HA_READ_BEFORE_KEY :
-		       HA_READ_AFTER_KEY);
+    key_range start_key, end_key;
+    last_range->make_min_endpoint(&start_key, prefix_length, keypart_map);
+    last_range->make_max_endpoint(&end_key, prefix_length, keypart_map);
 
     result= file->read_range_first(last_range->min_keypart_map ? &start_key : 0,
 				   last_range->max_keypart_map ? &end_key : 0,
@@ -8654,9 +8763,9 @@ bool QUICK_RANGE_SELECT::row_in_ranges()
 }
 
 /*
-  This is a hack: we inherit from QUICK_SELECT so that we can use the
+  This is a hack: we inherit from QUICK_RANGE_SELECT so that we can use the
   get_next() interface, but we have to hold a pointer to the original
-  QUICK_SELECT because its data are used all over the place.  What
+  QUICK_RANGE_SELECT because its data are used all over the place. What
   should be done is to factor out the data that is needed into a base
   class (QUICK_SELECT), and then have two subclasses (_ASC and _DESC)
   which handle the ranges and implement the get_next() function.  But
@@ -9110,13 +9219,15 @@ cost_group_min_max(TABLE* table, KEY *index_info, uint used_key_parts,
     NGA1.If in the index I there is a gap between the last GROUP attribute G_k,
          and the MIN/MAX attribute C, then NGA must consist of exactly the
          index attributes that constitute the gap. As a result there is a
-         permutation of NGA that coincides with the gap in the index
-         <B_1, ..., B_m>.
+         permutation of NGA, BA=<B_1,...,B_m>, that coincides with the gap
+         in the index.
     NGA2.If BA <> {}, then the WHERE clause must contain a conjunction EQ of
          equality conditions for all NG_i of the form (NG_i = const) or
          (const = NG_i), such that each NG_i is referenced in exactly one
          conjunct. Informally, the predicates provide constants to fill the
          gap in the index.
+    NGA3.If BA <> {}, there can only be one range. TODO: This is a code
+         limitation and is not strictly needed. See BUG#15947433
     WA1. There are no other attributes in the WHERE clause except the ones
          referenced in predicates RNG, PA, PC, EQ defined above. Therefore
          WA is subset of (GA union NGA union C) for GA,NGA,C that pass the
@@ -9718,13 +9829,85 @@ check_group_min_max_predicates(COND *cond, Item_field *min_max_arg_item,
     }
     else if (cur_arg->const_item())
     {
-      DBUG_RETURN(TRUE);
+      /*
+        For predicates of the form "const OP expr" we also have to check 'expr'
+        to make a decision.
+      */
+      continue;
     }
     else
       DBUG_RETURN(FALSE);
   }
 
   DBUG_RETURN(TRUE);
+}
+
+
+/*
+  Get SEL_ARG tree, if any, for the keypart covering non grouping
+  attribute (NGA) field 'nga_field'.
+
+  This function enforces the NGA3 test: If 'keypart_tree' contains a
+  condition for 'nga_field', there can only be one range. In the
+  opposite case, this function returns with error and 'cur_range'
+  should not be used.
+
+  Note that the NGA1 and NGA2 requirements, like whether or not the
+  range predicate for 'nga_field' is equality, is not tested by this
+  function.
+
+  @param[in]   nga_field      The NGA field we want the SEL_ARG tree for
+  @param[in]   keypart_tree   Root node of the SEL_ARG* tree for the index
+  @param[out]  cur_range      The SEL_ARG tree, if any, for the keypart
+                              covering field 'keypart_field'
+  @retval true   'keypart_tree' contained a predicate for 'nga_field' but
+                  multiple ranges exists. 'cur_range' should not be used.
+  @retval false  otherwise
+*/
+
+static bool
+get_sel_arg_for_keypart(Field *nga_field,
+                        SEL_ARG *keypart_tree,
+                        SEL_ARG **cur_range)
+{
+  if(keypart_tree == NULL)
+    return false;
+  if(keypart_tree->field->eq(nga_field))
+  {
+    /*
+      Enforce NGA3: If a condition for nga_field has been found, only
+      a single range is allowed.
+    */
+  if (keypart_tree->prev || keypart_tree->next)
+      return true; // There are multiple ranges
+
+    *cur_range= keypart_tree;
+    return false;
+  }
+
+  SEL_ARG *found_tree= NULL;
+  SEL_ARG *first_kp=  keypart_tree->first();
+
+  for (SEL_ARG *cur_kp= first_kp; cur_kp && !found_tree;
+       cur_kp= cur_kp->next)
+  {
+    if (cur_kp->next_key_part)
+    {
+      if (get_sel_arg_for_keypart(nga_field,
+                                  cur_kp->next_key_part,
+                                  &found_tree))
+        return true;
+
+    }
+    /*
+       Enforce NGA3: If a condition for nga_field has been found,only
+       a single range is allowed.
+    */
+    if (found_tree && first_kp->next)
+      return true; // There are multiple ranges
+  }
+  *cur_range= found_tree;
+  return false;
 }
 
 
@@ -9742,12 +9925,13 @@ check_group_min_max_predicates(COND *cond, Item_field *min_max_arg_item,
     key_infix              [out] Infix of constants to be used for index lookup
     key_infix_len          [out] Lenghth of the infix
     first_non_infix_part   [out] The first keypart after the infix (if any)
-    
+
   DESCRIPTION
-    Test conditions (NGA1, NGA2) from get_best_group_min_max(). Namely,
-    for each keypart field NGF_i not in GROUP-BY, check that there is a
-    constant equality predicate among conds with the form (NGF_i = const_ci) or
-    (const_ci = NGF_i).
+    Test conditions (NGA1, NGA2, NGA3) from get_best_group_min_max(). Namely,
+    for each keypart field NG_i not in GROUP-BY, check that there is exactly one
+    constant equality predicate among conds with the form (NG_i = const_ci) or
+    (const_ci = NG_i).. In addition, there can only be one range when there is
+    such a gap.
     Thus all the NGF_i attributes must fill the 'gap' between the last group-by
     attribute and the MIN/MAX attribute in the index (if present). If these
     conditions hold, copy each constant from its corresponding predicate into
@@ -9776,16 +9960,14 @@ get_constant_key_infix(KEY *index_info, SEL_ARG *index_range_tree,
   uchar *key_ptr= key_infix;
   for (cur_part= first_non_group_part; cur_part != end_part; cur_part++)
   {
+    cur_range= NULL;
     /*
       Find the range tree for the current keypart. We assume that
-      index_range_tree points to the leftmost keypart in the index.
+      index_range_tree points to the first keypart in the index.
     */
-    for (cur_range= index_range_tree; cur_range;
-         cur_range= cur_range->next_key_part)
-    {
-      if (cur_range->field->eq(cur_part->field))
-        break;
-    }
+    if(get_sel_arg_for_keypart(cur_part->field, index_range_tree, &cur_range))
+      return false;
+
     if (!cur_range)
     {
       if (min_max_arg_part)
@@ -9797,9 +9979,6 @@ get_constant_key_infix(KEY *index_info, SEL_ARG *index_range_tree,
       }
     }
 
-    /* Check that the current range tree is a single point interval. */
-    if (cur_range->prev || cur_range->next)
-      return FALSE; /* This is not the only range predicate for the field. */
     if ((cur_range->min_flag & NO_MIN_RANGE) ||
         (cur_range->max_flag & NO_MAX_RANGE) ||
         (cur_range->min_flag & NEAR_MIN) || (cur_range->max_flag & NEAR_MAX))
@@ -10175,7 +10354,7 @@ QUICK_GROUP_MIN_MAX_SELECT(TABLE *table, JOIN *join_arg, bool have_min_arg,
                            uint use_index, double read_cost_arg,
                            ha_rows records_arg, uint key_infix_len_arg,
                            uchar *key_infix_arg, MEM_ROOT *parent_alloc)
-  :join(join_arg), index_info(index_info_arg),
+  :file(table->file), join(join_arg), index_info(index_info_arg),
    group_prefix_len(group_prefix_len_arg),
    group_key_parts(group_key_parts_arg), have_min(have_min_arg),
    have_max(have_max_arg), seen_first_key(FALSE),
@@ -10184,7 +10363,6 @@ QUICK_GROUP_MIN_MAX_SELECT(TABLE *table, JOIN *join_arg, bool have_min_arg,
    max_functions_it(NULL)
 {
   head=       table;
-  file=       head->file;
   index=      use_index;
   record=     head->record[0];
   tmp_record= head->record[1];
@@ -10492,7 +10670,7 @@ int QUICK_GROUP_MIN_MAX_SELECT::reset(void)
   int result;
   DBUG_ENTER("QUICK_GROUP_MIN_MAX_SELECT::reset");
 
-  file->extra(HA_EXTRA_KEYREAD); /* We need only the key attributes */
+  head->set_keyread(TRUE); /* We need only the key attributes */
   if ((result= file->ha_index_init(index,1)))
     DBUG_RETURN(result);
   if (quick_prefix_select && quick_prefix_select->reset())
@@ -10678,9 +10856,11 @@ int QUICK_GROUP_MIN_MAX_SELECT::next_min()
     */
     if (min_max_arg_part && min_max_arg_part->field->is_null())
     {
+      uchar key_buf[MAX_KEY_LENGTH];
+
       /* Find the first subsequent record without NULL in the MIN/MAX field. */
-      key_copy(tmp_record, record, index_info, 0);
-      result= file->index_read_map(record, tmp_record,
+      key_copy(key_buf, record, index_info, 0);
+      result= file->index_read_map(record, key_buf,
                                    make_keypart_map(real_key_parts),
                                    HA_READ_AFTER_KEY);
       /*
@@ -10696,7 +10876,7 @@ int QUICK_GROUP_MIN_MAX_SELECT::next_min()
       if (!result)
       {
         if (key_cmp(index_info->key_part, group_prefix, real_prefix_len))
-          key_restore(record, tmp_record, index_info, 0);
+          key_restore(record, key_buf, index_info, 0);
       }
       else if (result == HA_ERR_KEY_NOT_FOUND || result == HA_ERR_END_OF_FILE)
         result= 0; /* There is a result in any case. */
@@ -10774,7 +10954,8 @@ int QUICK_GROUP_MIN_MAX_SELECT::next_prefix()
   {
     uchar *cur_prefix= seen_first_key ? group_prefix : NULL;
     if ((result= quick_prefix_select->get_next_prefix(group_prefix_len,
-                         make_prev_keypart_map(group_key_parts), cur_prefix)))
+                                                      group_key_parts, 
+                                                      cur_prefix)))
       DBUG_RETURN(result);
     seen_first_key= TRUE;
   }

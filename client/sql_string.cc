@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* This file is originally from the mysql distribution. Coded by monty */
 
@@ -116,13 +118,14 @@ bool String::set(ulonglong num, CHARSET_INFO *cs)
 
 bool String::set(double num,uint decimals, CHARSET_INFO *cs)
 {
-  char buff[331];
+  char buff[FLOATING_POINT_BUFFER];
   uint dummy_errors;
 
   str_charset=cs;
   if (decimals >= NOT_FIXED_DEC)
   {
-    uint32 len= my_sprintf(buff,(buff, "%.15g",num));// Enough for a DATETIME
+    // Enough for a DATETIME
+    uint32 len= sprintf(buff, "%.15g", num);
     return copy(buff, len, &my_charset_latin1, cs, &dummy_errors);
   }
 #ifdef HAVE_FCONVERT
@@ -185,7 +188,10 @@ end:
 #else
 #ifdef HAVE_SNPRINTF
   buff[sizeof(buff)-1]=0;			// Safety
-  snprintf(buff,sizeof(buff)-1, "%.*f",(int) decimals,num);
+  IF_DBUG(int num_chars= )
+    snprintf(buff, sizeof(buff)-1, "%.*f",(int) decimals, num);
+  DBUG_ASSERT(num_chars > 0);
+  DBUG_ASSERT(num_chars < (int) sizeof(buff));
 #else
   sprintf(buff,"%.*f",(int) decimals,num);
 #endif
@@ -674,7 +680,7 @@ void String::qs_append(const char *str, uint32 len)
 void String::qs_append(double d)
 {
   char *buff = Ptr + str_length;
-  str_length+= my_sprintf(buff, (buff, "%.15g", d));
+  str_length+= sprintf(buff, buff, "%.15g", d);
 }
 
 void String::qs_append(double *d)
@@ -755,7 +761,7 @@ String *copy_if_not_alloced(String *to,String *from,uint32 from_length)
 {
   if (from->Alloced_length >= from_length)
     return from;
-  if (from->alloced || !to || from == to)
+  if ((from->alloced && (from->Alloced_length != 0)) || !to || from == to)
   {
     (void) from->realloc(from_length);
     return from;

@@ -1,4 +1,5 @@
-/* Copyright (C) 2001-2005 MySQL AB
+/*
+   Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
@@ -352,13 +354,13 @@ static int _ftb_no_dupes_cmp(void* not_used __attribute__((unused)),
 
   returns 1 if the search was finished (must-word wasn't found)
 */
-static int _ft2_search(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
+static int _ft2_search_no_lock(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
 {
   int r;
   int subkeys=1;
   my_bool can_go_down;
   MI_INFO *info=ftb->info;
-  uint UNINIT_VAR(off), extra=HA_FT_WLEN+info->s->base.rec_reflength;
+  uint UNINIT_VAR(off), extra= HA_FT_WLEN + info->s->rec_reflength;
   uchar *lastkey_buf=ftbw->word+ftbw->off;
 
   if (ftbw->flags & FTB_FLAG_TRUNC)
@@ -437,12 +439,22 @@ static int _ft2_search(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
         return 0;
     }
 
-    /* going up to the first-level tree to continue search there */
+    /*
+      Going up to the first-level tree to continue search there.
+      Only done when performing prefix search.
+
+      Key buffer data pointer as well as docid[0] may be smaller
+      than values we got while searching first-level tree. Thus
+      they must be restored to original values to avoid dead-loop,
+      when subsequent search for a bigger value eventually ends up
+      in this same second-level tree.
+    */
     _mi_dpointer(info, (uchar*) (lastkey_buf+HA_FT_WLEN), ftbw->key_root);
+    ftbw->docid[0]= ftbw->key_root;
     ftbw->key_root=info->s->state.key_root[ftb->keynr];
     ftbw->keyinfo=info->s->keyinfo+ftb->keynr;
     ftbw->off=0;
-    return _ft2_search(ftb, ftbw, 0);
+    return _ft2_search_no_lock(ftb, ftbw, 0);
   }
 
   /* matching key found */
@@ -470,13 +482,24 @@ static int _ft2_search(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
   return 0;
 }
 
+static int _ft2_search(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
+{
+  int r;
+  MYISAM_SHARE *share= ftb->info->s;
+  if (share->concurrent_insert)
+    rw_rdlock(&share->key_root_lock[ftb->keynr]);
+  r= _ft2_search_no_lock(ftb, ftbw, init_search);
+  if (share->concurrent_insert)
+    rw_unlock(&share->key_root_lock[ftb->keynr]);
+  return r;
+}
+
 static void _ftb_init_index_search(FT_INFO *ftb)
 {
   int i;
   FTB_WORD   *ftbw;
 
-  if ((ftb->state != READY && ftb->state !=INDEX_DONE) ||
-      ftb->keynr == NO_SUCH_KEY)
+  if (ftb->state == UNINITIALIZED || ftb->keynr == NO_SUCH_KEY)
     return;
   ftb->state=INDEX_SEARCH;
 

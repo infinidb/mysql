@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /**
@@ -122,13 +124,18 @@ set_field_to_null(Field *field)
     return 0;
   }
   field->reset();
-  if (field->table->in_use->count_cuted_fields == CHECK_FIELD_WARN)
-  {
+  switch (field->table->in_use->count_cuted_fields) {
+  case CHECK_FIELD_WARN:
     field->set_warning(MYSQL_ERROR::WARN_LEVEL_WARN, WARN_DATA_TRUNCATED, 1);
+    /* fall through */
+  case CHECK_FIELD_IGNORE:
     return 0;
+  case CHECK_FIELD_ERROR_FOR_NULL:
+    if (!field->table->in_use->no_errors)
+      my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
+    return -1;
   }
-  if (!field->table->in_use->no_errors)
-    my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
+  DBUG_ASSERT(0); // impossible
   return -1;
 }
 
@@ -172,19 +179,27 @@ set_field_to_null_with_conversions(Field *field, bool no_conversions)
     ((Field_timestamp*) field)->set_time();
     return 0;					// Ok to set time to NULL
   }
+  
+  // Note: we ignore any potential failure of reset() here.
   field->reset();
+
   if (field == field->table->next_number_field)
   {
     field->table->auto_increment_field_not_null= FALSE;
     return 0;				  // field is set in fill_record()
   }
-  if (field->table->in_use->count_cuted_fields == CHECK_FIELD_WARN)
-  {
+  switch (field->table->in_use->count_cuted_fields) {
+  case CHECK_FIELD_WARN:
     field->set_warning(MYSQL_ERROR::WARN_LEVEL_WARN, ER_BAD_NULL_ERROR, 1);
+    /* fall through */
+  case CHECK_FIELD_IGNORE:
     return 0;
+  case CHECK_FIELD_ERROR_FOR_NULL:
+    if (!field->table->in_use->no_errors)
+      my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
+    return -1;
   }
-  if (!field->table->in_use->no_errors)
-    my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
+  DBUG_ASSERT(0); // impossible
   return -1;
 }
 
@@ -695,7 +710,7 @@ Copy_field::get_copy_func(Field *to,Field *from)
         if (((Field_varstring*) to)->length_bytes !=
             ((Field_varstring*) from)->length_bytes)
           return do_field_string;
-        if (to_length != from_length)
+        else
           return (((Field_varstring*) to)->length_bytes == 1 ?
                   (from->charset()->mbmaxlen == 1 ? do_varstring1 :
                                                     do_varstring1_mb) :
@@ -776,11 +791,8 @@ int field_conv(Field *to,Field *from)
          ((Field_varstring*)from)->length_bytes ==
           ((Field_varstring*)to)->length_bytes))
     {						// Identical fields
-#ifdef HAVE_purify
-      /* This may happen if one does 'UPDATE ... SET x=x' */
-      if (to->ptr != from->ptr)
-#endif
-        memcpy(to->ptr,from->ptr,to->pack_length());
+      // to->ptr==from->ptr may happen if one does 'UPDATE ... SET x=x'
+      memmove(to->ptr, from->ptr, to->pack_length());
       return 0;
     }
   }

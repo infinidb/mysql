@@ -1,4 +1,4 @@
-/* Copyright (C) 2008 MySQL AB
+/* Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*
@@ -152,14 +153,21 @@ int main(int argc, char* const argv[] )
   pid_t own_pid= getpid();
   pid_t parent_pid= getppid();
   bool nocore = false;
+  struct sigaction sa,sa_abort;
 
+  sa.sa_handler= handle_signal;
+  sa.sa_flags= SA_NOCLDSTOP;
+  sigemptyset(&sa.sa_mask);
+
+  sa_abort.sa_handler= handle_abort;
+  sigemptyset(&sa_abort.sa_mask);
   /* Install signal handlers */
-  signal(SIGTERM, handle_signal);
-  signal(SIGINT,  handle_signal);
-  signal(SIGCHLD, handle_signal);
-  signal(SIGABRT, handle_abort);
+  sigaction(SIGTERM, &sa,NULL);
+  sigaction(SIGINT, &sa,NULL);
+  sigaction(SIGCHLD, &sa,NULL);
+  sigaction(SIGABRT, &sa_abort,NULL);
 
-  sprintf(safe_process_name, "safe_process[%d]", own_pid);
+  sprintf(safe_process_name, "safe_process[%ld]", (long) own_pid);
 
   message("Started");
 

@@ -1,4 +1,5 @@
-/* Copyright (C) 2004-2006 MySQL AB
+/*
+   Copyright (c) 2004, 2012, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
- Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include <my_time.h>
 #include <m_string.h>
@@ -165,7 +167,7 @@ str_to_datetime(const char *str, uint length, MYSQL_TIME *l_time,
   uint add_hours= 0, start_loop;
   ulong not_zero_date, allow_space;
   my_bool is_internal_format;
-  const char *pos, *last_field_pos;
+  const char *pos, *UNINIT_VAR(last_field_pos);
   const char *end=str+length;
   const uchar *format_position;
   my_bool found_delimitier= 0, found_space= 0;
@@ -174,7 +176,6 @@ str_to_datetime(const char *str, uint length, MYSQL_TIME *l_time,
   DBUG_PRINT("ENTER",("str: %.*s",length,str));
 
   LINT_INIT(field_length);
-  LINT_INIT(last_field_pos);
 
   *was_cut= 0;
 
@@ -773,7 +774,7 @@ long calc_daynr(uint year,uint month,uint day)
   int y= year;                                  /* may be < 0 temporarily */
   DBUG_ENTER("calc_daynr");
 
-  if (y == 0 && month == 0 && day == 0)
+  if (y == 0 && month == 0)
     DBUG_RETURN(0);				/* Skip errors */
   /* Cast to int to be able to handle month == 0 */
   delsum= (long) (365 * y + 31 *((int) month - 1) + (int) day);
@@ -784,6 +785,7 @@ long calc_daynr(uint year,uint month,uint day)
   temp=(int) ((y/100+1)*3)/4;
   DBUG_PRINT("exit",("year: %d  month: %d  day: %d -> daynr: %ld",
 		     y+(month <= 2),month,day,delsum+y/4-temp));
+  DBUG_ASSERT(delsum+(int) y/4-temp >= 0);
   DBUG_RETURN(delsum+(int) y/4-temp);
 } /* calc_daynr */
 
@@ -993,7 +995,7 @@ my_system_gmt_sec(const MYSQL_TIME *t_src, long *my_timezone,
     with unsigned time_t tmp+= shift*86400L might result in a number,
     larger then TIMESTAMP_MAX_VALUE, so another check will work.
   */
-  if ((tmp < TIMESTAMP_MIN_VALUE) || (tmp > TIMESTAMP_MAX_VALUE))
+  if (!IS_TIME_T_VALID_FOR_TIMESTAMP(tmp))
     tmp= 0;
 
   return (my_time_t) tmp;
@@ -1025,30 +1027,21 @@ void set_zero_time(MYSQL_TIME *tm, enum enum_mysql_timestamp_type time_type)
 int my_time_to_str(const MYSQL_TIME *l_time, char *to)
 {
   uint extra_hours= 0;
-  return my_sprintf(to, (to, "%s%02u:%02u:%02u",
-                         (l_time->neg ? "-" : ""),
-                         extra_hours+ l_time->hour,
-                         l_time->minute,
-                         l_time->second));
+  return sprintf(to, "%s%02u:%02u:%02u", (l_time->neg ? "-" : ""),
+                 extra_hours+ l_time->hour, l_time->minute, l_time->second);
 }
 
 int my_date_to_str(const MYSQL_TIME *l_time, char *to)
 {
-  return my_sprintf(to, (to, "%04u-%02u-%02u",
-                         l_time->year,
-                         l_time->month,
-                         l_time->day));
+  return sprintf(to, "%04u-%02u-%02u",
+                 l_time->year, l_time->month, l_time->day);
 }
 
 int my_datetime_to_str(const MYSQL_TIME *l_time, char *to)
 {
-  return my_sprintf(to, (to, "%04u-%02u-%02u %02u:%02u:%02u",
-                         l_time->year,
-                         l_time->month,
-                         l_time->day,
-                         l_time->hour,
-                         l_time->minute,
-                         l_time->second));
+  return sprintf(to, "%04u-%02u-%02u %02u:%02u:%02u",
+                 l_time->year, l_time->month, l_time->day,
+                 l_time->hour, l_time->minute, l_time->second);
 }
 
 

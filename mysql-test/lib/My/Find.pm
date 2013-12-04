@@ -1,5 +1,5 @@
 # -*- cperl -*-
-# Copyright (C) 2004-2006 MySQL AB
+# Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,8 +27,6 @@ use My::Platform;
 
 use base qw(Exporter);
 our @EXPORT= qw(my_find_bin my_find_dir my_find_file NOT_REQUIRED);
-
-our $vs_config_dir;
 
 my $bin_extension= ".exe" if IS_WINDOWS;
 
@@ -128,9 +126,9 @@ sub my_find_file {
 #
 #
 sub my_find_dir {
-  my ($base, $paths, $dirs, $required)= @_;
-  croak "usage: my_find_dir(<base>, <paths>[, <dirs>])"
-    unless (@_ == 3 or @_ == 2);
+  my ($base, $paths, $dirs, $optional)= @_;
+  croak "usage: my_find_dir(<base>, <paths>[, <dirs>[, <optional>]])"
+    unless (@_ == 3 or @_ == 2 or @_ == 4);
 
   # -------------------------------------------------------
   # Find and return the first directory
@@ -138,6 +136,7 @@ sub my_find_dir {
   foreach my $path (my_find_paths($base, $paths, $dirs)) {
     return $path if ( -d $path );
   }
+  return "" if $optional;
   find_error($base, $paths, $dirs);
 }
 
@@ -158,7 +157,7 @@ sub my_find_paths {
   # User can select to look in a special build dir
   # which is a subdirectory of any of the paths
   my @extra_dirs;
-  my $build_dir= $vs_config_dir || $ENV{MTR_VS_CONFIG} || $ENV{MTR_BUILD_DIR};
+  my $build_dir= $::opt_vs_config || $ENV{MTR_VS_CONFIG} || $ENV{MTR_BUILD_DIR};
   push(@extra_dirs, $build_dir) if defined $build_dir;
 
   if (defined $extension){

@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -62,7 +62,7 @@ struct thr_local_struct{
 	os_thread_t	handle;	/*!< operating system handle to the thread */
 	ulint		slot_no;/*!< the index of the slot in the thread table
 				for this thread */
-	ibool		in_ibuf;/*!< TRUE if the the thread is doing an ibuf
+	ibool		in_ibuf;/*!< TRUE if the thread is doing an ibuf
 				operation */
 	hash_node_t	hash;	/*!< hash chain node */
 	ulint		magic_n;/*!< magic number (THR_LOCAL_MAGIC_N) */
@@ -70,6 +70,24 @@ struct thr_local_struct{
 
 /** The value of thr_local_struct::magic_n */
 #define THR_LOCAL_MAGIC_N	1231234
+
+#ifdef UNIV_DEBUG
+/*******************************************************************//**
+Validates thread local data.
+@return	TRUE if valid */
+static
+ibool
+thr_local_validate(
+/*===============*/
+	const thr_local_t*	local)	/*!< in: data to validate */
+{
+	ut_ad(local->magic_n == THR_LOCAL_MAGIC_N);
+	ut_ad(local->slot_no == ULINT_UNDEFINED
+	      || local->slot_no < OS_THREAD_MAX_N);
+	ut_ad(local->in_ibuf == FALSE || local->in_ibuf == TRUE);
+	return(TRUE);
+}
+#endif /* UNIV_DEBUG */
 
 /*******************************************************************//**
 Returns the local storage struct for a thread.
@@ -91,7 +109,8 @@ try_again:
 	local = NULL;
 
 	HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id),
-		    thr_local_t*, local,, os_thread_eq(local->id, id));
+		    thr_local_t*, local, ut_ad(thr_local_validate(local)),
+		    os_thread_eq(local->id, id));
 	if (local == NULL) {
 		mutex_exit(&thr_local_mutex);
 
@@ -102,7 +121,7 @@ try_again:
 		goto try_again;
 	}
 
-	ut_ad(local->magic_n == THR_LOCAL_MAGIC_N);
+	ut_ad(thr_local_validate(local));
 
 	return(local);
 }
@@ -188,7 +207,7 @@ thr_local_create(void)
 	local->id = os_thread_get_curr_id();
 	local->handle = os_thread_get_curr();
 	local->magic_n = THR_LOCAL_MAGIC_N;
-
+	local->slot_no = ULINT_UNDEFINED;
 	local->in_ibuf = FALSE;
 
 	mutex_enter(&thr_local_mutex);
@@ -215,7 +234,8 @@ thr_local_free(
 	/* Look for the local struct in the hash table */
 
 	HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id),
-		    thr_local_t*, local,, os_thread_eq(local->id, id));
+		    thr_local_t*, local, ut_ad(thr_local_validate(local)),
+		    os_thread_eq(local->id, id));
 	if (local == NULL) {
 		mutex_exit(&thr_local_mutex);
 
@@ -228,6 +248,7 @@ thr_local_free(
 	mutex_exit(&thr_local_mutex);
 
 	ut_a(local->magic_n == THR_LOCAL_MAGIC_N);
+	ut_ad(thr_local_validate(local));
 
 	mem_free(local);
 }
@@ -245,4 +266,36 @@ thr_local_init(void)
 	thr_local_hash = hash_create(OS_THREAD_MAX_N + 100);
 
 	mutex_create(&thr_local_mutex, SYNC_THR_LOCAL);
+}
+
+/********************************************************************
+Close the thread local storage module. */
+UNIV_INTERN
+void
+thr_local_close(void)
+/*=================*/
+{
+	ulint		i;
+
+	ut_a(thr_local_hash != NULL);
+
+	/* Free the hash elements. We don't remove them from the table
+	because we are going to destroy the table anyway. */
+	for (i = 0; i < hash_get_n_cells(thr_local_hash); i++) {
+		thr_local_t*	local;
+
+		local = HASH_GET_FIRST(thr_local_hash, i);
+
+		while (local) {
+			thr_local_t*	prev_local = local;
+
+			local = HASH_GET_NEXT(hash, prev_local);
+			ut_a(prev_local->magic_n == THR_LOCAL_MAGIC_N);
+			ut_ad(thr_local_validate(prev_local));
+			mem_free(prev_local);
+		}
+	}
+
+	hash_table_free(thr_local_hash);
+	thr_local_hash = NULL;
 }

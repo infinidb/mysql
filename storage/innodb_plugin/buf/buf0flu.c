@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 51 Franklin St,
+Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -88,6 +88,145 @@ buf_flush_validate_low(void);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 /********************************************************************//**
+Insert a block in the flush_rbt and returns a pointer to its
+predecessor or NULL if no predecessor. The ordering is maintained
+on the basis of the <oldest_modification, space, offset> key.
+@return pointer to the predecessor or NULL if no predecessor. */
+static
+buf_page_t*
+buf_flush_insert_in_flush_rbt(
+/*==========================*/
+	buf_page_t*	bpage)		/*!< in: bpage to be inserted. */
+{
+	buf_page_t*		prev = NULL;
+	const ib_rbt_node_t*	c_node;
+	const ib_rbt_node_t*	p_node;
+
+	ut_ad(buf_pool_mutex_own());
+
+	/* Insert this buffer into the rbt. */
+	c_node = rbt_insert(buf_pool->flush_rbt, &bpage, &bpage);
+	ut_a(c_node != NULL);
+
+	/* Get the predecessor. */
+	p_node = rbt_prev(buf_pool->flush_rbt, c_node);
+
+	if (p_node != NULL) {
+		prev = *rbt_value(buf_page_t*, p_node);
+		ut_a(prev != NULL);
+	}
+
+	return(prev);
+}
+
+/********************************************************************//**
+Delete a bpage from the flush_rbt. */
+static
+void
+buf_flush_delete_from_flush_rbt(
+/*============================*/
+	buf_page_t*	bpage)		/*!< in: bpage to be removed. */
+{
+
+#ifdef UNIV_DEBUG
+	ibool	ret = FALSE;
+#endif /* UNIV_DEBUG */
+
+	ut_ad(buf_pool_mutex_own());
+#ifdef UNIV_DEBUG
+	ret =
+#endif /* UNIV_DEBUG */
+	rbt_delete(buf_pool->flush_rbt, &bpage);
+	ut_ad(ret);
+}
+
+/********************************************************************//**
+Compare two modified blocks in the buffer pool. The key for comparison
+is:
+key = <oldest_modification, space, offset>
+This comparison is used to maintian ordering of blocks in the
+buf_pool->flush_rbt.
+Note that for the purpose of flush_rbt, we only need to order blocks
+on the oldest_modification. The other two fields are used to uniquely
+identify the blocks.
+@return < 0 if b2 < b1, 0 if b2 == b1, > 0 if b2 > b1 */
+static
+int
+buf_flush_block_cmp(
+/*================*/
+	const void*	p1,		/*!< in: block1 */
+	const void*	p2)		/*!< in: block2 */
+{
+	int		ret;
+	const buf_page_t* b1;
+	const buf_page_t* b2;
+
+	ut_ad(p1 != NULL);
+	ut_ad(p2 != NULL);
+
+	b1 = *(const buf_page_t**) p1;
+	b2 = *(const buf_page_t**) p2;
+
+	ut_ad(b1 != NULL);
+	ut_ad(b2 != NULL);
+
+	ut_ad(b1->in_flush_list);
+	ut_ad(b2->in_flush_list);
+
+	if (b2->oldest_modification
+	    > b1->oldest_modification) {
+		return(1);
+	}
+
+	if (b2->oldest_modification
+	    < b1->oldest_modification) {
+		return(-1);
+	}
+
+	/* If oldest_modification is same then decide on the space. */
+	ret = (int)(b2->space - b1->space);
+
+	/* Or else decide ordering on the offset field. */
+	return(ret ? ret : (int)(b2->offset - b1->offset));
+}
+
+/********************************************************************//**
+Initialize the red-black tree to speed up insertions into the flush_list
+during recovery process. Should be called at the start of recovery
+process before any page has been read/written. */
+UNIV_INTERN
+void
+buf_flush_init_flush_rbt(void)
+/*==========================*/
+{
+	buf_pool_mutex_enter();
+
+	/* Create red black tree for speedy insertions in flush list. */
+	buf_pool->flush_rbt = rbt_create(sizeof(buf_page_t*),
+					 buf_flush_block_cmp);
+	buf_pool_mutex_exit();
+}
+
+/********************************************************************//**
+Frees up the red-black tree. */
+UNIV_INTERN
+void
+buf_flush_free_flush_rbt(void)
+/*==========================*/
+{
+	buf_pool_mutex_enter();
+
+#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
+	ut_a(buf_flush_validate_low());
+#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
+
+	rbt_free(buf_pool->flush_rbt);
+	buf_pool->flush_rbt = NULL;
+
+	buf_pool_mutex_exit();
+}
+
+/********************************************************************//**
 Inserts a modified block into the flush list. */
 UNIV_INTERN
 void
@@ -100,6 +239,13 @@ buf_flush_insert_into_flush_list(
 	      || (UT_LIST_GET_FIRST(buf_pool->flush_list)->oldest_modification
 		  <= block->page.oldest_modification));
 
+	/* If we are in the recovery then we need to update the flush
+	red-black tree as well. */
+	if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+		buf_flush_insert_sorted_into_flush_list(block);
+		return;
+	}
+
 	ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 	ut_ad(block->page.in_LRU_list);
 	ut_ad(block->page.in_page_hash);
@@ -108,6 +254,17 @@ buf_flush_insert_into_flush_list(
 	ut_d(block->page.in_flush_list = TRUE);
 	UT_LIST_ADD_FIRST(list, buf_pool->flush_list, &block->page);
 
+#ifdef UNIV_DEBUG_VALGRIND
+	{
+		ulint	zip_size = buf_block_get_zip_size(block);
+
+		if (UNIV_UNLIKELY(zip_size)) {
+			UNIV_MEM_ASSERT_RW(block->page.zip.data, zip_size);
+		} else {
+			UNIV_MEM_ASSERT_RW(block->frame, UNIV_PAGE_SIZE);
+		}
+	}
+#endif /* UNIV_DEBUG_VALGRIND */
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 	ut_a(buf_flush_validate_low());
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
@@ -135,13 +292,40 @@ buf_flush_insert_sorted_into_flush_list(
 	ut_ad(!block->page.in_flush_list);
 	ut_d(block->page.in_flush_list = TRUE);
 
-	prev_b = NULL;
-	b = UT_LIST_GET_FIRST(buf_pool->flush_list);
+#ifdef UNIV_DEBUG_VALGRIND
+	{
+		ulint	zip_size = buf_block_get_zip_size(block);
 
-	while (b && b->oldest_modification > block->page.oldest_modification) {
-		ut_ad(b->in_flush_list);
-		prev_b = b;
-		b = UT_LIST_GET_NEXT(list, b);
+		if (UNIV_UNLIKELY(zip_size)) {
+			UNIV_MEM_ASSERT_RW(block->page.zip.data, zip_size);
+		} else {
+			UNIV_MEM_ASSERT_RW(block->frame, UNIV_PAGE_SIZE);
+		}
+	}
+#endif /* UNIV_DEBUG_VALGRIND */
+
+	prev_b = NULL;
+
+	/* For the most part when this function is called the flush_rbt
+	should not be NULL. In a very rare boundary case it is possible
+	that the flush_rbt has already been freed by the recovery thread
+	before the last page was hooked up in the flush_list by the
+	io-handler thread. In that case we'll  just do a simple
+	linear search in the else block. */
+	if (buf_pool->flush_rbt) {
+
+		prev_b = buf_flush_insert_in_flush_rbt(&block->page);
+
+	} else {
+
+		b = UT_LIST_GET_FIRST(buf_pool->flush_list);
+
+		while (b && b->oldest_modification
+		       > block->page.oldest_modification) {
+			ut_ad(b->in_flush_list);
+			prev_b = b;
+			b = UT_LIST_GET_NEXT(list, b);
+		}
 	}
 
 	if (prev_b == NULL) {
@@ -237,7 +421,6 @@ buf_flush_remove(
 	ut_ad(buf_pool_mutex_own());
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 	ut_ad(bpage->in_flush_list);
-	ut_d(bpage->in_flush_list = FALSE);
 
 	switch (buf_page_get_state(bpage)) {
 	case BUF_BLOCK_ZIP_PAGE:
@@ -252,17 +435,85 @@ buf_flush_remove(
 	case BUF_BLOCK_ZIP_DIRTY:
 		buf_page_set_state(bpage, BUF_BLOCK_ZIP_PAGE);
 		UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
+#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 		buf_LRU_insert_zip_clean(bpage);
+#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 		break;
 	case BUF_BLOCK_FILE_PAGE:
 		UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
 		break;
 	}
 
+	/* If the flush_rbt is active then delete from it as well. */
+	if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+		buf_flush_delete_from_flush_rbt(bpage);
+	}
+
+	/* Must be done after we have removed it from the flush_rbt
+	because we assert on in_flush_list in comparison function. */
+	ut_d(bpage->in_flush_list = FALSE);
+
 	bpage->oldest_modification = 0;
 
 	ut_d(UT_LIST_VALIDATE(list, buf_page_t, buf_pool->flush_list,
 			      ut_ad(ut_list_node_313->in_flush_list)));
+}
+
+/********************************************************************//**
+Relocates a buffer control block on the flush_list.
+Note that it is assumed that the contents of bpage has already been
+copied to dpage. */
+UNIV_INTERN
+void
+buf_flush_relocate_on_flush_list(
+/*=============================*/
+	buf_page_t*	bpage,	/*!< in/out: control block being moved */
+	buf_page_t*	dpage)	/*!< in/out: destination block */
+{
+	buf_page_t* prev;
+	buf_page_t* prev_b = NULL;
+
+	ut_ad(buf_pool_mutex_own());
+
+	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
+
+	ut_ad(bpage->in_flush_list);
+	ut_ad(dpage->in_flush_list);
+
+	/* If recovery is active we must swap the control blocks in
+	the flush_rbt as well. */
+	if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+		buf_flush_delete_from_flush_rbt(bpage);
+		prev_b = buf_flush_insert_in_flush_rbt(dpage);
+	}
+
+	/* Must be done after we have removed it from the flush_rbt
+	because we assert on in_flush_list in comparison function. */
+	ut_d(bpage->in_flush_list = FALSE);
+
+	prev = UT_LIST_GET_PREV(list, bpage);
+	UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
+
+	if (prev) {
+		ut_ad(prev->in_flush_list);
+		UT_LIST_INSERT_AFTER(
+			list,
+			buf_pool->flush_list,
+			prev, dpage);
+	} else {
+		UT_LIST_ADD_FIRST(
+			list,
+			buf_pool->flush_list,
+			dpage);
+	}
+
+	/* Just an extra check. Previous in flush_list
+	should be the same control block as in flush_rbt. */
+	ut_a(!buf_pool->flush_rbt || prev_b == prev);
+
+#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
+	ut_a(buf_flush_validate_low());
+#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
 /********************************************************************//**
@@ -304,6 +555,28 @@ buf_flush_write_complete(
 }
 
 /********************************************************************//**
+Flush a batch of writes to the datafiles that have already been
+written by the OS. */
+static
+void
+buf_flush_sync_datafiles(void)
+/*==========================*/
+{
+	/* Wake possible simulated aio thread to actually post the
+	writes to the operating system */
+	os_aio_simulated_wake_handler_threads();
+
+	/* Wait that all async writes to tablespaces have been posted to
+	the OS */
+	os_aio_wait_until_no_pending_writes();
+
+	/* Now we flush the data to disk (for example, with fsync) */
+	fil_flush_file_spaces(FIL_TABLESPACE);
+
+	return;
+}
+
+/********************************************************************//**
 Flushes possible buffered writes from the doublewrite memory buffer to disk,
 and also wakes up the aio thread if simulated aio is used. It is very
 important to call this function after a batch of writes has been posted,
@@ -320,8 +593,8 @@ buf_flush_buffered_writes(void)
 	ulint		i;
 
 	if (!srv_use_doublewrite_buf || trx_doublewrite == NULL) {
-		os_aio_simulated_wake_handler_threads();
-
+		/* Sync the writes to the disk. */
+		buf_flush_sync_datafiles();
 		return;
 	}
 
@@ -529,22 +802,10 @@ flush:
 		buf_LRU_stat_inc_io();
 	}
 
-	/* Wake possible simulated aio thread to actually post the
-	writes to the operating system */
-
-	os_aio_simulated_wake_handler_threads();
-
-	/* Wait that all async writes to tablespaces have been posted to
-	the OS */
-
-	os_aio_wait_until_no_pending_writes();
-
-	/* Now we flush the data to disk (for example, with fsync) */
-
-	fil_flush_file_spaces(FIL_TABLESPACE);
+	/* Sync the writes to the disk. */
+	buf_flush_sync_datafiles();
 
 	/* We can now reuse the doublewrite memory buffer: */
-
 	trx_doublewrite->first_free = 0;
 
 	mutex_exit(&(trx_doublewrite->mutex));
@@ -578,6 +839,7 @@ try_again:
 	zip_size = buf_page_get_zip_size(bpage);
 
 	if (UNIV_UNLIKELY(zip_size)) {
+		UNIV_MEM_ASSERT_RW(bpage->zip.data, zip_size);
 		/* Copy the compressed page and clear the rest. */
 		memcpy(trx_doublewrite->write_buf
 		       + UNIV_PAGE_SIZE * trx_doublewrite->first_free,
@@ -587,6 +849,8 @@ try_again:
 		       + zip_size, 0, UNIV_PAGE_SIZE - zip_size);
 	} else {
 		ut_a(buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE);
+		UNIV_MEM_ASSERT_RW(((buf_block_t*) bpage)->frame,
+				   UNIV_PAGE_SIZE);
 
 		memcpy(trx_doublewrite->write_buf
 		       + UNIV_PAGE_SIZE * trx_doublewrite->first_free,
@@ -776,6 +1040,82 @@ buf_flush_write_block_low(
 		buf_flush_post_to_doublewrite_buf(bpage);
 	}
 }
+
+# if defined UNIV_DEBUG || defined UNIV_IBUF_DEBUG
+/********************************************************************//**
+Writes a flushable page asynchronously from the buffer pool to a file.
+NOTE: buf_pool_mutex and block->mutex must be held upon entering this
+function, and they will be released by this function after flushing.
+This is loosely based on buf_flush_batch() and buf_flush_page().
+@return TRUE if the page was flushed and the mutexes released */
+UNIV_INTERN
+ibool
+buf_flush_page_try(
+/*===============*/
+	buf_block_t*	block)		/*!< in/out: buffer control block */
+{
+	ut_ad(buf_pool_mutex_own());
+	ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+	ut_ad(mutex_own(&block->mutex));
+
+	if (!buf_flush_ready_for_flush(&block->page, BUF_FLUSH_LRU)) {
+		return(FALSE);
+	}
+
+	if (buf_pool->n_flush[BUF_FLUSH_LRU] > 0
+	    || buf_pool->init_flush[BUF_FLUSH_LRU]) {
+		/* There is already a flush batch of the same type running */
+		return(FALSE);
+	}
+
+	buf_pool->init_flush[BUF_FLUSH_LRU] = TRUE;
+
+	buf_page_set_io_fix(&block->page, BUF_IO_WRITE);
+
+	buf_page_set_flush_type(&block->page, BUF_FLUSH_LRU);
+
+	if (buf_pool->n_flush[BUF_FLUSH_LRU]++ == 0) {
+
+		os_event_reset(buf_pool->no_flush[BUF_FLUSH_LRU]);
+	}
+
+	/* VERY IMPORTANT:
+	Because any thread may call the LRU flush, even when owning
+	locks on pages, to avoid deadlocks, we must make sure that the
+	s-lock is acquired on the page without waiting: this is
+	accomplished because buf_flush_ready_for_flush() must hold,
+	and that requires the page not to be bufferfixed. */
+
+	rw_lock_s_lock_gen(&block->lock, BUF_IO_WRITE);
+
+	/* Note that the s-latch is acquired before releasing the
+	buf_pool mutex: this ensures that the latch is acquired
+	immediately. */
+
+	mutex_exit(&block->mutex);
+	buf_pool_mutex_exit();
+
+	/* Even though block is not protected by any mutex at this
+	point, it is safe to access block, because it is io_fixed and
+	oldest_modification != 0.  Thus, it cannot be relocated in the
+	buffer pool or removed from flush_list or LRU_list. */
+
+	buf_flush_write_block_low(&block->page);
+
+	buf_pool_mutex_enter();
+	buf_pool->init_flush[BUF_FLUSH_LRU] = FALSE;
+
+	if (buf_pool->n_flush[BUF_FLUSH_LRU] == 0) {
+		/* The running flush batch has ended */
+		os_event_set(buf_pool->no_flush[BUF_FLUSH_LRU]);
+	}
+
+	buf_pool_mutex_exit();
+	buf_flush_buffered_writes();
+
+	return(TRUE);
+}
+# endif /* UNIV_DEBUG || UNIV_IBUF_DEBUG */
 
 /********************************************************************//**
 Writes a flushable page asynchronously from the buffer pool to a file.
@@ -1009,7 +1349,6 @@ buf_flush_batch(
 {
 	buf_page_t*	bpage;
 	ulint		page_count	= 0;
-	ulint		old_page_count;
 	ulint		space;
 	ulint		offset;
 
@@ -1081,15 +1420,9 @@ flush_next:
 
 				buf_pool_mutex_exit();
 
-				old_page_count = page_count;
-
 				/* Try to flush also all the neighbors */
 				page_count += buf_flush_try_neighbors(
 					space, offset, flush_type);
-				/* fprintf(stderr,
-				"Flush type %lu, page no %lu, neighb %lu\n",
-				flush_type, offset,
-				page_count - old_page_count); */
 
 				buf_pool_mutex_enter();
 				goto flush_next;
@@ -1357,12 +1690,20 @@ ibool
 buf_flush_validate_low(void)
 /*========================*/
 {
-	buf_page_t*	bpage;
+	buf_page_t*		bpage;
+	const ib_rbt_node_t*	rnode = NULL;
 
 	UT_LIST_VALIDATE(list, buf_page_t, buf_pool->flush_list,
 			 ut_ad(ut_list_node_313->in_flush_list));
 
 	bpage = UT_LIST_GET_FIRST(buf_pool->flush_list);
+
+	/* If we are in recovery mode i.e.: flush_rbt != NULL
+	then each block in the flush_list must also be present
+	in the flush_rbt. */
+	if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+		rnode = rbt_first(buf_pool->flush_rbt);
+	}
 
 	while (bpage != NULL) {
 		const ib_uint64_t om = bpage->oldest_modification;
@@ -1370,10 +1711,23 @@ buf_flush_validate_low(void)
 		ut_a(buf_page_in_file(bpage));
 		ut_a(om > 0);
 
+		if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+			buf_page_t* rpage;
+			ut_a(rnode);
+			rpage = *rbt_value(buf_page_t*, rnode);
+			ut_a(rpage);
+			ut_a(rpage == bpage);
+			rnode = rbt_next(buf_pool->flush_rbt, rnode);
+		}
+
 		bpage = UT_LIST_GET_NEXT(list, bpage);
 
 		ut_a(!bpage || om >= bpage->oldest_modification);
 	}
+
+	/* By this time we must have exhausted the traversal of
+	flush_rbt (if active) as well. */
+	ut_a(rnode == NULL);
 
 	return(TRUE);
 }

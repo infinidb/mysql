@@ -1,4 +1,4 @@
-/* Copyright (C) 2002-2006 MySQL AB
+/* Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Classes to support the SET command */
 
@@ -196,6 +196,7 @@ public:
 		       sys_after_update_func func)
     :sys_var(name_arg,func), value(value_ptr_arg)
   { chain_sys_var(chain); }
+  bool check(THD *thd, set_var *var);
   bool update(THD *thd, set_var *var);
   void set_default(THD *thd, enum_var_type type);
   SHOW_TYPE show_type() { return SHOW_LONGLONG; }
@@ -442,6 +443,7 @@ public:
 		      sys_after_update_func func)
     :sys_var_thd(name_arg,func), offset(offset_arg)
   { chain_sys_var(chain); }
+  bool check(THD *thd, set_var *var);
   bool update(THD *thd, set_var *var);
   void set_default(THD *thd, enum_var_type type);
   SHOW_TYPE show_type() { return SHOW_HA_ROWS; }
@@ -621,6 +623,7 @@ public:
   uchar *value_ptr(THD *thd, enum_var_type type, LEX_STRING *base);
 };
 
+#ifndef DBUG_OFF
 class sys_var_thd_dbug :public sys_var_thd
 {
 public:
@@ -634,8 +637,23 @@ public:
   void set_default(THD *thd, enum_var_type type) { DBUG_POP(); }
   uchar *value_ptr(THD *thd, enum_var_type type, LEX_STRING *b);
 };
+#endif /* DBUG_OFF */
 
-
+#if defined(ENABLED_DEBUG_SYNC)
+/* Debug Sync Facility. Implemented in debug_sync.cc. */
+class sys_var_debug_sync :public sys_var_thd
+{
+public:
+  sys_var_debug_sync(sys_var_chain *chain, const char *name_arg)
+    :sys_var_thd(name_arg)
+  { chain_sys_var(chain); }
+  bool check(THD *thd, set_var *var);
+  bool update(THD *thd, set_var *var);
+  SHOW_TYPE show_type() { return SHOW_CHAR; }
+  bool check_update_type(Item_result type) { return type != STRING_RESULT; }
+  uchar *value_ptr(THD *thd, enum_var_type type, LEX_STRING *base);
+};
+#endif /* defined(ENABLED_DEBUG_SYNC) */
 
 /* some variables that require special handling */
 
@@ -646,6 +664,7 @@ public:
                     Binlog_status_enum binlog_status_arg= NOT_IN_BINLOG)
     :sys_var(name_arg, NULL, binlog_status_arg)
   { chain_sys_var(chain); }
+  bool check(THD *thd, set_var *var);
   bool update(THD *thd, set_var *var);
   void set_default(THD *thd, enum_var_type type);
   bool check_type(enum_var_type type)    { return type == OPT_GLOBAL; }
@@ -837,6 +856,7 @@ public:
     :sys_var_key_cache_param(chain, name_arg,
                              offsetof(KEY_CACHE, param_buff_size))
   {}
+  bool check(THD *thd, set_var *var);
   bool update(THD *thd, set_var *var);
   SHOW_TYPE show_type() { return SHOW_LONGLONG; }
 };
@@ -848,6 +868,7 @@ public:
   sys_var_key_cache_long(sys_var_chain *chain, const char *name_arg, size_t offset_arg)
     :sys_var_key_cache_param(chain, name_arg, offset_arg)
   {}
+  bool check(THD *thd, set_var *var);
   bool update(THD *thd, set_var *var);
   SHOW_TYPE show_type() { return SHOW_LONG; }
 };
@@ -1305,13 +1326,23 @@ public:
     if (value_arg && value_arg->type() == Item::FIELD_ITEM)
     {
       Item_field *item= (Item_field*) value_arg;
-      if (!(value=new Item_string(item->field_name, 
-                  (uint) strlen(item->field_name),
-				  item->collation.collation)))
-	value=value_arg;			/* Give error message later */
+      if (item->field_name)
+      {
+        if (!(value= new Item_string(item->field_name,
+                                     (uint) strlen(item->field_name),
+                                     item->collation.collation)))
+	  value= value_arg;			/* Give error message later */
+      }
+      else
+      {
+        /* Both Item_field and Item_insert_value will return the type as
+        Item::FIELD_ITEM. If the item->field_name is NULL, we assume the
+        object to be Item_insert_value. */
+        value= value_arg;
+      }
     }
     else
-      value=value_arg;
+      value= value_arg;
   }
   int check(THD *thd);
   int update(THD *thd);
@@ -1429,7 +1460,7 @@ sys_var *find_sys_var(THD *thd, const char *str, uint length=0);
 int sql_set_variables(THD *thd, List<set_var_base> *var_list);
 bool not_all_support_one_shot(List<set_var_base> *var_list);
 void fix_delay_key_write(THD *thd, enum_var_type type);
-void fix_slave_exec_mode(enum_var_type type);
+void fix_slave_exec_mode(void);
 ulong fix_sql_mode(ulong sql_mode);
 extern sys_var_const_str sys_charset_system;
 extern sys_var_str sys_init_connect;

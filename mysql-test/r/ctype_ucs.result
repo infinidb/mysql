@@ -116,6 +116,26 @@ select binary 'a  a' > 'a', binary 'a  \0' > 'a', binary 'a\0' > 'a';
 binary 'a  a' > 'a'	binary 'a  \0' > 'a'	binary 'a\0' > 'a'
 1	1	1
 SET CHARACTER SET koi8r;
+create table t1 (a varchar(2) character set ucs2 collate ucs2_bin, key(a));
+insert into t1 values ('A'),('A'),('B'),('C'),('D'),('A\t');
+insert into t1 values ('A\0'),('A\0'),('A\0'),('A\0'),('AZ');
+select hex(a) from t1 where a like 'A_' order by a;
+hex(a)
+00410000
+00410000
+00410000
+00410000
+00410009
+0041005A
+select hex(a) from t1 ignore key(a) where a like 'A_' order by a;
+hex(a)
+00410000
+00410000
+00410000
+00410000
+00410009
+0041005A
+drop table t1;
 CREATE TABLE t1 (word VARCHAR(64) CHARACTER SET ucs2, word2 CHAR(64) CHARACTER SET ucs2);
 INSERT INTO t1 VALUES (_koi8r'ò',_koi8r'ò'), (X'2004',X'2004');
 SELECT hex(word) FROM t1 ORDER BY word;
@@ -170,6 +190,32 @@ t1	CREATE TABLE `t1` (
   `l` varchar(10) CHARACTER SET ucs2 NOT NULL DEFAULT '',
   `r` varchar(10) CHARACTER SET ucs2 NOT NULL DEFAULT ''
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1
+DROP TABLE t1;
+#
+# Bug #51876 : crash/memory underrun when loading data with ucs2 
+#   and reverse() function
+#
+# Problem # 1 (original report): wrong parsing of ucs2 data
+SELECT '00' UNION SELECT '10' INTO OUTFILE 'tmpp.txt';
+CREATE TABLE t1(a INT);
+LOAD DATA INFILE 'tmpp.txt' INTO TABLE t1 CHARACTER SET ucs2
+(@b) SET a=REVERSE(@b);
+# should return 2 zeroes (as the value is truncated)
+SELECT * FROM t1;
+a
+0
+1
+DROP TABLE t1;
+# Problem # 2 : if you write and read ucs2 data to a file they're lost
+SELECT '00' UNION SELECT '10' INTO OUTFILE 'tmpp2.txt' CHARACTER SET ucs2;
+CREATE TABLE t1(a INT);
+LOAD DATA INFILE 'tmpp2.txt' INTO TABLE t1 CHARACTER SET ucs2
+(@b) SET a=REVERSE(@b);
+# should return 0 and 1 (10 reversed)
+SELECT * FROM t1;
+a
+0
+1
 DROP TABLE t1;
 create table t2(f1 Char(30));
 insert into t2 values ("103000"), ("22720000"), ("3401200"), ("78000");
@@ -970,8 +1016,8 @@ old_password(name)
 ????????
 select quote(name) from bug20536;
 quote(name)
-????????
-????????????????
+'test1'
+'\'test\\_2\''
 drop table bug20536;
 set names ucs2;
 ERROR 42000: Variable 'character_set_client' can't be set to the value of 'ucs2'
@@ -1210,4 +1256,23 @@ SELECT HEX(DAYNAME(19700101));
 HEX(DAYNAME(19700101))
 0427043504420432043504400433
 SET character_set_connection=latin1;
+#
+# Bug#52120 create view cause Assertion failed: 0, file .\item_subselect.cc, line 817
+#
+CREATE TABLE t1 (a CHAR(1) CHARSET ascii, b CHAR(1) CHARSET latin1);
+CREATE VIEW v1 AS SELECT 1 from t1
+WHERE t1.b <=> (SELECT a FROM t1 WHERE a < SOME(SELECT '1'));
+DROP VIEW v1;
+DROP TABLE t1;
+#
+# Bug#59648 my_strtoll10_mb2: Assertion `(*endptr - s) % 2 == 0' failed.
+#
+SELECT HEX(CHAR(COALESCE(NULL, CHAR(COUNT('%s') USING ucs2), 1, @@global.license, NULL) USING cp850));
+HEX(CHAR(COALESCE(NULL, CHAR(COUNT('%s') USING ucs2), 1, @@global.license, NULL) USING cp850))
+00
+SELECT CONVERT(QUOTE(CHAR(0xf5 using ucs2)), SIGNED);
+CONVERT(QUOTE(CHAR(0xf5 using ucs2)), SIGNED)
+0
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
 End of 5.0 tests

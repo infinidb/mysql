@@ -1,4 +1,4 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -57,7 +57,6 @@ typedef struct st_order {
   struct st_order *next;
   Item	 **item;			/* Point at item in select fields */
   Item	 *item_ptr;			/* Storage for initial item */
-  Item   **item_copy;			/* For SPs; the original item ptr */
   int    counter;                       /* position in SELECT list, correct
                                            only if counter_used is true*/
   bool	 asc;				/* true if ascending */
@@ -165,6 +164,7 @@ typedef struct st_filesort_info
 {
   IO_CACHE *io_cache;           /* If sorted through filesort */
   uchar     **sort_keys;        /* Buffer for sorting keys */
+  size_t    sort_keys_size;     /* Number of bytes allocated */
   uchar     *buffpek;           /* Buffer for buffpek structures */
   uint      buffpek_len;        /* Max number of buffpeks in the buffer */
   uchar     *addon_buf;         /* Pointer to a buffer if sorted with fields */
@@ -292,6 +292,36 @@ typedef enum enum_table_category TABLE_CATEGORY;
 TABLE_CATEGORY get_table_category(const LEX_STRING *db,
                                   const LEX_STRING *name);
 
+
+typedef struct st_table_field_type
+{
+  LEX_STRING name;
+  LEX_STRING type;
+  LEX_STRING cset;
+} TABLE_FIELD_TYPE;
+
+
+typedef struct st_table_field_def
+{
+  uint count;
+  const TABLE_FIELD_TYPE *field;
+} TABLE_FIELD_DEF;
+
+
+class Table_check_intact
+{
+protected:
+  virtual void report_error(uint code, const char *fmt, ...)= 0;
+
+public:
+  Table_check_intact() {}
+  virtual ~Table_check_intact() {}
+
+  /** Checks whether a table is intact. */
+  bool check(TABLE *table, const TABLE_FIELD_DEF *table_def);
+};
+
+
 /*
   This structure is shared between different table objects. There is one
   instance of table share per one table in the database.
@@ -407,7 +437,6 @@ typedef struct st_table_share
   bool name_lock, replace_with_name_lock;
   bool waiting_on_cond;                 /* Protection against free */
   ulong table_map_id;                   /* for row-based replication */
-  ulonglong table_map_version;
 
   /*
     Cache for row-based replication table share checks that does not
@@ -420,7 +449,7 @@ typedef struct st_table_share
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   /** @todo: Move into *ha_data for partitioning */
   bool auto_partitioned;
-  const char *partition_info;
+  char *partition_info;
   uint  partition_info_len;
   uint  partition_info_buffer_size;
   const char *part_state;
@@ -428,8 +457,21 @@ typedef struct st_table_share
   handlerton *default_part_db_type;
 #endif
 
+  /**
+    Cache the checked structure of this table.
+
+    The pointer data is used to describe the structure that
+    a instance of the table must have. Each element of the
+    array specifies a field that must exist on the table.
+
+    The pointer is cached in order to perform the check only
+    once -- when the table is loaded from the disk.
+  */
+  const TABLE_FIELD_DEF *table_field_def_cache;
+
   /** place to store storage engine specific data */
   void *ha_data;
+  void (*ha_data_destroy)(void *); /* An optional destructor for ha_data. */
 
 
   /*
@@ -759,6 +801,18 @@ struct st_table {
     bytes, it would take up 4.
   */
   my_bool force_index;
+
+  /**
+    Flag set when the statement contains FORCE INDEX FOR ORDER BY
+    See TABLE_LIST::process_index_hints().
+  */
+  my_bool force_index_order;
+
+  /**
+    Flag set when the statement contains FORCE INDEX FOR GROUP BY
+    See TABLE_LIST::process_index_hints().
+  */
+  my_bool force_index_group;
   my_bool distinct,const_table,no_rows;
 
   /**
@@ -819,6 +873,7 @@ struct st_table {
   void prepare_for_position(void);
   void mark_columns_used_by_index_no_reset(uint index, MY_BITMAP *map);
   void mark_columns_used_by_index(uint index);
+  void add_read_columns_used_by_index(uint index);
   void restore_column_maps_after_mark_index();
   void mark_auto_increment_column(void);
   void mark_columns_needed_for_update(void);
@@ -866,6 +921,20 @@ struct st_table {
   inline bool needs_reopen_or_name_lock()
   { return s->version != refresh_version; }
   bool is_children_attached(void);
+  inline void set_keyread(bool flag)
+  {
+    DBUG_ASSERT(file);
+    if (flag && !key_read)
+    {
+      key_read= 1;
+      file->extra(HA_EXTRA_KEYREAD);
+    }
+    else if (!flag && key_read)
+    {
+      key_read= 0;
+      file->extra(HA_EXTRA_NO_KEYREAD);
+    }
+  }
 };
 
 enum enum_schema_table_state
@@ -1115,7 +1184,7 @@ struct TABLE_LIST
   }
 
   /*
-    List of tables local to a subquery (used by SQL_LIST). Considers
+    List of tables local to a subquery (used by SQL_I_List). Considers
     views as leaves (unlike 'next_leaf' below). Created at parse time
     in st_select_lex::add_table_to_list() -> table_list.link_in_list().
   */
@@ -1641,7 +1710,11 @@ typedef struct st_nested_join
   List<TABLE_LIST>  join_list;       /* list of elements in the nested join */
   table_map         used_tables;     /* bitmap of tables in the nested join */
   table_map         not_null_tables; /* tables that rejects nulls           */
-  struct st_join_table *first_nested;/* the first nested table in the plan  */
+  /**
+    Used for pointing out the first table in the plan being covered by this
+    join nest. It is used exclusively within make_outerjoin_info().
+   */
+  struct st_join_table *first_nested;
   /* 
     Used to count tables in the nested join in 2 isolated places:
     1. In make_outerjoin_info(). 
@@ -1651,6 +1724,15 @@ typedef struct st_nested_join
   */
   uint              counter;
   nested_join_map   nj_map;          /* Bit used to identify this nested join*/
+  /**
+     True if this join nest node is completely covered by the query execution
+     plan. This means two things.
+
+     1. All tables on its @c join_list are covered by the plan.
+
+     2. All child join nest nodes are fully covered.
+   */
+  bool is_fully_covered() const { return join_list.elements == counter; }
 } NESTED_JOIN;
 
 
@@ -1668,17 +1750,6 @@ typedef struct st_open_table_list{
   uint32 in_use,locked;
 } OPEN_TABLE_LIST;
 
-typedef struct st_table_field_w_type
-{
-  LEX_STRING name;
-  LEX_STRING type;
-  LEX_STRING cset;
-} TABLE_FIELD_W_TYPE;
-
-
-my_bool
-table_check_intact(TABLE *table, const uint table_f_count,
-                   const TABLE_FIELD_W_TYPE *table_def);
 
 static inline my_bitmap_map *tmp_use_all_columns(TABLE *table,
                                                  MY_BITMAP *bitmap)

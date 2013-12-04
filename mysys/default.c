@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /****************************************************************************
  Add all options from files named "group".cnf from the default_directories
@@ -650,7 +653,7 @@ static int search_default_file_with_ext(Process_option_func opt_handler,
                                         int recursion_level)
 {
   char name[FN_REFLEN + 10], buff[4096], curr_gr[4096], *ptr, *end, **tmp_ext;
-  char *value, option[4096], tmp[FN_REFLEN];
+  char *value, option[4096+2], tmp[FN_REFLEN];
   static const char includedir_keyword[]= "includedir";
   static const char include_keyword[]= "include";
   const int max_recursion_level= 10;
@@ -995,10 +998,10 @@ void print_defaults(const char *conf_file, const char **groups)
     }
   }
   puts("\nThe following options may be given as the first argument:\n\
---print-defaults	Print the program argument list and exit\n\
---no-defaults		Don't read default options from any options file\n\
---defaults-file=#	Only read default options from the given file #\n\
---defaults-extra-file=# Read this file after the global files are read");
+--print-defaults        Print the program argument list and exit.\n\
+--no-defaults           Don't read default options from any option file.\n\
+--defaults-file=#       Only read default options from the given file #.\n\
+--defaults-extra-file=# Read this file after the global files are read.");
 }
 
 #include <help_end.h>

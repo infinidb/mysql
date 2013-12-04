@@ -1219,3 +1219,669 @@ explain select * from t2 where a=1000 and b<11;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t2	ref	a	a	5	const	502	Using where
 drop table t1, t2;
+CREATE TABLE t1( a INT, b INT, KEY( a, b ) );
+CREATE TABLE t2( a INT, b INT, KEY( a, b ) );
+CREATE TABLE t3( a INT, b INT, KEY( a, b ) );
+INSERT INTO t1( a, b ) 
+VALUES (0, 1), (1, 2), (1, 4), (2, 3), (5, 0), (9, 7);
+INSERT INTO t2( a, b ) 
+VALUES ( 1, 1), ( 2, 1), ( 3, 1), ( 4, 1), ( 5, 1),
+( 6, 1), ( 7, 1), ( 8, 1), ( 9, 1), (10, 1), 
+(11, 1), (12, 1), (13, 1), (14, 1), (15, 1),
+(16, 1), (17, 1), (18, 1), (19, 1), (20, 1);
+INSERT INTO t2 SELECT a, 2 FROM t2 WHERE b = 1;
+INSERT INTO t2 SELECT a, 3 FROM t2 WHERE b = 1;
+INSERT INTO t2 SELECT -1, -1 FROM t2;
+INSERT INTO t2 SELECT -1, -1 FROM t2;
+INSERT INTO t2 SELECT -1, -1 FROM t2;
+INSERT INTO t3
+VALUES (1, 0), (2, 0), (3, 0), (4, 0), (5, 0),
+(6, 0), (7, 0), (8, 0), (9, 0), (10, 0);
+INSERT INTO t3 SELECT * FROM t3 WHERE a = 10;
+INSERT INTO t3 SELECT * FROM t3 WHERE a = 10;
+SELECT * FROM t1 WHERE
+3 <= a AND a < 5 OR 
+5 < a AND b = 3 OR
+3 <= a;
+a	b
+5	0
+9	7
+EXPLAIN
+SELECT * FROM t1 WHERE
+3 <= a AND a < 5 OR 
+5 < a AND b = 3 OR
+3 <= a;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	a	a	5	NULL	3	Using where; Using index
+SELECT * FROM t1 WHERE
+3 <= a AND a < 5 OR 
+5 <= a AND b = 3 OR
+3 <= a;
+a	b
+5	0
+9	7
+EXPLAIN
+SELECT * FROM t1 WHERE
+3 <= a AND a < 5 OR 
+5 <= a AND b = 3 OR
+3 <= a;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	a	a	5	NULL	4	Using where; Using index
+SELECT * FROM t1 WHERE
+3 <= a AND a <= 5 OR 
+5 <= a AND b = 3 OR
+3 <= a;
+a	b
+5	0
+9	7
+EXPLAIN
+SELECT * FROM t1 WHERE
+3 <= a AND a <= 5 OR 
+5 <= a AND b = 3 OR
+3 <= a;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	a	a	5	NULL	3	Using where; Using index
+SELECT * FROM t1 WHERE
+3 <= a AND a <= 5 OR 
+3 <= a;
+a	b
+5	0
+9	7
+EXPLAIN
+SELECT * FROM t1 WHERE
+3 <= a AND a <= 5 OR 
+3 <= a;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	a	a	5	NULL	3	Using where; Using index
+SELECT * FROM t2 WHERE
+5 <= a AND a < 10 AND b = 1 OR
+15 <= a AND a < 20 AND b = 3
+OR
+1 <= a AND b = 1;
+a	b
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1
+10	1
+11	1
+12	1
+13	1
+14	1
+15	1
+15	3
+16	1
+16	3
+17	1
+17	3
+18	1
+18	3
+19	1
+19	3
+20	1
+EXPLAIN
+SELECT * FROM t2 WHERE
+5 <= a AND a < 10 AND b = 1 OR
+15 <= a AND a < 20 AND b = 3
+OR
+1 <= a AND b = 1;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t2	range	a	a	10	NULL	50	Using where; Using index
+SELECT * FROM t2 WHERE
+5 <= a AND a < 10 AND b = 2 OR
+15 <= a AND a < 20 AND b = 3
+OR
+1 <= a AND b = 1;
+a	b
+1	1
+2	1
+3	1
+4	1
+5	1
+5	2
+6	1
+6	2
+7	1
+7	2
+8	1
+8	2
+9	1
+9	2
+10	1
+11	1
+12	1
+13	1
+14	1
+15	1
+15	3
+16	1
+16	3
+17	1
+17	3
+18	1
+18	3
+19	1
+19	3
+20	1
+EXPLAIN
+SELECT * FROM t2 WHERE
+5 <= a AND a < 10 AND b = 2 OR
+15 <= a AND a < 20 AND b = 3
+OR
+1 <= a AND b = 1;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t2	range	a	a	10	NULL	50	Using where; Using index
+SELECT * FROM t3 WHERE
+5 <= a AND a < 10 AND b = 3 OR 
+a < 5 OR
+a < 10;
+a	b
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+EXPLAIN
+SELECT * FROM t3 WHERE
+5 <= a AND a < 10 AND b = 3 OR 
+a < 5 OR
+a < 10;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t3	range	a	a	5	NULL	8	Using where; Using index
+DROP TABLE t1, t2, t3;
+#
+# Bug #47123: Endless 100% CPU loop with STRAIGHT_JOIN
+#
+CREATE TABLE t1(a INT, KEY(a));
+INSERT INTO t1 VALUES (1), (NULL);
+SELECT * FROM t1 WHERE a <> NULL and (a <> NULL or a <= NULL);
+a
+DROP TABLE t1;
+#
+# Bug#47925: regression of range optimizer and date comparison in 5.1.39!
+#
+CREATE TABLE t1 ( a DATE,     KEY ( a ) );
+CREATE TABLE t2 ( a DATETIME, KEY ( a ) );
+# Make optimizer choose range scan
+INSERT INTO t1 VALUES ('2009-09-22'), ('2009-09-22'), ('2009-09-22');
+INSERT INTO t1 VALUES ('2009-09-23'), ('2009-09-23'), ('2009-09-23');
+INSERT INTO t2 VALUES ('2009-09-22 12:00:00'), ('2009-09-22 12:00:00'),
+('2009-09-22 12:00:00');
+INSERT INTO t2 VALUES ('2009-09-23 12:00:00'), ('2009-09-23 12:00:00'),
+('2009-09-23 12:00:00');
+# DATE vs DATE
+EXPLAIN
+SELECT * FROM t1 WHERE a >= '2009/09/23';
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+X	X	X	range	a	a	X	X	X	X
+SELECT * FROM t1 WHERE a >= '2009/09/23';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '20090923';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >=  20090923;
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009-9-23';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009.09.23';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009:09:23';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+# DATE vs DATETIME
+EXPLAIN
+SELECT * FROM t2 WHERE a >= '2009/09/23';
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+X	X	X	range	a	a	X	X	X	X
+SELECT * FROM t2 WHERE a >= '2009/09/23';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009/09/23';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '20090923';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >=  20090923;
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009-9-23';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009.09.23';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009:09:23';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+# DATETIME vs DATETIME
+EXPLAIN
+SELECT * FROM t2 WHERE a >= '2009/09/23 12:00:00';
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+X	X	X	range	a	a	X	X	X	X
+SELECT * FROM t2 WHERE a >= '2009/09/23 12:00:00';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '20090923120000';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >=  20090923120000;
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009-9-23 12:00:00';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009.09.23 12:00:00';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+SELECT * FROM t2 WHERE a >= '2009:09:23 12:00:00';
+a
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+2009-09-23 12:00:00
+# DATETIME vs DATE
+EXPLAIN
+SELECT * FROM t1 WHERE a >= '2009/09/23 00:00:00';
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+X	X	X	range	a	a	X	X	X	X
+SELECT * FROM t1 WHERE a >= '2009/09/23 00:00:00';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009/09/23 00:00:00';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '20090923000000';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >=  20090923000000;
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009-9-23 00:00:00';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009.09.23 00:00:00';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+SELECT * FROM t1 WHERE a >= '2009:09:23 00:00:00';
+a
+2009-09-23
+2009-09-23
+2009-09-23
+# Test of the new get_date_from_str implementation
+# Behavior differs slightly between the trunk and mysql-pe.
+# The former may give errors for the truncated values, while the latter
+# gives warnings. The purpose of this test is not to interfere, and only
+# preserve existing behavior.
+SELECT str_to_date('2007-10-00', '%Y-%m-%d') >= '' AND 
+str_to_date('2007-10-00', '%Y-%m-%d') <= '2007/10/20';
+str_to_date('2007-10-00', '%Y-%m-%d') >= '' AND 
+str_to_date('2007-10-00', '%Y-%m-%d') <= '2007/10/20'
+1
+Warnings:
+Warning	1292	Truncated incorrect date value: ''
+SELECT str_to_date('2007-20-00', '%Y-%m-%d') >= '2007/10/20' AND 
+str_to_date('2007-20-00', '%Y-%m-%d') <= '';
+str_to_date('2007-20-00', '%Y-%m-%d') >= '2007/10/20' AND 
+str_to_date('2007-20-00', '%Y-%m-%d') <= ''
+NULL
+Warnings:
+Warning	1292	Truncated incorrect date value: ''
+Error	1411	Incorrect datetime value: '2007-20-00' for function str_to_date
+Error	1411	Incorrect datetime value: '2007-20-00' for function str_to_date
+SELECT str_to_date('2007-10-00', '%Y-%m-%d') BETWEEN '' AND '2007/10/20';
+str_to_date('2007-10-00', '%Y-%m-%d') BETWEEN '' AND '2007/10/20'
+1
+Warnings:
+Warning	1292	Truncated incorrect datetime value: ''
+SELECT str_to_date('2007-20-00', '%Y-%m-%d') BETWEEN '2007/10/20' AND '';
+str_to_date('2007-20-00', '%Y-%m-%d') BETWEEN '2007/10/20' AND ''
+NULL
+Warnings:
+Error	1411	Incorrect datetime value: '2007-20-00' for function str_to_date
+SELECT str_to_date('', '%Y-%m-%d');
+str_to_date('', '%Y-%m-%d')
+0000-00-00
+DROP TABLE t1, t2;
+#
+# Bug#48459: valgrind errors with query using 'Range checked for each 
+# record'
+#
+CREATE TABLE t1 (
+a INT,
+b CHAR(2),
+c INT,
+d INT,
+KEY ( c ),
+KEY ( d, a, b ( 2 ) ),
+KEY ( b ( 1 ) )
+);
+INSERT INTO t1 VALUES ( NULL, 'a', 1, 2 ), ( NULL, 'a', 1, 2 ),
+( 1,    'a', 1, 2 ), ( 1,    'a', 1, 2 );
+CREATE TABLE t2 (
+a INT,
+c INT,
+e INT,
+KEY ( e )
+);
+INSERT INTO t2 VALUES ( 1, 1, NULL ), ( 1, 1, NULL );
+# Should not give Valgrind warnings
+SELECT 1
+FROM t1, t2
+WHERE t1.d <> '1' AND t1.b > '1'
+AND t1.a = t2.a AND t1.c = t2.c;
+1
+1
+1
+1
+1
+DROP TABLE t1, t2;
+#
+# Bug #48665: sql-bench's insert test fails due to wrong result
+#
+CREATE TABLE t1 (a INT, b INT, PRIMARY KEY (a));
+INSERT INTO t1 VALUES (0,0), (1,1);
+EXPLAIN 
+SELECT * FROM t1 FORCE INDEX (PRIMARY) 
+WHERE (a>=1 AND a<=2) OR (a>=4 AND a<=5) OR (a>=0 AND a <=10);
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+@	@	@	range	@	@	@	@	@	@
+# Should return 2 rows
+SELECT * FROM t1 FORCE INDEX (PRIMARY) 
+WHERE (a>=1 AND a<=2) OR (a>=4 AND a<=5) OR (a>=0 AND a <=10);
+a	b
+0	0
+1	1
+DROP TABLE t1;
+#
+# Bug #54802: 'NOT BETWEEN' evaluation is incorrect
+#
+CREATE TABLE t1 (c_key INT, c_notkey INT, KEY(c_key));
+INSERT INTO t1 VALUES (1, 1), (2, 2), (3, 3);
+EXPLAIN SELECT * FROM t1 WHERE 2 NOT BETWEEN c_notkey AND c_key;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	ALL	c_key	NULL	NULL	NULL	3	Using where
+SELECT * FROM t1 WHERE 2 NOT BETWEEN c_notkey AND c_key;
+c_key	c_notkey
+1	1
+3	3
+DROP TABLE t1;
+#
+# Bug #57030: 'BETWEEN' evaluation is incorrect
+#
+CREATE TABLE t1(pk INT PRIMARY KEY, i4 INT);
+CREATE UNIQUE INDEX i4_uq ON t1(i4);
+INSERT INTO t1 VALUES (1,10), (2,20), (3,30);
+EXPLAIN
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND 10;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	const	i4_uq	i4_uq	5	const	1	
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND 10;
+pk	i4
+1	10
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN i4 AND i4;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	const	i4_uq	i4_uq	5	const	1	
+SELECT * FROM t1 WHERE 10 BETWEEN i4 AND i4;
+pk	i4
+1	10
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN 10 AND i4;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	i4_uq	i4_uq	5	NULL	3	Using where
+SELECT * FROM t1 WHERE 10 BETWEEN 10 AND i4;
+pk	i4
+1	10
+2	20
+3	30
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN i4 AND 10;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	i4_uq	i4_uq	5	NULL	1	Using where
+SELECT * FROM t1 WHERE 10 BETWEEN i4 AND 10;
+pk	i4
+1	10
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN 10 AND 10;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	
+SELECT * FROM t1 WHERE 10 BETWEEN 10 AND 10;
+pk	i4
+1	10
+2	20
+3	30
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN 11 AND 11;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+SELECT * FROM t1 WHERE 10 BETWEEN 11 AND 11;
+pk	i4
+EXPLAIN
+SELECT * FROM t1 WHERE 10 BETWEEN 100 AND 0;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+SELECT * FROM t1 WHERE 10 BETWEEN 100 AND 0;
+pk	i4
+EXPLAIN
+SELECT * FROM t1 WHERE i4 BETWEEN 100 AND 0;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+SELECT * FROM t1 WHERE i4 BETWEEN 100 AND 0;
+pk	i4
+EXPLAIN
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND 99999999999999999;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	i4_uq	i4_uq	5	NULL	2	Using where
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND 99999999999999999;
+pk	i4
+1	10
+2	20
+3	30
+EXPLAIN
+SELECT * FROM t1 WHERE i4 BETWEEN 999999999999999 AND 30;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+SELECT * FROM t1 WHERE i4 BETWEEN 999999999999999 AND 30;
+pk	i4
+EXPLAIN
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND '20';
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	range	i4_uq	i4_uq	5	NULL	1	Using where
+SELECT * FROM t1 WHERE i4 BETWEEN 10 AND '20';
+pk	i4
+1	10
+2	20
+EXPLAIN
+SELECT * FROM t1, t1 as t2 WHERE t2.pk BETWEEN t1.i4 AND t1.i4;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	ALL	i4_uq	NULL	NULL	NULL	3	
+1	SIMPLE	t2	eq_ref	PRIMARY	PRIMARY	4	test.t1.i4	1	Using where
+SELECT * FROM t1, t1 as t2 WHERE t2.pk BETWEEN t1.i4 AND t1.i4;
+pk	i4	pk	i4
+EXPLAIN
+SELECT * FROM t1, t1 as t2 WHERE t1.i4 BETWEEN t2.pk AND t2.pk;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	ALL	i4_uq	NULL	NULL	NULL	3	
+1	SIMPLE	t2	eq_ref	PRIMARY	PRIMARY	4	test.t1.i4	1	Using where
+SELECT * FROM t1, t1 as t2 WHERE t1.i4 BETWEEN t2.pk AND t2.pk;
+pk	i4	pk	i4
+DROP TABLE t1;
+#
+# BUG#13519696 - 62940: SELECT RESULTS VARY WITH VERSION AND
+# WITH/WITHOUT INDEX RANGE SCAN
+#
+create table t1 (id int unsigned not null auto_increment primary key);
+insert into t1 values (null);
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+insert into t1 select null from t1;
+create table t2 (
+id int unsigned not null auto_increment,
+val decimal(5,3) not null,
+primary key (id,val),
+unique key (val,id),
+unique key (id));
+insert into t2 select null,id*0.0009 from t1;
+select count(val) from t2 ignore index (val) where val > 0.1155;
+count(val)
+128
+select count(val) from t2 force index (val)  where val > 0.1155;
+count(val)
+128
+drop table t2, t1;
+#
+# BUG#13453382 - REGRESSION SINCE 5.1.39, RANGE OPTIMIZER WRONG
+# RESULTS WITH DECIMAL CONVERSION
+#
+create table t1 (a int,b int,c int,primary key (a,c));
+insert into t1 values (1,1,2),(1,1,3),(1,1,4);
+select convert(3, signed integer) > 2.9;
+convert(3, signed integer) > 2.9
+1
+select * from t1 force  index (primary) where a=1 and c>= 2.9;
+a	b	c
+1	1	3
+1	1	4
+select * from t1 ignore index (primary) where a=1 and c>= 2.9;
+a	b	c
+1	1	3
+1	1	4
+select * from t1 force  index (primary) where a=1 and c> 2.9;
+a	b	c
+1	1	3
+1	1	4
+select * from t1 ignore index (primary) where a=1 and c> 2.9;
+a	b	c
+1	1	3
+1	1	4
+drop table t1;
+#
+# BUG#13463488 - 63437: CHAR & BETWEEN WITH INDEX RETURNS WRONG
+# RESULT AFTER MYSQL 5.1.
+#
+CREATE TABLE t1(
+F1 CHAR(5) NOT NULL,
+F2 CHAR(5) NOT NULL,
+F3 CHAR(5) NOT NULL,
+PRIMARY KEY(F1),
+INDEX IDX_F2(F2)
+);
+INSERT INTO t1 VALUES
+('A','A','A'),('AA','AA','AA'),('AAA','AAA','AAA'),
+('AAAA','AAAA','AAAA'),('AAAAA','AAAAA','AAAAA');
+SELECT * FROM t1 WHERE F1 = 'A    ';
+F1	F2	F3
+A	A	A
+SELECT * FROM t1 IGNORE INDEX(PRIMARY) WHERE F1 = 'A    ';
+F1	F2	F3
+A	A	A
+SELECT * FROM t1 WHERE F1 >= 'A    ';
+F1	F2	F3
+A	A	A
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+SELECT * FROM t1 WHERE F1 > 'A    ';
+F1	F2	F3
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+SELECT * FROM t1 WHERE F1 BETWEEN 'A    ' AND 'AAAAA';
+F1	F2	F3
+A	A	A
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+SELECT * FROM t1 WHERE F2 BETWEEN 'A    ' AND 'AAAAA';
+F1	F2	F3
+A	A	A
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+SELECT * FROM t1 WHERE F3 BETWEEN 'A    ' AND 'AAAAA';
+F1	F2	F3
+A	A	A
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+SELECT * FROM t1 IGNORE INDEX(PRIMARY) WHERE F1 BETWEEN 'A    ' AND
+'AAAAA';
+F1	F2	F3
+A	A	A
+AA	AA	AA
+AAA	AAA	AAA
+AAAA	AAAA	AAAA
+AAAAA	AAAAA	AAAAA
+DROP TABLE t1;
+End of 5.1 tests

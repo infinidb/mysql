@@ -1,4 +1,5 @@
-/* Copyright (C) 2004 MySQL AB
+/* Copyright (c) 2007, 2008 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*
@@ -49,9 +51,6 @@
            spawned by safe_process will not be closed off when safe_process
            is killed.
 */
-
-/* Requires Windows 2000 or higher */
-#define _WIN32_WINNT 0x0500
 
 #include <windows.h>
 #include <stdio.h>
@@ -163,6 +162,7 @@ int main(int argc, const char** argv )
   HANDLE job_handle;
   HANDLE wait_handles[NUM_HANDLES]= {0};
   PROCESS_INFORMATION process_info= {0};
+  BOOL nocore= FALSE;
 
   sprintf(safe_process_name, "safe_process[%d]", pid);
 
@@ -188,22 +188,39 @@ int main(int argc, const char** argv )
         die("No real args -> nothing to do");
       /* Copy the remaining args to child_arg */
       for (int j= i+1; j < argc; j++) {
-        to+= _snprintf(to, child_args + sizeof(child_args) - to, "%s ", argv[j]);
+        arg= argv[j];
+        if (strchr (arg, ' ') &&
+            arg[0] != '\"' &&
+            arg[strlen(arg)] != '\"')
+        {
+          /* Quote arg that contains spaces and are not quoted already */
+          to+= _snprintf(to, child_args + sizeof(child_args) - to,
+                         "\"%s\" ", arg);
+        }
+        else
+        {
+          to+= _snprintf(to, child_args + sizeof(child_args) - to,
+          "%s ", arg);
+        }
       }
       break;
     } else {
-      if ( strcmp(arg, "--verbose") == 0 )
+      if (strcmp(arg, "--verbose") == 0)
         verbose++;
-	  else if ( strncmp(arg, "--parent-pid", 10) == 0 )
-	  {
-	    /* Override parent_pid with a value provided by user */
-		const char* start;
+      else if (strncmp(arg, "--parent-pid", 10) == 0)
+      {
+            /* Override parent_pid with a value provided by user */
+        const char* start;
         if ((start= strstr(arg, "=")) == NULL)
-		  die("Could not find start of option value in '%s'", arg);
-		start++; /* Step past = */
-		if ((parent_pid= atoi(start)) == 0)
-		  die("Invalid value '%s' passed to --parent-id", start);
-	  }
+          die("Could not find start of option value in '%s'", arg);
+        start++; /* Step past = */
+        if ((parent_pid= atoi(start)) == 0)
+          die("Invalid value '%s' passed to --parent-id", start);
+      }
+      else if (strcmp(arg, "--nocore") == 0)
+      {
+        nocore= TRUE;
+      }
       else
         die("Unknown option: %s", arg);
     }
@@ -240,6 +257,11 @@ int main(int argc, const char** argv )
   if (SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation,
                               &jeli, sizeof(jeli)) == 0)
     message("SetInformationJobObject failed, continue anyway...");
+
+				/* Avoid popup box */
+  if (nocore)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
+                 | SEM_NOOPENFILEERRORBOX);
 
 #if 0
   /* Setup stdin, stdout and stderr redirect */

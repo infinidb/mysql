@@ -1,6 +1,6 @@
 #ifndef INCLUDES_MYSQL_SQL_LIST_H
 #define INCLUDES_MYSQL_SQL_LIST_H
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 #ifdef USE_PRAGMA_INTERFACE
@@ -52,6 +53,73 @@ public:
   inline ~Sql_alloc() {}
 #endif
 
+};
+
+
+/**
+  Simple intrusive linked list.
+
+  @remark Similar in nature to base_list, but intrusive. It keeps a
+          a pointer to the first element in the list and a indirect
+          reference to the last element.
+*/
+template <typename T>
+class SQL_I_List :public Sql_alloc
+{
+public:
+  uint elements;
+  /** The first element in the list. */
+  T *first;
+  /** A reference to the next element in the list. */
+  T **next;
+
+  SQL_I_List() { empty(); }
+
+  SQL_I_List(const SQL_I_List &tmp) : Sql_alloc()
+  {
+    elements= tmp.elements;
+    first= tmp.first;
+    next= elements ? tmp.next : &first;
+  }
+
+  inline void empty()
+  {
+    elements= 0;
+    first= NULL;
+    next= &first;
+  }
+
+  inline void link_in_list(T *element, T **next_ptr)
+  {
+    elements++;
+    (*next)= element;
+    next= next_ptr;
+    *next= NULL;
+  }
+
+  inline void save_and_clear(SQL_I_List<T> *save)
+  {
+    *save= *this;
+    empty();
+  }
+
+  inline void push_front(SQL_I_List<T> *save)
+  {
+    /* link current list last */
+    *save->next= first;
+    first= save->first;
+    elements+= save->elements;
+  }
+
+  inline void push_back(SQL_I_List<T> *save)
+  {
+    if (save->first)
+    {
+      *next= save->first;
+      next= save->next;
+      elements+= save->elements;
+    }
+  }
 };
 
 
@@ -95,6 +163,14 @@ protected:
 
 public:
   uint elements;
+
+  bool operator==(const base_list &rhs) const
+  {
+    return
+      elements == rhs.elements &&
+      first == rhs.first &&
+      last == rhs.last;
+  }
 
   inline void empty() { elements=0; first= &end_of_list; last=&first;}
   inline base_list() { empty(); }

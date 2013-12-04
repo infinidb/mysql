@@ -14,7 +14,7 @@
 
 @SET_MAKE@
 
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -53,7 +53,8 @@ subdir = plugin/daemon_example
 DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in \
 	AUTHORS ChangeLog NEWS
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -116,6 +117,8 @@ ABI_CHECK = @ABI_CHECK@
 ACLOCAL = @ACLOCAL@
 ALLOCA = @ALLOCA@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -210,6 +213,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -273,6 +277,7 @@ THREAD_LOBJECTS = @THREAD_LOBJECTS@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -366,8 +371,6 @@ plugin_ftexample_shared_target = @plugin_ftexample_shared_target@
 plugin_ftexample_static_target = @plugin_ftexample_static_target@
 plugin_heap_shared_target = @plugin_heap_shared_target@
 plugin_heap_static_target = @plugin_heap_static_target@
-plugin_ibmdb2i_shared_target = @plugin_ibmdb2i_shared_target@
-plugin_ibmdb2i_static_target = @plugin_ibmdb2i_static_target@
 plugin_innobase_shared_target = @plugin_innobase_shared_target@
 plugin_innobase_static_target = @plugin_innobase_static_target@
 plugin_innodb_plugin_shared_target = @plugin_innodb_plugin_shared_target@
@@ -383,8 +386,6 @@ plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -413,6 +414,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 
 #Makefile.am example for a daemon
@@ -429,12 +431,12 @@ INCLUDES = -I$(top_srcdir)/include -I$(top_builddir)/include \
 EXTRA_LTLIBRARIES = libdaemon_example.la
 pkgplugin_LTLIBRARIES = @plugin_daemon_example_shared_target@
 libdaemon_example_la_LDFLAGS = -module -rpath $(pkgplugindir)
-libdaemon_example_la_CXXFLAGS = $(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
+libdaemon_example_la_CXXFLAGS = $(AM_CXXFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 libdaemon_example_la_CFLAGS = $(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 libdaemon_example_la_SOURCES = daemon_example.cc
 EXTRA_LIBRARIES = libdaemon_example.a
 noinst_LIBRARIES = @plugin_daemon_example_static_target@
-libdaemon_example_a_CXXFLAGS = $(AM_CFLAGS)
+libdaemon_example_a_CXXFLAGS = $(AM_CXXFLAGS)
 libdaemon_example_a_CFLAGS = $(AM_CFLAGS)
 libdaemon_example_a_SOURCES = daemon_example.cc
 all: all-am

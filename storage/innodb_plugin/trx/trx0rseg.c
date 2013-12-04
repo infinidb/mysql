@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -132,6 +132,49 @@ trx_rseg_header_create(
 }
 
 /***********************************************************************//**
+Free's an instance of the rollback segment in memory. */
+UNIV_INTERN
+void
+trx_rseg_mem_free(
+/*==============*/
+	trx_rseg_t*	rseg)	/* in, own: instance to free */
+{
+	trx_undo_t*	undo;
+
+	mutex_free(&rseg->mutex);
+
+	/* There can't be any active transactions. */
+	ut_a(UT_LIST_GET_LEN(rseg->update_undo_list) == 0);
+	ut_a(UT_LIST_GET_LEN(rseg->insert_undo_list) == 0);
+
+	undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
+
+	while (undo != NULL) {
+		trx_undo_t*	prev_undo = undo;
+
+		undo = UT_LIST_GET_NEXT(undo_list, undo);
+		UT_LIST_REMOVE(undo_list, rseg->update_undo_cached, prev_undo);
+
+		trx_undo_mem_free(prev_undo);
+	}
+
+	undo = UT_LIST_GET_FIRST(rseg->insert_undo_cached);
+
+	while (undo != NULL) {
+		trx_undo_t*	prev_undo = undo;
+
+		undo = UT_LIST_GET_NEXT(undo_list, undo);
+		UT_LIST_REMOVE(undo_list, rseg->insert_undo_cached, prev_undo);
+
+		trx_undo_mem_free(prev_undo);
+	}
+
+	trx_sys_set_nth_rseg(trx_sys, rseg->id, NULL);
+
+	mem_free(rseg);
+}
+
+/***************************************************************************
 Creates and initializes a rollback segment object. The values for the
 fields are read from the header. The object is inserted to the rseg
 list of the trx system object and a pointer is inserted in the rseg
@@ -242,40 +285,4 @@ trx_rseg_list_and_array_init(
 			trx_rseg_mem_create(i, space, zip_size, page_no, mtr);
 		}
 	}
-}
-
-/****************************************************************//**
-Creates a new rollback segment to the database.
-@return	the created segment object, NULL if fail */
-UNIV_INTERN
-trx_rseg_t*
-trx_rseg_create(
-/*============*/
-	ulint	space,		/*!< in: space id */
-	ulint	max_size,	/*!< in: max size in pages */
-	ulint*	id,		/*!< out: rseg id */
-	mtr_t*	mtr)		/*!< in: mtr */
-{
-	ulint		flags;
-	ulint		zip_size;
-	ulint		page_no;
-	trx_rseg_t*	rseg;
-
-	mtr_x_lock(fil_space_get_latch(space, &flags), mtr);
-	zip_size = dict_table_flags_to_zip_size(flags);
-	mutex_enter(&kernel_mutex);
-
-	page_no = trx_rseg_header_create(space, zip_size, max_size, id, mtr);
-
-	if (page_no == FIL_NULL) {
-
-		mutex_exit(&kernel_mutex);
-		return(NULL);
-	}
-
-	rseg = trx_rseg_mem_create(*id, space, zip_size, page_no, mtr);
-
-	mutex_exit(&kernel_mutex);
-
-	return(rseg);
 }

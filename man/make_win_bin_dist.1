@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmake_win_bin_dist\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 09/09/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMAKE_WIN_BIN_DIST" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMAKE_WIN_BIN_DIST" "1" "09/09/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -20,18 +29,18 @@
 .\" -----------------------------------------------------------------
 .\" make_win_bin_dist
 .SH "NAME"
-make_win_bin_dist \- package MySQL distribution as ZIP archive
+make_win_bin_dist \- package MySQL distribution as Zip archive
 .SH "SYNOPSIS"
 .HP \w'\fBmake_win_bin_dist\ [\fR\fB\fIoptions\fR\fR\fB]\ \fR\fB\fIpackage_basename\fR\fR\fB\ [\fR\fB\fIcopy_def\fR\fR\fB\ \&.\&.\&.]\fR\ 'u
 \fBmake_win_bin_dist [\fR\fB\fIoptions\fR\fR\fB] \fR\fB\fIpackage_basename\fR\fR\fB [\fR\fB\fIcopy_def\fR\fR\fB \&.\&.\&.]\fR
 .SH "DESCRIPTION"
 .PP
-This script is used on Windows after building a MySQL distribution from source to create executable programs\&. It packages the binaries and support files into a ZIP archive that can be unpacked at the location where you want to install MySQL\&.
+This script is used on Windows after building a MySQL distribution from source to create executable programs\&. It packages the binaries and support files into a Zip archive that can be unpacked at the location where you want to install MySQL\&.
 .PP
 \fBmake_win_bin_dist\fR
 is a shell script, so you must have Cygwin installed to use it\&.
 .PP
-This program\'s use is subject to change\&. Currently, you invoke it as follows from the root directory of your source distribution:
+This program\*(Aqs use is subject to change\&. Currently, you invoke it as follows from the root directory of your source distribution:
 .sp
 .if n \{\
 .RS 4
@@ -45,11 +54,11 @@ shell> \fBmake_win_bin_dist [\fR\fB\fIoptions\fR\fR\fB] \fR\fB\fIpackage_basenam
 .PP
 The
 \fIpackage_basename\fR
-argument provides the basename for the resulting ZIP archive\&. This name will be the name of the directory that results from unpacking the archive\&.
+argument provides the basename for the resulting Zip archive\&. This name will be the name of the directory that results from unpacking the archive\&.
 .PP
-Because you might want to include files of directories from other builds, you can instruct this script do copy them in for you, via
+Because you might want to include files of directories from other builds, you can instruct this script to copy them in for you, using
 \fIcopy_def\fR
-arguments, which of which is of the form
+arguments, which have the form
 \fIrelative_dest_name\fR=\fIsource_name\fR\&.
 .PP
 Example:
@@ -67,7 +76,7 @@ bin/mysqld\-max\&.exe=\&.\&./my\-max\-build/sql/release/mysqld\&.exe
 If you specify a directory, the entire directory will be copied\&.
 .PP
 \fBmake_win_bin_dist\fR
-supports the following options:
+supports the following options\&.
 .sp
 .RS 4
 .ie n \{\
@@ -169,7 +178,7 @@ directories)\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -182,4 +191,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

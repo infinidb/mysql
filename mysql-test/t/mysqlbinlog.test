@@ -1,6 +1,6 @@
 # We are using .opt file since we need small binlog size
 # TODO: Need to look at making a row based version once the new row based client is completed. [jbm]
--- source include/have_binlog_format_mixed_or_statement.inc
+-- source include/have_binlog_format_statement.inc
 
 -- source include/have_log_bin.inc
 
@@ -71,7 +71,8 @@ select "--- --position --" as "";
 --enable_query_log
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --replace_regex /SQL_LOAD_MB-[0-9]-[0-9]/SQL_LOAD_MB-#-#/
---exec $MYSQL_BINLOG --short-form --local-load=$MYSQLTEST_VARDIR/tmp/ --position=239 $MYSQLD_DATADIR/master-bin.000002
+--exec $MYSQL_BINLOG --short-form --local-load=$MYSQLTEST_VARDIR/tmp/ --position=332 $MYSQLD_DATADIR/master-bin.000002
+
 
 # These are tests for remote binlog.
 # They should return the same as previous test.
@@ -107,7 +108,7 @@ select "--- --position --" as "";
 --enable_query_log
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --replace_regex /SQL_LOAD_MB-[0-9]-[0-9]/SQL_LOAD_MB-#-#/
---exec $MYSQL_BINLOG --short-form --local-load=$MYSQLTEST_VARDIR/tmp/ --read-from-remote-server --position=239 --user=root --host=127.0.0.1 --port=$MASTER_MYPORT master-bin.000002
+--exec $MYSQL_BINLOG --short-form --local-load=$MYSQLTEST_VARDIR/tmp/ --read-from-remote-server --position=332 --user=root --host=127.0.0.1 --port=$MASTER_MYPORT master-bin.000002
 
 # Bug#7853 mysqlbinlog does not accept input from stdin
 --disable_query_log
@@ -377,6 +378,146 @@ FLUSH LOGS;
 # We do not need the results, just make sure that mysqlbinlog does not crash
 --exec $MYSQL_BINLOG --hexdump --read-from-remote-server --user=root --host=127.0.0.1 --port=$MASTER_MYPORT  master-bin.000001 >/dev/null
 
+#
+# #46998
+# This test verifies if the 'BEGIN', 'COMMIT' and 'ROLLBACK' are output 
+# in regardless of database filtering
+#
+
+RESET MASTER;
+FLUSH LOGS;
+
+# The following three test cases were wrtten into binlog_transaction.000001
+# Test case1: Test if the 'BEGIN' and 'COMMIT' are output for the 'test' database 
+# in transaction1 base on innodb engine tables
+# use test;
+# create table t1(a int) engine= innodb;
+# use mysql;
+# create table t2(a int) engine= innodb;
+# Transaction1 begin
+# begin;
+# use test;
+# insert into t1 (a) values (1);
+# use mysql;
+# insert into t2 (a) values (1);
+# commit;
+# Transaction1 end
+
+# Test case2: Test if the 'BEGIN' and 'ROLLBACK' are output for the 'test' database 
+# in transaction2 base on innodb and myisam engine tables
+# use test;
+# create table t3(a int) engine= innodb;
+# use mysql;
+# create table t4(a int) engine= myisam;
+# Transaction2 begin
+# begin;
+# use test;
+# insert into t3 (a) values (2);
+# use mysql;
+# insert into t4 (a) values (2);
+# rollback;
+# Transaction2 end
+
+# Test case3: Test if the 'BEGIN' and 'COMMIT' are output for the 'test' database 
+# in transaction3 base on NDB engine tables
+# use test;
+# create table t5(a int) engine= NDB;
+# use mysql;
+# create table t6(a int) engine= NDB;
+# Transaction3 begin
+# begin;
+# use test;
+# insert into t5 (a) values (3);
+# use mysql;
+# insert into t6 (a) values (3);
+# commit;
+# Transaction3 end
+
+--echo #
+--echo # Test if the 'BEGIN', 'ROLLBACK' and 'COMMIT' are output if the database specified exists
+--exec $MYSQL_BINLOG --database=test --short-form $MYSQLTEST_VARDIR/std_data/binlog_transaction.000001
+--echo #
+--echo # Test if the 'BEGIN', 'ROLLBACK' and 'COMMIT' are output if the database specified does not exist
+--exec $MYSQL_BINLOG --database=not_exist --short-form $MYSQLTEST_VARDIR/std_data/binlog_transaction.000001
+
+--echo #
+--echo # Test if the 'SAVEPOINT', 'ROLLBACK TO' are output if the database specified exists
+--exec $MYSQL_BINLOG --database=db1 --short-form $MYSQLTEST_VARDIR/std_data/binlog_savepoint.000001
+--echo #
+--echo # Test if the 'SAVEPOINT', 'ROLLBACK TO' are output if the database specified does not exist
+--exec $MYSQL_BINLOG --database=not_exist --short-form $MYSQLTEST_VARDIR/std_data/binlog_savepoint.000001
+
 --echo End of 5.0 tests
 
 --echo End of 5.1 tests
+
+#
+# BUG#38468 Memory leak detected when using mysqlbinlog utility;
+#
+disable_query_log;
+RESET MASTER;
+CREATE TABLE t1 SELECT 1;
+FLUSH LOGS;
+DROP TABLE t1;
+enable_query_log;
+
+# Write an empty file for comparison
+write_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn.empty;
+EOF
+
+# Before fix of BUG#38468, this would generate some warnings
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 >/dev/null 2> $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn
+
+# Make sure the command above does not generate any error or warnings
+diff_files $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn.empty;
+
+# Cleanup for this part of test
+remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn.empty;
+remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.warn;
+
+#
+# BUG#50914
+# This test verifies if the approach of the mysqlbinlog prints
+# "use $database" statements to its output stream will cause
+# "No Database Selected" error when dropping and recreating
+# that database.
+#
+RESET MASTER;
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE t1(id int);
+DROP DATABASE test1;
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE t1(id int);
+DROP TABLE t1;
+DROP DATABASE test1;
+let $master_binlog= query_get_value(SHOW MASTER STATUS, File, 1);
+FLUSH LOGS;
+
+let $MYSQLD_DATADIR= `SELECT @@datadir`;
+exec $MYSQL_BINLOG $MYSQLD_DATADIR/$master_binlog | $MYSQL test 2>&1;
+
+let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1);
+source include/show_binlog_events.inc;
+
+#
+# BUG#11766427 BUG#59530: Filter by server id in mysqlbinlog fails
+# This test checks that the format description log event is not
+# filtered out by the --server-id option.
+#
+RESET MASTER;
+USE test;
+CREATE TABLE t1 (a INT);
+--let $old_server_id= `SELECT @@GLOBAL.SERVER_ID`
+SET GLOBAL SERVER_ID = 2;
+DROP TABLE t1;
+--let $master_binlog= query_get_value(SHOW MASTER STATUS, File, 1)
+FLUSH LOGS;
+# The following should only create t1, not drop it.
+--exec $MYSQL_BINLOG --server-id=1 $MYSQLD_DATADIR/$master_binlog | $MYSQL
+SHOW TABLES IN test;
+# The following should only drop t1, not create it.
+--exec $MYSQL_BINLOG --server-id=2 $MYSQLD_DATADIR/$master_binlog | $MYSQL
+SHOW TABLES IN test;
+eval SET GLOBAL SERVER_ID = $old_server_id;

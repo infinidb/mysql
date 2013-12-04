@@ -531,7 +531,7 @@ bool Item_func_window_median::fix_fields(THD* thd, Item** ref)
 	SQL_LIST* orders = new SQL_LIST();
 	orders->elements= 0;
 	orders->first= 0;
-	orders->next= (uchar**) &(orders->first);
+	orders->next= &(orders->first);
 	if (add_to_list(thd, *orders, args[0], true, 0)) // decending, null last
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_BY, funcname);

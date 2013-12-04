@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -45,6 +45,16 @@ Created 2/25/1997 Heikki Tuuri
 #include "que0que.h"
 #include "ibuf0ibuf.h"
 #include "log0log.h"
+
+/*************************************************************************
+IMPORTANT NOTE: Any operation that generates redo MUST check that there
+is enough space in the redo log before for that operation. This is
+done by calling log_free_check(). The reason for checking the
+availability of the redo log space before the start of the operation is
+that we MUST not hold any synchonization objects when performing the
+check.
+If you make a change in this module make sure that no codepath is
+introduced where a call to log_free_check() is bypassed. */
 
 /***************************************************************//**
 Removes a clustered index record. The pcur in node was positioned on the
@@ -152,7 +162,6 @@ row_undo_ins_remove_sec_low(
 	ulint		err;
 	mtr_t		mtr;
 
-	log_free_check();
 	mtr_start(&mtr);
 
 	found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
@@ -327,14 +336,16 @@ row_undo_ins(
 			/* The database must have crashed after
 			inserting a clustered index record but before
 			writing all the externally stored columns of
-			that record.  Because secondary index entries
-			are inserted after the clustered index record,
-			we may assume that the secondary index record
-			does not exist.  However, this situation may
-			only occur during the rollback of incomplete
-			transactions. */
-			ut_a(trx_is_recv(node->trx));
+			that record, or a statement is being rolled
+			back because an error occurred while storing
+			off-page columns.
+
+			Because secondary index entries are inserted
+			after the clustered index record, we may
+			assume that the secondary index record does
+			not exist. */
 		} else {
+			log_free_check();
 			err = row_undo_ins_remove_sec(node->index, entry);
 
 			if (err != DB_SUCCESS) {
@@ -346,5 +357,6 @@ row_undo_ins(
 		node->index = dict_table_get_next_index(node->index);
 	}
 
+	log_free_check();
 	return(row_undo_ins_remove_clust_rec(node));
 }

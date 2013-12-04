@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307	 USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /*
   This file is based on ha_berkeley.h of MySQL distribution
@@ -78,9 +78,9 @@ class ha_innobase: public handler
 	ulong innobase_reset_autoinc(ulonglong auto_inc);
 	ulong innobase_get_autoinc(ulonglong* value);
 	ulong innobase_update_autoinc(ulonglong	auto_inc);
-	ulong innobase_initialize_autoinc();
+	void innobase_initialize_autoinc();
 	dict_index_t* innobase_get_index(uint keynr);
- 	ulonglong innobase_get_int_col_max_value(const Field* field);
+	int info_low(uint flag, bool called_from_analyze);
 
 	/* Init values for the class: */
  public:
@@ -117,6 +117,7 @@ class ha_innobase: public handler
 	const key_map *keys_to_use_for_scanning() { return &key_map_full; }
 
 	int open(const char *name, int mode, uint test_if_locked);
+	handler* clone(const char *name, MEM_ROOT *mem_root);
 	int close(void);
 	double scan_time();
 	double read_time(uint index, uint ranges, ha_rows rows);
@@ -211,7 +212,7 @@ the definitions are bracketed with #ifdef INNODB_COMPATIBILITY_HOOKS */
 
 extern "C" {
 struct charset_info_st *thd_charset(MYSQL_THD thd);
-char **thd_query(MYSQL_THD thd);
+LEX_STRING *thd_query_string(MYSQL_THD thd);
 
 /** Get the file name of the MySQL binlog.
  * @return the name of the binlog file
@@ -252,4 +253,11 @@ int thd_binlog_format(const MYSQL_THD thd);
   @param  all   TRUE <=> rollback main transaction.
 */
 void thd_mark_transaction_to_rollback(MYSQL_THD thd, bool all);
+
+/**
+  Check if binary logging is filtered for thread's current db.
+  @param  thd   Thread handle
+  @retval 1 the query is not filtered, 0 otherwise.
+*/
+bool thd_binlog_filter_ok(const MYSQL_THD thd);
 }

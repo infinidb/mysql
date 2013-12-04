@@ -1,4 +1,4 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include <my_global.h>
 #include "m_ctype.h"
@@ -147,13 +148,16 @@ int my_strcasecmp_mb(CHARSET_INFO * cs,const char *s, const char *t)
 
 #define likeconv(s,A) (uchar) (s)->sort_order[(uchar) (A)]
 
-int my_wildcmp_mb(CHARSET_INFO *cs,
-		  const char *str,const char *str_end,
-		  const char *wildstr,const char *wildend,
-		  int escape, int w_one, int w_many)
+static
+int my_wildcmp_mb_impl(CHARSET_INFO *cs,
+                       const char *str,const char *str_end,
+                       const char *wildstr,const char *wildend,
+                       int escape, int w_one, int w_many, int recurse_level)
 {
   int result= -1;				/* Not found, using wildcards */
 
+  if (my_string_stack_guard && my_string_stack_guard(recurse_level))
+    return 1;
   while (wildstr != wildend)
   {
     while (*wildstr != w_many && *wildstr != w_one)
@@ -242,8 +246,8 @@ int my_wildcmp_mb(CHARSET_INFO *cs,
           INC_PTR(cs,str, str_end);
         }
 	{
-	  int tmp=my_wildcmp_mb(cs,str,str_end,wildstr,wildend,escape,w_one,
-                                w_many);
+	  int tmp=my_wildcmp_mb_impl(cs,str,str_end,wildstr,wildend,escape,w_one,
+                                     w_many, recurse_level + 1);
 	  if (tmp <= 0)
 	    return (tmp);
 	}
@@ -252,6 +256,16 @@ int my_wildcmp_mb(CHARSET_INFO *cs,
     }
   }
   return (str != str_end ? 1 : 0);
+}
+
+int my_wildcmp_mb(CHARSET_INFO *cs,
+                  const char *str,const char *str_end,
+                  const char *wildstr,const char *wildend,
+                  int escape, int w_one, int w_many)
+{
+  return my_wildcmp_mb_impl(cs, str, str_end,
+                            wildstr, wildend,
+                            escape, w_one, w_many, 1);
 }
 
 
@@ -498,7 +512,9 @@ static void my_hash_sort_mb_bin(CHARSET_INFO *cs __attribute__((unused)),
   DESCRIPTION
       Write max key:
       - for non-Unicode character sets:
-        just set to 255.
+        just bfill using max_sort_char if max_sort_char is one byte.
+        In case when max_sort_char is two bytes, fill with double-byte pairs
+        and optionally pad with a single space character.
       - for Unicode character set (utf-8):
         create a buffer with multibyte representation of the max_sort_char
         character, and copy it into max_str in a loop. 
@@ -510,12 +526,20 @@ static void pad_max_char(CHARSET_INFO *cs, char *str, char *end)
   
   if (!(cs->state & MY_CS_UNICODE))
   {
-    bfill(str, end - str, 255);
-    return;
+    if (cs->max_sort_char <= 255)
+    {
+      bfill(str, end - str, cs->max_sort_char);
+      return;
+    }
+    buf[0]= cs->max_sort_char >> 8;
+    buf[1]= cs->max_sort_char & 0xFF;
+    buflen= 2;
   }
-  
-  buflen= cs->cset->wc_mb(cs, cs->max_sort_char, (uchar*) buf,
-                          (uchar*) buf + sizeof(buf));
+  else
+  {
+    buflen= cs->cset->wc_mb(cs, cs->max_sort_char, (uchar*) buf,
+                            (uchar*) buf + sizeof(buf));
+  }
   
   DBUG_ASSERT(buflen > 0);
   do
@@ -686,13 +710,15 @@ fill_max_and_min:
 }
 
 
-static int my_wildcmp_mb_bin(CHARSET_INFO *cs,
-		  const char *str,const char *str_end,
-		  const char *wildstr,const char *wildend,
-		  int escape, int w_one, int w_many)
+static int my_wildcmp_mb_bin_impl(CHARSET_INFO *cs,
+                                  const char *str,const char *str_end,
+                                  const char *wildstr,const char *wildend,
+                                  int escape, int w_one, int w_many, int recurse_level)
 {
   int result= -1;				/* Not found, using wildcards */
 
+  if (my_string_stack_guard && my_string_stack_guard(recurse_level))
+    return 1;
   while (wildstr != wildend)
   {
     while (*wildstr != w_many && *wildstr != w_one)
@@ -779,7 +805,9 @@ static int my_wildcmp_mb_bin(CHARSET_INFO *cs,
           INC_PTR(cs,str, str_end);
         }
 	{
-	  int tmp=my_wildcmp_mb_bin(cs,str,str_end,wildstr,wildend,escape,w_one,w_many);
+	  int tmp=my_wildcmp_mb_bin_impl(cs,str,str_end,
+                                         wildstr,wildend,escape,
+                                         w_one,w_many, recurse_level+1);
 	  if (tmp <= 0)
 	    return (tmp);
 	}
@@ -788,6 +816,17 @@ static int my_wildcmp_mb_bin(CHARSET_INFO *cs,
     }
   }
   return (str != str_end ? 1 : 0);
+}
+
+int
+my_wildcmp_mb_bin(CHARSET_INFO *cs,
+                  const char *str,const char *str_end,
+                  const char *wildstr,const char *wildend,
+                  int escape, int w_one, int w_many)
+{
+  return my_wildcmp_mb_bin_impl(cs, str, str_end,
+                                wildstr, wildend,
+                                escape, w_one, w_many, 1);
 }
 
 

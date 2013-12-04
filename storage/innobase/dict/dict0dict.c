@@ -26,9 +26,12 @@ Created 1/8/1996 Heikki Tuuri
 #include "pars0sym.h"
 #include "que0que.h"
 #include "rem0cmp.h"
+#include "m_string.h"
+#include "my_sys.h"
 #ifndef UNIV_HOTBACKUP
 # include "m_ctype.h" /* my_isspace() */
 #endif /* !UNIV_HOTBACKUP */
+#include "ha_prototypes.h"
 
 #include <ctype.h>
 
@@ -616,15 +619,12 @@ dict_table_get_on_id(
 {
 	dict_table_t*	table;
 
-	if (ut_dulint_cmp(table_id, DICT_FIELDS_ID) <= 0
-	    || trx->dict_operation_lock_mode == RW_X_LATCH) {
-		/* It is a system table which will always exist in the table
-		cache: we avoid acquiring the dictionary mutex, because
-		if we are doing a rollback to handle an error in TABLE
-		CREATE, for example, we already have the mutex! */
+	if (trx->dict_operation_lock_mode == RW_X_LATCH) {
 
-		ut_ad(mutex_own(&(dict_sys->mutex))
-		      || trx->dict_operation_lock_mode == RW_X_LATCH);
+		/* Note: An X latch implies that the transaction
+		already owns the dictionary mutex. */
+
+		ut_ad(mutex_own(&dict_sys->mutex));
 
 		return(dict_table_get_on_id_low(table_id));
 	}
@@ -1052,6 +1052,7 @@ dict_table_rename_in_cache(
 	foreign = UT_LIST_GET_FIRST(table->foreign_list);
 
 	while (foreign != NULL) {
+
 		if (ut_strlen(foreign->foreign_table_name)
 		    < ut_strlen(table->name)) {
 			/* Allocate a longer name buffer;
@@ -1065,34 +1066,115 @@ dict_table_rename_in_cache(
 		strcpy(foreign->foreign_table_name, table->name);
 
 		if (strchr(foreign->id, '/')) {
+			/* This is a >= 4.0.18 format id */
+
 			ulint	db_len;
 			char*	old_id;
+			char	old_name_cs_filename[MAX_TABLE_NAME_LEN+20];
+			uint	errors = 0;
 
-			/* This is a >= 4.0.18 format id */
+			/* All table names are internally stored in charset
+			my_charset_filename (except the temp tables and the
+			partition identifier suffix in partition tables). The
+			foreign key constraint names are internally stored
+			in UTF-8 charset.  The variable fkid here is used
+			to store foreign key constraint name in charset
+			my_charset_filename for comparison further below. */
+			char	fkid[MAX_TABLE_NAME_LEN+20];
+			ibool	on_tmp = FALSE;
+
+			/* The old table name in my_charset_filename is stored
+			in old_name_cs_filename */
+
+			strncpy(old_name_cs_filename, old_name,
+				MAX_TABLE_NAME_LEN);
+			if (strstr(old_name, TEMP_TABLE_PATH_PREFIX) == NULL) {
+
+				innobase_convert_to_system_charset(
+					strchr(old_name_cs_filename, '/') + 1,
+					strchr(old_name, '/') + 1,
+					MAX_TABLE_NAME_LEN, &errors);
+
+				if (errors) {
+					/* There has been an error to convert
+					old table into UTF-8.  This probably
+					means that the old table name is
+					actually in UTF-8. */
+					innobase_convert_to_filename_charset(
+						strchr(old_name_cs_filename,
+						       '/') + 1,
+						strchr(old_name, '/') + 1,
+						MAX_TABLE_NAME_LEN);
+				} else {
+					/* Old name already in
+					my_charset_filename */
+					strncpy(old_name_cs_filename, old_name,
+						MAX_TABLE_NAME_LEN);
+				}
+			}
+
+			strncpy(fkid, foreign->id, MAX_TABLE_NAME_LEN);
+
+			if (strstr(fkid, TEMP_TABLE_PATH_PREFIX) == NULL) {
+				innobase_convert_to_filename_charset(
+					strchr(fkid, '/') + 1,
+					strchr(foreign->id, '/') + 1,
+					MAX_TABLE_NAME_LEN+20);
+			} else {
+				on_tmp = TRUE;
+			}
 
 			old_id = mem_strdup(foreign->id);
 
-			if (ut_strlen(foreign->id) > ut_strlen(old_name)
+			if (ut_strlen(fkid) > ut_strlen(old_name_cs_filename)
 			    + ((sizeof dict_ibfk) - 1)
-			    && !memcmp(foreign->id, old_name,
-				       ut_strlen(old_name))
-			    && !memcmp(foreign->id + ut_strlen(old_name),
+			    && !memcmp(fkid, old_name_cs_filename,
+				       ut_strlen(old_name_cs_filename))
+			    && !memcmp(fkid + ut_strlen(old_name_cs_filename),
 				       dict_ibfk, (sizeof dict_ibfk) - 1)) {
+
+				char	table_name[MAX_TABLE_NAME_LEN] = "";
+				uint	errors = 0;
 
 				/* This is a generated >= 4.0.18 format id */
 
 				if (strlen(table->name) > strlen(old_name)) {
-					foreign->id = mem_heap_alloc(
+					foreign->id = mem_heap_zalloc(
 						foreign->heap,
 						strlen(table->name)
 						+ strlen(old_id) + 1);
 				}
 
+				/* Convert the table name to UTF-8 */
+				strncpy(table_name, table->name,
+					MAX_TABLE_NAME_LEN);
+				innobase_convert_to_system_charset(
+					strchr(table_name, '/') + 1,
+					strchr(table->name, '/') + 1,
+					MAX_TABLE_NAME_LEN, &errors);
+
+				if (errors) {
+					/* Table name could not be converted
+					from charset my_charset_filename to
+					UTF-8. This means that the table name
+					is already in UTF-8 (#mysql#50). */
+					strncpy(table_name, table->name,
+						MAX_TABLE_NAME_LEN);
+				}
+
 				/* Replace the prefix 'databasename/tablename'
 				with the new names */
-				strcpy(foreign->id, table->name);
-				strcat(foreign->id,
-				       old_id + ut_strlen(old_name));
+				strcpy(foreign->id, table_name);
+				if (on_tmp) {
+					strcat(foreign->id,
+					       old_id + ut_strlen(old_name));
+				} else {
+					sprintf(strchr(foreign->id, '/') + 1,
+						"%s%s",
+						strchr(table_name, '/') +1,
+						strstr(old_id, "_ibfk_") );
+				}
+
 			} else {
 				/* This is a >= 4.0.18 format id where the user
 				gave the id name */
@@ -1268,7 +1350,7 @@ dict_col_name_is_reserved(
 	ulint			i;
 
 	for (i = 0; i < UT_ARR_SIZE(reserved_names); i++) {
-		if (strcmp(name, reserved_names[i]) == 0) {
+		if (innobase_strcasecmp(name, reserved_names[i]) == 0) {
 
 			return(TRUE);
 		}
@@ -1361,6 +1443,12 @@ dict_index_add_to_cache(
 			new_index->heap,
 			(1 + dict_index_get_n_unique(new_index))
 			* sizeof(ib_longlong));
+
+		new_index->stat_n_non_null_key_vals = mem_heap_zalloc(
+			new_index->heap,
+			(1 + dict_index_get_n_unique(new_index))
+			* sizeof(*new_index->stat_n_non_null_key_vals));
+
 		/* Give some sensible values to stat_n_... in case we do
 		not calculate statistics quickly enough */
 
@@ -1624,7 +1712,6 @@ dict_index_build_internal_clust(
 {
 	dict_index_t*	new_index;
 	dict_field_t*	field;
-	ulint		fixed_size;
 	ulint		trx_id_pos;
 	ulint		i;
 	ibool*		indexed;
@@ -1701,7 +1788,7 @@ dict_index_build_internal_clust(
 
 		for (i = 0; i < trx_id_pos; i++) {
 
-			fixed_size = dict_col_get_fixed_size(
+			ulint	fixed_size = dict_col_get_fixed_size(
 				dict_index_get_nth_col(new_index, i));
 
 			if (fixed_size == 0) {
@@ -1717,7 +1804,20 @@ dict_index_build_internal_clust(
 				break;
 			}
 
-			new_index->trx_id_offset += (unsigned int) fixed_size;
+			/* Add fixed_size to new_index->trx_id_offset.
+			Because the latter is a bit-field, an overflow
+			can theoretically occur. Check for it. */
+			fixed_size += new_index->trx_id_offset;
+
+			new_index->trx_id_offset = fixed_size;
+
+			if (new_index->trx_id_offset != fixed_size) {
+				/* Overflow. Pretend that this is a
+				variable-length PRIMARY KEY. */
+				ut_ad(0);
+				new_index->trx_id_offset = 0;
+				break;
+			}
 		}
 
 	}
@@ -1886,6 +1986,8 @@ dict_foreign_free(
 /*==============*/
 	dict_foreign_t*	foreign)	/* in, own: foreign key struct */
 {
+	ut_a(foreign->foreign_table->n_foreign_key_checks_running == 0);
+
 	mem_heap_free(foreign->heap);
 }
 
@@ -2142,7 +2244,7 @@ dict_foreign_add_to_cache(
 				mem_heap_free(foreign->heap);
 			}
 
-			return(DB_CANNOT_ADD_CONSTRAINT);
+			return(DB_FOREIGN_NO_INDEX);
 		}
 
 		for_in_cache->referenced_table = ref_table;
@@ -2186,7 +2288,7 @@ dict_foreign_add_to_cache(
 				mem_heap_free(foreign->heap);
 			}
 
-			return(DB_CANNOT_ADD_CONSTRAINT);
+			return(DB_REFERENCING_NO_INDEX);
 		}
 
 		for_in_cache->foreign_table = for_table;
@@ -2220,7 +2322,7 @@ dict_scan_to(
 			quote = '\0';
 		} else if (quote) {
 			/* Within quotes: do nothing. */
-		} else if (*ptr == '`' || *ptr == '"') {
+		} else if (*ptr == '`' || *ptr == '"' || *ptr == '\'') {
 			/* Starting quote: remember the quote character. */
 			quote = *ptr;
 		} else {
@@ -2586,25 +2688,28 @@ dict_strip_comments(
 					/* out, own: SQL string stripped from
 					comments; the caller must free this
 					with mem_free()! */
-	const char*	sql_string)	/* in: SQL string */
+	const char*	sql_string,	/* in: SQL string */
+	size_t		sql_length)	/* in: length of sql_string */
 {
 	char*		str;
 	const char*	sptr;
+	const char*	eptr	= sql_string + sql_length;
 	char*		ptr;
 	/* unclosed quote character (0 if none) */
 	char		quote	= 0;
 
-	str = mem_alloc(strlen(sql_string) + 1);
+	str = mem_alloc(sql_length + 1);
 
 	sptr = sql_string;
 	ptr = str;
 
 	for (;;) {
 scan_more:
-		if (*sptr == '\0') {
+		if (sptr >= eptr || *sptr == '\0') {
+end_of_string:
 			*ptr = '\0';
 
-			ut_a(ptr <= str + strlen(sql_string));
+			ut_a(ptr <= str + sql_length);
 
 			return(str);
 		}
@@ -2623,30 +2728,35 @@ scan_more:
 			   || (sptr[0] == '-' && sptr[1] == '-'
 			       && sptr[2] == ' ')) {
 			for (;;) {
+				if (++sptr >= eptr) {
+					goto end_of_string;
+				}
+
 				/* In Unix a newline is 0x0A while in Windows
 				it is 0x0D followed by 0x0A */
 
-				if (*sptr == (char)0x0A
-				    || *sptr == (char)0x0D
-				    || *sptr == '\0') {
-
+				switch (*sptr) {
+				case (char) 0X0A:
+				case (char) 0x0D:
+				case '\0':
 					goto scan_more;
 				}
-
-				sptr++;
 			}
 		} else if (!quote && *sptr == '/' && *(sptr + 1) == '*') {
+			sptr += 2;
 			for (;;) {
-				if (*sptr == '*' && *(sptr + 1) == '/') {
-
-					sptr += 2;
-
-					goto scan_more;
+				if (sptr >= eptr) {
+					goto end_of_string;
 				}
 
-				if (*sptr == '\0') {
-
+				switch (*sptr) {
+				case '\0':
 					goto scan_more;
+				case '*':
+					if (sptr[1] == '/') {
+						sptr += 2;
+						goto scan_more;
+					}
 				}
 
 				sptr++;
@@ -3348,6 +3458,7 @@ dict_create_foreign_constraints(
 					name before it: test.table2; the
 					default database id the database of
 					parameter name */
+	size_t		sql_length,	/* in: length of sql_string */
 	const char*	name,		/* in: table full name in the
 					normalized form
 					database_name/table_name */
@@ -3362,7 +3473,7 @@ dict_create_foreign_constraints(
 	ut_a(trx);
 	ut_a(trx->mysql_thd);
 
-	str = dict_strip_comments(sql_string);
+	str = dict_strip_comments(sql_string, sql_length);
 	heap = mem_heap_create(10000);
 
 	err = dict_create_foreign_constraints_low(
@@ -3411,7 +3522,8 @@ dict_foreign_parse_drop_constraints(
 
 	*constraints_to_drop = mem_heap_alloc(heap, 1000 * sizeof(char*));
 
-	str = dict_strip_comments(*(trx->mysql_query_str));
+	str = dict_strip_comments(*trx->mysql_query_str,
+				  *trx->mysql_query_len);
 	ptr = str;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
@@ -3746,7 +3858,6 @@ dict_update_statistics_low(
 					dictionary mutex */
 {
 	dict_index_t*	index;
-	ulint		size;
 	ulint		sum_of_index_sizes	= 0;
 
 	if (table->ibd_file_missing) {
@@ -3762,14 +3873,6 @@ dict_update_statistics_low(
 		return;
 	}
 
-	/* If we have set a high innodb_force_recovery level, do not calculate
-	statistics, as a badly corrupted index can cause a crash in it. */
-
-	if (srv_force_recovery >= SRV_FORCE_NO_IBUF_MERGE) {
-
-		return;
-	}
-
 	/* Find out the sizes of the indexes and how many different values
 	for the key they approximately have */
 
@@ -3781,26 +3884,52 @@ dict_update_statistics_low(
 		return;
 	}
 
-	while (index) {
-		size = btr_get_size(index, BTR_TOTAL_SIZE);
 
-		index->stat_index_size = size;
+	do {
+		if (UNIV_LIKELY
+		    (srv_force_recovery < SRV_FORCE_NO_IBUF_MERGE
+		     || (srv_force_recovery < SRV_FORCE_NO_LOG_REDO
+			 && (index->type & DICT_CLUSTERED)))) {
+			ulint	size;
+			size = btr_get_size(index, BTR_TOTAL_SIZE);
 
-		sum_of_index_sizes += size;
+			index->stat_index_size = size;
 
-		size = btr_get_size(index, BTR_N_LEAF_PAGES);
+			sum_of_index_sizes += size;
 
-		if (size == 0) {
-			/* The root node of the tree is a leaf */
-			size = 1;
+			size = btr_get_size(index, BTR_N_LEAF_PAGES);
+
+			if (size == 0) {
+				/* The root node of the tree is a leaf */
+				size = 1;
+			}
+
+			index->stat_n_leaf_pages = size;
+
+			btr_estimate_number_of_different_key_vals(index);
+		} else {
+			/* If we have set a high innodb_force_recovery
+			level, do not calculate statistics, as a badly
+			corrupted index can cause a crash in it.
+			Initialize some bogus index cardinality
+			statistics, so that the data can be queried in
+			various means, also via secondary indexes. */
+			ulint	i;
+
+			sum_of_index_sizes++;
+			index->stat_index_size = index->stat_n_leaf_pages = 1;
+
+			for (i = dict_index_get_n_unique(index); i; ) {
+				index->stat_n_diff_key_vals[i--] = 1;
+			}
+
+			memset(index->stat_n_non_null_key_vals, 0,
+			       (1 + dict_index_get_n_unique(index))
+                               * sizeof(*index->stat_n_non_null_key_vals));
 		}
 
-		index->stat_n_leaf_pages = size;
-
-		btr_estimate_number_of_different_key_vals(index);
-
 		index = dict_table_get_next_index(index);
-	}
+	} while (index);
 
 	index = dict_table_get_first_index(table);
 

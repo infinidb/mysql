@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqlmanager\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 09/09/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYSQLMANAGER\FR" "8" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLMANAGER\FR" "8" "09/09/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -39,7 +48,7 @@ mysqlmanager \- the MySQL Instance Manager
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -47,7 +56,7 @@ MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
 is the MySQL Instance Manager (IM)\&. This program monitors and manages MySQL Database Server instances\&. MySQL Instance Manager is available for Unix\-like operating systems, as well as Windows\&. It runs as a daemon that listens on a TCP/IP port\&. On Unix, it also listens on a Unix socket file\&.
 .PP
 MySQL Instance Manager can be used in place of the
-mysqld_safe
+\fBmysqld_safe\fR
 script to start and stop one or more instances of MySQL Server\&. Because Instance Manager can manage multiple server instances, it can also be used in place of the
 \fBmysqld_multi\fR
 script\&. Instance Manager offers these capabilities:
@@ -94,7 +103,7 @@ When Instance Manager starts, it starts each guarded instance\&. If the instance
 .\}
 A nonguarded instance is not started when Instance Manager starts or monitored by it\&. If the instance crashes after being started, Instance Manager does not restart it\&. When Instance Manager exits, it does not stop the instance if it is running\&.
 .RE
-.RS 4
+.sp
 Instances are guarded by default\&. An instance can be designated as nonguarded by including the
 \fBnonguarded\fR
 option in the configuration file\&.
@@ -137,7 +146,7 @@ The following sections describe MySQL Instance Manager operation in more detail\
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -153,7 +162,7 @@ in the directory where Instance Manager is installed\&. On Unix, the standard fi
 option\&.
 .PP
 \fBmysqlmanager\fR
-supports the options described in the following list\&. The options for managing entries in the password file are described further in
+supports the following options\&. The options for managing entries in the password file are described further in
 the section called \(lqINSTANCE MANAGER USER AND PASSWORD MANAGEMENT\(rq\&.
 .sp
 .RS 4
@@ -274,12 +283,13 @@ Drop all users from the password file\&. This option was added in MySQL 5\&.1\&.
 .\}
 .\" mysqlmanager: debug option
 .\" debug option: mysqlmanager
-\fB\-\-debug=\fR\fB\fIdebug_options\fR\fR\fB, \-# \fR\fB\fIdebug_options\fR\fR
+\fB\-\-debug=\fR\fB\fIdebug_options\fR\fR,
+\fB\-# \fR\fB\fIdebug_options\fR\fR
 .sp
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. This option was added in MySQL 5\&.1\&.10\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. This option was added in MySQL 5\&.1\&.10\&.
 .RE
 .sp
 .RS 4
@@ -437,7 +447,7 @@ mysqlmanager > im\&.log
 .sp
 The interval in seconds for monitoring server instances\&. The default value is 20 seconds\&. Instance Manager tries to connect to each monitored (guarded) instance using the nonexisting
 MySQL_Instance_Manager
-user account to check whether it is alive/not hanging\&. If the result of the connection attempt indicates that the instance is unavailable, Instance Manager performs several attempts to restart the instance\&.
+user account to check whether it is available/not hanging\&. If the result of the connection attempt indicates that the instance is unavailable, Instance Manager performs several attempts to restart the instance\&.
 .sp
 Normally, the
 MySQL_Instance_Manager
@@ -447,7 +457,7 @@ account does not exist, so the connection attempts by Instance Manager cause the
 .RS 4
 .\}
 .nf
-Access denied for user \'MySQL_Instance_M\'@\'localhost\' \(Fc
+Access denied for user \*(AqMySQL_Instance_M\*(Aq@\*(Aqlocalhost\*(Aq \(Fc
     (using password: YES)
 .fi
 .if n \{\
@@ -456,7 +466,7 @@ Access denied for user \'MySQL_Instance_M\'@\'localhost\' \(Fc
 .sp
 The
 nonguarded
-option in the appropriate server instance section disables monitoring for a particular instance\&. If the instance dies after being started, Instance Manager will not restart it\&. Instance Manager tries to connect to a nonguarded instance only when you request the instance\'s status (for example, with the
+option in the appropriate server instance section disables monitoring for a particular instance\&. If the instance dies after being started, Instance Manager will not restart it\&. Instance Manager tries to connect to a nonguarded instance only when you request the instance\*(Aqs status (for example, with the
 SHOW INSTANCES
 status\&.
 .sp
@@ -736,7 +746,7 @@ This option was added in MySQL 5\&.1\&.7\&. Before that, the timeout is 30 secon
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -783,7 +793,7 @@ Each
 or
 [mysqld\fIN\fR]
 instance section specifies options given by Instance Manager to a server instance at startup\&. These are mainly common MySQL Server options (see
-Section\ \&5.1.2, \(lqServer Command Options\(rq)\&. In addition, a
+Section\ \&5.1.3, \(lqServer Command Options\(rq)\&. In addition, a
 [mysqld\fIN\fR]
 section can contain the options in the following list, which are specific to Instance Manager\&. These options are interpreted by Instance Manager itself; it does not pass them to the server when it attempts to start that server\&.
 .if n \{\
@@ -894,7 +904,7 @@ log=/tmp/fordel\&.log
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -980,7 +990,7 @@ Without
 .PP
 Instance Manager also stops all guarded server instances when it shuts down\&.
 .PP
-The allowable options for
+The permissible options for
 [mysqld\fIN\fR]
 server instance sections are described in
 the section called \(lqMYSQL INSTANCE MANAGER CONFIGURATION FILES\(rq\&. In these sections, you can use a special
@@ -991,7 +1001,7 @@ binary resides\&. If there are multiple instances, it may also be necessary to s
 \fBdatadir\fR
 and
 \fBport\fR, to ensure that each instance has a different data directory and TCP/IP port number\&.
-Section\ \&5.6, \(lqRunning Multiple MySQL Servers on the Same Machine\(rq, discusses the configuration values that must differ for each instance when you run multiple instance on the same machine\&.
+Section\ \&5.3, \(lqRunning Multiple MySQL Instances on One Machine\(rq, discusses the configuration values that must differ for each instance when you run multiple instance on the same machine\&.
 .if n \{\
 .sp
 .\}
@@ -1074,7 +1084,7 @@ command), it shuts down all server instances\&.
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -1128,7 +1138,7 @@ Instance Manager accounts differ somewhat from MySQL Server accounts:
 .IP \(bu 2.3
 .\}
 MySQL Server accounts are associated with a host name, user name, and password (see
-Section\ \&5.5.1, \(lqUser Names and Passwords\(rq)\&.
+Section\ \&6.3.1, \(lqUser Names and Passwords\(rq)\&.
 .RE
 .sp
 .RS 4
@@ -1201,7 +1211,7 @@ is invoked directly from an IBM 5250 terminal\&. To work around this, use a comm
 .\}
 .nf
 shell> \fBmysql \-B \-\-skip\-column\-name \e\fR
-         \fB\-e \'SELECT CONCAT("\fR\fB\fIuser_name\fR\fR\fB",":",PASSWORD("\fR\fB\fIpass_val\fR\fR\fB"));\'\fR
+         \fB\-e \*(AqSELECT CONCAT("\fR\fB\fIuser_name\fR\fR\fB",":",PASSWORD("\fR\fB\fIpass_val\fR\fR\fB"));\*(Aq\fR
 .fi
 .if n \{\
 .RE
@@ -1240,7 +1250,7 @@ option, Instance Manager prompts for the required value\&.
 .PP
 \fB\-\-print\-password\-line\fR
 causes Instance Manager to send the resulting account entry to its output, which you can append to the password file\&. The following list describes other account\-management options that cause Instance Manager to operate directly on the password file\&. (These options make Instance Manager scriptable for account\-management purposes\&.) For operations on the password file to succeed, the file must exist and it must be accessible by Instance Manager\&. (The exception is
-\fB\-\-clean\-password\-file\fR, which creates the file if it does not exist\&. Alternatively, if there is no password file, manually create it as an empty file and ensure that its ownership and access modes allow it to be read and written by Instance Manager\&.) The default password file is used unless you specify a
+\fB\-\-clean\-password\-file\fR, which creates the file if it does not exist\&. Alternatively, if there is no password file, manually create it as an empty file and ensure that its ownership and access modes permit it to be read and written by Instance Manager\&.) The default password file is used unless you specify a
 \fB\-\-password\-file\fR
 option\&.
 .PP
@@ -1320,7 +1330,7 @@ mysqlmanager \-\-edit\-user \-\-username=\fIuser_name\fR [\-\-password=\fIpasswo
 .RE
 .\}
 .sp
-This command changes the given user\'s password in the password file\&. The user name is required\&.
+This command changes the given user\*(Aqs password in the password file\&. The user name is required\&.
 \fBmysqlmanager\fR
 prompts for the password it is not given on the command line\&. The command fails if the user does not exist\&.
 .RE
@@ -1407,7 +1417,7 @@ This command empties the password file, which has the effect of dropping all use
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -1429,7 +1439,7 @@ command\&. This is the only status monitoring done for nonguarded instances\&.
 .PP
 Instance Manager knows if a server instance fails at startup because it receives a status from the attempt\&. For an instance that starts but later crashes, Instance Manager receives a signal because it is the parent process of the instance\&.
 .PP
-Beginning with MySQL 5\&.1\&.12, Instance Manager tracks instance states so that it can determine which commands are allowed for each instance\&. For example, commands that modify an instance\'s configuration are allowed only while the instance is offline\&.
+Beginning with MySQL 5\&.1\&.12, Instance Manager tracks instance states so that it can determine which commands are permitted for each instance\&. For example, commands that modify an instance\*(Aqs configuration are permitted only while the instance is offline\&.
 .PP
 Each instance is in one of the states described in the following table\&. Guarded instances can be in any of the states\&. Nonguarded instances can only be offline or online\&. Instance state information is displayed in the
 status
@@ -1440,7 +1450,13 @@ SHOW INSTANCE STATUS
 commands\&.
 .TS
 allbox tab(:);
-l l
+lB lB.
+T{
+State
+T}:T{
+Meaning
+T}
+.T&
 l l
 l l
 l l
@@ -1448,11 +1464,6 @@ l l
 l l
 l l
 l l.
-T{
-\fBState\fR
-T}:T{
-\fBMeaning\fR
-T}
 T{
 offline
 T}:T{
@@ -1524,11 +1535,11 @@ T}
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
-After you set up a password file for the MySQL Instance Manager and Instance Manager is running, you can connect to it\&. The MySQL client\-server protocol is used to communicate with the Instance Manager\&. For example, you can connect to it using the standard
+After you set up a password file for the MySQL Instance Manager and Instance Manager is running, you can connect to it\&. The MySQL client/server protocol is used to communicate with the Instance Manager\&. For example, you can connect to it using the standard
 \fBmysql\fR
 client program:
 .sp
@@ -1542,7 +1553,7 @@ shell> \fBmysql \-\-port=2273 \-\-host=im\&.example\&.org \-\-user=mysql \-\-pas
 .RE
 .\}
 .PP
-Instance Manager supports the version of the MySQL client\-server protocol used by the client tools and libraries distributed with MySQL 4\&.1 or later, so other programs that use the MySQL C API also can connect to it\&.
+Instance Manager supports the version of the MySQL client/server protocol used by the client tools and libraries distributed with MySQL 4\&.1 or later, so other programs that use the MySQL C API also can connect to it\&.
 .SH "MYSQL INSTANCE MANAGER COMMANDS"
 .if n \{\
 .sp
@@ -1557,7 +1568,7 @@ Instance Manager supports the version of the MySQL client\-server protocol used 
 .ps -1
 .br
 .PP
-MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.4\&.
+MySQL Instance Manager has been deprecated and is removed in MySQL 5\&.5\&.
 .sp .5v
 .RE
 .PP
@@ -1661,7 +1672,7 @@ is not a valid instance name or the instance already exists\&.
 .sp
 The created section instance is empty if no options are given\&. Otherwise, the options are added to the section\&. Options should be given in the same format used when you write options in option files\&. (See
 Section\ \&4.2.3.3, \(lqUsing Option Files\(rq
-for a description of the allowable syntax\&.) If you specify multiple options, separate them by commas\&.
+for a description of the permissible syntax\&.) If you specify multiple options, separate them by commas\&.
 .sp
 For example, to create an instance section named
 [mysqld98], you might write something like this were you to modify the configuration file directly:
@@ -1677,7 +1688,7 @@ basedir=/var/mysql98
 .RE
 .\}
 .sp
-To achieve the same effect via
+To achieve the same effect using
 CREATE INSTANCE, issue this command to Instance Manager:
 .sp
 .if n \{\
@@ -1910,7 +1921,7 @@ displays information only about log files\&. If a server instance uses log table
 Section\ \&5.2.1, \(lqSelecting General Query and Slow Query Log Output Destinations\(rq), no information about those tables is shown\&.
 .sp
 Log options are described in
-Section\ \&5.1.2, \(lqServer Command Options\(rq\&.
+Section\ \&5.1.3, \(lqServer Command Options\(rq\&.
 .RE
 .sp
 .RS 4
@@ -1955,7 +1966,7 @@ mysql> \fBSHOW mysqld LOG GENERAL 21, 2;\fR
 .\}
 SET \fIinstance_name\fR\&.\fIoption_name\fR[=\fIoption_value\fR]
 .sp
-This command edits the specified instance\'s configuration section to change or add instance options\&. The option is added to the section is it is not already present\&. Otherwise, the new setting replaces the existing one\&.
+This command edits the specified instance\*(Aqs configuration section to change or add instance options\&. The option is added to the section is it is not already present\&. Otherwise, the new setting replaces the existing one\&.
 .sp
 .if n \{\
 .RS 4
@@ -1983,7 +1994,7 @@ Query OK, 0 rows affected (0\&.00 sec)
 .RE
 .\}
 .sp
-Before MySQL 5\&.1\&.12, only a single option can be specified\&. Also, changes made to the configuration file do not take effect until the MySQL server is restarted\&. In addition, these changes are not stored in the instance manager\'s local cache of instance settings until a
+Before MySQL 5\&.1\&.12, only a single option can be specified\&. Also, changes made to the configuration file do not take effect until the MySQL server is restarted\&. In addition, these changes are not stored in the instance manager\*(Aqs local cache of instance settings until a
 FLUSH INSTANCES
 command is executed\&.
 .RE
@@ -1998,7 +2009,7 @@ command is executed\&.
 .\}
 UNSET \fIinstance_name\fR\&.\fIoption_name\fR
 .sp
-This command removes an option from an instance\'s configuration section\&.
+This command removes an option from an instance\*(Aqs configuration section\&.
 .sp
 .if n \{\
 .RS 4
@@ -2026,7 +2037,7 @@ Query OK, 0 rows affected (0\&.00 sec)
 .RE
 .\}
 .sp
-Before MySQL 5\&.1\&.12, only a single option can be specified\&. Also, changes made to the configuration file do not take effect until the MySQL server is restarted\&. In addition, these changes are not stored in the instance manager\'s local cache of instance settings until a
+Before MySQL 5\&.1\&.12, only a single option can be specified\&. Also, changes made to the configuration file do not take effect until the MySQL server is restarted\&. In addition, these changes are not stored in the instance manager\*(Aqs local cache of instance settings until a
 FLUSH INSTANCES
 command is executed\&.
 .RE
@@ -2061,7 +2072,7 @@ Query OK, 0 rows affected (0\&.04 sec)
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -2074,4 +2085,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

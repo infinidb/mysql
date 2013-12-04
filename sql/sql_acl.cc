@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 
 /*
@@ -31,9 +31,8 @@
 #include "sp_head.h"
 #include "sp.h"
 
-time_t mysql_db_table_last_check= 0L;
-
-TABLE_FIELD_W_TYPE mysql_db_table_fields[MYSQL_DB_FIELD_COUNT] = {
+static const
+TABLE_FIELD_TYPE mysql_db_table_fields[MYSQL_DB_FIELD_COUNT] = {
   {
     { C_STRING_WITH_LEN("Host") },            
     { C_STRING_WITH_LEN("char(60)") },
@@ -146,6 +145,8 @@ TABLE_FIELD_W_TYPE mysql_db_table_fields[MYSQL_DB_FIELD_COUNT] = {
   }
 };
 
+const TABLE_FIELD_DEF
+  mysql_db_table_def= {MYSQL_DB_FIELD_COUNT, mysql_db_table_fields};
 
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
 
@@ -193,7 +194,18 @@ static bool compare_hostname(const acl_host_and_ip *host,const char *hostname,
 			     const char *ip);
 static my_bool acl_load(THD *thd, TABLE_LIST *tables);
 static my_bool grant_load(THD *thd, TABLE_LIST *tables);
-
+static inline void get_grantor(THD *thd, char* grantor);
+/*
+ Enumeration of various ACL's and Hashes used in handle_grant_struct()
+*/
+enum enum_acl_lists
+{
+  USER_ACL= 0,
+  DB_ACL,
+  COLUMN_PRIVILEGES_HASH,
+  PROC_PRIVILEGES_HASH,
+  FUNC_PRIVILEGES_HASH
+};
 /*
   Convert scrambled password to binary form, according to scramble type, 
   Binary form is stored in user.salt.
@@ -263,8 +275,7 @@ my_bool acl_init(bool dont_read_acl_tables)
   acl_cache= new hash_filo(ACL_CACHE_SIZE, 0, 0,
                            (hash_get_key) acl_entry_get_key,
                            (hash_free_key) free,
-                           lower_case_file_system ?
-                           system_charset_info : &my_charset_bin);
+                           &my_charset_utf8_bin);
   if (dont_read_acl_tables)
   {
     DBUG_RETURN(0); /* purecov: tested */
@@ -310,7 +321,7 @@ static my_bool acl_load(THD *thd, TABLE_LIST *tables)
 {
   TABLE *table;
   READ_RECORD read_record_info;
-  my_bool return_val= 1;
+  my_bool return_val= TRUE;
   bool check_no_resolve= specialflag & SPECIAL_NO_RESOLVE;
   char tmp_name[NAME_LEN+1];
   int password_length;
@@ -623,7 +634,7 @@ static my_bool acl_load(THD *thd, TABLE_LIST *tables)
   init_check_host();
 
   initialized=1;
-  return_val=0;
+  return_val= FALSE;
 
 end:
   thd->variables.sql_mode= old_sql_mode;
@@ -674,7 +685,7 @@ my_bool acl_reload(THD *thd)
   DYNAMIC_ARRAY old_acl_hosts,old_acl_users,old_acl_dbs;
   MEM_ROOT old_mem;
   bool old_initialized;
-  my_bool return_val= 1;
+  my_bool return_val= TRUE;
   DBUG_ENTER("acl_reload");
 
   if (thd->locked_tables)
@@ -701,8 +712,13 @@ my_bool acl_reload(THD *thd)
 
   if (simple_open_n_lock_tables(thd, tables))
   {
-    sql_print_error("Fatal error: Can't open and lock privilege tables: %s",
-		    thd->main_da.message());
+    /*
+      Execution might have been interrupted; only print the error message
+      if an error condition has been raised.
+    */
+    if (thd->main_da.is_error())
+      sql_print_error("Fatal error: Can't open and lock privilege tables: %s",
+                      thd->main_da.message());
     goto end;
   }
 
@@ -1061,7 +1077,7 @@ int acl_getroot(THD *thd, USER_RESOURCES  *mqh,
     *mqh= acl_user->user_resource;
 
     if (acl_user->host.hostname)
-      strmake(sctx->priv_host, acl_user->host.hostname, MAX_HOSTNAME);
+      strmake(sctx->priv_host, acl_user->host.hostname, MAX_HOSTNAME - 1);
     else
       *sctx->priv_host= 0;
   }
@@ -1162,7 +1178,7 @@ bool acl_getroot_no_password(Security_context *sctx, char *user, char *host,
     sctx->priv_user= acl_user->user ? user : (char *) "";
 
     if (acl_user->host.hostname)
-      strmake(sctx->priv_host, acl_user->host.hostname, MAX_HOSTNAME);
+      strmake(sctx->priv_host, acl_user->host.hostname, MAX_HOSTNAME - 1);
     else
       *sctx->priv_host= 0;
   }
@@ -1340,10 +1356,19 @@ ulong acl_get(const char *host, const char *ip,
 {
   ulong host_access= ~(ulong)0, db_access= 0;
   uint i;
-  size_t key_length;
+  size_t key_length, copy_length;
   char key[ACL_KEY_LENGTH],*tmp_db,*end;
   acl_entry *entry;
   DBUG_ENTER("acl_get");
+  
+  copy_length= (size_t) (strlen(ip ? ip : "") +
+                 strlen(user ? user : "") +
+                 strlen(db ? db : ""));
+  /*
+    Make sure that strmov() operations do not result in buffer overflow.
+  */
+  if (copy_length >= ACL_KEY_LENGTH)
+    DBUG_RETURN(0);
 
   VOID(pthread_mutex_lock(&acl_cache->lock));
   end=strmov((tmp_db=strmov(strmov(key, ip ? ip : "")+1,user)+1),db);
@@ -1587,6 +1612,7 @@ bool change_password(THD *thd, const char *host, const char *user,
   /* Buffer should be extended when password length is extended. */
   char buff[512];
   ulong query_length;
+  bool save_binlog_row_based;
   uint new_password_len= (uint) strlen(new_password);
   bool result= 1;
   DBUG_ENTER("change_password");
@@ -1622,6 +1648,14 @@ bool change_password(THD *thd, const char *host, const char *user,
   if (!(table= open_ltable(thd, &tables, TL_WRITE, 0)))
     DBUG_RETURN(1);
 
+  /*
+    This statement will be replicated as a statement, even when using
+    row-based replication.  The flag will be reset at the end of the
+    statement.
+  */
+  if ((save_binlog_row_based= thd->current_stmt_binlog_row_based))
+    thd->clear_current_stmt_binlog_row_based();
+
   VOID(pthread_mutex_lock(&acl_cache->lock));
   ACL_USER *acl_user;
   if (!(acl_user= find_acl_user(host, user, TRUE)))
@@ -1647,18 +1681,22 @@ bool change_password(THD *thd, const char *host, const char *user,
   result= 0;
   if (mysql_bin_log.is_open())
   {
-    query_length=
-      my_sprintf(buff,
-                 (buff,"SET PASSWORD FOR '%-.120s'@'%-.120s'='%-.120s'",
-                  acl_user->user ? acl_user->user : "",
-                  acl_user->host.hostname ? acl_user->host.hostname : "",
-                  new_password));
+    query_length= sprintf(buff, "SET PASSWORD FOR '%-.120s'@'%-.120s'='%-.120s'",
+                          acl_user->user ? acl_user->user : "",
+                          acl_user->host.hostname ? acl_user->host.hostname : "",
+                          new_password);
     thd->clear_error();
-    thd->binlog_query(THD::MYSQL_QUERY_TYPE, buff, query_length,
-                      FALSE, FALSE, 0);
+    result= thd->binlog_query(THD::MYSQL_QUERY_TYPE, buff, query_length,
+                              FALSE, FALSE, 0);
   }
 end:
   close_thread_tables(thd);
+
+  /* Restore the state of binlog format */
+  DBUG_ASSERT(!thd->current_stmt_binlog_row_based);
+  if (save_binlog_row_based)
+    thd->set_current_stmt_binlog_row_based();
+
   DBUG_RETURN(result);
 }
 
@@ -1951,13 +1989,12 @@ static int replace_user_table(THD *thd, TABLE *table, const LEX_USER &combo,
     */
     else if (!password_len && no_auto_create)
     {
-      my_error(ER_PASSWORD_NO_MATCH, MYF(0), combo.user.str, combo.host.str);
+      my_error(ER_PASSWORD_NO_MATCH, MYF(0));
       goto end;
     }
     else if (!can_create_user)
     {
-      my_error(ER_CANT_CREATE_USER_WITH_GRANT, MYF(0),
-               thd->security_ctx->user, thd->security_ctx->host_or_ip);
+      my_error(ER_CANT_CREATE_USER_WITH_GRANT, MYF(0));
       goto end;
     }
     old_row_exists = 0;
@@ -2251,10 +2288,13 @@ public:
   ulong sort;
   size_t key_length;
   GRANT_NAME(const char *h, const char *d,const char *u,
-             const char *t, ulong p);
-  GRANT_NAME (TABLE *form);
+             const char *t, ulong p, bool is_routine);
+  GRANT_NAME (TABLE *form, bool is_routine);
   virtual ~GRANT_NAME() {};
   virtual bool ok() { return privs != 0; }
+  void set_user_details(const char *h, const char *d,
+                        const char *u, const char *t,
+                        bool is_routine);
 };
 
 
@@ -2272,38 +2312,48 @@ public:
 };
 
 
-
-GRANT_NAME::GRANT_NAME(const char *h, const char *d,const char *u,
-                       const char *t, ulong p)
-  :privs(p)
+void GRANT_NAME::set_user_details(const char *h, const char *d,
+                                  const char *u, const char *t,
+                                  bool is_routine)
 {
   /* Host given by user */
   update_hostname(&host, strdup_root(&memex, h));
-  db =   strdup_root(&memex,d);
+  if (db != d)
+  {
+    db= strdup_root(&memex, d);
+    if (lower_case_table_names)
+      my_casedn_str(files_charset_info, db);
+  }
   user = strdup_root(&memex,u);
   sort=  get_sort(3,host.hostname,db,user);
-  tname= strdup_root(&memex,t);
-  if (lower_case_table_names)
+  if (tname != t)
   {
-    my_casedn_str(files_charset_info, db);
-    my_casedn_str(files_charset_info, tname);
+    tname= strdup_root(&memex, t);
+    if (lower_case_table_names || is_routine)
+      my_casedn_str(files_charset_info, tname);
   }
   key_length= strlen(d) + strlen(u)+ strlen(t)+3;
   hash_key=   (char*) alloc_root(&memex,key_length);
   strmov(strmov(strmov(hash_key,user)+1,db)+1,tname);
 }
 
+GRANT_NAME::GRANT_NAME(const char *h, const char *d,const char *u,
+                       const char *t, ulong p, bool is_routine)
+  :db(0), tname(0), privs(p)
+{
+  set_user_details(h, d, u, t, is_routine);
+}
 
 GRANT_TABLE::GRANT_TABLE(const char *h, const char *d,const char *u,
                 	 const char *t, ulong p, ulong c)
-  :GRANT_NAME(h,d,u,t,p), cols(c)
+  :GRANT_NAME(h,d,u,t,p, FALSE), cols(c)
 {
   (void) hash_init2(&hash_columns,4,system_charset_info,
                    0,0,0, (hash_get_key) get_key_column,0,0);
 }
 
 
-GRANT_NAME::GRANT_NAME(TABLE *form)
+GRANT_NAME::GRANT_NAME(TABLE *form, bool is_routine)
 {
   update_hostname(&host, get_field(&memex, form->field[0]));
   db=    get_field(&memex,form->field[1]);
@@ -2321,6 +2371,9 @@ GRANT_NAME::GRANT_NAME(TABLE *form)
   if (lower_case_table_names)
   {
     my_casedn_str(files_charset_info, db);
+  }
+  if (lower_case_table_names || is_routine)
+  {
     my_casedn_str(files_charset_info, tname);
   }
   key_length= (strlen(db) + strlen(user) + strlen(tname) + 3);
@@ -2332,7 +2385,7 @@ GRANT_NAME::GRANT_NAME(TABLE *form)
 
 
 GRANT_TABLE::GRANT_TABLE(TABLE *form, TABLE *col_privs)
-  :GRANT_NAME(form)
+  :GRANT_NAME(form, FALSE)
 {
   uchar key[MAX_KEY_LENGTH];
 
@@ -2389,7 +2442,12 @@ GRANT_TABLE::GRANT_TABLE(TABLE *form, TABLE *col_privs)
         privs = cols = 0;			/* purecov: deadcode */
         return;				/* purecov: deadcode */
       }
-      my_hash_insert(&hash_columns, (uchar *) mem_check);
+      if (my_hash_insert(&hash_columns, (uchar *) mem_check))
+      {
+        /* Invalidate this entry */
+        privs= cols= 0;
+        return;
+      }
     } while (!col_privs->file->index_next(col_privs->record[0]) &&
              !key_cmp_if_same(col_privs,key,0,key_prefix_len));
     col_privs->file->ha_index_end();
@@ -2423,14 +2481,17 @@ static GRANT_NAME *name_hash_search(HASH *name_hash,
                                     const char *host,const char* ip,
                                     const char *db,
                                     const char *user, const char *tname,
-                                    bool exact)
+                                    bool exact, bool name_tolower)
 {
-  char helping [NAME_LEN*2+USERNAME_LENGTH+3];
+  char helping [NAME_LEN*2+USERNAME_LENGTH+3], *name_ptr;
   uint len;
   GRANT_NAME *grant_name,*found=0;
   HASH_SEARCH_STATE state;
 
-  len  = (uint) (strmov(strmov(strmov(helping,user)+1,db)+1,tname)-helping)+ 1;
+  name_ptr= strmov(strmov(helping, user) + 1, db) + 1;
+  len  = (uint) (strmov(name_ptr, tname) - helping) + 1;
+  if (name_tolower)
+    my_casedn_str(files_charset_info, name_ptr);
   for (grant_name= (GRANT_NAME*) hash_first(name_hash, (uchar*) helping,
                                             len, &state);
        grant_name ;
@@ -2463,7 +2524,7 @@ routine_hash_search(const char *host, const char *ip, const char *db,
 {
   return (GRANT_TABLE*)
     name_hash_search(proc ? &proc_priv_hash : &func_priv_hash,
-		     host, ip, db, user, tname, exact);
+		     host, ip, db, user, tname, exact, TRUE);
 }
 
 
@@ -2472,7 +2533,7 @@ table_hash_search(const char *host, const char *ip, const char *db,
 		  const char *user, const char *tname, bool exact)
 {
   return (GRANT_TABLE*) name_hash_search(&column_priv_hash, host, ip, db,
-					 user, tname, exact);
+					 user, tname, exact, FALSE);
 }
 
 
@@ -2594,7 +2655,11 @@ static int replace_column_table(GRANT_TABLE *g_t,
 	goto end;				/* purecov: inspected */
       }
       grant_column= new GRANT_COLUMN(column->column,privileges);
-      my_hash_insert(&g_t->hash_columns,(uchar*) grant_column);
+      if (my_hash_insert(&g_t->hash_columns,(uchar*) grant_column))
+      {
+        result= -1;
+        goto end;
+      }
     }
   }
 
@@ -2671,6 +2736,20 @@ end:
   DBUG_RETURN(result);
 }
 
+static inline void get_grantor(THD *thd, char *grantor)
+{
+  const char *user= thd->security_ctx->user;
+  const char *host= thd->security_ctx->host_or_ip;
+
+#if defined(HAVE_REPLICATION)
+  if (thd->slave_thread && thd->has_invoker())
+  {
+    user= thd->get_invoker_user().str;
+    host= thd->get_invoker_host().str;
+  }
+#endif
+  strxmov(grantor, user, "@", host, NullS);
+}
 
 static int replace_table_table(THD *thd, GRANT_TABLE *grant_table,
 			       TABLE *table, const LEX_USER &combo,
@@ -2685,9 +2764,7 @@ static int replace_table_table(THD *thd, GRANT_TABLE *grant_table,
   uchar user_key[MAX_KEY_LENGTH];
   DBUG_ENTER("replace_table_table");
 
-  strxmov(grantor, thd->security_ctx->user, "@",
-          thd->security_ctx->host_or_ip, NullS);
-
+  get_grantor(thd, grantor);
   /*
     The following should always succeed as new users are created before
     this function is called!
@@ -2817,9 +2894,7 @@ static int replace_routine_table(THD *thd, GRANT_NAME *grant_name,
     DBUG_RETURN(-1);
   }
 
-  strxmov(grantor, thd->security_ctx->user, "@",
-          thd->security_ctx->host_or_ip, NullS);
-
+  get_grantor(thd, grantor);
   /*
     New users are created before this function is called.
 
@@ -2945,6 +3020,7 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
   TABLE_LIST tables[3];
   bool create_new_users=0;
   char *db_name, *table_name;
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_table_grant");
 
   if (!initialized)
@@ -3040,6 +3116,7 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
 #ifdef HAVE_REPLICATION
@@ -3055,7 +3132,11 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
     */
     tables[0].updating= tables[1].updating= tables[2].updating= 1;
     if (!(thd->spcont || rpl_filter->tables_ok(0, tables)))
+    {
+      /* Restore the state of binlog format */
+      thd->current_stmt_binlog_row_based= save_binlog_row_based;
       DBUG_RETURN(FALSE);
+    }
   }
 #endif
 
@@ -3068,6 +3149,8 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
   if (simple_open_n_lock_tables(thd,tables))
   {						// Should never happen
     close_thread_tables(thd);			/* purecov: deadcode */
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(TRUE);				/* purecov: deadcode */
   }
 
@@ -3119,12 +3202,12 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
 				     Str->user.str, table_name,
 				     rights,
 				     column_priv);
-      if (!grant_table)				// end of memory
+      if (!grant_table ||
+        my_hash_insert(&column_priv_hash,(uchar*) grant_table))
       {
 	result= TRUE;				/* purecov: deadcode */
 	continue;				/* purecov: deadcode */
       }
-      my_hash_insert(&column_priv_hash,(uchar*) grant_table);
     }
 
     /* If revoke_grant, calculate the new column privilege for tables_priv */
@@ -3184,7 +3267,7 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
 
   if (!result) /* success */
   {
-    write_bin_log(thd, TRUE, thd->query, thd->query_length);
+    result= write_bin_log(thd, TRUE, thd->query(), thd->query_length());
   }
 
   rw_unlock(&LOCK_grant);
@@ -3194,6 +3277,8 @@ int mysql_table_grant(THD *thd, TABLE_LIST *table_list,
 
   /* Tables are automatically closed */
   thd->lex->restore_backup_query_tables_list(&backup);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
   DBUG_RETURN(result);
 }
 
@@ -3222,6 +3307,7 @@ bool mysql_routine_grant(THD *thd, TABLE_LIST *table_list, bool is_proc,
   TABLE_LIST tables[2];
   bool create_new_users=0, result=0;
   char *db_name, *table_name;
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_routine_grant");
 
   if (!initialized)
@@ -3257,6 +3343,7 @@ bool mysql_routine_grant(THD *thd, TABLE_LIST *table_list, bool is_proc,
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
 #ifdef HAVE_REPLICATION
@@ -3272,13 +3359,19 @@ bool mysql_routine_grant(THD *thd, TABLE_LIST *table_list, bool is_proc,
     */
     tables[0].updating= tables[1].updating= 1;
     if (!(thd->spcont || rpl_filter->tables_ok(0, tables)))
+    {
+      /* Restore the state of binlog format */
+      thd->current_stmt_binlog_row_based= save_binlog_row_based;
       DBUG_RETURN(FALSE);
+    }
   }
 #endif
 
   if (simple_open_n_lock_tables(thd,tables))
   {						// Should never happen
     close_thread_tables(thd);
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(TRUE);
   }
 
@@ -3327,13 +3420,14 @@ bool mysql_routine_grant(THD *thd, TABLE_LIST *table_list, bool is_proc,
       }
       grant_name= new GRANT_NAME(Str->host.str, db_name,
 				 Str->user.str, table_name,
-				 rights);
-      if (!grant_name)
+				 rights, TRUE);
+      if (!grant_name ||
+        my_hash_insert(is_proc ?
+                       &proc_priv_hash : &func_priv_hash,(uchar*) grant_name))
       {
         result= TRUE;
 	continue;
       }
-      my_hash_insert(is_proc ? &proc_priv_hash : &func_priv_hash,(uchar*) grant_name);
     }
 
     if (replace_routine_table(thd, grant_name, tables[1].table, *Str,
@@ -3349,10 +3443,13 @@ bool mysql_routine_grant(THD *thd, TABLE_LIST *table_list, bool is_proc,
 
   if (write_to_binlog)
   {
-    write_bin_log(thd, TRUE, thd->query, thd->query_length);
+    if (write_bin_log(thd, FALSE, thd->query(), thd->query_length()))
+      result= TRUE;
   }
 
   rw_unlock(&LOCK_grant);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
 
   /* Tables are automatically closed */
   DBUG_RETURN(result);
@@ -3367,6 +3464,7 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
   char tmp_db[NAME_LEN+1];
   bool create_new_users=0;
   TABLE_LIST tables[2];
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_grant");
   if (!initialized)
   {
@@ -3377,7 +3475,8 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
 
   if (lower_case_table_names && db)
   {
-    strmov(tmp_db,db);
+    strnmov(tmp_db,db,NAME_LEN);
+    tmp_db[NAME_LEN]= '\0';
     my_casedn_str(files_charset_info, tmp_db);
     db=tmp_db;
   }
@@ -3395,6 +3494,7 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
 #ifdef HAVE_REPLICATION
@@ -3410,13 +3510,19 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
     */
     tables[0].updating= tables[1].updating= 1;
     if (!(thd->spcont || rpl_filter->tables_ok(0, tables)))
+    {
+      /* Restore the state of binlog format */
+      thd->current_stmt_binlog_row_based= save_binlog_row_based;
       DBUG_RETURN(FALSE);
+    }
   }
 #endif
 
   if (simple_open_n_lock_tables(thd,tables))
   {						// This should never happen
     close_thread_tables(thd);			/* purecov: deadcode */
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(TRUE);				/* purecov: deadcode */
   }
 
@@ -3436,6 +3542,13 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
       result= TRUE;
       continue;
     }
+    /*
+      No User, but a password?
+      They did GRANT ... TO CURRENT_USER() IDENTIFIED BY ... !
+      Get the current user, and shallow-copy the new password to them!
+    */
+    if (!tmp_Str->user.str && tmp_Str->password.str)
+      Str->password= tmp_Str->password;
     if (replace_user_table(thd, tables[0].table, *Str,
                            (!db ? rights : 0), revoke_grant, create_new_users,
                            test(thd->variables.sql_mode &
@@ -3461,7 +3574,7 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
 
   if (!result)
   {
-    write_bin_log(thd, TRUE, thd->query, thd->query_length);
+    result= write_bin_log(thd, TRUE, thd->query(), thd->query_length());
   }
 
   rw_unlock(&LOCK_grant);
@@ -3469,6 +3582,8 @@ bool mysql_grant(THD *thd, const char *db, List <LEX_USER> &list,
 
   if (!result)
     my_ok(thd);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
 
   DBUG_RETURN(result);
 }
@@ -3538,10 +3653,10 @@ static my_bool grant_load_procs_priv(TABLE *p_table)
   MEM_ROOT **save_mem_root_ptr= my_pthread_getspecific_ptr(MEM_ROOT**,
                                                            THR_MALLOC);
   DBUG_ENTER("grant_load_procs_priv");
-  (void) hash_init(&proc_priv_hash,system_charset_info,
+  (void) hash_init(&proc_priv_hash, &my_charset_utf8_bin,
                    0,0,0, (hash_get_key) get_grant_table,
                    0,0);
-  (void) hash_init(&func_priv_hash,system_charset_info,
+  (void) hash_init(&func_priv_hash, &my_charset_utf8_bin,
                    0,0,0, (hash_get_key) get_grant_table,
                    0,0);
   p_table->file->ha_index_init(0, 1);
@@ -3555,7 +3670,7 @@ static my_bool grant_load_procs_priv(TABLE *p_table)
     {
       GRANT_NAME *mem_check;
       HASH *hash;
-      if (!(mem_check=new (memex_ptr) GRANT_NAME(p_table)))
+      if (!(mem_check=new (memex_ptr) GRANT_NAME(p_table, TRUE)))
       {
         /* This could only happen if we are out memory */
         goto end_unlock;
@@ -3639,7 +3754,7 @@ static my_bool grant_load(THD *thd, TABLE_LIST *tables)
 
   thd->variables.sql_mode&= ~MODE_PAD_CHAR_TO_FULL_LENGTH;
 
-  (void) hash_init(&column_priv_hash,system_charset_info,
+  (void) hash_init(&column_priv_hash, &my_charset_utf8_bin,
                    0,0,0, (hash_get_key) get_grant_table,
                    (hash_free_key) free_grant_table,0);
 
@@ -3729,11 +3844,11 @@ static my_bool grant_reload_procs_priv(THD *thd)
     DBUG_RETURN(TRUE);
   }
 
+  rw_wrlock(&LOCK_grant);
   /* Save a copy of the current hash if we need to undo the grant load */
   old_proc_priv_hash= proc_priv_hash;
   old_func_priv_hash= func_priv_hash;
 
-  rw_wrlock(&LOCK_grant);
   if ((return_val= grant_load_procs_priv(table.table)))
   {
     /* Error; Reverting to old hash */
@@ -4072,8 +4187,7 @@ bool check_column_grant_in_table_ref(THD *thd, TABLE_LIST * table_ref,
     db_name= table_ref->view_db.str;
     table_name= table_ref->view_name.str;
     if (table_ref->belong_to_view && 
-        (thd->lex->sql_command == SQLCOM_SHOW_FIELDS ||
-         thd->lex->sql_command == SQLCOM_SHOW_CREATE))
+        thd->lex->sql_command == SQLCOM_SHOW_FIELDS)
     {
       view_privs= get_column_grant(thd, grant, db_name, table_name, name);
       if (view_privs & VIEW_ANY_ACL)
@@ -4236,6 +4350,16 @@ bool check_grant_db(THD *thd,const char *db)
   char helping [NAME_LEN+USERNAME_LENGTH+2];
   uint len;
   bool error= TRUE;
+  size_t copy_length;
+
+  copy_length= (size_t) (strlen(sctx->priv_user ? sctx->priv_user : "") +
+                 strlen(db ? db : ""));
+
+  /*
+    Make sure that strmov() operations do not result in buffer overflow.
+  */
+  if (copy_length >= (NAME_LEN+USERNAME_LENGTH+2))
+    return 1;
 
   len= (uint) (strmov(strmov(helping, sctx->priv_user) + 1, db) - helping) + 1;
 
@@ -5282,36 +5406,33 @@ static int handle_grant_table(TABLE_LIST *tables, uint table_no, bool drop,
 }
 
 
-/*
+/**
   Handle an in-memory privilege structure.
 
-  SYNOPSIS
-    handle_grant_struct()
-    struct_no                   The number of the structure to handle (0..3).
-    drop                        If user_from is to be dropped.
-    user_from                   The the user to be searched/dropped/renamed.
-    user_to                     The new name for the user if to be renamed,
-                                NULL otherwise.
+  @param struct_no  The number of the structure to handle (0..4).
+  @param drop       If user_from is to be dropped.
+  @param user_from  The the user to be searched/dropped/renamed.
+  @param user_to    The new name for the user if to be renamed, NULL otherwise.
 
-  DESCRIPTION
+  @note
     Scan through all elements in an in-memory grant structure and apply
     the requested operation.
     Delete from grant structure if drop is true.
     Update in grant structure if drop is false and user_to is not NULL.
     Search in grant structure if drop is false and user_to is NULL.
-    Structures are numbered as follows:
-    0 acl_users
-    1 acl_dbs
-    2 column_priv_hash
-    3 procs_priv_hash
+    Structures are enumerated as follows:
+    0 ACL_USER
+    1 ACL_DB
+    2 COLUMN_PRIVILEGES_HASH
+    3 PROC_PRIVILEGES_HASH
+    4 FUNC_PRIVILEGES_HASH
 
-  RETURN
-    > 0         At least one element matched.
-    0           OK, but no element matched.
-    -1		Wrong arguments to function
+  @retval > 0  At least one element matched.
+  @retval 0    OK, but no element matched.
+  @retval -1   Wrong arguments to function or Out of Memory
 */
 
-static int handle_grant_struct(uint struct_no, bool drop,
+static int handle_grant_struct(enum enum_acl_lists struct_no, bool drop,
                                LEX_USER *user_from, LEX_USER *user_to)
 {
   int result= 0;
@@ -5322,6 +5443,12 @@ static int handle_grant_struct(uint struct_no, bool drop,
   ACL_USER *acl_user= NULL;
   ACL_DB *acl_db= NULL;
   GRANT_NAME *grant_name= NULL;
+  /*
+    Dynamic array acl_grant_name used to store pointers to all
+    GRANT_NAME objects
+  */
+  Dynamic_array<GRANT_NAME *> acl_grant_name;
+  HASH *grant_name_hash= NULL;
   DBUG_ENTER("handle_grant_struct");
   DBUG_PRINT("info",("scan struct: %u  search: '%s'@'%s'",
                      struct_no, user_from->user.str, user_from->host.str));
@@ -5333,17 +5460,23 @@ static int handle_grant_struct(uint struct_no, bool drop,
 
   /* Get the number of elements in the in-memory structure. */
   switch (struct_no) {
-  case 0:
+  case USER_ACL:
     elements= acl_users.elements;
     break;
-  case 1:
+  case DB_ACL:
     elements= acl_dbs.elements;
     break;
-  case 2:
+  case COLUMN_PRIVILEGES_HASH:
     elements= column_priv_hash.records;
+    grant_name_hash= &column_priv_hash;
     break;
-  case 3:
+  case PROC_PRIVILEGES_HASH:
     elements= proc_priv_hash.records;
+    grant_name_hash= &proc_priv_hash;
+    break;
+  case FUNC_PRIVILEGES_HASH:
+    elements= func_priv_hash.records;
+    grant_name_hash= &func_priv_hash;
     break;
   default:
     return -1;
@@ -5360,31 +5493,28 @@ static int handle_grant_struct(uint struct_no, bool drop,
       Get a pointer to the element.
     */
     switch (struct_no) {
-    case 0:
+    case USER_ACL:
       acl_user= dynamic_element(&acl_users, idx, ACL_USER*);
       user= acl_user->user;
       host= acl_user->host.hostname;
     break;
 
-    case 1:
+    case DB_ACL:
       acl_db= dynamic_element(&acl_dbs, idx, ACL_DB*);
       user= acl_db->user;
       host= acl_db->host.hostname;
       break;
 
-    case 2:
-      grant_name= (GRANT_NAME*) hash_element(&column_priv_hash, idx);
+    case COLUMN_PRIVILEGES_HASH:
+    case PROC_PRIVILEGES_HASH:
+    case FUNC_PRIVILEGES_HASH:
+      grant_name= (GRANT_NAME*) hash_element(grant_name_hash, idx);
       user= grant_name->user;
       host= grant_name->host.hostname;
       break;
 
-    case 3:
-      grant_name= (GRANT_NAME*) hash_element(&proc_priv_hash, idx);
-      user= grant_name->user;
-      host= grant_name->host.hostname;
-      break;
     default:
-      assert(0);
+      MY_ASSERT_UNREACHABLE();
     }
     if (! user)
       user= "";
@@ -5403,44 +5533,60 @@ static int handle_grant_struct(uint struct_no, bool drop,
     if ( drop )
     {
       switch ( struct_no ) {
-      case 0:
+      case USER_ACL:
         delete_dynamic_element(&acl_users, idx);
+        elements--;
+        /*
+        - If we are iterating through an array then we just have moved all
+          elements after the current element one position closer to its head.
+          This means that we have to take another look at the element at
+          current position as it is a new element from the array's tail.
+        - This is valid for USER_ACL, DB_ACL.
+        */
+        idx--;
         break;
 
-      case 1:
+      case DB_ACL:
         delete_dynamic_element(&acl_dbs, idx);
+        elements--;
+        idx--;
         break;
 
-      case 2:
-        hash_delete(&column_priv_hash, (uchar*) grant_name);
-	break;
-
-      case 3:
-        hash_delete(&proc_priv_hash, (uchar*) grant_name);
+      case COLUMN_PRIVILEGES_HASH:
+      case PROC_PRIVILEGES_HASH:
+      case FUNC_PRIVILEGES_HASH:
+        /*
+          Deleting while traversing a hash table is not valid procedure and
+          hence we save pointers to GRANT_NAME objects for later processing.
+        */
+        if (acl_grant_name.append(grant_name))
+          DBUG_RETURN(-1);
 	break;
       }
-      elements--;
-      idx--;
     }
     else if ( user_to )
     {
       switch ( struct_no ) {
-      case 0:
+      case USER_ACL:
         acl_user->user= strdup_root(&mem, user_to->user.str);
         acl_user->host.hostname= strdup_root(&mem, user_to->host.str);
         break;
 
-      case 1:
+      case DB_ACL:
         acl_db->user= strdup_root(&mem, user_to->user.str);
         acl_db->host.hostname= strdup_root(&mem, user_to->host.str);
         break;
 
-      case 2:
-      case 3:
-        grant_name->user= strdup_root(&mem, user_to->user.str);
-        update_hostname(&grant_name->host,
-                        strdup_root(&mem, user_to->host.str));
-	break;
+      case COLUMN_PRIVILEGES_HASH:
+      case PROC_PRIVILEGES_HASH:
+      case FUNC_PRIVILEGES_HASH:
+        /*
+          Updating while traversing a hash table is not valid procedure and
+          hence we save pointers to GRANT_NAME objects for later processing.
+        */
+        if (acl_grant_name.append(grant_name))
+          DBUG_RETURN(-1);
+        break;
       }
     }
     else
@@ -5449,6 +5595,48 @@ static int handle_grant_struct(uint struct_no, bool drop,
       break;
     }
   }
+
+  if (drop || user_to)
+  {
+    /*
+      Traversing the elements stored in acl_grant_name dynamic array
+      to either delete or update them.
+    */
+    for (int i= 0; i < acl_grant_name.elements(); ++i)
+    {
+      grant_name= acl_grant_name.at(i);
+
+      if (drop)
+      {
+        my_hash_delete(grant_name_hash, (uchar *) grant_name);
+      }
+      else
+      {
+        /*
+          Save old hash key and its length to be able properly update
+          element position in hash.
+        */
+        char *old_key= grant_name->hash_key;
+        size_t old_key_length= grant_name->key_length;
+
+        /*
+          Update the grant structure with the new user name and host name.
+        */
+        grant_name->set_user_details(user_to->host.str, grant_name->db,
+                                     user_to->user.str, grant_name->tname,
+                                     TRUE);
+
+        /*
+          Since username is part of the hash key, when the user name
+          is renamed, the hash key is changed. Update the hash to
+          ensure that the position matches the new hash key value
+        */
+        my_hash_update(grant_name_hash, (uchar*) grant_name, (uchar*) old_key,
+                       old_key_length);
+      }
+    }
+  }
+
 #ifdef EXTRA_DEBUG
   DBUG_PRINT("loop",("scan struct: %u  result %d", struct_no, result));
 #endif
@@ -5486,6 +5674,7 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
 {
   int result= 0;
   int found;
+  int ret;
   DBUG_ENTER("handle_grant_data");
 
   /* Handle user table. */
@@ -5497,13 +5686,18 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
   else
   {
     /* Handle user array. */
-    if ((handle_grant_struct(0, drop, user_from, user_to) && ! result) ||
-        found)
+    if (((ret= handle_grant_struct(USER_ACL, drop, user_from, user_to) > 0) &&
+         ! result) || found)
     {
       result= 1; /* At least one record/element found. */
       /* If search is requested, we do not need to search further. */
       if (! drop && ! user_to)
         goto end;
+    }
+    else if (ret < 0)
+    {
+      result= -1;
+      goto end;
     }
   }
 
@@ -5516,17 +5710,22 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
   else
   {
     /* Handle db array. */
-    if (((handle_grant_struct(1, drop, user_from, user_to) && ! result) ||
-         found) && ! result)
+    if ((((ret= handle_grant_struct(DB_ACL, drop, user_from, user_to) > 0) &&
+          ! result) || found) && ! result)
     {
       result= 1; /* At least one record/element found. */
       /* If search is requested, we do not need to search further. */
       if (! drop && ! user_to)
         goto end;
     }
+    else if (ret < 0)
+    {
+      result= -1;
+      goto end;
+    }
   }
 
-  /* Handle procedures table. */
+  /* Handle stored routines table. */
   if ((found= handle_grant_table(tables, 4, drop, user_from, user_to)) < 0)
   {
     /* Handle of table failed, don't touch in-memory array. */
@@ -5535,13 +5734,34 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
   else
   {
     /* Handle procs array. */
-    if (((handle_grant_struct(3, drop, user_from, user_to) && ! result) ||
-         found) && ! result)
+    if ((((ret= handle_grant_struct(PROC_PRIVILEGES_HASH, drop, user_from,
+                                    user_to) > 0) && ! result) || found) &&
+        ! result)
     {
       result= 1; /* At least one record/element found. */
       /* If search is requested, we do not need to search further. */
       if (! drop && ! user_to)
         goto end;
+    }
+    else if (ret < 0)
+    {
+      result= -1;
+      goto end;
+    }
+    /* Handle funcs array. */
+    if ((((ret= handle_grant_struct(FUNC_PRIVILEGES_HASH, drop, user_from,
+                                    user_to) > 0) && ! result) || found) &&
+        ! result)
+    {
+      result= 1; /* At least one record/element found. */
+      /* If search is requested, we do not need to search further. */
+      if (! drop && ! user_to)
+        goto end;
+    }
+    else if (ret < 0)
+    {
+      result= -1;
+      goto end;
     }
   }
 
@@ -5570,9 +5790,12 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
     else
     {
       /* Handle columns hash. */
-      if (((handle_grant_struct(2, drop, user_from, user_to) && ! result) ||
-           found) && ! result)
+      if ((((ret= handle_grant_struct(COLUMN_PRIVILEGES_HASH, drop, user_from,
+                                      user_to) > 0) && ! result) || found) &&
+          ! result)
         result= 1; /* At least one record/element found. */
+      else if (ret < 0)
+        result= -1;
     }
   }
  end:
@@ -5609,11 +5832,11 @@ bool mysql_create_user(THD *thd, List <LEX_USER> &list)
 {
   int result;
   String wrong_users;
-  ulong sql_mode;
   LEX_USER *user_name, *tmp_user_name;
   List_iterator <LEX_USER> user_list(list);
   TABLE_LIST tables[GRANT_TABLES];
   bool some_users_created= FALSE;
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_create_user");
 
   /*
@@ -5621,11 +5844,16 @@ bool mysql_create_user(THD *thd, List <LEX_USER> &list)
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
   /* CREATE USER may be skipped on replication client. */
   if ((result= open_grant_tables(thd, tables)))
+  {
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(result != 1);
+  }
 
   rw_wrlock(&LOCK_grant);
   VOID(pthread_mutex_lock(&acl_cache->lock));
@@ -5650,7 +5878,6 @@ bool mysql_create_user(THD *thd, List <LEX_USER> &list)
     }
 
     some_users_created= TRUE;
-    sql_mode= thd->variables.sql_mode;
     if (replace_user_table(thd, tables[0].table, *user_name, 0, 0, 1, 0))
     {
       append_user(&wrong_users, user_name);
@@ -5664,10 +5891,12 @@ bool mysql_create_user(THD *thd, List <LEX_USER> &list)
     my_error(ER_CANNOT_USER, MYF(0), "CREATE USER", wrong_users.c_ptr_safe());
 
   if (some_users_created)
-    write_bin_log(thd, FALSE, thd->query, thd->query_length);
+    result |= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
   rw_unlock(&LOCK_grant);
   close_thread_tables(thd);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
   DBUG_RETURN(result);
 }
 
@@ -5694,6 +5923,7 @@ bool mysql_drop_user(THD *thd, List <LEX_USER> &list)
   TABLE_LIST tables[GRANT_TABLES];
   bool some_users_deleted= FALSE;
   ulong old_sql_mode= thd->variables.sql_mode;
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_drop_user");
 
   /*
@@ -5701,11 +5931,16 @@ bool mysql_drop_user(THD *thd, List <LEX_USER> &list)
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
   /* DROP USER may be skipped on replication client. */
   if ((result= open_grant_tables(thd, tables)))
+  {
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(result != 1);
+  }
 
   thd->variables.sql_mode&= ~MODE_PAD_CHAR_TO_FULL_LENGTH;
 
@@ -5737,11 +5972,13 @@ bool mysql_drop_user(THD *thd, List <LEX_USER> &list)
     my_error(ER_CANNOT_USER, MYF(0), "DROP USER", wrong_users.c_ptr_safe());
 
   if (some_users_deleted)
-    write_bin_log(thd, FALSE, thd->query, thd->query_length);
+    result |= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
   rw_unlock(&LOCK_grant);
   close_thread_tables(thd);
   thd->variables.sql_mode= old_sql_mode;
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
   DBUG_RETURN(result);
 }
 
@@ -5768,6 +6005,7 @@ bool mysql_rename_user(THD *thd, List <LEX_USER> &list)
   List_iterator <LEX_USER> user_list(list);
   TABLE_LIST tables[GRANT_TABLES];
   bool some_users_renamed= FALSE;
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_rename_user");
 
   /*
@@ -5775,11 +6013,16 @@ bool mysql_rename_user(THD *thd, List <LEX_USER> &list)
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
   /* RENAME USER may be skipped on replication client. */
   if ((result= open_grant_tables(thd, tables)))
+  {
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(result != 1);
+  }
 
   rw_wrlock(&LOCK_grant);
   VOID(pthread_mutex_lock(&acl_cache->lock));
@@ -5822,10 +6065,12 @@ bool mysql_rename_user(THD *thd, List <LEX_USER> &list)
     my_error(ER_CANNOT_USER, MYF(0), "RENAME USER", wrong_users.c_ptr_safe());
   
   if (some_users_renamed && mysql_bin_log.is_open())
-    write_bin_log(thd, FALSE, thd->query, thd->query_length);
+    result |= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
   rw_unlock(&LOCK_grant);
   close_thread_tables(thd);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
   DBUG_RETURN(result);
 }
 
@@ -5850,6 +6095,7 @@ bool mysql_revoke_all(THD *thd,  List <LEX_USER> &list)
   int result;
   ACL_DB *acl_db;
   TABLE_LIST tables[GRANT_TABLES];
+  bool save_binlog_row_based;
   DBUG_ENTER("mysql_revoke_all");
 
   /*
@@ -5857,10 +6103,15 @@ bool mysql_revoke_all(THD *thd,  List <LEX_USER> &list)
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
   if ((result= open_grant_tables(thd, tables)))
+  {
+    /* Restore the state of binlog format */
+    thd->current_stmt_binlog_row_based= save_binlog_row_based;
     DBUG_RETURN(result != 1);
+  }
 
   rw_wrlock(&LOCK_grant);
   VOID(pthread_mutex_lock(&acl_cache->lock));
@@ -6004,13 +6255,17 @@ bool mysql_revoke_all(THD *thd,  List <LEX_USER> &list)
 
   VOID(pthread_mutex_unlock(&acl_cache->lock));
 
-  write_bin_log(thd, FALSE, thd->query, thd->query_length);
+  if (result)
+    my_message(ER_REVOKE_GRANTS, ER(ER_REVOKE_GRANTS), MYF(0));
+
+  result= result |
+    write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
   rw_unlock(&LOCK_grant);
   close_thread_tables(thd);
 
-  if (result)
-    my_message(ER_REVOKE_GRANTS, ER(ER_REVOKE_GRANTS), MYF(0));
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
 
   DBUG_RETURN(result);
 }
@@ -6094,6 +6349,7 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
   TABLE_LIST tables[GRANT_TABLES];
   HASH *hash= is_proc ? &proc_priv_hash : &func_priv_hash;
   Silence_routine_definer_errors error_handler;
+  bool save_binlog_row_based;
   DBUG_ENTER("sp_revoke_privileges");
 
   if ((result= open_grant_tables(thd, tables)))
@@ -6110,6 +6366,7 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
     row-based replication.  The flag will be reset at the end of the
     statement.
   */
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
   thd->clear_current_stmt_binlog_row_based();
 
   /* Remove procedure access */
@@ -6118,7 +6375,7 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
     for (counter= 0, revoked= 0 ; counter < hash->records ; )
     {
       GRANT_NAME *grant_proc= (GRANT_NAME*) hash_element(hash, counter);
-      if (!my_strcasecmp(system_charset_info, grant_proc->db, sp_db) &&
+      if (!my_strcasecmp(&my_charset_utf8_bin, grant_proc->db, sp_db) &&
 	  !my_strcasecmp(system_charset_info, grant_proc->tname, sp_name))
       {
         LEX_USER lex_user;
@@ -6146,6 +6403,8 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
   close_thread_tables(thd);
 
   thd->pop_internal_handler();
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
 
   DBUG_RETURN(error_handler.has_errors());
 }

@@ -155,24 +155,24 @@ execute stmt1 ;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 6	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
-5	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
-4	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
+5	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+4	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 3	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 2	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 execute stmt1 ;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 6	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
-5	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
-4	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
+5	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+4	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 3	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 2	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 explain SELECT (SELECT SUM(c1 + c12 + 0.0) FROM t2 where (t1.c2 - 0e-3) = t2.c2 GROUP BY t1.c15 LIMIT 1) as scalar_s, exists (select 1.0e+0 from t2 where t2.c3 * 9.0000000000 = t1.c4) as exists_s, c5 * 4 in (select c6 + 0.3e+1 from t2) as in_s, (c7 - 4, c8 - 4) in (select c9 + 4.0, c10 + 40e-1 from t2) as in_row_s FROM t1, (select c25 x, c32 y from t2) tt WHERE x * 1 = c25;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 6	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
-5	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
-4	DEPENDENT SUBQUERY	t2	system	NULL	NULL	NULL	NULL	0	const row not found
+5	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+4	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 3	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 2	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
 deallocate prepare stmt1;
@@ -1786,7 +1786,7 @@ prepare stmt from "create view v1 (c,d,e,f) as select a,b,a in (select a+2 from 
 execute stmt;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `c`,`t1`.`b` AS `d`,`t1`.`a` in (select (`t1`.`a` + 2) AS `a+2` from `t1`) AS `e`,`t1`.`a` = all (select `t1`.`a` AS `a` from `t1`) AS `f` from `t1`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `c`,`t1`.`b` AS `d`,`t1`.`a` in (select (`t1`.`a` + 2) from `t1`) AS `e`,`t1`.`a` = all (select `t1`.`a` from `t1`) AS `f` from `t1`	latin1	latin1_swedish_ci
 select * from v1;
 c	d	e	f
 drop view v1;
@@ -1794,7 +1794,7 @@ execute stmt;
 deallocate prepare stmt;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `c`,`t1`.`b` AS `d`,`t1`.`a` in (select (`t1`.`a` + 2) AS `a+2` from `t1`) AS `e`,`t1`.`a` = all (select `t1`.`a` AS `a` from `t1`) AS `f` from `t1`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `c`,`t1`.`b` AS `d`,`t1`.`a` in (select (`t1`.`a` + 2) from `t1`) AS `e`,`t1`.`a` = all (select `t1`.`a` from `t1`) AS `f` from `t1`	latin1	latin1_swedish_ci
 select * from v1;
 c	d	e	f
 drop view v1;
@@ -1917,6 +1917,53 @@ execute stmt using @arg;
 ?
 -12345.5432100000
 deallocate prepare stmt;
+#
+# Bug#48508: Crash on prepared statement re-execution.
+#
+create table t1(b int);
+insert into t1 values (0);
+create view v1 AS select 1 as a from t1 where b;
+prepare stmt from "select * from v1 where a";
+execute stmt;
+a
+execute stmt;
+a
+deallocate prepare stmt;
+drop table t1;
+drop view v1;
+create table t1(a bigint);
+create table t2(b tinyint);
+insert into t2 values (null);
+prepare stmt from "select 1 from t1 join  t2 on a xor b where b > 1  and a =1";
+execute stmt;
+1
+execute stmt;
+1
+deallocate prepare stmt;
+drop table t1,t2;
+#
+#
+# Bug #49570: Assertion failed: !(order->used & map)
+# on re-execution of prepared statement
+#
+CREATE TABLE t1(a INT PRIMARY KEY);
+INSERT INTO t1 VALUES(0), (1);
+PREPARE stmt FROM 
+"SELECT 1 FROM t1 JOIN t1 t2 USING(a) GROUP BY t2.a, t1.a";
+EXECUTE stmt;
+1
+1
+1
+EXECUTE stmt;
+1
+1
+1
+EXECUTE stmt;
+1
+1
+1
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
 End of 5.0 tests.
 create procedure proc_1() reset query cache;
 call proc_1();
@@ -2922,4 +2969,177 @@ execute stmt;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 drop table t1;
 deallocate prepare stmt;
+#
+# Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
+#
+prepare encode from "select encode(?, ?) into @ciphertext";
+prepare decode from "select decode(?, ?) into @plaintext";
+set @str="abc", @key="cba";
+execute encode using @str, @key;
+execute decode using @ciphertext, @key;
+select @plaintext;
+@plaintext
+abc
+set @str="bcd", @key="dcb";
+execute encode using @str, @key;
+execute decode using @ciphertext, @key;
+select @plaintext;
+@plaintext
+bcd
+deallocate prepare encode;
+deallocate prepare decode;
+#
+# Bug#52124 memory leaks like a sieve in datetime, timestamp, time, date fields + warnings
+#
+CREATE TABLE t1 (a DATETIME NOT NULL, b TINYINT);
+INSERT INTO t1 VALUES (0, 0),(0, 0);
+PREPARE stmt FROM "SELECT 1 FROM t1 WHERE
+ROW(a, b) >= ROW('1', (SELECT 1 FROM t1 WHERE a > 1234))";
+EXECUTE stmt;
+1
+EXECUTE stmt;
+1
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+#
+# Bug#54494 crash with explain extended and prepared statements
+#
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES (1),(2);
+PREPARE stmt FROM 'EXPLAIN EXTENDED SELECT 1 FROM t1 RIGHT JOIN t1 t2 ON 1';
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	
+Warnings:
+Note	1003	select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	
+Warnings:
+Note	1003	select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+#
+# Bug#54488 crash when using explain and prepared statements with subqueries
+#
+CREATE TABLE t1(f1 INT);
+INSERT INTO t1 VALUES (1),(1);
+PREPARE stmt FROM 'EXPLAIN SELECT 1 FROM t1 WHERE (SELECT (SELECT 1 FROM t1 GROUP BY f1))';
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+3	SUBQUERY	t1	ALL	NULL	NULL	NULL	NULL	2	Using temporary; Using filesort
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+3	SUBQUERY	t1	ALL	NULL	NULL	NULL	NULL	2	Using temporary; Using filesort
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
 End of 5.1 tests.
+
+# Bug#13805127: Stored program cache produces wrong result in same THD
+
+PREPARE s1 FROM 
+"
+SELECT c1, t2.c2, count(c3)
+FROM
+  (
+  SELECT 3 as c2 FROM dual WHERE @x = 1
+  UNION
+  SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+  ) AS t1,
+  (
+  SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+  UNION
+  SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+  UNION
+  SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+  ) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2
+";
+
+SET @x = 1;
+SELECT c1, t2.c2, count(c3)
+FROM
+(
+SELECT 3 as c2 FROM dual WHERE @x = 1
+UNION
+SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+) AS t1,
+(
+SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+UNION
+SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+UNION
+SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+2012-03-01 01:00:00	3	1
+2012-03-01 02:00:00	3	1
+
+EXECUTE s1;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+2012-03-01 01:00:00	3	1
+2012-03-01 02:00:00	3	1
+
+SET @x = 2;
+SELECT c1, t2.c2, count(c3)
+FROM
+(
+SELECT 3 as c2 FROM dual WHERE @x = 1
+UNION
+SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+) AS t1,
+(
+SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+UNION
+SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+UNION
+SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+
+EXECUTE s1;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+
+SET @x = 1;
+SELECT c1, t2.c2, count(c3)
+FROM
+(
+SELECT 3 as c2 FROM dual WHERE @x = 1
+UNION
+SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+) AS t1,
+(
+SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+UNION
+SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+UNION
+SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+2012-03-01 01:00:00	3	1
+2012-03-01 02:00:00	3	1
+
+EXECUTE s1;
+c1	c2	count(c3)
+2012-03-01 01:00:00	2	1
+2012-03-01 01:00:00	3	1
+2012-03-01 02:00:00	3	1
+DEALLOCATE PREPARE s1;

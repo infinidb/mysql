@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @file
@@ -183,7 +184,7 @@ static enum_field_types field_types_merge_rules [FIELDTYPE_NUM][FIELDTYPE_NUM]=
   //MYSQL_TYPE_NULL         MYSQL_TYPE_TIMESTAMP
     MYSQL_TYPE_LONG,         MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_LONGLONG     MYSQL_TYPE_INT24
-    MYSQL_TYPE_LONGLONG,    MYSQL_TYPE_INT24,
+    MYSQL_TYPE_LONGLONG,    MYSQL_TYPE_LONG,
   //MYSQL_TYPE_DATE         MYSQL_TYPE_TIME
     MYSQL_TYPE_VARCHAR,     MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_DATETIME     MYSQL_TYPE_YEAR
@@ -214,7 +215,7 @@ static enum_field_types field_types_merge_rules [FIELDTYPE_NUM][FIELDTYPE_NUM]=
   //MYSQL_TYPE_NULL         MYSQL_TYPE_TIMESTAMP
     MYSQL_TYPE_FLOAT,       MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_LONGLONG     MYSQL_TYPE_INT24
-    MYSQL_TYPE_FLOAT,       MYSQL_TYPE_INT24,
+    MYSQL_TYPE_FLOAT,       MYSQL_TYPE_FLOAT,
   //MYSQL_TYPE_DATE         MYSQL_TYPE_TIME
     MYSQL_TYPE_VARCHAR,     MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_DATETIME     MYSQL_TYPE_YEAR
@@ -245,7 +246,7 @@ static enum_field_types field_types_merge_rules [FIELDTYPE_NUM][FIELDTYPE_NUM]=
   //MYSQL_TYPE_NULL         MYSQL_TYPE_TIMESTAMP
     MYSQL_TYPE_DOUBLE,      MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_LONGLONG     MYSQL_TYPE_INT24
-    MYSQL_TYPE_DOUBLE,      MYSQL_TYPE_INT24,
+    MYSQL_TYPE_DOUBLE,      MYSQL_TYPE_DOUBLE,
   //MYSQL_TYPE_DATE         MYSQL_TYPE_TIME
     MYSQL_TYPE_VARCHAR,     MYSQL_TYPE_VARCHAR,
   //MYSQL_TYPE_DATETIME     MYSQL_TYPE_YEAR
@@ -276,7 +277,7 @@ static enum_field_types field_types_merge_rules [FIELDTYPE_NUM][FIELDTYPE_NUM]=
   //MYSQL_TYPE_NULL         MYSQL_TYPE_TIMESTAMP
     MYSQL_TYPE_NULL,        MYSQL_TYPE_TIMESTAMP,
   //MYSQL_TYPE_LONGLONG     MYSQL_TYPE_INT24
-    MYSQL_TYPE_LONGLONG,    MYSQL_TYPE_INT24,
+    MYSQL_TYPE_LONGLONG,    MYSQL_TYPE_LONGLONG,
   //MYSQL_TYPE_DATE         MYSQL_TYPE_TIME
     MYSQL_TYPE_NEWDATE,     MYSQL_TYPE_TIME,
   //MYSQL_TYPE_DATETIME     MYSQL_TYPE_YEAR
@@ -1373,12 +1374,14 @@ bool Field::send_binary(Protocol *protocol)
    to the size of this field (the slave or destination). 
 
    @param   field_metadata   Encoded size in field metadata
+   @param   mflags           Flags from the table map event for the table.
 
    @retval 0 if this field's size is < the source field's size
    @retval 1 if this field's size is >= the source field's size
 */
 int Field::compatible_field_size(uint field_metadata,
-                                 const Relay_log_info *rli_arg __attribute__((unused)))
+                                 const Relay_log_info *rli_arg __attribute__((unused)),
+                                 uint16 mflags __attribute__((unused)))
 {
   uint const source_size= pack_length_from_metadata(field_metadata);
   uint const destination_size= row_pack_length();
@@ -1533,7 +1536,7 @@ void Field::make_field(Send_field *field)
   }
   else
     field->org_table_name= field->db_name= "";
-  if (orig_table)
+  if (orig_table && orig_table->alias)
   {
     field->table_name= orig_table->alias;
     field->org_col_name= field_name;
@@ -1705,11 +1708,10 @@ uint Field::fill_cache_field(CACHE_FIELD *copy)
   uint store_length;
   copy->str=ptr;
   copy->length=pack_length();
-  copy->blob_field=0;
+  copy->field= this;
   if (flags & BLOB_FLAG)
   {
-    copy->blob_field=(Field_blob*) this;
-    copy->strip=0;
+    copy->type= CACHE_BLOB;
     copy->length-= table->s->blob_ptr_size;
     return copy->length;
   }
@@ -1717,15 +1719,15 @@ uint Field::fill_cache_field(CACHE_FIELD *copy)
            (type() == MYSQL_TYPE_STRING && copy->length >= 4 &&
             copy->length < 256))
   {
-    copy->strip=1;				/* Remove end space */
+    copy->type= CACHE_STRIPPED;
     store_length= 2;
   }
   else
   {
-    copy->strip=0;
+    copy->type= 0;
     store_length= 0;
   }
-  return copy->length+ store_length;
+  return copy->length + store_length;
 }
 
 
@@ -2276,7 +2278,7 @@ int Field_decimal::store(double nr)
   snprintf(buff,sizeof(buff)-1, "%.*f",(int) dec,nr);
   length= strlen(buff);
 #else
-  length= my_sprintf(buff,(buff,"%.*f",dec,nr));
+  length= sprintf(buff, "%.*f", dec, nr);
 #endif
 
   if (length > field_length)
@@ -2480,94 +2482,53 @@ Field_new_decimal::Field_new_decimal(uint32 len_arg,
 {
   precision= my_decimal_length_to_precision(len_arg, dec_arg, unsigned_arg);
   set_if_smaller(precision, DECIMAL_MAX_PRECISION);
-  DBUG_ASSERT(precision >= dec);
   DBUG_ASSERT((precision <= DECIMAL_MAX_PRECISION) &&
               (dec <= DECIMAL_MAX_SCALE));
   bin_size= my_decimal_get_binary_size(precision, dec);
 }
 
 
-/**
-  Create a field to hold a decimal value from an item.
-
-  @remark The MySQL DECIMAL data type has a characteristic that needs to be
-          taken into account when deducing the type from a Item_decimal.
-
-  But first, let's briefly recap what is the new MySQL DECIMAL type:
-
-  The declaration syntax for a decimal is DECIMAL(M,D), where:
-
-  * M is the maximum number of digits (the precision).
-    It has a range of 1 to 65.
-  * D is the number of digits to the right of the decimal separator (the scale).
-    It has a range of 0 to 30 and must be no larger than M.
-
-  D and M are used to determine the storage requirements for the integer
-  and fractional parts of each value. The integer part is to the left of
-  the decimal separator and to the right is the fractional part. Hence:
-
-  M is the number of digits for the integer and fractional part.
-  D is the number of digits for the fractional part.
-
-  Consequently, M - D is the number of digits for the integer part. For
-  example, a DECIMAL(20,10) column has ten digits on either side of
-  the decimal separator.
-
-  The characteristic that needs to be taken into account is that the
-  backing type for Item_decimal is a my_decimal that has a higher
-  precision (DECIMAL_MAX_POSSIBLE_PRECISION, see my_decimal.h) than
-  DECIMAL.
-
-  Drawing a comparison between my_decimal and DECIMAL:
-
-  * M has a range of 1 to 81.
-  * D has a range of 0 to 81.
-
-  There can be a difference in range if the decimal contains a integer
-  part. This is because the fractional part must always be on a group
-  boundary, leaving at least one group for the integer part. Since each
-  group is 9 (DIG_PER_DEC1) digits and there are 9 (DECIMAL_BUFF_LENGTH)
-  groups, the fractional part is limited to 72 digits if there is at
-  least one digit in the integral part.
-
-  Although the backing type for a DECIMAL is also my_decimal, every
-  time a my_decimal is stored in a DECIMAL field, the precision and
-  scale are explicitly capped at 65 (DECIMAL_MAX_PRECISION) and 30
-  (DECIMAL_MAX_SCALE) digits, following my_decimal truncation procedure
-  (FIX_INTG_FRAC_ERROR).
-*/
-
-Field_new_decimal *
-Field_new_decimal::new_decimal_field(const Item *item)
+Field *Field_new_decimal::create_from_item (Item *item)
 {
-  uint32 len;
-  uint intg= item->decimal_int_part(), scale= item->decimals;
+  uint8 dec= item->decimals;
+  uint8 intg= item->decimal_precision() - dec;
+  uint32 len= item->max_length;
 
-  DBUG_ASSERT(item->decimal_precision() >= item->decimals);
+  DBUG_ASSERT (item->result_type() == DECIMAL_RESULT);
 
   /*
-    Employ a procedure along the lines of the my_decimal truncation process:
-    - If the integer part is equal to or bigger than the maximum precision:
-      Truncate integer part to fit and the fractional becomes zero.
-    - Otherwise:
-      Truncate fractional part to fit.
+    Trying to put too many digits overall in a DECIMAL(prec,dec)
+    will always throw a warning. We must limit dec to
+    DECIMAL_MAX_SCALE however to prevent an assert() later.
   */
-  if (intg >= DECIMAL_MAX_PRECISION)
-  {
-    intg= DECIMAL_MAX_PRECISION;
-    scale= 0;
-  }
-  else
-  {
-    uint room= min(DECIMAL_MAX_PRECISION - intg, DECIMAL_MAX_SCALE);
-    if (scale > room)
-      scale= room;
-  }
 
-  len= my_decimal_precision_to_length(intg + scale, scale, item->unsigned_flag);
+  if (dec > 0)
+  {
+    signed int overflow;
 
-  return new Field_new_decimal(len, item->maybe_null, item->name, scale,
-                               item->unsigned_flag);
+    dec= min(dec, DECIMAL_MAX_SCALE);
+
+    /*
+      If the value still overflows the field with the corrected dec,
+      we'll throw out decimals rather than integers. This is still
+      bad and of course throws a truncation warning.
+      +1: for decimal point
+      */
+
+    const int required_length=
+      my_decimal_precision_to_length(intg + dec, dec,
+                                     item->unsigned_flag);
+
+    overflow= required_length - len;
+
+    if (overflow > 0)
+      dec= max(0, dec - overflow);            // too long, discard fract
+    else
+      /* Corrected value fits. */
+      len= required_length;
+  }
+  return new Field_new_decimal(len, item->maybe_null, item->name,
+                               dec, item->unsigned_flag);
 }
 
 
@@ -2623,7 +2584,7 @@ bool Field_new_decimal::store_value(const my_decimal *decimal_value)
   DBUG_ENTER("Field_new_decimal::store_value");
 #ifndef DBUG_OFF
   {
-    char dbug_buff[DECIMAL_MAX_STR_LENGTH+1];
+    char dbug_buff[DECIMAL_MAX_STR_LENGTH+2];
     DBUG_PRINT("enter", ("value: %s", dbug_decimal_as_string(dbug_buff, decimal_value)));
   }
 #endif
@@ -2638,7 +2599,7 @@ bool Field_new_decimal::store_value(const my_decimal *decimal_value)
   }
 #ifndef DBUG_OFF
   {
-    char dbug_buff[DECIMAL_MAX_STR_LENGTH+1];
+    char dbug_buff[DECIMAL_MAX_STR_LENGTH+2];
     DBUG_PRINT("info", ("saving with precision %d  scale: %d  value %s",
                         (int)precision, (int)dec,
                         dbug_decimal_as_string(dbug_buff, decimal_value)));
@@ -2713,7 +2674,7 @@ int Field_new_decimal::store(const char *from, uint length,
   }
 
 #ifndef DBUG_OFF
-  char dbug_buff[DECIMAL_MAX_STR_LENGTH+1];
+  char dbug_buff[DECIMAL_MAX_STR_LENGTH+2];
   DBUG_PRINT("enter", ("value: %s",
                        dbug_decimal_as_string(dbug_buff, &decimal_value)));
 #endif
@@ -2921,7 +2882,8 @@ uint Field_new_decimal::pack_length_from_metadata(uint field_metadata)
    @retval 1 if this field's size is >= the source field's size
 */
 int Field_new_decimal::compatible_field_size(uint field_metadata,
-                                             const Relay_log_info * __attribute__((unused)))
+                                             const Relay_log_info * __attribute__((unused)),
+                                             uint16 mflags __attribute__((unused)))
 {
   int compatible= 0;
   uint const source_precision= (field_metadata >> 8U) & 0x00ff;
@@ -2986,16 +2948,16 @@ Field_new_decimal::unpack(uchar* to,
       a decimal and write that to the raw data buffer.
     */
     decimal_digit_t dec_buf[DECIMAL_MAX_PRECISION];
-    decimal_t dec;
-    dec.len= from_precision;
-    dec.buf= dec_buf;
+    decimal_t dec_val;
+    dec_val.len= from_precision;
+    dec_val.buf= dec_buf;
     /*
       Note: bin2decimal does not change the length of the field. So it is
       just the first step the resizing operation. The second step does the
       resizing using the precision and decimals from the slave.
     */
-    bin2decimal((uchar *)from, &dec, from_precision, from_decimal);
-    decimal2bin(&dec, to, precision, decimals());
+    bin2decimal((uchar *)from, &dec_val, from_precision, from_decimal);
+    decimal2bin(&dec_val, to, precision, decimals());
   }
   else
     memcpy(to, from, len); // Sizes are the same, just copy the data.
@@ -4298,7 +4260,7 @@ String *Field_float::val_str(String *val_buffer,
     snprintf(to,to_length-1,"%.*f",dec,nr);
     to=strend(to);
 #else
-    to+= my_sprintf(to,(to,"%.*f",dec,nr));
+    to+= sprintf(to, "%.*f", dec, nr);
 #endif
 #endif
   }
@@ -4600,7 +4562,7 @@ String *Field_double::val_str(String *val_buffer,
 #endif
     doubleget(nr,ptr);
 
-  uint to_length=max(field_length, DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE);
+  uint to_length= DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
   val_buffer->alloc(to_length);
   char *to=(char*) val_buffer->ptr();
 
@@ -4656,7 +4618,7 @@ String *Field_double::val_str(String *val_buffer,
     snprintf(to,to_length-1,"%.*f",dec,nr);
     to=strend(to);
 #else
-    to+= my_sprintf(to,(to,"%.*f",dec,nr));
+    to+= sprintf(to, "%.*f", dec, nr);
 #endif
 #endif
   }
@@ -5351,7 +5313,6 @@ String *Field_time::val_str(String *val_buffer,
  
 bool Field_time::get_date(MYSQL_TIME *ltime, uint fuzzydate)
 {
-  long tmp;
   THD *thd= table ? table->in_use : current_thd;
   if (!(fuzzydate & TIME_FUZZY_DATE))
   {
@@ -5361,19 +5322,7 @@ bool Field_time::get_date(MYSQL_TIME *ltime, uint fuzzydate)
                         thd->row_count);
     return 1;
   }
-  tmp=(long) sint3korr(ptr);
-  ltime->neg=0;
-  if (tmp < 0)
-  {
-    ltime->neg= 1;
-    tmp=-tmp;
-  }
-  ltime->hour=tmp/10000;
-  tmp-=ltime->hour*10000;
-  ltime->minute=   tmp/100;
-  ltime->second= tmp % 100;
-  ltime->year= ltime->month= ltime->day= ltime->second_part= 0;
-  return 0;
+  return Field_time::get_time(ltime);
 }
 
 
@@ -5519,6 +5468,7 @@ double Field_year::val_real(void)
 longlong Field_year::val_int(void)
 {
   ASSERT_COLUMN_MARKED_FOR_READ;
+  DBUG_ASSERT(field_length == 2 || field_length == 4);
   int tmp= (int) ptr[0];
   if (field_length != 4)
     tmp%=100;					// Return last 2 char
@@ -5531,6 +5481,7 @@ longlong Field_year::val_int(void)
 String *Field_year::val_str(String *val_buffer,
 			    String *val_ptr __attribute__((unused)))
 {
+  DBUG_ASSERT(field_length < 5);
   val_buffer->alloc(5);
   val_buffer->length(field_length);
   char *to=(char*) val_buffer->ptr();
@@ -5593,7 +5544,6 @@ int Field_date::store(const char *from, uint len,CHARSET_INFO *cs)
 int Field_date::store(double nr)
 {
   longlong tmp;
-  int error= 0;
   if (nr >= 19000000000000.0 && nr <= 99991231235959.0)
     nr=floor(nr/1000000.0);			// Timestamp to date
   if (nr < 0.0 || nr > 99991231.0)
@@ -5602,7 +5552,6 @@ int Field_date::store(double nr)
     set_datetime_warning(MYSQL_ERROR::WARN_LEVEL_WARN,
                          ER_WARN_DATA_OUT_OF_RANGE,
                          nr, MYSQL_TIMESTAMP_DATE);
-    error= 1;
   }
   else
     tmp= (longlong) rint(nr);
@@ -6376,7 +6325,7 @@ check_string_copy_error(Field_str *field,
 
   SYNOPSIS
     Field_longstr::report_if_important_data()
-    ptr                      - Truncated rest of string
+    pstr                     - Truncated rest of string
     end                      - End of truncated string
     count_spaces             - Treat traling spaces as important data
 
@@ -6392,12 +6341,12 @@ check_string_copy_error(Field_str *field,
 */
 
 int
-Field_longstr::report_if_important_data(const char *ptr, const char *end,
+Field_longstr::report_if_important_data(const char *pstr, const char *end,
                                         bool count_spaces)
 {
-  if ((ptr < end) && table->in_use->count_cuted_fields)
+  if ((pstr < end) && table->in_use->count_cuted_fields)
   {
-    if (test_if_important_data(field_charset, ptr, end))
+    if (test_if_important_data(field_charset, pstr, end))
     {
       if (table->in_use->abort_on_warning)
         set_warning(MYSQL_ERROR::WARN_LEVEL_ERROR, ER_DATA_TOO_LONG, 1);
@@ -6513,7 +6462,7 @@ int Field_str::store(double nr)
   /* Limit precision to DBL_DIG to avoid garbage past significant digits */
   set_if_smaller(digits, DBL_DIG);
   
-  length= (uint) my_sprintf(buff, (buff, "%-.*g", digits, nr));
+  length= (uint) sprintf(buff, "%-.*g", digits, nr);
 
 #ifdef __WIN__
   /*
@@ -6550,20 +6499,9 @@ uint Field::is_equal(Create_field *new_field)
 }
 
 
-/* If one of the fields is binary and the other one isn't return 1 else 0 */
-
-bool Field_str::compare_str_field_flags(Create_field *new_field, uint32 flag_arg)
-{
-  return (((new_field->flags & (BINCMP_FLAG | BINARY_FLAG)) &&
-          !(flag_arg & (BINCMP_FLAG | BINARY_FLAG))) ||
-         (!(new_field->flags & (BINCMP_FLAG | BINARY_FLAG)) &&
-          (flag_arg & (BINCMP_FLAG | BINARY_FLAG))));
-}
-
-
 uint Field_str::is_equal(Create_field *new_field)
 {
-  if (compare_str_field_flags(new_field, flags))
+  if (field_flags_are_binary() != new_field->field_flags_are_binary())
     return 0;
 
   return ((new_field->sql_type == real_type()) &&
@@ -6708,7 +6646,8 @@ check_field_for_37426(const void *param_arg)
 #endif
 
 int Field_string::compatible_field_size(uint field_metadata,
-                                        const Relay_log_info *rli_arg)
+                                        const Relay_log_info *rli_arg,
+                                        uint16 mflags __attribute__((unused)))
 {
 #ifdef HAVE_REPLICATION
   const Check_field_param check_param = { this };
@@ -6716,7 +6655,7 @@ int Field_string::compatible_field_size(uint field_metadata,
                          check_field_for_37426, &check_param))
     return FALSE;                        // Not compatible field sizes
 #endif
-  return Field::compatible_field_size(field_metadata, rli_arg);
+  return Field::compatible_field_size(field_metadata, rli_arg, mflags);
 }
 
 
@@ -7061,9 +7000,8 @@ const uint Field_varstring::MAX_SIZE= UINT_MAX16;
 */
 int Field_varstring::do_save_field_metadata(uchar *metadata_ptr)
 {
-  char *ptr= (char *)metadata_ptr;
   DBUG_ASSERT(field_length <= 65535);
-  int2store(ptr, field_length);
+  int2store((char*)metadata_ptr, field_length);
   return 2;
 }
 
@@ -8329,13 +8267,12 @@ uint Field_blob::max_packed_col_length(uint max_length)
 
 uint Field_blob::is_equal(Create_field *new_field)
 {
-  if (compare_str_field_flags(new_field, flags))
+  if (field_flags_are_binary() != new_field->field_flags_are_binary())
     return 0;
 
   return ((new_field->sql_type == get_blob_type_from_length(max_data_length()))
           && new_field->charset == field_charset &&
-          ((Field_blob *)new_field->field)->max_data_length() ==
-          max_data_length());
+          new_field->pack_length == pack_length());
 }
 
 
@@ -8755,7 +8692,13 @@ int Field_set::store(longlong nr, bool unsigned_val)
 {
   ASSERT_COLUMN_MARKED_FOR_WRITE;
   int error= 0;
-  ulonglong max_nr= set_bits(ulonglong, typelib->count);
+  ulonglong max_nr;
+
+  if (sizeof(ulonglong)*8 <= typelib->count)
+    max_nr= ULONGLONG_MAX;
+  else
+    max_nr= (ULL(1) << typelib->count) - 1;
+
   if ((ulonglong) nr > max_nr)
   {
     nr&= max_nr;
@@ -8833,38 +8776,81 @@ bool Field::eq_def(Field *field)
 
 
 /**
+  Compare the first t1::count type names.
+
+  @return TRUE if the type names of t1 match those of t2. FALSE otherwise.
+*/
+
+static bool compare_type_names(CHARSET_INFO *charset, TYPELIB *t1, TYPELIB *t2)
+{
+  for (uint i= 0; i < t1->count; i++)
+    if (my_strnncoll(charset,
+                     (const uchar*) t1->type_names[i],
+                     t1->type_lengths[i],
+                     (const uchar*) t2->type_names[i],
+                     t2->type_lengths[i]))
+      return FALSE;
+  return TRUE;
+}
+
+/**
   @return
   returns 1 if the fields are equally defined
 */
 
 bool Field_enum::eq_def(Field *field)
 {
+  TYPELIB *values;
+
   if (!Field::eq_def(field))
-    return 0;
-  return compare_enum_values(((Field_enum*) field)->typelib);
-}
+    return FALSE;
 
+  values= ((Field_enum*) field)->typelib;
 
-bool Field_enum::compare_enum_values(TYPELIB *values)
-{
+  /* Definition must be strictly equal. */
   if (typelib->count != values->count)
     return FALSE;
-  for (uint i= 0; i < typelib->count; i++)
-    if (my_strnncoll(field_charset,
-                     (const uchar*) typelib->type_names[i],
-                     typelib->type_lengths[i],
-                     (const uchar*) values->type_names[i],
-                     values->type_lengths[i]))
-      return FALSE;
-  return TRUE;
+
+  return compare_type_names(field_charset, typelib, values);
 }
 
+
+/**
+  Check whether two fields can be considered 'equal' for table
+  alteration purposes. Fields are equal if they retain the same
+  pack length and if new members are added to the end of the list.
+
+  @return IS_EQUAL_YES if fields are compatible.
+          IS_EQUAL_NO otherwise.
+*/
 
 uint Field_enum::is_equal(Create_field *new_field)
 {
-  if (!Field_str::is_equal(new_field))
-    return 0;
-  return compare_enum_values(new_field->interval);
+  TYPELIB *values= new_field->interval;
+
+  /*
+    The fields are compatible if they have the same flags,
+    type, charset and have the same underlying length.
+  */
+  if (new_field->field_flags_are_binary() != field_flags_are_binary() ||
+      new_field->sql_type != real_type() ||
+      new_field->charset != field_charset ||
+      new_field->pack_length != pack_length())
+    return IS_EQUAL_NO;
+
+  /*
+    Changing the definition of an ENUM or SET column by adding a new
+    enumeration or set members to the end of the list of valid member
+    values only alters table metadata and not table data.
+  */
+  if (typelib->count > values->count)
+    return IS_EQUAL_NO;
+
+  /* Check whether there are modification before the end. */
+  if (! compare_type_names(field_charset, typelib, new_field->interval))
+    return IS_EQUAL_NO;
+
+  return IS_EQUAL_YES;
 }
 
 
@@ -8886,14 +8872,20 @@ bool Field_num::eq_def(Field *field)
 }
 
 
+/**
+  Check whether two numeric fields can be considered 'equal' for table
+  alteration purposes. Fields are equal if they are of the same type
+  and retain the same pack length.
+*/
+
 uint Field_num::is_equal(Create_field *new_field)
 {
   return ((new_field->sql_type == real_type()) &&
-	  ((new_field->flags & UNSIGNED_FLAG) == (uint) (flags &
-							 UNSIGNED_FLAG)) &&
+          ((new_field->flags & UNSIGNED_FLAG) == 
+           (uint) (flags & UNSIGNED_FLAG)) &&
 	  ((new_field->flags & AUTO_INCREMENT_FLAG) ==
 	   (uint) (flags & AUTO_INCREMENT_FLAG)) &&
-	  (new_field->length <= max_display_length()));
+          (new_field->pack_length == pack_length()));
 }
 
 
@@ -9225,8 +9217,13 @@ uint Field_bit::get_key_image(uchar *buff, uint length, imagetype type_arg)
 */
 int Field_bit::do_save_field_metadata(uchar *metadata_ptr)
 {
-  *metadata_ptr= bit_len;
-  *(metadata_ptr + 1)= bytes_in_rec;
+  /*
+    Since this class and Field_bit_as_char have different ideas of
+    what should be stored here, we compute the values of the metadata
+    explicitly using the field_length.
+   */
+  metadata_ptr[0]= field_length % 8;
+  metadata_ptr[1]= field_length / 8;
   return 2;
 }
 
@@ -9266,20 +9263,26 @@ uint Field_bit::pack_length_from_metadata(uint field_metadata)
    @retval 1 if this field's size is >= the source field's size
 */
 int Field_bit::compatible_field_size(uint field_metadata,
-                                     const Relay_log_info * __attribute__((unused)))
+                                     const Relay_log_info * __attribute__((unused)),
+                                     uint16 mflags)
 {
-  int compatible= 0;
-  uint const source_size= pack_length_from_metadata(field_metadata);
-  uint const destination_size= row_pack_length();
-  uint const from_bit_len= field_metadata & 0x00ff;
-  uint const from_len= (field_metadata >> 8U) & 0x00ff;
-  if ((bit_len == 0) || (from_bit_len == 0))
-    compatible= (source_size <= destination_size);
-  else if (from_bit_len > bit_len)
-    compatible= (from_len < bytes_in_rec);
-  else
-    compatible= ((from_bit_len <= bit_len) && (from_len <= bytes_in_rec));
-  return (compatible);
+  uint from_bit_len= 8 * (field_metadata >> 8) + (field_metadata & 0xff);
+  uint to_bit_len= max_display_length();
+
+  /*
+    If the bit length exact flag is clear, we are dealing with an old
+    master, so we allow some less strict behaviour if replicating by
+    moving both bit lengths to an even multiple of 8.
+
+    We do this by computing the number of bytes to store the field
+    instead, and then compare the result.
+   */
+  if (!(mflags & Table_map_log_event::TM_BIT_LEN_EXACT_F)) {
+    from_bit_len= (from_bit_len + 7) / 8;
+    to_bit_len= (to_bit_len + 7) / 8;
+  }
+
+  return from_bit_len <= to_bit_len;
 }
 
 
@@ -9476,6 +9479,7 @@ void Create_field::create_length_to_internal_length(void)
   case MYSQL_TYPE_MEDIUM_BLOB:
   case MYSQL_TYPE_LONG_BLOB:
   case MYSQL_TYPE_BLOB:
+  case MYSQL_TYPE_GEOMETRY:
   case MYSQL_TYPE_VAR_STRING:
   case MYSQL_TYPE_STRING:
   case MYSQL_TYPE_VARCHAR:
@@ -9582,7 +9586,7 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
   if (decimals >= NOT_FIXED_DEC)
   {
     my_error(ER_TOO_BIG_SCALE, MYF(0), decimals, fld_name,
-             NOT_FIXED_DEC-1);
+             static_cast<ulong>(NOT_FIXED_DEC - 1));
     DBUG_RETURN(TRUE);
   }
 
@@ -9615,7 +9619,7 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
     }
 
     if (length == 0)
-      fld_length= 0; /* purecov: inspected */
+      fld_length= NULL; /* purecov: inspected */
   }
 
   sign_len= fld_type_modifier & UNSIGNED_FLAG ? 0 : 1;
@@ -9652,8 +9656,8 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
     my_decimal_trim(&length, &decimals);
     if (length > DECIMAL_MAX_PRECISION)
     {
-      my_error(ER_TOO_BIG_PRECISION, MYF(0), length, fld_name,
-               DECIMAL_MAX_PRECISION);
+      my_error(ER_TOO_BIG_PRECISION, MYF(0), static_cast<int>(length),
+               fld_name, static_cast<ulong>(DECIMAL_MAX_PRECISION));
       DBUG_RETURN(TRUE);
     }
     if (length < decimals)
@@ -9767,8 +9771,7 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
   case MYSQL_TYPE_TIMESTAMP:
     if (fld_length == NULL)
     {
-      /* Compressed date YYYYMMDDHHMMSS */
-      length= MAX_DATETIME_COMPRESSED_WIDTH;
+      length= MAX_DATETIME_WIDTH;
     }
     else if (length != MAX_DATETIME_WIDTH)
     {
@@ -9833,7 +9836,7 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
       sql_type= MYSQL_TYPE_NEWDATE;
     /* fall trough */
   case MYSQL_TYPE_NEWDATE:
-    length= 10;
+    length= MAX_DATE_WIDTH;
     break;
   case MYSQL_TYPE_TIME:
     length= 10;
@@ -9879,7 +9882,7 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
       if (length > MAX_BIT_FIELD_LENGTH)
       {
         my_error(ER_TOO_BIG_DISPLAYWIDTH, MYF(0), fld_name,
-                 MAX_BIT_FIELD_LENGTH);
+                 static_cast<ulong>(MAX_BIT_FIELD_LENGTH));
         DBUG_RETURN(TRUE);
       }
       pack_length= (length + 7) / 8;
@@ -9912,6 +9915,17 @@ bool Create_field::init(THD *thd, char *fld_name, enum_field_types fld_type,
   {
     my_error(ER_WRONG_FIELD_SPEC, MYF(0), fld_name);
     DBUG_RETURN(TRUE);
+  }
+
+  switch (fld_type) {
+  case MYSQL_TYPE_DATE:
+  case MYSQL_TYPE_NEWDATE:
+  case MYSQL_TYPE_TIME:
+  case MYSQL_TYPE_DATETIME:
+  case MYSQL_TYPE_TIMESTAMP:
+    charset= &my_charset_bin;
+    flags|= BINCMP_FLAG;
+  default: break;
   }
 
   DBUG_RETURN(FALSE); /* success */
@@ -10213,6 +10227,17 @@ Create_field::Create_field(Field *old_field,Field *orig_field)
     geom_type= ((Field_geom*)old_field)->geom_type;
     break;
 #endif
+  case MYSQL_TYPE_YEAR:
+    if (length != 4)
+    {
+      char buff[sizeof("YEAR()") + MY_INT64_NUM_DECIMAL_DIGITS + 1];
+      my_snprintf(buff, sizeof(buff), "YEAR(%lu)", length);
+      push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_NOTE,
+                          ER_WARN_DEPRECATED_SYNTAX,
+                          ER(ER_WARN_DEPRECATED_SYNTAX),
+                          buff, "YEAR(4)");
+    }
+    break;
   default:
     break;
   }
@@ -10407,7 +10432,7 @@ Field::set_datetime_warning(MYSQL_ERROR::enum_warning_level level, uint code,
   {
     /* DBL_DIG is enough to print '-[digits].E+###' */
     char str_nr[DBL_DIG + 8];
-    uint str_len= my_sprintf(str_nr, (str_nr, "%g", nr));
+    uint str_len= sprintf(str_nr, "%g", nr);
     make_truncated_value_warning(thd, level, str_nr, str_len, ts_type,
                                  field_name);
   }

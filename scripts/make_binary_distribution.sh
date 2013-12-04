@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2000-2006 MySQL AB
+# Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -302,8 +302,8 @@ if [ x"$BASE_SYSTEM" != x"netware" ] ; then
 
   # Copy readme and license files
   cp README Docs/INSTALL-BINARY  $DEST/
-  if [ -f COPYING -a -f EXCEPTIONS-CLIENT ] ; then
-    cp COPYING EXCEPTIONS-CLIENT $DEST/
+  if [ -f COPYING ] ; then
+    cp COPYING $DEST/
   elif [ -f LICENSE.mysql ] ; then
     cp LICENSE.mysql $DEST/
   else
@@ -381,7 +381,7 @@ copyfileto()
 copyfileto $BASE/docs ChangeLog Docs/mysql.info
 
 copyfileto $BASE COPYING COPYING.LIB README Docs/INSTALL-BINARY \
-         EXCEPTIONS-CLIENT LICENSE.mysql
+           LICENSE.mysql
 
 # Non platform-specific bin dir files:
 BIN_FILES="extra/comp_err$BS extra/replace$BS extra/perror$BS \
@@ -476,9 +476,11 @@ $CP mysql-test/std_data/*.dat mysql-test/std_data/*.frm \
     mysql-test/std_data/des_key_file mysql-test/std_data/*.*001 \
     mysql-test/std_data/*.cnf mysql-test/std_data/*.MY* \
     $BASE/mysql-test/std_data
-$CP mysql-test/t/*.test mysql-test/t/*.imtest \
-    mysql-test/t/*.disabled mysql-test/t/*.opt \
-    mysql-test/t/*.slave-mi mysql-test/t/*.sh mysql-test/t/*.sql $BASE/mysql-test/t
+# Attention: when the wildcards expand to a line that is very long,
+# it may exceed the command line length limit on some platform(s). Bug#54590
+$CP mysql-test/t/*.test mysql-test/t/*.imtest $BASE/mysql-test/t
+$CP mysql-test/t/*.disabled mysql-test/t/*.opt $BASE/mysql-test/t
+$CP mysql-test/t/*.slave-mi mysql-test/t/*.sh mysql-test/t/*.sql $BASE/mysql-test/t
 $CP mysql-test/r/*.result mysql-test/r/*.require \
     $BASE/mysql-test/r
 

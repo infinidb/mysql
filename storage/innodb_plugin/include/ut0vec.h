@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -92,6 +92,25 @@ ib_vector_get(
 /*==========*/
 	ib_vector_t*	vec,	/*!< in: vector */
 	ulint		n);	/*!< in: element index to get */
+
+/****************************************************************//**
+Get last element. The vector must not be empty.
+@return	last element */
+UNIV_INLINE
+void*
+ib_vector_get_last(
+/*===============*/
+	ib_vector_t*	vec);	/*!< in: vector */
+
+/****************************************************************//**
+Set the n'th element. */
+UNIV_INLINE
+void
+ib_vector_set(
+/*==========*/
+	ib_vector_t*	vec,	/*!< in/out: vector */
+	ulint		n,	/*!< in: element index to set */
+	void*		elem);	/*!< in: data element */
 
 /****************************************************************//**
 Remove the last element from the vector. */

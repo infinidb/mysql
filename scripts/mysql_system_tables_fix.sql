@@ -1,3 +1,18 @@
+# Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
 # This part converts any old privilege tables to privilege tables suitable
 # for current version of MySQL
 
@@ -58,7 +73,7 @@ ALTER TABLE tables_priv
     COLLATE utf8_general_ci DEFAULT '' NOT NULL,
   MODIFY Table_priv set('Select','Insert','Update','Delete','Create',
                         'Drop','Grant','References','Index','Alter',
-                        'Create View','Show view')
+                        'Create View','Show view','Trigger')
     COLLATE utf8_general_ci DEFAULT '' NOT NULL,
   COMMENT='Table privileges';
 
@@ -221,12 +236,29 @@ ALTER TABLE func
 
 SET @old_log_state = @@global.general_log;
 SET GLOBAL general_log = 'OFF';
-ALTER TABLE general_log MODIFY COLUMN server_id INTEGER UNSIGNED NOT NULL;
+ALTER TABLE general_log
+  MODIFY event_time TIMESTAMP NOT NULL,
+  MODIFY user_host MEDIUMTEXT NOT NULL,
+  MODIFY thread_id INTEGER NOT NULL,
+  MODIFY server_id INTEGER UNSIGNED NOT NULL,
+  MODIFY command_type VARCHAR(64) NOT NULL,
+  MODIFY argument MEDIUMTEXT NOT NULL;
 SET GLOBAL general_log = @old_log_state;
 
 SET @old_log_state = @@global.slow_query_log;
 SET GLOBAL slow_query_log = 'OFF';
-ALTER TABLE slow_log MODIFY COLUMN server_id INTEGER UNSIGNED NOT NULL;
+ALTER TABLE slow_log
+  MODIFY start_time TIMESTAMP NOT NULL,
+  MODIFY user_host MEDIUMTEXT NOT NULL,
+  MODIFY query_time TIME NOT NULL,
+  MODIFY lock_time TIME NOT NULL,
+  MODIFY rows_sent INTEGER NOT NULL,
+  MODIFY rows_examined INTEGER NOT NULL,
+  MODIFY db VARCHAR(512) NOT NULL,
+  MODIFY last_insert_id INTEGER NOT NULL,
+  MODIFY insert_id INTEGER NOT NULL,
+  MODIFY server_id INTEGER UNSIGNED NOT NULL,
+  MODIFY sql_text MEDIUMTEXT NOT NULL;
 SET GLOBAL slow_query_log = @old_log_state;
 
 #
@@ -337,6 +369,10 @@ ALTER TABLE procs_priv
   MODIFY Proc_priv set('Execute','Alter Routine','Grant')
     COLLATE utf8_general_ci DEFAULT '' NOT NULL;
 
+ALTER IGNORE TABLE procs_priv
+  MODIFY Routine_name char(64)
+    COLLATE utf8_general_ci DEFAULT '' NOT NULL;
+
 ALTER TABLE procs_priv
   ADD Routine_type enum('FUNCTION','PROCEDURE')
     COLLATE utf8_general_ci NOT NULL AFTER Routine_name;
@@ -411,17 +447,47 @@ ALTER TABLE proc ADD character_set_client
 ALTER TABLE proc MODIFY character_set_client
                         char(32) collate utf8_bin DEFAULT NULL;
 
+SELECT CASE WHEN COUNT(*) > 0 THEN 
+CONCAT ("WARNING: NULL values of the 'character_set_client' column ('mysql.proc' table) have been updated with a default value (", @@character_set_client, "). Please verify if necessary.")
+ELSE NULL 
+END 
+AS value FROM proc WHERE character_set_client IS NULL;
+
+UPDATE proc SET character_set_client = @@character_set_client 
+                     WHERE character_set_client IS NULL;
+
 ALTER TABLE proc ADD collation_connection
                      char(32) collate utf8_bin DEFAULT NULL
                      AFTER character_set_client;
 ALTER TABLE proc MODIFY collation_connection
                         char(32) collate utf8_bin DEFAULT NULL;
 
+SELECT CASE WHEN COUNT(*) > 0 THEN 
+CONCAT ("WARNING: NULL values of the 'collation_connection' column ('mysql.proc' table) have been updated with a default value (", @@collation_connection, "). Please verify if necessary.")
+ELSE NULL 
+END 
+AS value FROM proc WHERE collation_connection IS NULL;
+
+UPDATE proc SET collation_connection = @@collation_connection
+                     WHERE collation_connection IS NULL;
+
 ALTER TABLE proc ADD db_collation
                      char(32) collate utf8_bin DEFAULT NULL
                      AFTER collation_connection;
 ALTER TABLE proc MODIFY db_collation
                         char(32) collate utf8_bin DEFAULT NULL;
+
+SELECT CASE WHEN COUNT(*) > 0 THEN 
+CONCAT ("WARNING: NULL values of the 'db_collation' column ('mysql.proc' table) have been updated with default values. Please verify if necessary.")
+ELSE NULL
+END
+AS value FROM proc WHERE db_collation IS NULL;
+
+UPDATE proc AS p SET db_collation  = 
+                     ( SELECT DEFAULT_COLLATION_NAME 
+                       FROM INFORMATION_SCHEMA.SCHEMATA 
+                       WHERE SCHEMA_NAME = p.db)
+                     WHERE db_collation IS NULL;
 
 ALTER TABLE proc ADD body_utf8 longblob DEFAULT NULL
                      AFTER db_collation;
@@ -532,8 +598,6 @@ ALTER TABLE host MODIFY Trigger_priv enum('N','Y') COLLATE utf8_general_ci DEFAU
 
 ALTER TABLE db ADD Trigger_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL;
 ALTER TABLE db MODIFY Trigger_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL;
-
-ALTER TABLE tables_priv MODIFY Table_priv set('Select','Insert','Update','Delete','Create','Drop','Grant','References','Index','Alter','Create View','Show view','Trigger') COLLATE utf8_general_ci DEFAULT '' NOT NULL;
 
 UPDATE user SET Trigger_priv=Super_priv WHERE @hadTriggerPriv = 0;
 

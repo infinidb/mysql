@@ -1,4 +1,5 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef RPL_RLI_H
 #define RPL_RLI_H
@@ -94,6 +96,16 @@ public:
   */
   MYSQL_BIN_LOG relay_log;
   LOG_INFO linfo;
+
+  /*
+   cur_log
+     Pointer that either points at relay_log.get_log_file() or
+     &rli->cache_buf, depending on whether the log is hot or there was
+     the need to open a cold relay_log.
+
+   cache_buf 
+     IO_CACHE used when opening cold relay logs.
+   */
   IO_CACHE cache_buf,*cur_log;
 
   /* The following variables are safe to read any time */
@@ -178,6 +190,13 @@ public:
   bool ignore_log_space_limit;
 
   /*
+    Used by the SQL thread to instructs the IO thread to rotate 
+    the logs when the SQL thread needs to purge to release some
+    disk space.
+   */
+  bool sql_force_rotate_relay;
+
+  /*
     When it commits, InnoDB internally stores the master log position it has
     processed so far; the position to store is the one of the end of the
     committing event (the COMMIT query event, or the event if in autocommit
@@ -209,7 +228,13 @@ public:
 #endif  
 
   /* if not set, the value of other members of the structure are undefined */
-  bool inited;
+  /*
+    inited changes its value within LOCK_active_mi-guarded critical
+    sections  at times of start_slave_threads() (0->1) and end_slave() (1->0).
+    Readers may not acquire the mutex while they realize potential concurrency
+    issue.
+  */
+  volatile bool inited;
   volatile bool abort_slave;
   volatile uint slave_running;
 
@@ -303,7 +328,7 @@ public:
   void close_temporary_tables();
 
   /* Check if UNTIL condition is satisfied. See slave.cc for more. */
-  bool is_until_satisfied(my_off_t master_beg_pos);
+  bool is_until_satisfied(THD *thd, Log_event *ev);
   inline ulonglong until_pos()
   {
     return ((until_condition == UNTIL_MASTER_POS) ? group_master_log_pos :
@@ -344,6 +369,41 @@ public:
    */
   time_t last_event_start_time;
 
+  /*
+    A container to hold on Intvar-, Rand-, Uservar- log-events in case
+    the slave is configured with table filtering rules.
+    The withhold events are executed when their parent Query destiny is
+    determined for execution as well.
+  */
+  Deferred_log_events *deferred_events;
+
+  /*
+    State of the container: true stands for IRU events gathering, 
+    false does for execution, either deferred or direct.
+  */
+  bool deferred_events_collecting;
+
+  /* 
+     Returns true if the argument event resides in the containter;
+     more specifically, the checking is done against the last added event.
+  */
+  bool is_deferred_event(Log_event * ev)
+  {
+    return deferred_events_collecting ? deferred_events->is_last(ev) : false;
+  };
+  /* The general cleanup that slave applier may need at the end of query. */
+  inline void cleanup_after_query()
+  {
+    if (deferred_events)
+      deferred_events->rewind();
+  };
+  /* The general cleanup that slave applier may need at the end of session. */
+  void cleanup_after_session()
+  {
+    if (deferred_events)
+      delete deferred_events;
+  };
+   
   /**
     Helper function to do after statement completion.
 

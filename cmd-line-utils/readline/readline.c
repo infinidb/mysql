@@ -19,7 +19,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA. */
 #define READLINE_LIBRARY
 
 #if defined (HAVE_CONFIG_H)
@@ -447,11 +447,10 @@ readline_internal_char ()
 readline_internal_charloop ()
 #endif
 {
-  static int lastc, eof_found;
+  static int lastc;
   int c, code, lk;
 
   lastc = -1;
-  eof_found = 0;
 
 #if !defined (READLINE_CALLBACKS)
   while (rl_done == 0)

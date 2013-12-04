@@ -1,5 +1,6 @@
 # -*- cperl -*-
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+# Use is subject to license terms.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -150,7 +151,7 @@ sub run_stress_test ()
   mtr_add_arg($args, "--verbose");
   mtr_add_arg($args, "--cleanup");
   mtr_add_arg($args, "--log-error-details");
-  mtr_add_arg($args, "--abort-on-error");
+  mtr_add_arg($args, "--abort-on-error=1");
 
   if ( $::opt_stress_init_file )
   {

@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2002, 2004-2005 MySQL AB
+/*
+   Copyright (c) 2000-2002, 2004-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Static variables for MyISAM library. All definied here for easy making of
@@ -40,7 +43,7 @@ ulong myisam_concurrent_insert= 0;
 my_off_t myisam_max_temp_length= MAX_FILE_SIZE;
 ulong    myisam_bulk_insert_tree_size=8192*1024;
 ulong    myisam_data_pointer_size=4;
-
+ulonglong    myisam_mmap_size= SIZE_T_MAX, myisam_mmap_used= 0;
 
 static int always_valid(const char *filename __attribute__((unused)))
 {

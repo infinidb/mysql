@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* create and drop of databases */
@@ -23,9 +25,11 @@
 #include <my_dir.h>
 #include <m_ctype.h>
 #include "log.h"
+#include "log_event.h"
 #ifdef __WIN__
 #include <direct.h>
 #endif
+#include "debug_sync.h"
 
 #define MAX_DROP_TABLE_Q_LEN      1024
 
@@ -178,13 +182,13 @@ uchar* dboptions_get_key(my_dbopt_t *opt, size_t *length,
   Helper function to write a query to binlog used by mysql_rm_db()
 */
 
-static inline void write_to_binlog(THD *thd, char *query, uint q_len,
-                                   char *db, uint db_len)
+static inline int write_to_binlog(THD *thd, char *query, uint q_len,
+                                  char *db, uint db_len)
 {
   Query_log_event qinfo(thd, query, q_len, 0, 0, 0);
   qinfo.db= db;
   qinfo.db_len= db_len;
-  mysql_bin_log.write(&qinfo);
+  return mysql_bin_log.write(&qinfo);
 }  
 
 
@@ -618,7 +622,7 @@ int mysql_create_db(THD *thd, char *db, HA_CREATE_INFO *create_info,
   DBUG_ENTER("mysql_create_db");
 
   /* do not create 'information_schema' db */
-  if (!my_strcasecmp(system_charset_info, db, INFORMATION_SCHEMA_NAME.str))
+  if (is_schema_db(db))
   {
     my_error(ER_DB_CREATE_EXISTS, MYF(0), db);
     DBUG_RETURN(-1);
@@ -640,6 +644,18 @@ int mysql_create_db(THD *thd, char *db, HA_CREATE_INFO *create_info,
   {
     error= -1;
     goto exit2;
+  }
+
+  /*
+    Close and mark for re-open all HANDLER tables which are marked for flush
+    or which there are pending conflicing locks against. This is needed to
+    prevent deadlocks.
+  */
+  if (thd->handler_tables_hash.records)
+  {
+    pthread_mutex_lock(&LOCK_open);
+    mysql_ha_flush(thd);
+    pthread_mutex_unlock(&LOCK_open);
   }
 
   VOID(pthread_mutex_lock(&LOCK_mysql_create_db));
@@ -695,6 +711,7 @@ int mysql_create_db(THD *thd, char *db, HA_CREATE_INFO *create_info,
       file.  In this case it's best to just continue as if nothing has
       happened.  (This is a very unlikely senario)
     */
+    thd->clear_error();
   }
 
 not_silent:
@@ -702,17 +719,22 @@ not_silent:
   {
     char *query;
     uint query_length;
+    char db_name_quoted[2 * FN_REFLEN + sizeof("create database ") + 2];
+    int id_len= 0;
 
-    if (!thd->query)				// Only in replication
+    if (!thd->query())                          // Only in replication
     {
-      query= 	     tmp_query;
-      query_length= (uint) (strxmov(tmp_query,"create database `",
-                                    db, "`", NullS) - tmp_query);
+      id_len= my_strmov_quoted_identifier(thd, (char *) db_name_quoted, db,
+                                          0);
+      db_name_quoted[id_len]= '\0';
+      query= tmp_query;
+      query_length= (uint) (strxmov(tmp_query,"create database ",
+                                    db_name_quoted, NullS) - tmp_query);
     }
     else
     {
-      query= 	    thd->query;
-      query_length= thd->query_length;
+      query=        thd->query();
+      query_length= thd->query_length();
     }
 
     ha_binlog_log_query(thd, 0, LOGCOM_CREATE_DB,
@@ -746,7 +768,11 @@ not_silent:
       qinfo.db_len = strlen(db);
 
       /* These DDL methods and logging protected with LOCK_mysql_create_db */
-      mysql_bin_log.write(&qinfo);
+      if (mysql_bin_log.write(&qinfo))
+      {
+        error= -1;
+        goto exit;
+      }
     }
     my_ok(thd, result);
   }
@@ -783,6 +809,18 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info)
   if ((error=wait_if_global_read_lock(thd,0,1)))
     goto exit2;
 
+  /*
+    Close and mark for re-open all HANDLER tables which are marked for flush
+    or which there are pending conflicing locks against. This is needed to
+    prevent deadlocks.
+  */
+  if (thd->handler_tables_hash.records)
+  {
+    pthread_mutex_lock(&LOCK_open);
+    mysql_ha_flush(thd);
+    pthread_mutex_unlock(&LOCK_open);
+  }
+
   VOID(pthread_mutex_lock(&LOCK_mysql_create_db));
 
   /* 
@@ -805,14 +843,14 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info)
   }
 
   ha_binlog_log_query(thd, 0, LOGCOM_ALTER_DB,
-                      thd->query, thd->query_length,
+                      thd->query(), thd->query_length(),
                       db, "");
 
   if (mysql_bin_log.is_open())
   {
-    int errcode= query_error_code(thd, TRUE);
-    Query_log_event qinfo(thd, thd->query, thd->query_length, 0,
-			  /* suppress_use */ TRUE, errcode);
+    thd->clear_error();
+    Query_log_event qinfo(thd, thd->query(), thd->query_length(), 0,
+			  /* suppress_use */ TRUE, 0);
 
     /*
       Write should use the database being created as the "current
@@ -822,9 +860,9 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info)
     qinfo.db     = db;
     qinfo.db_len = strlen(db);
 
-    thd->clear_error();
     /* These DDL methods and logging protected with LOCK_mysql_create_db */
-    mysql_bin_log.write(&qinfo);
+    if ((error= mysql_bin_log.write(&qinfo)))
+      goto exit;
   }
   my_ok(thd, result);
 
@@ -857,7 +895,7 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
 {
   long deleted=0;
   int error= 0;
-  char	path[FN_REFLEN+16];
+  char	path[2 * FN_REFLEN + 16];
   MY_DIR *dirp;
   uint length;
   TABLE_LIST* dropped_tables= 0;
@@ -879,6 +917,18 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
   {
     error= -1;
     goto exit2;
+  }
+
+  /*
+    Close and mark for re-open all HANDLER tables which are marked for flush
+    or which there are pending conflicing locks against. This is needed to
+    prevent deadlocks.
+  */
+  if (thd->handler_tables_hash.records)
+  {
+    pthread_mutex_lock(&LOCK_open);
+    mysql_ha_flush(thd);
+    pthread_mutex_unlock(&LOCK_open);
   }
 
   VOID(pthread_mutex_lock(&LOCK_mysql_create_db));
@@ -940,27 +990,34 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
       reenable_binlog(thd);
     }
   }
+
   if (!silent && deleted>=0)
   {
     const char *query;
     ulong query_length;
-    if (!thd->query)
+    // quoted db name + wraping quote
+    char buffer_temp [2 * FN_REFLEN + 2];
+    int id_len= 0;
+
+    if (!thd->query())
     {
       /* The client used the old obsolete mysql_drop_db() call */
       query= path;
-      query_length= (uint) (strxmov(path, "drop database `", db, "`",
+      id_len= my_strmov_quoted_identifier(thd, buffer_temp, db, strlen(db));
+      buffer_temp[id_len] ='\0';
+      query_length= (uint) (strxmov(path, "DROP DATABASE ", buffer_temp, "",
                                      NullS) - path);
     }
     else
     {
-      query =thd->query;
-      query_length= thd->query_length;
+      query= thd->query();
+      query_length= thd->query_length();
     }
     if (mysql_bin_log.is_open())
     {
-      int errcode= query_error_code(thd, TRUE);
+      thd->clear_error();
       Query_log_event qinfo(thd, query, query_length, 0, 
-			    /* suppress_use */ TRUE, errcode);
+			    /* suppress_use */ TRUE, 0);
       /*
         Write should use the database being created as the "current
         database" and not the threads current database, which is the
@@ -969,9 +1026,12 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
       qinfo.db     = db;
       qinfo.db_len = strlen(db);
 
-      thd->clear_error();
       /* These DDL methods and logging protected with LOCK_mysql_create_db */
-      mysql_bin_log.write(&qinfo);
+      if (mysql_bin_log.write(&qinfo))
+      {
+        error= -1;
+        goto exit;
+      }
     }
     thd->clear_error();
     thd->server_status|= SERVER_STATUS_DB_DROPPED;
@@ -981,12 +1041,13 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
   else if (mysql_bin_log.is_open())
   {
     char *query, *query_pos, *query_end, *query_data_start;
+    char temp_identifier[ 2 * FN_REFLEN + 2];
     TABLE_LIST *tbl;
-    uint db_len;
+    uint db_len, id_length=0;
 
     if (!(query= (char*) thd->alloc(MAX_DROP_TABLE_Q_LEN)))
       goto exit; /* not much else we can do */
-    query_pos= query_data_start= strmov(query,"drop table ");
+    query_pos= query_data_start= strmov(query,"DROP TABLE ");
     query_end= query + MAX_DROP_TABLE_Q_LEN;
     db_len= strlen(db);
 
@@ -999,20 +1060,28 @@ bool mysql_rm_db(THD *thd,char *db,bool if_exists, bool silent)
       if (query_pos + tbl_name_len + 1 >= query_end)
       {
         /* These DDL methods and logging protected with LOCK_mysql_create_db */
-        write_to_binlog(thd, query, query_pos -1 - query, db, db_len);
+        if (write_to_binlog(thd, query, query_pos -1 - query, db, db_len))
+        {
+          error= -1;
+          goto exit;
+        }
         query_pos= query_data_start;
       }
-
-      *query_pos++ = '`';
-      query_pos= strmov(query_pos,tbl->table_name);
-      *query_pos++ = '`';
+      id_length= my_strmov_quoted_identifier(thd, (char *)temp_identifier,
+                                      tbl->table_name, 0);
+      temp_identifier[id_length]= '\0';
+      query_pos= strmov(query_pos,(char *)&temp_identifier);
       *query_pos++ = ',';
     }
 
     if (query_pos != query_data_start)
     {
       /* These DDL methods and logging protected with LOCK_mysql_create_db */
-      write_to_binlog(thd, query, query_pos -1 - query, db, db_len);
+      if (write_to_binlog(thd, query, query_pos -1 - query, db, db_len))
+      {
+        error= -1;
+        goto exit;
+      }
     }
   }
 
@@ -1141,6 +1210,12 @@ static long mysql_rm_known_files(THD *thd, MY_DIR *dirp, const char *db,
       VOID(filename_to_tablename(file->name, table_list->table_name,
                                  MYSQL50_TABLE_NAME_PREFIX_LENGTH +
                                  strlen(file->name) + 1));
+
+      /* To be able to correctly look up the table in the table cache. */
+      if (lower_case_table_names)
+        table_list->table_name_length= my_casedn_str(files_charset_info,
+                                                     table_list->table_name);
+
       table_list->alias= table_list->table_name;	// If lower_case_table_names=2
       table_list->internal_tmp_table= is_prefix(file->name, tmp_file_prefix);
       /* Link into list */
@@ -1151,15 +1226,33 @@ static long mysql_rm_known_files(THD *thd, MY_DIR *dirp, const char *db,
     else
     {
       strxmov(filePath, org_path, "/", file->name, NullS);
-      if (my_delete_with_symlink(filePath,MYF(MY_WME)))
+      /*
+        We ignore ENOENT error in order to skip files that was deleted
+        by concurrently running statement like REAPIR TABLE ...
+      */
+      if (my_delete_with_symlink(filePath, MYF(0)) &&
+          my_errno != ENOENT)
       {
-	goto err;
+        my_error(EE_DELETE, MYF(0), filePath, my_errno);
+        goto err;
       }
     }
   }
-  if (thd->killed ||
-      (tot_list && mysql_rm_table_part2(thd, tot_list, 1, 0, 1, 1)))
+
+  if (thd->killed)
     goto err;
+
+  if (tot_list)
+  {
+    int res= 0;
+    Drop_table_error_handler err_handler(thd->get_internal_handler());
+
+    thd->push_internal_handler(&err_handler);
+    res= mysql_rm_table_part2(thd, tot_list, 1, 0, 1, 1);
+    thd->pop_internal_handler();
+    if (res)
+      goto err;
+  }
 
   /* Remove RAID directories */
   {
@@ -1376,10 +1469,12 @@ static void mysql_change_db_impl(THD *thd,
       we just call THD::reset_db(). Since THD::reset_db() does not releases
       the previous database name, we should do it explicitly.
     */
-
-    x_free(thd->db);
-
+    pthread_mutex_lock(&thd->LOCK_thd_data);
+    if (thd->db)
+      x_free(thd->db);
+    DEBUG_SYNC(thd, "after_freeing_thd_db");
     thd->reset_db(new_db_name->str, new_db_name->length);
+    pthread_mutex_unlock(&thd->LOCK_thd_data);
   }
 
   /* 2. Update security context. */
@@ -1446,11 +1541,11 @@ cmp_db_names(const char *db1_name,
 {
   return
          /* db1 is NULL and db2 is NULL */
-         !db1_name && !db2_name ||
+         (!db1_name && !db2_name) ||
 
          /* db1 is not-NULL, db2 is not-NULL, db1 == db2. */
-         db1_name && db2_name &&
-         my_strcasecmp(system_charset_info, db1_name, db2_name) == 0;
+         (db1_name && db2_name &&
+         my_strcasecmp(system_charset_info, db1_name, db2_name) == 0);
 }
 
 
@@ -1554,8 +1649,7 @@ bool mysql_change_db(THD *thd, const LEX_STRING *new_db_name, bool force_switch)
     }
   }
 
-  if (my_strcasecmp(system_charset_info, new_db_name->str,
-                    INFORMATION_SCHEMA_NAME.str) == 0)
+  if (is_schema_db(new_db_name->str, new_db_name->length))
   {
     /* Switch the current database to INFORMATION_SCHEMA. */
 
@@ -1625,6 +1719,8 @@ bool mysql_change_db(THD *thd, const LEX_STRING *new_db_name, bool force_switch)
     DBUG_RETURN(TRUE);
   }
 #endif
+
+  DEBUG_SYNC(thd, "before_db_dir_check");
 
   if (check_db_dir_existence(new_db_file_name.str))
   {
@@ -1960,10 +2056,10 @@ bool mysql_upgrade_db(THD *thd, LEX_STRING *old_db)
   if (mysql_bin_log.is_open())
   {
     int errcode= query_error_code(thd, TRUE);
-    Query_log_event qinfo(thd, thd->query, thd->query_length,
+    Query_log_event qinfo(thd, thd->query(), thd->query_length(),
                           0, TRUE, errcode);
     thd->clear_error();
-    mysql_bin_log.write(&qinfo);
+    error|= mysql_bin_log.write(&qinfo);
   }
 
   /* Step9: Let's do "use newdb" if we renamed the current database */

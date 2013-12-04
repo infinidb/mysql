@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmyisamchk\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 09/09/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYISAMCHK\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYISAMCHK\FR" "1" "09/09/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -37,6 +46,16 @@ tables (tables that have
 and
 \&.MYI
 files for storing data and indexes)\&.
+.PP
+You can also use the
+CHECK TABLE
+and
+REPAIR TABLE
+statements to check and repair
+MyISAM
+tables\&. See
+Section\ \&13.7.2.3, \(lqCHECK TABLE Syntax\(rq, and
+Section\ \&13.7.2.6, \(lqREPAIR TABLE Syntax\(rq\&.
 .PP
 The use of
 \fBmyisamchk\fR
@@ -98,7 +117,7 @@ You can name several tables on the
 \fBmyisamchk\fR
 command line if you wish\&. You can also specify a table by naming its index file (the file with the
 \&.MYI
-suffix)\&. This allows you to specify all tables in a directory by using the pattern
+suffix)\&. This enables you to specify all tables in a directory by using the pattern
 *\&.MYI\&. For example, if you are in a database directory, you can check all the
 MyISAM
 tables in that directory like this:
@@ -160,7 +179,7 @@ tables and repair any that are corrupted, you can use the following command:
 .\}
 .nf
 shell> \fBmyisamchk \-\-silent \-\-force \-\-fast \-\-update\-state \e\fR
-          \fB\-\-key_buffer_size=64M \-\-sort_buffer_size=64M \e\fR
+          \fB\-\-key_buffer_size=64M \-\-myisam_sort_buffer_size=64M \e\fR
           \fB\-\-read_buffer_size=1M \-\-write_buffer_size=1M \e\fR
           \fB\fI/path/to/datadir/*/*\fR\fR\fB\&.MYI\fR
 .fi
@@ -171,6 +190,10 @@ shell> \fBmyisamchk \-\-silent \-\-force \-\-fast \-\-update\-state \e\fR
 This command assumes that you have more than 64MB free\&. For more information about memory allocation with
 \fBmyisamchk\fR, see
 the section called \(lqMYISAMCHK MEMORY USAGE\(rq\&.
+.PP
+For additional information about using
+\fBmyisamchk\fR, see
+Section\ \&7.6, \(lqMyISAM Table Maintenance and Crash Recovery\(rq\&.
 .if n \{\
 .sp
 .\}
@@ -196,7 +219,7 @@ Otherwise, when you run
 .RS 4
 .\}
 .nf
-warning: clients are using or haven\'t closed the table properly
+warning: clients are using or haven\*(Aqt closed the table properly
 .fi
 .if n \{\
 .RE
@@ -204,7 +227,7 @@ warning: clients are using or haven\'t closed the table properly
 .PP
 This means that you are trying to check a table that has been updated by another program (such as the
 \fBmysqld\fR
-server) that hasn\'t yet closed the file or that has died without closing the file properly, which can sometimes lead to the corruption of one or more
+server) that hasn\*(Aqt yet closed the file or that has died without closing the file properly, which can sometimes lead to the corruption of one or more
 MyISAM
 tables\&.
 .PP
@@ -219,13 +242,17 @@ CHECK TABLE
 instead of
 \fBmyisamchk\fR
 to check tables\&. See
-Section\ \&12.5.2.3, \(lqCHECK TABLE Syntax\(rq\&.
+Section\ \&13.7.2.3, \(lqCHECK TABLE Syntax\(rq\&.
 .sp .5v
 .RE
 .PP
 \fBmyisamchk\fR
-supports the options in the following table\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+supports the following options, which can be specified on the command line or in the
+[myisamchk]
+group of an option file\&.
+\fBmyisamchk\fR
+also supports the options for processing option files described at
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .SH "MYISAMCHK GENERAL OPTIONS"
 .\" options: myisamchk
 .\" myisamchk: options
@@ -275,13 +302,14 @@ Display a help message and exit\&. Options are presented in a single list\&.
 .\}
 .\" myisamchk: debug option
 .\" debug option: myisamchk
-\fB\-\-debug=\fR\fB\fIdebug_options\fR\fR\fB, \-# \fR\fB\fIdebug_options\fR\fR
+\fB\-\-debug=\fR\fB\fIdebug_options\fR\fR,
+\fB\-# \fR\fB\fIdebug_options\fR\fR
 .sp
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. The default is
-\'d:t:o,/tmp/myisamchk\&.trace\'\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. The default is
+\*(Aqd:t:o,/tmp/myisamchk\&.trace\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -373,11 +401,19 @@ syntax:
 .\" myisam_block_size myisamchk variable
 .\" read_buffer_size myisamchk variable
 .\" sort_buffer_size myisamchk variable
+.\" myisam_sort_buffer_size myisamchk variable
 .\" sort_key_blocks myisamchk variable
 .\" stats_method myisamchk variable
 .\" write_buffer_size myisamchk variable
 .TS
 allbox tab(:);
+lB lB.
+T{
+Variable
+T}:T{
+Default Value
+T}
+.T&
 l l
 l l
 l l
@@ -390,11 +426,6 @@ l l
 l l
 l l
 l l.
-T{
-\fBVariable\fR
-T}:T{
-\fBDefault Value\fR
-T}
 T{
 decode_bits
 T}:T{
@@ -424,6 +455,11 @@ T{
 myisam_block_size
 T}:T{
 1024
+T}
+T{
+myisam_sort_key_blocks
+T}:T{
+16
 T}
 T{
 read_buffer_size
@@ -460,7 +496,18 @@ variables and their default values can be examined with
 .PP
 sort_buffer_size
 is used when the keys are repaired by sorting keys, which is the normal case when you use
-\fB\-\-recover\fR\&.
+\fB\-\-recover\fR\&. As of MySQL 5\&.1\&.67,
+myisam_sort_buffer_size
+is available as an alternative name to
+sort_buffer_size\&.
+myisam_sort_buffer_size
+is preferable to
+sort_buffer_size
+because its name corresponds to the
+myisam_sort_buffer_size
+server system variable that has a similar meaning\&.
+sort_buffer_size
+should be considered deprecated\&.
 .PP
 key_buffer_size
 is used when you are checking the table with
@@ -503,7 +550,7 @@ Repairing through the key buffer takes much less disk space than using sorting, 
 If you want a faster repair, set the
 key_buffer_size
 and
-sort_buffer_size
+myisam_sort_buffer_size
 variables to about 25% of your available memory\&. You can set both variables to large values, because only one of them is used at a time\&.
 .PP
 myisam_block_size
@@ -520,18 +567,7 @@ system variable\&. For more information, see the description of
 myisam_stats_method
 in
 Section\ \&5.1.4, \(lqServer System Variables\(rq, and
-Section\ \&7.4.6, \(lqMyISAM Index Statistics Collection\(rq\&. For MySQL 5\&.1,
-stats_method
-was added in MySQL 5\&.0\&.14\&. For older versions, the statistics collection method is equivalent to
-nulls_equal\&.
-.PP
-The
-ft_min_word_len
-and
-ft_max_word_len
-variables are available as of MySQL 4\&.0\&.0\&.
-ft_stopword_file
-is available as of MySQL 4\&.0\&.19\&.
+Section\ \&8.5.4, \(lqInnoDB and MyISAM Index Statistics Collection\(rq\&.
 .PP
 ft_min_word_len
 and
@@ -663,8 +699,10 @@ and have plenty of memory, setting the
 key_buffer_size
 variable to a large value helps the repair operation run faster\&.
 .sp
+See also the description of this option under table repair options\&.
+.sp
 For a description of the output format, see
-the section called \(lqMYISAMCHK TABLE INFORMATION\(rq\&.
+the section called \(lqOBTAINING TABLE INFORMATION WITH MYISAMCHK\(rq\&.
 .RE
 .sp
 .RS 4
@@ -680,7 +718,7 @@ the section called \(lqMYISAMCHK TABLE INFORMATION\(rq\&.
 \fB\-\-fast\fR,
 \fB\-F\fR
 .sp
-Check only tables that haven\'t been closed properly\&.
+Check only tables that haven\*(Aqt been closed properly\&.
 .RE
 .sp
 .RS 4
@@ -776,7 +814,7 @@ Store information in the
 \&.MYI
 file to indicate when the table was checked and whether the table crashed\&. This should be used to get full benefit of the
 \fB\-\-check\-only\-changed\fR
-option, but you shouldn\'t use this option if the
+option, but you shouldn\*(Aqt use this option if the
 \fBmysqld\fR
 server is using the table and you are running it with external locking disabled\&.
 .RE
@@ -823,7 +861,7 @@ file as
 \fB\-\-character\-sets\-dir=\fR\fB\fIpath\fR\fR
 .sp
 The directory where character sets are installed\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
 .RE
 .sp
 .RS 4
@@ -851,7 +889,8 @@ Correct the checksum information for the table\&.
 .\}
 .\" myisamchk: data-file-length option
 .\" data-file-length option: myisamchk
-\fB\-\-data\-file\-length=\fR\fB\fIlen\fR\fR\fB, \-D \fR\fB\fIlen\fR\fR
+\fB\-\-data\-file\-length=\fR\fB\fIlen\fR\fR,
+\fB\-D \fR\fB\fIlen\fR\fR
 .sp
 The maximum length of the data file (when re\-creating data file when it is
 \(lqfull\(rq)\&.
@@ -872,8 +911,10 @@ The maximum length of the data file (when re\-creating data file when it is
 .sp
 Do a repair that tries to recover every possible row from the data file\&. Normally, this also finds a lot of garbage rows\&. Do not use this option unless you are desperate\&.
 .sp
+See also the description of this option under table checking options\&.
+.sp
 For a description of the output format, see
-the section called \(lqMYISAMCHK TABLE INFORMATION\(rq\&.
+the section called \(lqOBTAINING TABLE INFORMATION WITH MYISAMCHK\(rq\&.
 .RE
 .sp
 .RS 4
@@ -979,7 +1020,7 @@ and
 \fB\-\-quick\fR,
 \fB\-q\fR
 .sp
-Achieve a faster repair by not modifying the data file\&. You can specify this option twice to force
+Achieve a faster repair by modifying only the index file, not the data file\&. You can specify this option twice to force
 \fBmyisamchk\fR
 to modify the original data file in case of duplicate keys\&.
 .RE
@@ -1009,7 +1050,7 @@ reports that the table cannot be recovered using
 fails, the data file remains intact\&.)
 .sp
 If you have lots of memory, you should increase the value of
-sort_buffer_size\&.
+myisam_sort_buffer_size\&.
 .RE
 .sp
 .RS 4
@@ -1108,7 +1149,7 @@ The path of the directory to be used for storing temporary files\&. If this is n
 uses the value of the
 TMPDIR
 environment variable\&.
-tmpdir
+\fB\-\-tmpdir\fR
 can be set to a list of directory paths that are used successively in round\-robin fashion for creating temporary files\&. The separator character between directory names is the colon (\(lq:\(rq) on Unix and the semicolon (\(lq;\(rq) on Windows, NetWare, and OS/2\&.
 .RE
 .sp
@@ -1185,7 +1226,7 @@ Find the record that a block at the given offset belongs to\&.
 Print some descriptive information about the table\&. Specifying the
 \fB\-\-verbose\fR
 option once or twice produces additional information\&. See
-the section called \(lqMYISAMCHK TABLE INFORMATION\(rq\&.
+the section called \(lqOBTAINING TABLE INFORMATION WITH MYISAMCHK\(rq\&.
 .RE
 .sp
 .RS 4
@@ -1245,8 +1286,8 @@ Sort records according to a particular index\&. This makes your data much more l
 SELECT
 and
 ORDER BY
-operations that use this index\&. (The first time you use this option to sort a table, it may be very slow\&.) To determine a table\'s index numbers, use
-SHOW INDEX, which displays a table\'s indexes in the same order that
+operations that use this index\&. (The first time you use this option to sort a table, it may be very slow\&.) To determine a table\*(Aqs index numbers, use
+SHOW INDEX, which displays a table\*(Aqs indexes in the same order that
 \fBmyisamchk\fR
 sees them\&. Indexes are numbered beginning with 1\&.
 .sp
@@ -1256,7 +1297,7 @@ sorts and moves records, it just overwrites record offsets in the index\&. If ke
 \fBmyisamchk\fR
 must unpack key blocks first, then re\-create indexes and pack the key blocks again\&. (In this case, re\-creating indexes is faster than updating offsets for each index\&.)
 .RE
-.SH "MYISAMCHK TABLE INFORMATION"
+.SH "OBTAINING TABLE INFORMATION WITH MYISAMCHK"
 .\" table description: myisamchk
 .\" tables: information
 .\" examples: myisamchk output
@@ -1467,7 +1508,11 @@ The format used to store table rows\&. The preceding examples use
 Fixed length\&. Other possible values are
 Compressed
 and
-Packed\&.
+Packed\&. (Packed
+corresponds to what
+SHOW TABLE STATUS
+reports as
+Dynamic\&.)
 .RE
 .sp
 .RS 4
@@ -1554,7 +1599,7 @@ sorted index pages\&.
 Auto increment key,
 Last value
 .sp
-The key number associated the table\'s
+The key number associated the table\*(Aqs
 AUTO_INCREMENT
 column, and the most recently generated value for this column\&. These fields do not appear if there is no such column\&.
 .RE
@@ -1583,7 +1628,7 @@ The number of rows in the table\&.
 Deleted blocks
 .sp
 How many deleted blocks still have reserved space\&. You can optimize your table to minimize this space\&. See
-Section\ \&6.4.4, \(lqTable Optimization\(rq\&.
+Section\ \&7.6.4, \(lqMyISAM Table Optimization\(rq\&.
 .RE
 .sp
 .RS 4
@@ -1611,7 +1656,7 @@ Data records\&.
 Deleted data
 .sp
 How many bytes of unreclaimed deleted data there are\&. You can optimize your table to minimize this space\&. See
-Section\ \&6.4.4, \(lqTable Optimization\(rq\&.
+Section\ \&7.6.4, \(lqMyISAM Table Optimization\(rq\&.
 .RE
 .sp
 .RS 4
@@ -1695,7 +1740,7 @@ displays some low\-level information:
 .\}
 Key
 .sp
-This key\'s number\&. This value is shown only for the first column of the key\&. If this value is missing, the line corresponds to the second or later column of a multiple\-column key\&. For the table shown in the example, there are two
+This key\*(Aqs number\&. This value is shown only for the first column of the key\&. If this value is missing, the line corresponds to the second or later column of a multiple\-column key\&. For the table shown in the example, there are two
 table description
 lines for the second index\&. This indicates that it is a multiple\-part index with two parts\&.
 .RE
@@ -2053,8 +2098,7 @@ Key:  2:  Keyblocks used:  99%  Packed:   97%  Max levels:  3
 \- check data record references index: 3
 Key:  3:  Keyblocks used:  98%  Packed:  \-14%  Max levels:  3
 Total:    Keyblocks used:  98%  Packed:   89%
-\- check records and index references
-\fI*** LOTS OF ROW NUMBERS DELETED ***\fR
+\- check records and index references\fI*** LOTS OF ROW NUMBERS DELETED ***\fR
 Records:            306688  M\&.recordlength:       25  Packed:            83%
 Recordspace used:       97% Empty space:           2% Blocks/Record:   1\&.00
 Record blocks:      306688  Delete blocks:         0
@@ -2098,7 +2142,7 @@ The number of rows in the table\&.
 Deleted blocks
 .sp
 How many deleted blocks still have reserved space\&. You can optimize your table to minimize this space\&. See
-Section\ \&6.4.4, \(lqTable Optimization\(rq\&.
+Section\ \&7.6.4, \(lqMyISAM Table Optimization\(rq\&.
 .RE
 .sp
 .RS 4
@@ -2236,7 +2280,7 @@ What percentage of the data file is unused\&.
 Blocks/Record
 .sp
 Average number of blocks per row (that is, how many links a fragmented row is composed of)\&. This is always 1\&.0 for fixed\-format tables\&. This value should stay as close to 1\&.0 as possible\&. If it gets too large, you can reorganize the table\&. See
-Section\ \&6.4.4, \(lqTable Optimization\(rq\&.
+Section\ \&7.6.4, \(lqMyISAM Table Optimization\(rq\&.
 .RE
 .sp
 .RS 4
@@ -2328,24 +2372,24 @@ uses no more memory than its memory\-related variables are set to\&. If you are 
 \fBmyisamchk\fR
 on very large tables, you should first decide how much memory you want it to use\&. The default is to use only about 3MB to perform repairs\&. By using larger values, you can get
 \fBmyisamchk\fR
-to operate faster\&. For example, if you have more than 32MB RAM, you could use options such as these (in addition to any other options you might specify):
+to operate faster\&. For example, if you have more than 512MB RAM available, you could use options such as these (in addition to any other options you might specify):
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-shell> \fBmyisamchk \-\-sort_buffer_size=16M \e\fR
-           \fB\-\-key_buffer_size=16M \e\fR
-           \fB\-\-read_buffer_size=1M \e\fR
-           \fB\-\-write_buffer_size=1M \&.\&.\&.\fR
+shell> \fBmyisamchk \-\-myisam_sort_buffer_size=256M \e\fR
+           \fB\-\-key_buffer_size=512M \e\fR
+           \fB\-\-read_buffer_size=64M \e\fR
+           \fB\-\-write_buffer_size=64M \&.\&.\&.\fR
 .fi
 .if n \{\
 .RE
 .\}
 .PP
 Using
-\fB\-\-sort_buffer_size=16M\fR
-should probably be enough for most cases\&.
+\fB\-\-myisam_sort_buffer_size=16M\fR
+is probably enough for most cases\&.
 .PP
 Be aware that
 \fBmyisamchk\fR
@@ -2408,7 +2452,7 @@ or
 .RS 4
 .\}
 .nf
-(\fIlargest_key\fR + \fIrow_pointer_length\fR) \(mu \fInumber_of_rows\fR \(mu 2
+(\fIlargest_key\fR + \fIrow_pointer_length\fR) * \fInumber_of_rows\fR * 2
 .fi
 .if n \{\
 .RE
@@ -2419,7 +2463,7 @@ You can check the length of the keys and the
 with
 \fBmyisamchk \-dv \fR\fB\fItbl_name\fR\fR
 (see
-the section called \(lqMYISAMCHK TABLE INFORMATION\(rq)\&. The
+the section called \(lqOBTAINING TABLE INFORMATION WITH MYISAMCHK\(rq)\&. The
 \fIrow_pointer_length\fR
 and
 \fInumber_of_rows\fR
@@ -2445,7 +2489,7 @@ instead of
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -2458,4 +2502,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

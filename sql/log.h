@@ -1,4 +1,5 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +12,9 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
- 
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
+
 /* Copyright (C) 2013 Calpont Corp. */
 
 #ifndef LOG_H
@@ -21,6 +23,11 @@
 class Relay_log_info;
 
 class Format_description_log_event;
+
+bool ending_trans(const THD* thd, const bool all);
+bool trans_has_updated_non_trans_table(const THD* thd);
+bool trans_has_no_stmt_committed(const THD* thd, const bool all);
+bool stmt_has_updated_non_trans_table(const THD* thd);
 
 /*
   Transaction Coordinator log - a base abstract class
@@ -36,7 +43,7 @@ class TC_LOG
   virtual int open(const char *opt_name)=0;
   virtual void close()=0;
   virtual int log_xid(THD *thd, my_xid xid)=0;
-  virtual void unlog(ulong cookie, my_xid xid)=0;
+  virtual int unlog(ulong cookie, my_xid xid)=0;
 };
 
 class TC_LOG_DUMMY: public TC_LOG // use it to disable the logging
@@ -46,7 +53,7 @@ public:
   int open(const char *opt_name)        { return 0; }
   void close()                          { }
   int log_xid(THD *thd, my_xid xid)         { return 1; }
-  void unlog(ulong cookie, my_xid xid)  { }
+  int unlog(ulong cookie, my_xid xid)  { return 0; }
 };
 
 #ifdef HAVE_MMAP
@@ -91,7 +98,7 @@ class TC_LOG_MMAP: public TC_LOG
   int open(const char *opt_name);
   void close();
   int log_xid(THD *thd, my_xid xid);
-  void unlog(ulong cookie, my_xid xid);
+  int unlog(ulong cookie, my_xid xid);
   int recover();
 
   private:
@@ -125,6 +132,11 @@ extern TC_LOG_DUMMY tc_log_dummy;
 
 class Relay_log_info;
 
+/*
+  Note that we destroy the lock mutex in the desctructor here.
+  This means that object instances cannot be destroyed/go out of scope,
+  until we have reset thd->current_linfo to NULL;
+ */
 typedef struct st_log_info
 {
   char log_file_name[FN_REFLEN];
@@ -174,6 +186,10 @@ public:
             enum_log_type log_type,
             const char *new_name,
             enum cache_type io_cache_type_arg);
+  bool init_and_set_log_file_name(const char *log_name,
+                                  const char *new_name,
+                                  enum_log_type log_type_arg,
+                                  enum cache_type io_cache_type_arg);
   void init(enum_log_type log_type_arg,
             enum cache_type io_cache_type_arg);
   void close(uint exiting);
@@ -235,14 +251,15 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   pthread_cond_t update_cond;
   ulonglong bytes_written;
   IO_CACHE index_file;
+  char index_file_name[FN_REFLEN];
   /*
-    purge_temp is a temp file used in purge_logs so that the index file
+    purge_file is a temp file used in purge_logs so that the index file
     can be updated before deleting files from disk, yielding better crash
     recovery. It is created on demand the first time purge_logs is called
     and then reused for subsequent calls. It is cleaned up in cleanup().
   */
-  IO_CACHE purge_temp;
-  char index_file_name[FN_REFLEN];
+  IO_CACHE purge_index_file;
+  char purge_index_file_name[FN_REFLEN];
   /*
      The max size before rotation (usable only if log_type == LOG_BIN: binary
      logs and relay logs).
@@ -269,16 +286,14 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   */
   bool no_auto_events;
 
-  ulonglong m_table_map_version;
-
   int write_to_file(IO_CACHE *cache);
   /*
     This is used to start writing to a new log file. The difference from
     new_file() is locking. new_file_without_locking() does not acquire
     LOCK_log.
   */
-  void new_file_without_locking();
-  void new_file_impl(bool need_lock);
+  int new_file_without_locking();
+  int new_file_impl(bool need_lock);
 
 public:
   using MYSQL_LOG::generate_name;
@@ -308,17 +323,9 @@ public:
   int open(const char *opt_name);
   void close();
   int log_xid(THD *thd, my_xid xid);
-  void unlog(ulong cookie, my_xid xid);
+  int unlog(ulong cookie, my_xid xid);
   int recover(IO_CACHE *log, Format_description_log_event *fdle);
 #if !defined(MYSQL_CLIENT)
-  bool is_table_mapped(TABLE *table) const
-  {
-    return table->s->table_map_version == table_map_version();
-  }
-
-  ulonglong table_map_version() const { return m_table_map_version; }
-  void update_table_map_version() { ++m_table_map_version; }
-
   int flush_and_set_pending_rows_event(THD *thd, Rows_log_event* event);
   int remove_pending_rows_event(THD *thd);
 
@@ -351,16 +358,18 @@ public:
             const char *new_name,
 	    enum cache_type io_cache_type_arg,
 	    bool no_auto_events_arg, ulong max_size,
-            bool null_created);
+            bool null_created,
+            bool need_mutex);
   bool open_index_file(const char *index_file_name_arg,
-                       const char *log_name);
+                       const char *log_name, bool need_mutex);
   /* Use this to start writing a new log file */
-  void new_file();
+  int new_file();
 
+  void reset_gathered_updates(THD *thd);
   bool write(Log_event* event_info); // binary log write
   bool write(THD *thd, IO_CACHE *cache, Log_event *commit_event, bool incident);
-  bool write_incident(THD *thd, bool lock);
 
+  bool write_incident(THD *thd, bool lock);
   int  write_cache(IO_CACHE *cache, bool lock_log, bool flush_and_sync);
   void set_write_error(THD *thd);
   bool check_write_error(THD *thd);
@@ -379,13 +388,23 @@ public:
   void make_log_name(char* buf, const char* log_ident);
   bool is_active(const char* log_file_name);
   int update_log_index(LOG_INFO* linfo, bool need_update_threads);
-  void rotate_and_purge(uint flags);
+  int rotate_and_purge(uint flags);
   bool flush_and_sync();
   int purge_logs(const char *to_log, bool included,
                  bool need_mutex, bool need_update_threads,
                  ulonglong *decrease_log_space);
   int purge_logs_before_date(time_t purge_time);
   int purge_first_log(Relay_log_info* rli, bool included);
+  int set_purge_index_file_name(const char *base_file_name);
+  int open_purge_index_file(bool destroy);
+  bool is_inited_purge_index_file();
+  int close_purge_index_file();
+  int clean_purge_index_file();
+  int sync_purge_index_file();
+  int register_purge_index_entry(const char* entry);
+  int register_create_index_entry(const char* entry);
+  int purge_index_entry(THD *thd, ulonglong *decrease_log_space,
+                        bool need_mutex);
   bool reset_logs(THD* thd);
   void close(uint exiting);
 

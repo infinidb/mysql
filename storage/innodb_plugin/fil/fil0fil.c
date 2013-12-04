@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 51 Franklin St,
+Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -38,6 +38,7 @@ Created 10/25/1995 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "mtr0log.h"
 #include "dict0dict.h"
+#include "page0page.h"
 #include "page0zip.h"
 #ifndef UNIV_HOTBACKUP
 # include "buf0lru.h"
@@ -174,7 +175,7 @@ struct fil_space_struct {
 				.ibd file of tablespace and want to
 				stop temporarily posting of new i/o
 				requests on the file */
-	ibool		stop_ibuf_merges;
+	ibool		stop_new_ops;
 				/*!< we set this TRUE when we start
 				deleting a single-table tablespace */
 	ibool		is_being_deleted;
@@ -199,12 +200,13 @@ struct fil_space_struct {
 	ulint		n_pending_flushes; /*!< this is positive when flushing
 				the tablespace to disk; dropping of the
 				tablespace is forbidden if this is positive */
-	ulint		n_pending_ibuf_merges;/*!< this is positive
-				when merging insert buffer entries to
-				a page so that we may need to access
-				the ibuf bitmap page in the
-				tablespade: dropping of the tablespace
-				is forbidden if this is positive */
+	ulint		n_pending_ops;/*!< this is positive when we
+				have pending operations against this
+				tablespace. The pending operations can
+				be ibuf merges or lock validation code
+				trying to read a block.
+				Dropping of the tablespace is forbidden
+				if this is positive */
 	hash_node_t	hash;	/*!< hash chain node */
 	hash_node_t	name_hash;/*!< hash chain the name_hash table */
 #ifndef UNIV_HOTBACKUP
@@ -278,6 +280,10 @@ struct fil_system_struct {
 					request */
 	UT_LIST_BASE_NODE_T(fil_space_t) space_list;
 					/*!< list of all file spaces */
+	ibool		space_id_reuse_warned;
+					/* !< TRUE if fil_space_create()
+					has issued a warning about
+					potential space_id reuse */
 };
 
 /** The tablespace memory cache. This variable is NULL before the module is
@@ -321,6 +327,18 @@ fil_get_space_id_for_table(
 /*=======================*/
 	const char*	name);	/*!< in: table name in the standard
 				'databasename/tablename' format */
+/*******************************************************************//**
+Frees a space object from the tablespace memory cache. Closes the files in
+the chain but does not delete them. There must not be any pending i/o's or
+flushes on the files.
+@return TRUE on success */
+static
+ibool
+fil_space_free(
+/*===========*/
+	ulint		id,		/* in: space id */
+	ibool		x_latched);	/* in: TRUE if caller has space->latch
+					in X mode */
 /********************************************************************//**
 Reads data from a space to a buffer. Remember that the possible incomplete
 blocks at the end of file are ignored: they are not taken into account when
@@ -594,6 +612,11 @@ fil_node_create(
 
 	UT_LIST_ADD_LAST(chain, space->chain, node);
 
+	if (id < SRV_LOG_SPACE_FIRST_ID && fil_system->max_assigned_id < id) {
+
+		fil_system->max_assigned_id = id;
+	}
+
 	mutex_exit(&fil_system->mutex);
 }
 
@@ -613,12 +636,10 @@ fil_node_open_file(
 	ulint		size_high;
 	ibool		ret;
 	ibool		success;
-#ifndef UNIV_HOTBACKUP
 	byte*		buf2;
 	byte*		page;
 	ulint		space_id;
 	ulint		flags;
-#endif /* !UNIV_HOTBACKUP */
 
 	ut_ad(mutex_own(&(system->mutex)));
 	ut_a(node->n_pending == 0);
@@ -654,9 +675,12 @@ fil_node_open_file(
 		size_bytes = (((ib_int64_t)size_high) << 32)
 			+ (ib_int64_t)size_low;
 #ifdef UNIV_HOTBACKUP
-		node->size = (ulint) (size_bytes / UNIV_PAGE_SIZE);
-		/* TODO: adjust to zip_size, like below? */
-#else
+		if (space->id == 0) {
+			node->size = (ulint) (size_bytes / UNIV_PAGE_SIZE);
+			os_file_close(node->handle);
+			goto add_size;
+		}
+#endif /* UNIV_HOTBACKUP */
 		ut_a(space->purpose != FIL_LOG);
 		ut_a(space->id != 0);
 
@@ -735,7 +759,10 @@ fil_node_open_file(
 				(size_bytes
 				 / dict_table_flags_to_zip_size(flags));
 		}
-#endif
+
+#ifdef UNIV_HOTBACKUP
+add_size:
+#endif /* UNIV_HOTBACKUP */
 		space->size += node->size;
 	}
 
@@ -892,11 +919,6 @@ retry:
 		return;
 	}
 
-	if (fil_system->n_open < fil_system->max_n_open) {
-
-		return;
-	}
-
 	space = fil_space_get_by_id(space_id);
 
 	if (space != NULL && space->stop_ios) {
@@ -913,11 +935,35 @@ retry:
 
 		mutex_exit(&fil_system->mutex);
 
+#ifndef UNIV_HOTBACKUP
+
+		/* Wake the i/o-handler threads to make sure pending
+		i/o's are performed */
+		os_aio_simulated_wake_handler_threads();
+
+		/* The sleep here is just to give IO helper threads a
+		bit of time to do some work. It is not required that
+		all IO related to the tablespace being renamed must
+		be flushed here as we do fil_flush() in
+		fil_rename_tablespace() as well. */
+		os_thread_sleep(20000);
+
+#endif /* UNIV_HOTBACKUP */
+
+		/* Flush tablespaces so that we can close modified
+		files in the LRU list */
+		fil_flush_file_spaces(FIL_TABLESPACE);
+
 		os_thread_sleep(20000);
 
 		count2++;
 
 		goto retry;
+	}
+
+	if (fil_system->n_open < fil_system->max_n_open) {
+
+		return;
 	}
 
 	/* If the file is already open, no need to do anything; if the space
@@ -955,7 +1001,7 @@ close_more:
 			" while the maximum\n"
 			"InnoDB: allowed value would be %lu.\n"
 			"InnoDB: You may need to raise the value of"
-			" innodb_max_files_open in\n"
+			" innodb_open_files in\n"
 			"InnoDB: my.cnf.\n",
 			(ulong) fil_system->n_open,
 			(ulong) fil_system->max_n_open);
@@ -1077,10 +1123,13 @@ fil_space_create(
 	fil_space_t*	space;
 
 	/* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-	ROW_FORMAT=COMPACT (table->flags == DICT_TF_COMPACT) and
+	ROW_FORMAT=COMPACT
+	((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
 	ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-	format, the tablespace flags should equal table->flags. */
+	format, the tablespace flags should equal
+	(table->flags & ~(~0 << DICT_TF_BITS)). */
 	ut_a(flags != DICT_TF_COMPACT);
+	ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
 try_again:
 	/*printf(
@@ -1095,6 +1144,7 @@ try_again:
 	space = fil_space_get_by_name(name);
 
 	if (UNIV_LIKELY_NULL(space)) {
+		ibool	success;
 		ulint	namesake_id;
 
 		ut_print_timestamp(stderr);
@@ -1133,9 +1183,10 @@ try_again:
 
 		namesake_id = space->id;
 
-		mutex_exit(&fil_system->mutex);
+		success = fil_space_free(namesake_id, FALSE);
+		ut_a(success);
 
-		fil_space_free(namesake_id);
+		mutex_exit(&fil_system->mutex);
 
 		goto try_again;
 	}
@@ -1169,12 +1220,24 @@ try_again:
 	space->tablespace_version = fil_system->tablespace_version;
 	space->mark = FALSE;
 
-	if (purpose == FIL_TABLESPACE && id > fil_system->max_assigned_id) {
+	if (UNIV_LIKELY(purpose == FIL_TABLESPACE && !recv_recovery_on)
+	    && UNIV_UNLIKELY(id > fil_system->max_assigned_id)) {
+		if (!fil_system->space_id_reuse_warned) {
+			fil_system->space_id_reuse_warned = TRUE;
+
+			ut_print_timestamp(stderr);
+			fprintf(stderr,
+				"  InnoDB: Warning: allocated tablespace %lu,"
+				" old maximum was %lu\n",
+				(ulong) id,
+				(ulong) fil_system->max_assigned_id);
+		}
+
 		fil_system->max_assigned_id = id;
 	}
 
 	space->stop_ios = FALSE;
-	space->stop_ibuf_merges = FALSE;
+	space->stop_new_ops = FALSE;
 	space->is_being_deleted = FALSE;
 	space->purpose = purpose;
 	space->size = 0;
@@ -1183,7 +1246,7 @@ try_again:
 	space->n_reserved_extents = 0;
 
 	space->n_pending_flushes = 0;
-	space->n_pending_ibuf_merges = 0;
+	space->n_pending_ops = 0;
 
 	UT_LIST_INIT(space->chain);
 	space->magic_n = FIL_SPACE_MAGIC_N;
@@ -1207,19 +1270,25 @@ try_again:
 Assigns a new space id for a new single-table tablespace. This works simply by
 incrementing the global counter. If 4 billion id's is not enough, we may need
 to recycle id's.
-@return	new tablespace id; ULINT_UNDEFINED if could not assign an id */
-static
-ulint
-fil_assign_new_space_id(void)
-/*=========================*/
+@return	TRUE if assigned, FALSE if not */
+UNIV_INTERN
+ibool
+fil_assign_new_space_id(
+/*====================*/
+	ulint*	space_id)	/*!< in/out: space id */
 {
-	ulint		id;
+	ulint	id;
+	ibool	success;
 
 	mutex_enter(&fil_system->mutex);
 
-	fil_system->max_assigned_id++;
+	id = *space_id;
 
-	id = fil_system->max_assigned_id;
+	if (id < fil_system->max_assigned_id) {
+		id = fil_system->max_assigned_id;
+	}
+
+	id++;
 
 	if (id > (SRV_LOG_SPACE_FIRST_ID / 2) && (id % 1000000UL == 0)) {
 		ut_print_timestamp(stderr);
@@ -1235,7 +1304,11 @@ fil_assign_new_space_id(void)
 			(ulong) SRV_LOG_SPACE_FIRST_ID);
 	}
 
-	if (id >= SRV_LOG_SPACE_FIRST_ID) {
+	success = (id < SRV_LOG_SPACE_FIRST_ID);
+
+	if (success) {
+		*space_id = fil_system->max_assigned_id = id;
+	} else {
 		ut_print_timestamp(stderr);
 		fprintf(stderr,
 			"InnoDB: You have run out of single-table"
@@ -1245,14 +1318,12 @@ fil_assign_new_space_id(void)
 			" have to dump all your tables and\n"
 			"InnoDB: recreate the whole InnoDB installation.\n",
 			(ulong) id);
-		fil_system->max_assigned_id--;
-
-		id = ULINT_UNDEFINED;
+		*space_id = ULINT_UNDEFINED;
 	}
 
 	mutex_exit(&fil_system->mutex);
 
-	return(id);
+	return(success);
 }
 
 /*******************************************************************//**
@@ -1260,17 +1331,20 @@ Frees a space object from the tablespace memory cache. Closes the files in
 the chain but does not delete them. There must not be any pending i/o's or
 flushes on the files.
 @return	TRUE if success */
-UNIV_INTERN
+static
 ibool
 fil_space_free(
 /*===========*/
-	ulint	id)	/*!< in: space id */
+					/* out: TRUE if success */
+	ulint		id,		/* in: space id */
+	ibool		x_latched)	/* in: TRUE if caller has space->latch
+					in X mode */
 {
 	fil_space_t*	space;
 	fil_space_t*	namespace;
 	fil_node_t*	fil_node;
 
-	mutex_enter(&fil_system->mutex);
+	ut_ad(mutex_own(&fil_system->mutex));
 
 	space = fil_space_get_by_id(id);
 
@@ -1280,8 +1354,6 @@ fil_space_free(
 			"  InnoDB: Error: trying to remove tablespace %lu"
 			" from the cache but\n"
 			"InnoDB: it is not there.\n", (ulong) id);
-
-		mutex_exit(&fil_system->mutex);
 
 		return(FALSE);
 	}
@@ -1317,7 +1389,9 @@ fil_space_free(
 
 	ut_a(0 == UT_LIST_GET_LEN(space->chain));
 
-	mutex_exit(&fil_system->mutex);
+	if (x_latched) {
+		rw_lock_x_unlock(&space->latch);
+	}
 
 	rw_lock_free(&(space->latch));
 
@@ -1482,7 +1556,7 @@ fil_init(
 	ut_a(hash_size > 0);
 	ut_a(max_n_open > 0);
 
-	fil_system = mem_alloc(sizeof(fil_system_t));
+	fil_system = mem_zalloc(sizeof(fil_system_t));
 
 	mutex_create(&fil_system->mutex, SYNC_ANY_LATCH);
 
@@ -1491,16 +1565,7 @@ fil_init(
 
 	UT_LIST_INIT(fil_system->LRU);
 
-	fil_system->n_open = 0;
 	fil_system->max_n_open = max_n_open;
-
-	fil_system->modification_counter = 0;
-	fil_system->max_assigned_id = 0;
-
-	fil_system->tablespace_version = 0;
-
-	UT_LIST_INIT(fil_system->unflushed_spaces);
-	UT_LIST_INIT(fil_system->space_list);
 }
 
 /*******************************************************************//**
@@ -1535,7 +1600,7 @@ fil_open_log_and_system_tablespace_files(void)
 					fprintf(stderr,
 						"InnoDB: Warning: you must"
 						" raise the value of"
-						" innodb_max_open_files in\n"
+						" innodb_open_files in\n"
 						"InnoDB: my.cnf! Remember that"
 						" InnoDB keeps all log files"
 						" and all system\n"
@@ -1570,22 +1635,27 @@ fil_close_all_files(void)
 /*=====================*/
 {
 	fil_space_t*	space;
-	fil_node_t*	node;
 
 	mutex_enter(&fil_system->mutex);
 
 	space = UT_LIST_GET_FIRST(fil_system->space_list);
 
 	while (space != NULL) {
-		node = UT_LIST_GET_FIRST(space->chain);
+		fil_node_t*	node;
+		fil_space_t*	prev_space = space;
 
-		while (node != NULL) {
+		for (node = UT_LIST_GET_FIRST(space->chain);
+		     node != NULL;
+		     node = UT_LIST_GET_NEXT(chain, node)) {
+
 			if (node->open) {
 				fil_node_close_file(node, fil_system);
 			}
-			node = UT_LIST_GET_NEXT(chain, node);
 		}
+
 		space = UT_LIST_GET_NEXT(space_list, space);
+
+		fil_space_free(prev_space->id, FALSE);
 	}
 
 	mutex_exit(&fil_system->mutex);
@@ -1767,13 +1837,12 @@ fil_read_flushed_lsn_and_arch_log_no(
 
 #ifndef UNIV_HOTBACKUP
 /*******************************************************************//**
-Increments the count of pending insert buffer page merges, if space is not
-being deleted.
-@return	TRUE if being deleted, and ibuf merges should be skipped */
+Increments the count of pending operation, if space is not being deleted.
+@return	TRUE if being deleted, and operation should be skipped */
 UNIV_INTERN
 ibool
-fil_inc_pending_ibuf_merges(
-/*========================*/
+fil_inc_pending_ops(
+/*================*/
 	ulint	id)	/*!< in: space id */
 {
 	fil_space_t*	space;
@@ -1784,18 +1853,18 @@ fil_inc_pending_ibuf_merges(
 
 	if (space == NULL) {
 		fprintf(stderr,
-			"InnoDB: Error: trying to do ibuf merge to a"
+			"InnoDB: Error: trying to do an operation on a"
 			" dropped tablespace %lu\n",
 			(ulong) id);
 	}
 
-	if (space == NULL || space->stop_ibuf_merges) {
+	if (space == NULL || space->stop_new_ops) {
 		mutex_exit(&fil_system->mutex);
 
 		return(TRUE);
 	}
 
-	space->n_pending_ibuf_merges++;
+	space->n_pending_ops++;
 
 	mutex_exit(&fil_system->mutex);
 
@@ -1803,11 +1872,11 @@ fil_inc_pending_ibuf_merges(
 }
 
 /*******************************************************************//**
-Decrements the count of pending insert buffer page merges. */
+Decrements the count of pending operations. */
 UNIV_INTERN
 void
-fil_decr_pending_ibuf_merges(
-/*=========================*/
+fil_decr_pending_ops(
+/*=================*/
 	ulint	id)	/*!< in: space id */
 {
 	fil_space_t*	space;
@@ -1818,13 +1887,13 @@ fil_decr_pending_ibuf_merges(
 
 	if (space == NULL) {
 		fprintf(stderr,
-			"InnoDB: Error: decrementing ibuf merge of a"
-			" dropped tablespace %lu\n",
+			"InnoDB: Error: decrementing pending operation"
+			" of a dropped tablespace %lu\n",
 			(ulong) id);
 	}
 
 	if (space != NULL) {
-		space->n_pending_ibuf_merges--;
+		space->n_pending_ops--;
 	}
 
 	mutex_exit(&fil_system->mutex);
@@ -2082,7 +2151,7 @@ fil_op_log_parse_or_replay(
 			fil_create_directory_for_tablename(name);
 
 			if (fil_create_new_single_table_tablespace(
-				    &space_id, name, FALSE, flags,
+				    space_id, name, FALSE, flags,
 				    FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
 				ut_error;
 			}
@@ -2114,15 +2183,15 @@ fil_delete_tablespace(
 	char*		path;
 
 	ut_a(id != 0);
-stop_ibuf_merges:
+stop_new_ops:
 	mutex_enter(&fil_system->mutex);
 
 	space = fil_space_get_by_id(id);
 
 	if (space != NULL) {
-		space->stop_ibuf_merges = TRUE;
+		space->stop_new_ops = TRUE;
 
-		if (space->n_pending_ibuf_merges == 0) {
+		if (space->n_pending_ops == 0) {
 			mutex_exit(&fil_system->mutex);
 
 			count = 0;
@@ -2136,9 +2205,10 @@ stop_ibuf_merges:
 				ut_print_filename(stderr, space->name);
 				fprintf(stderr, ",\n"
 					"InnoDB: but there are %lu pending"
-					" ibuf merges on it.\n"
+					" operations (most likely ibuf merges)"
+					" on it.\n"
 					"InnoDB: Loop %lu.\n",
-					(ulong) space->n_pending_ibuf_merges,
+					(ulong) space->n_pending_ops,
 					(ulong) count);
 			}
 
@@ -2147,7 +2217,7 @@ stop_ibuf_merges:
 			os_thread_sleep(20000);
 			count++;
 
-			goto stop_ibuf_merges;
+			goto stop_new_ops;
 		}
 	}
 
@@ -2173,7 +2243,7 @@ try_again:
 	}
 
 	ut_a(space);
-	ut_a(space->n_pending_ibuf_merges == 0);
+	ut_a(space->n_pending_ops == 0);
 
 	space->is_being_deleted = TRUE;
 
@@ -2205,6 +2275,19 @@ try_again:
 	path = mem_strdup(space->name);
 
 	mutex_exit(&fil_system->mutex);
+
+	/* Important: We rely on the data dictionary mutex to ensure
+	that a race is not possible here. It should serialize the tablespace
+	drop/free. We acquire an X latch only to avoid a race condition
+	when accessing the tablespace instance via:
+
+	  fsp_get_available_space_in_free_extents().
+
+	There our main motivation is to reduce the contention on the
+	dictionary mutex. */
+
+	rw_lock_x_lock(&space->latch);
+
 #ifndef UNIV_HOTBACKUP
 	/* Invalidate in the buffer pool all pages belonging to the
 	tablespace. Since we have set space->is_being_deleted = TRUE, readahead
@@ -2217,7 +2300,11 @@ try_again:
 #endif
 	/* printf("Deleting tablespace %s id %lu\n", space->name, id); */
 
-	success = fil_space_free(id);
+	mutex_enter(&fil_system->mutex);
+
+	success = fil_space_free(id, TRUE);
+
+	mutex_exit(&fil_system->mutex);
 
 	if (success) {
 		success = os_file_delete(path);
@@ -2225,6 +2312,8 @@ try_again:
 		if (!success) {
 			success = os_file_delete_if_exists(path);
 		}
+	} else {
+		rw_lock_x_unlock(&space->latch);
 	}
 
 	if (success) {
@@ -2250,6 +2339,31 @@ try_again:
 	mem_free(path);
 
 	return(FALSE);
+}
+
+/*******************************************************************//**
+Returns TRUE if a single-table tablespace is being deleted.
+@return TRUE if being deleted */
+UNIV_INTERN
+ibool
+fil_tablespace_is_being_deleted(
+/*============================*/
+	ulint		id)	/*!< in: space id */
+{
+	fil_space_t*	space;
+	ibool		is_being_deleted;
+
+	mutex_enter(&fil_system->mutex);
+
+	space = fil_space_get_by_id(id);
+
+	ut_a(space != NULL);
+
+	is_being_deleted = space->is_being_deleted;
+
+	mutex_exit(&fil_system->mutex);
+
+	return(is_being_deleted);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -2402,7 +2516,7 @@ fil_rename_tablespace(
 retry:
 	count++;
 
-	if (count > 1000) {
+	if (!(count % 1000)) {
 		ut_print_timestamp(stderr);
 		fputs("  InnoDB: Warning: problems renaming ", stderr);
 		ut_print_filename(stderr, old_name);
@@ -2505,7 +2619,7 @@ retry:
 	mutex_exit(&fil_system->mutex);
 
 #ifndef UNIV_HOTBACKUP
-	if (success) {
+	if (success && !recv_recovery_on) {
 		mtr_t		mtr;
 
 		mtr_start(&mtr);
@@ -2529,9 +2643,7 @@ UNIV_INTERN
 ulint
 fil_create_new_single_table_tablespace(
 /*===================================*/
-	ulint*		space_id,	/*!< in/out: space id; if this is != 0,
-					then this is an input parameter,
-					otherwise output */
+	ulint		space_id,	/*!< in: space id */
 	const char*	tablename,	/*!< in: the table name in the usual
 					databasename/tablename format
 					of InnoDB, or a dir path to a temp
@@ -2551,12 +2663,17 @@ fil_create_new_single_table_tablespace(
 	ibool		success;
 	char*		path;
 
+	ut_a(space_id > 0);
+	ut_a(space_id < SRV_LOG_SPACE_FIRST_ID);
 	ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
 	/* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-	ROW_FORMAT=COMPACT (table->flags == DICT_TF_COMPACT) and
+	ROW_FORMAT=COMPACT
+	((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
 	ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-	format, the tablespace flags should equal table->flags. */
+	format, the tablespace flags should equal
+	(table->flags & ~(~0 << DICT_TF_BITS)). */
 	ut_a(flags != DICT_TF_COMPACT);
+	ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
 	path = fil_make_ibd_name(tablename, is_temp);
 
@@ -2604,37 +2721,20 @@ fil_create_new_single_table_tablespace(
 		return(DB_ERROR);
 	}
 
-	buf2 = ut_malloc(3 * UNIV_PAGE_SIZE);
-	/* Align the memory for file i/o if we might have O_DIRECT set */
-	page = ut_align(buf2, UNIV_PAGE_SIZE);
-
 	ret = os_file_set_size(path, file, size * UNIV_PAGE_SIZE, 0);
 
 	if (!ret) {
-		ut_free(buf2);
-		os_file_close(file);
-		os_file_delete(path);
-
-		mem_free(path);
-		return(DB_OUT_OF_FILE_SPACE);
-	}
-
-	if (*space_id == 0) {
-		*space_id = fil_assign_new_space_id();
-	}
-
-	/* printf("Creating tablespace %s id %lu\n", path, *space_id); */
-
-	if (*space_id == ULINT_UNDEFINED) {
-		ut_free(buf2);
+		err = DB_OUT_OF_FILE_SPACE;
 error_exit:
 		os_file_close(file);
 error_exit2:
 		os_file_delete(path);
 
 		mem_free(path);
-		return(DB_ERROR);
+		return(err);
 	}
+
+	/* printf("Creating tablespace %s id %lu\n", path, space_id); */
 
 	/* We have to write the space id to the file immediately and flush the
 	file to disk. This is because in crash recovery we must be aware what
@@ -2645,10 +2745,14 @@ error_exit2:
 	with zeros from the call of os_file_set_size(), until a buffer pool
 	flush would write to it. */
 
+	buf2 = ut_malloc(3 * UNIV_PAGE_SIZE);
+	/* Align the memory for file i/o if we might have O_DIRECT set */
+	page = ut_align(buf2, UNIV_PAGE_SIZE);
+
 	memset(page, '\0', UNIV_PAGE_SIZE);
 
-	fsp_header_init_fields(page, *space_id, flags);
-	mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, *space_id);
+	fsp_header_init_fields(page, space_id, flags);
+	mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, space_id);
 
 	if (!(flags & DICT_TF_ZSSIZE_MASK)) {
 		buf_flush_init_for_writing(page, NULL, 0);
@@ -2679,6 +2783,7 @@ error_exit2:
 		      " to tablespace ", stderr);
 		ut_print_filename(stderr, path);
 		putc('\n', stderr);
+		err = DB_ERROR;
 		goto error_exit;
 	}
 
@@ -2688,22 +2793,20 @@ error_exit2:
 		fputs("InnoDB: Error: file flush of tablespace ", stderr);
 		ut_print_filename(stderr, path);
 		fputs(" failed\n", stderr);
+		err = DB_ERROR;
 		goto error_exit;
 	}
 
 	os_file_close(file);
 
-	if (*space_id == ULINT_UNDEFINED) {
-		goto error_exit2;
-	}
-
-	success = fil_space_create(path, *space_id, flags, FIL_TABLESPACE);
+	success = fil_space_create(path, space_id, flags, FIL_TABLESPACE);
 
 	if (!success) {
+		err = DB_ERROR;
 		goto error_exit2;
 	}
 
-	fil_node_create(path, size, *space_id, FALSE);
+	fil_node_create(path, size, space_id, FALSE);
 
 #ifndef UNIV_HOTBACKUP
 	{
@@ -2714,7 +2817,7 @@ error_exit2:
 		fil_op_write_log(flags
 				 ? MLOG_FILE_CREATE2
 				 : MLOG_FILE_CREATE,
-				 *space_id,
+				 space_id,
 				 is_temp ? MLOG_FILE_FLAG_TEMP : 0,
 				 flags,
 				 tablename, NULL, &mtr);
@@ -2757,6 +2860,7 @@ fil_reset_too_high_lsns(
 	ib_int64_t	offset;
 	ulint		zip_size;
 	ibool		success;
+	page_zip_des_t	page_zip;
 
 	filepath = fil_make_ibd_name(name, FALSE);
 
@@ -2804,6 +2908,12 @@ fil_reset_too_high_lsns(
 	space_id = fsp_header_get_space_id(page);
 	zip_size = fsp_header_get_zip_size(page);
 
+	page_zip_des_init(&page_zip);
+	page_zip_set_size(&page_zip, zip_size);
+	if (zip_size) {
+		page_zip.data = page + UNIV_PAGE_SIZE;
+	}
+
 	ut_print_timestamp(stderr);
 	fprintf(stderr,
 		"  InnoDB: Flush lsn in the tablespace file %lu"
@@ -2838,20 +2948,23 @@ fil_reset_too_high_lsns(
 			/* We have to reset the lsn */
 
 			if (zip_size) {
-				memcpy(page + UNIV_PAGE_SIZE, page, zip_size);
+				memcpy(page_zip.data, page, zip_size);
 				buf_flush_init_for_writing(
-					page, page + UNIV_PAGE_SIZE,
-					current_lsn);
+					page, &page_zip, current_lsn);
+				success = os_file_write(
+					filepath, file, page_zip.data,
+					(ulint) offset & 0xFFFFFFFFUL,
+					(ulint) (offset >> 32), zip_size);
 			} else {
 				buf_flush_init_for_writing(
 					page, NULL, current_lsn);
+				success = os_file_write(
+					filepath, file, page,
+					(ulint)(offset & 0xFFFFFFFFUL),
+					(ulint)(offset >> 32),
+					UNIV_PAGE_SIZE);
 			}
-			success = os_file_write(filepath, file, page,
-						(ulint)(offset & 0xFFFFFFFFUL),
-						(ulint)(offset >> 32),
-						zip_size
-						? zip_size
-						: UNIV_PAGE_SIZE);
+
 			if (!success) {
 
 				goto func_exit;
@@ -2923,15 +3036,17 @@ fil_open_single_table_tablespace(
 	byte*		page;
 	ulint		space_id;
 	ulint		space_flags;
-	ibool		ret		= TRUE;
 
 	filepath = fil_make_ibd_name(name, FALSE);
 
 	/* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-	ROW_FORMAT=COMPACT (table->flags == DICT_TF_COMPACT) and
+	ROW_FORMAT=COMPACT
+	((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
 	ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-	format, the tablespace flags should equal table->flags. */
+	format, the tablespace flags should equal
+	(table->flags & ~(~0 << DICT_TF_BITS)). */
 	ut_a(flags != DICT_TF_COMPACT);
+	ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
 	file = os_file_create_simple_no_error_handling(
 		filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
@@ -2983,7 +3098,8 @@ fil_open_single_table_tablespace(
 
 	ut_free(buf2);
 
-	if (UNIV_UNLIKELY(space_id != id || space_flags != flags)) {
+	if (UNIV_UNLIKELY(space_id != id
+			  || space_flags != (flags & ~(~0 << DICT_TF_BITS)))) {
 		ut_print_timestamp(stderr);
 
 		fputs("  InnoDB: Error: tablespace id and flags in file ",
@@ -3001,7 +3117,7 @@ fil_open_single_table_tablespace(
 			(ulong) space_id, (ulong) space_flags,
 			(ulong) id, (ulong) flags);
 
-		ret = FALSE;
+		success = FALSE;
 
 		goto func_exit;
 	}
@@ -3021,7 +3137,7 @@ func_exit:
 	os_file_close(file);
 	mem_free(filepath);
 
-	return(ret);
+	return(success);
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -3237,7 +3353,7 @@ fil_load_single_table_tablespace(
 		fprintf(stderr,
 			"InnoDB: Renaming tablespace %s of id %lu,\n"
 			"InnoDB: to %s_ibbackup_old_vers_<timestamp>\n"
-			"InnoDB: because its size %lld is too small"
+			"InnoDB: because its size %" PRId64 " is too small"
 			" (< 4 pages 16 kB each),\n"
 			"InnoDB: or the space id in the file header"
 			" is not sensible.\n"
@@ -3299,7 +3415,17 @@ fil_load_single_table_tablespace(
 
 	if (!success) {
 
-		goto func_exit;
+		if (srv_force_recovery > 0) {
+			fprintf(stderr,
+				"InnoDB: innodb_force_recovery"
+				" was set to %lu. Continuing crash recovery\n"
+				"InnoDB: even though the tablespace creation"
+				" of this table failed.\n",
+				srv_force_recovery);
+			goto func_exit;
+		}
+
+		exit(1);
 	}
 
 	/* We do not use the size information we have about the file, because
@@ -3480,39 +3606,6 @@ next_datadir_item:
 	}
 
 	return(err);
-}
-
-/********************************************************************//**
-If we need crash recovery, and we have called
-fil_load_single_table_tablespaces() and dict_load_single_table_tablespaces(),
-we can call this function to print an error message of orphaned .ibd files
-for which there is not a data dictionary entry with a matching table name
-and space id. */
-UNIV_INTERN
-void
-fil_print_orphaned_tablespaces(void)
-/*================================*/
-{
-	fil_space_t*	space;
-
-	mutex_enter(&fil_system->mutex);
-
-	space = UT_LIST_GET_FIRST(fil_system->space_list);
-
-	while (space) {
-		if (space->purpose == FIL_TABLESPACE && space->id != 0
-		    && !space->mark) {
-			fputs("InnoDB: Warning: tablespace ", stderr);
-			ut_print_filename(stderr, space->name);
-			fprintf(stderr, " of id %lu has no matching table in\n"
-				"InnoDB: the InnoDB data dictionary.\n",
-				(ulong) space->id);
-		}
-
-		space = UT_LIST_GET_NEXT(space_list, space);
-	}
-
-	mutex_exit(&fil_system->mutex);
 }
 
 /*******************************************************************//**
@@ -4735,3 +4828,53 @@ fil_page_get_type(
 
 	return(mach_read_from_2(page + FIL_PAGE_TYPE));
 }
+
+/****************************************************************//**
+Initializes the tablespace memory cache. */
+UNIV_INTERN
+void
+fil_close(void)
+/*===========*/
+{
+#ifndef UNIV_HOTBACKUP
+	/* The mutex should already have been freed. */
+	ut_ad(fil_system->mutex.magic_n == 0);
+#endif /* !UNIV_HOTBACKUP */
+
+	hash_table_free(fil_system->spaces);
+
+	hash_table_free(fil_system->name_hash);
+
+	ut_a(UT_LIST_GET_LEN(fil_system->LRU) == 0);
+	ut_a(UT_LIST_GET_LEN(fil_system->unflushed_spaces) == 0);
+	ut_a(UT_LIST_GET_LEN(fil_system->space_list) == 0);
+
+	mem_free(fil_system);
+
+	fil_system = NULL;
+}
+
+/****************************************************************//**
+Generate redo logs for swapping two .ibd files */
+UNIV_INTERN
+void
+fil_mtr_rename_log(
+/*===============*/
+	ulint		old_space_id,	/*!< in: tablespace id of the old
+					table. */
+	const char*	old_name,	/*!< in: old table name */
+	ulint		new_space_id,	/*!< in: tablespace id of the new
+					table */
+	const char*	new_name,	/*!< in: new table name */
+	const char*	tmp_name)	/*!< in: temp table name used while
+					swapping */
+{
+	mtr_t           mtr;
+	mtr_start(&mtr);
+	fil_op_write_log(MLOG_FILE_RENAME, old_space_id,
+			 0, 0, old_name, tmp_name, &mtr);
+	fil_op_write_log(MLOG_FILE_RENAME, new_space_id,
+			 0, 0, new_name, old_name, &mtr);
+	mtr_commit(&mtr);
+}
+

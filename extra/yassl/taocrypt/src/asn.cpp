@@ -1,5 +1,6 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -110,7 +111,8 @@ bool ValidateDate(const byte* date, byte format, CertDecoder::DateType dt)
     GetTime(certTime.tm_min,  date, i); 
     GetTime(certTime.tm_sec,  date, i); 
 
-    assert(date[i] == 'Z');     // only Zulu supported for this profile
+    if (date[i] != 'Z')     // only Zulu supported for this profile
+        return false;
 
     time_t ltime = time(0);
     tm* localTime = gmtime(&ltime);
@@ -142,6 +144,8 @@ word32 GetLength(Source& source)
     if (b >= LONG_LENGTH) {        
         word32 bytes = b & 0x7F;
 
+        if (source.IsLeft(bytes) == false) return 0;
+
         while (bytes--) {
             b = source.next();
             length = (length << 8) | b;
@@ -149,6 +153,8 @@ word32 GetLength(Source& source)
     }
     else
         length = b;
+
+    if (source.IsLeft(length) == false) return 0;
 
     return length;
 }
@@ -213,9 +219,9 @@ void PublicKey::AddToEnd(const byte* data, word32 len)
 Signer::Signer(const byte* k, word32 kSz, const char* n, const byte* h)
     : key_(k, kSz)
 {
-        size_t sz = strlen(n);
-        memcpy(name_, n, sz);
-        name_[sz] = 0;
+    size_t sz = strlen(n);
+    memcpy(name_, n, sz);
+    name_[sz] = 0;
 
     memcpy(hash_, h, SHA::DIGEST_SIZE);
 }
@@ -363,9 +369,56 @@ void RSA_Public_Decoder::Decode(RSA_PublicKey& key)
     ReadHeader();
     if (source_.GetError().What()) return;
 
+    ReadHeaderOpenSSL();   // may or may not be
+    if (source_.GetError().What()) return;
+
     // public key
     key.SetModulus(GetInteger(Integer().Ref()));
     key.SetPublicExponent(GetInteger(Integer().Ref()));
+}
+
+
+// Read OpenSSL format public header
+void RSA_Public_Decoder::ReadHeaderOpenSSL()
+{
+    byte b = source_.next();  // peek
+    source_.prev();
+
+    if (b != INTEGER) { // have OpenSSL public format
+        GetSequence();
+        b = source_.next();
+        if (b != OBJECT_IDENTIFIER) {
+            source_.SetError(OBJECT_ID_E);
+            return;
+        }
+
+        word32 len = GetLength(source_);
+        source_.advance(len);
+
+        b = source_.next();
+        if (b == TAG_NULL) {   // could have NULL tag and 0 terminator, may not 
+            b = source_.next();
+            if (b != 0) {
+                source_.SetError(EXPECT_0_E);
+                return; 
+            }
+        }
+        else
+            source_.prev();   // put back
+
+        b = source_.next();
+        if (b != BIT_STRING) {   
+            source_.SetError(BIT_STR_E);
+            return; 
+        }
+
+        len = GetLength(source_); 
+        b = source_.next();
+        if (b != 0)           // could have 0
+            source_.prev();   // put back
+        
+        GetSequence();
+    }
 }
 
 
@@ -419,12 +472,12 @@ CertDecoder::CertDecoder(Source& s, bool decode, SignerList* signers,
                          bool noVerify, CertType ct)
     : BER_Decoder(s), certBegin_(0), sigIndex_(0), sigLength_(0),
       signature_(0), verify_(!noVerify)
-{ 
+{
     issuer_[0] = 0;
     subject_[0] = 0;
 
     if (decode)
-        Decode(signers, ct); 
+        Decode(signers, ct);
 
 }
 
@@ -469,9 +522,9 @@ void CertDecoder::Decode(SignerList* signers, CertType ct)
         source_.SetError(SIG_OID_E);
         return;
     }
-
+    
     if (ct != CA && verify_ && !ValidateSignature(signers))
-            source_.SetError(SIG_OTHER_E);
+        source_.SetError(SIG_OTHER_E);
 }
 
 
@@ -529,8 +582,10 @@ void CertDecoder::StoreKey()
     read = source_.get_index() - read;
     length += read;
 
+    if (source_.GetError().What()) return;
     while (read--) source_.prev();
 
+    if (source_.IsLeft(length) == false) return;
     key_.SetSize(length);
     key_.SetKey(source_.get_current());
     source_.advance(length);
@@ -562,6 +617,8 @@ void CertDecoder::AddDSA()
     word32 length = GetLength(source_);
     length += source_.get_index() - idx;
 
+    if (source_.IsLeft(length) == false) return;
+
     key_.AddToEnd(source_.get_buffer() + idx, length);    
 }
 
@@ -571,6 +628,8 @@ word32 CertDecoder::GetAlgoId()
 {
     if (source_.GetError().What()) return 0;
     word32 length = GetSequence();
+
+    if (source_.GetError().What()) return 0;
     
     byte b = source_.next();
     if (b != OBJECT_IDENTIFIER) {
@@ -579,26 +638,25 @@ word32 CertDecoder::GetAlgoId()
     }
 
     length = GetLength(source_);
+    if (source_.IsLeft(length) == false) return 0;
+
     word32 oid = 0;
-    
     while(length--)
         oid += source_.next();        // just sum it up for now
 
-    if (oid != SHAwDSA && oid != DSAk) {
-        b = source_.next();               // should have NULL tag and 0
-
-        if (b != TAG_NULL) {
-            source_.SetError(TAG_NULL_E);
-            return 0;
-        }
-
+    // could have NULL tag and 0 terminator, but may not
+    b = source_.next();
+    if (b == TAG_NULL) {
         b = source_.next();
         if (b != 0) {
             source_.SetError(EXPECT_0_E);
             return 0;
         }
     }
- 
+    else
+        // go back, didn't have it
+        b = source_.prev();
+
     return oid;
 }
 
@@ -615,6 +673,10 @@ word32 CertDecoder::GetSignature()
     }
 
     sigLength_ = GetLength(source_);
+    if (sigLength_ == 0 || source_.IsLeft(sigLength_) == false) {
+        source_.SetError(CONTENT_E);
+        return 0;
+    }
   
     b = source_.next();
     if (b != 0) {
@@ -652,6 +714,25 @@ word32 CertDecoder::GetDigest()
 }
 
 
+// memory length checked add tag to buffer
+char* CertDecoder::AddTag(char* ptr, const char* buf_end, const char* tag_name,
+                          word32 tag_name_length, word32 tag_value_length)
+{
+    if (ptr + tag_name_length + tag_value_length > buf_end) {
+        source_.SetError(CONTENT_E);
+        return 0;
+    }
+
+    memcpy(ptr, tag_name, tag_name_length);
+    ptr += tag_name_length;
+
+    memcpy(ptr, source_.get_current(), tag_value_length);
+    ptr += tag_value_length;
+
+    return ptr;
+}
+
+
 // process NAME, either issuer or subject
 void CertDecoder::GetName(NameType nt)
 {
@@ -659,14 +740,30 @@ void CertDecoder::GetName(NameType nt)
 
     SHA    sha;
     word32 length = GetSequence();  // length of all distinguished names
-    assert (length < ASN_NAME_MAX);
-    length += source_.get_index();
 
-    char*  ptr = (nt == ISSUER) ? issuer_ : subject_;
-    word32 idx = 0;
+    if (length >= ASN_NAME_MAX)
+        return;
+    if (source_.IsLeft(length) == false) return;
+    length += source_.get_index();
+    
+    char* ptr;
+    char* buf_end;
+
+    if (nt == ISSUER) {
+        ptr = issuer_;
+        buf_end = ptr + sizeof(issuer_) - 1;   // 1 byte for trailing 0
+    }
+    else {
+        ptr = subject_;
+        buf_end = ptr + sizeof(subject_) - 1;  // 1 byte for trailing 0
+    }
 
     while (source_.get_index() < length) {
         GetSet();
+        if (source_.GetError().What() == SET_E) {
+            source_.SetError(NO_ERROR_E);  // extensions may only have sequence
+            source_.prev();
+        }
         GetSequence();
 
         byte b = source_.next();
@@ -676,7 +773,10 @@ void CertDecoder::GetName(NameType nt)
         }
 
         word32 oidSz = GetLength(source_);
+        if (source_.IsLeft(oidSz) == false) return;
+
         byte joint[2];
+        if (source_.IsLeft(sizeof(joint)) == false) return;
         memcpy(joint, source_.get_current(), sizeof(joint));
 
         // v1 name types
@@ -685,72 +785,64 @@ void CertDecoder::GetName(NameType nt)
             byte   id      = source_.next();  
             b              = source_.next();    // strType
             word32 strLen  = GetLength(source_);
-            bool   copy    = false;
 
-            if (id == COMMON_NAME) {
-                memcpy(&ptr[idx], "/CN=", 4);
-                idx += 4;
-                copy = true;
-            }
-            else if (id == SUR_NAME) {
-                memcpy(&ptr[idx], "/SN=", 4);
-                idx += 4;
-                copy = true;
-            }
-            else if (id == COUNTRY_NAME) {
-                memcpy(&ptr[idx], "/C=", 3);
-                idx += 3;
-                copy = true;
-            }
-            else if (id == LOCALITY_NAME) {
-                memcpy(&ptr[idx], "/L=", 3);
-                idx += 3;
-                copy = true;
-            }
-            else if (id == STATE_NAME) {
-                memcpy(&ptr[idx], "/ST=", 4);
-                idx += 4;
-                copy = true;
-            }
-            else if (id == ORG_NAME) {
-                memcpy(&ptr[idx], "/O=", 3);
-                idx += 3;
-                copy = true;
-            }
-            else if (id == ORGUNIT_NAME) {
-                memcpy(&ptr[idx], "/OU=", 4);
-                idx += 4;
-                copy = true;
-            }
+            if (source_.IsLeft(strLen) == false) return;
 
-            if (copy) {
-                memcpy(&ptr[idx], source_.get_current(), strLen);
-                idx += strLen;
+            switch (id) {
+            case COMMON_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/CN=", 4, strLen)))
+                    return;
+                break;
+            case SUR_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/SN=", 4, strLen)))
+                    return;
+                break;
+            case COUNTRY_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/C=", 3, strLen)))
+                    return;
+                break;
+            case LOCALITY_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/L=", 3, strLen)))
+                    return;
+                break;
+            case STATE_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/ST=", 4, strLen)))
+                    return;
+                break;
+            case ORG_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/O=", 3, strLen)))
+                    return;
+                break;
+            case ORGUNIT_NAME:
+                if (!(ptr = AddTag(ptr, buf_end, "/OU=", 4, strLen)))
+                    return;
+                break;
             }
 
             sha.Update(source_.get_current(), strLen);
             source_.advance(strLen);
         }
-        else {
+        else { 
             bool email = false;
             if (joint[0] == 0x2a && joint[1] == 0x86)  // email id hdr
                 email = true;
 
             source_.advance(oidSz + 1);
             word32 length = GetLength(source_);
+            if (source_.IsLeft(length) == false) return;
 
             if (email) {
-                memcpy(&ptr[idx], "/emailAddress=", 14);
-                idx += 14;
-
-                memcpy(&ptr[idx], source_.get_current(), length);
-                idx += length;
+                if (!(ptr = AddTag(ptr, buf_end, "/emailAddress=", 14, length))) {
+                    source_.SetError(CONTENT_E);
+                    return;
+                }
             }
 
             source_.advance(length);
         }
     }
-    ptr[idx++] = 0;
+
+    *ptr = 0;
 
     if (nt == ISSUER)
         sha.Final(issuerHash_);
@@ -771,6 +863,8 @@ void CertDecoder::GetDate(DateType dt)
     }
 
     word32 length = GetLength(source_);
+    if (source_.IsLeft(length) == false) return;
+
     byte date[MAX_DATE_SZ];
     if (length > MAX_DATE_SZ || length < MIN_DATE_SZ) {
         source_.SetError(DATE_SZ_E);
@@ -780,8 +874,7 @@ void CertDecoder::GetDate(DateType dt)
     memcpy(date, source_.get_current(), length);
     source_.advance(length);
 
-    if (!ValidateDate(date, b, dt) && verify_)
-    {
+    if (!ValidateDate(date, b, dt) && verify_) {
         if (dt == BEFORE)
             source_.SetError(BEFORE_DATE_E);
         else
@@ -842,7 +935,8 @@ void CertDecoder::GetCompareHash(const byte* plain, word32 sz, byte* digest,
 // validate signature signed by someone else
 bool CertDecoder::ValidateSignature(SignerList* signers)
 {
-    assert(signers);
+    if (!signers)
+        return false;
 
     SignerList::iterator first = signers->begin();
     SignerList::iterator last  = signers->end();
@@ -1063,8 +1157,7 @@ word32 DecodeDSA_Signature(byte* decoded, const byte* encoded, word32 sz)
         return 0;
     }
     word32 rLen = GetLength(source);
-    if (rLen != 20)
-    {
+    if (rLen != 20) {
         if (rLen == 21) {       // zero at front, eat
             source.next();
             --rLen;
@@ -1087,8 +1180,7 @@ word32 DecodeDSA_Signature(byte* decoded, const byte* encoded, word32 sz)
         return 0;
     }
     word32 sLen = GetLength(source);
-    if (sLen != 20)
-    {
+    if (sLen != 20) {
         if (sLen == 21) {
             source.next();          // zero at front, eat
             --sLen;
@@ -1109,6 +1201,7 @@ word32 DecodeDSA_Signature(byte* decoded, const byte* encoded, word32 sz)
 }
 
 
+/*
 // Get Cert in PEM format from BEGIN to END
 int GetCert(Source& source)
 {
@@ -1160,12 +1253,10 @@ void PKCS12_Decoder::Decode()
 
 
     // Get MacData optional
-    /*
-    mac     digestInfo  like certdecoder::getdigest?
-    macsalt octet string
-    iter    integer
+    // mac     digestInfo  like certdecoder::getdigest?
+    // macsalt octet string
+    // iter    integer
     
-    */
 }
 
 
@@ -1185,6 +1276,7 @@ int GetPKCS_Cert(const char* password, Source& source)
 
     return 0;
 }
+*/
 
 
 

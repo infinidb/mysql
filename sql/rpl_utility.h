@@ -1,4 +1,5 @@
-/* Copyright (C) 2006 MySQL AB
+/*
+   Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef RPL_UTILITY_H
 #define RPL_UTILITY_H
@@ -32,12 +34,6 @@ class Relay_log_info;
   - Extract and decode table definition data from the table map event
   - Check if table definition in table map is compatible with table
     definition on slave
-
-  Currently, the only field type data available is an array of the
-  type operators that are present in the table map event.
-
-  @todo Add type operands to this structure to allow detection of
-     difference between, e.g., BIT(5) and BIT(10).
  */
 
 class table_def
@@ -59,9 +55,9 @@ public:
     @param null_bitmap The bitmap of fields that can be null
    */
   table_def(field_type *types, ulong size, uchar *field_metadata, 
-      int metadata_size, uchar *null_bitmap)
+      int metadata_size, uchar *null_bitmap, uint16 flags)
     : m_size(size), m_type(0), m_field_metadata_size(metadata_size),
-      m_field_metadata(0), m_null_bits(0), m_memory(NULL)
+    m_field_metadata(0), m_null_bits(0), m_flags(flags), m_memory(NULL)
   {
     m_memory= (uchar *)my_multi_malloc(MYF(MY_WME),
                                        &m_type, size,
@@ -95,6 +91,7 @@ public:
         case MYSQL_TYPE_LONG_BLOB:
         case MYSQL_TYPE_DOUBLE:
         case MYSQL_TYPE_FLOAT:
+        case MYSQL_TYPE_GEOMETRY:
         {
           /*
             These types store a single byte.
@@ -246,6 +243,7 @@ private:
   uint m_field_metadata_size;
   uint16 *m_field_metadata;
   uchar *m_null_bits;
+  uint16 m_flags;         // Table flags
   uchar *m_memory;
 };
 
@@ -292,6 +290,24 @@ namespace {
   };
 
 }
+
+class Deferred_log_events
+{
+private:
+  DYNAMIC_ARRAY array;
+  Log_event *last_added;
+
+public:
+  Deferred_log_events(Relay_log_info *rli);
+  ~Deferred_log_events();
+  /* queue for exection at Query-log-event time prior the Query */
+  int add(Log_event *ev);
+  bool is_empty();
+  bool execute(Relay_log_info *rli);
+  void rewind();
+  bool is_last(Log_event *ev) { return ev == last_added; };
+};
+
 #endif
 
 // NB. number of printed bit values is limited to sizeof(buf) - 1

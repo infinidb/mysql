@@ -198,8 +198,9 @@ void
 sync_thread_add_level(
 /*==================*/
 	void*	latch,	/* in: pointer to a mutex or an rw-lock */
-	ulint	level);	/* in: level in the latching order; if
+	ulint	level,	/* in: level in the latching order; if
 			SYNC_LEVEL_VARYING, nothing is done */
+	ibool	relock);/* in: TRUE if re-entering an x-lock */
 /**********************************************************************
 Removes a latch from the thread level array if it is found there. */
 
@@ -401,7 +402,7 @@ or row lock! */
 					locked; see e.g.
 					ibuf_bitmap_get_map_page(). */
 #define	SYNC_DICT_OPERATION	1001	/* table create, drop, etc. reserve
-					this in X-mode, implicit or backround
+					this in X-mode; implicit or backround
 					operations purge, rollback, foreign
 					key checks reserve this in S-mode */
 #define SYNC_DICT		1000

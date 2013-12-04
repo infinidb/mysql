@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/* Copyright (c) 2003-2007 MySQL AB, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef NdbOperation_H
 #define NdbOperation_H
@@ -779,7 +780,7 @@ public:
   /**
    * Get the type of access for this operation
    */
-  const Type getType() const;
+  Type getType() const;
 
   /** @} *********************************************************************/
 
@@ -1135,7 +1136,7 @@ Return Value    Return the Type.
 Remark:         Gets type of access.
 ******************************************************************************/
 inline
-const NdbOperation::Type
+NdbOperation::Type
 NdbOperation::getType() const
 {
   return m_type;

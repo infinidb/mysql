@@ -248,7 +248,6 @@ CREATE PROCEDURE p1(i INT) BEGIN END;
 DROP PROCEDURE p1;
 DELETE FROM mysql.user WHERE User='mysqltest_1';
 FLUSH PRIVILEGES;
-set @@global.concurrent_insert= @old_concurrent_insert;
 #
 # Bug#44521 Prepared Statement: CALL p() - crashes: `! thd->main_da.is_sent' failed et.al.
 #
@@ -268,6 +267,38 @@ SELECT RELEASE_LOCK('Bug44521');
 RELEASE_LOCK('Bug44521')
 1
 DROP PROCEDURE p;
+CREATE TABLE t1(a int);
+INSERT INTO t1 VALUES (1);
+CREATE FUNCTION f1 (inp TEXT) RETURNS INT NO SQL RETURN sleep(60);
+CREATE VIEW v1 AS SELECT f1('a') FROM t1;
+SELECT * FROM v1;;
+SELECT * FROM v1;
+ERROR 70100: Query execution was interrupted
+ERROR 70100: Query execution was interrupted
+DROP VIEW v1;
+DROP TABLE t1;
+DROP FUNCTION f1;
+#
+# Bug#11763507 - 56224: FUNCTION NAME IS CASE-SENSITIVE
+#
+SET @@SQL_MODE = '';
+CREATE EVENT teste_bug11763507 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR 
+DO SELECT 1 $
+SHOW EVENTS LIKE 'teste_bug11763507';
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+test	teste_bug11763507	root@localhost	SYSTEM	ONE TIME	#	#	#	#	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+SHOW EVENTS LIKE 'TESTE_bug11763507';
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+test	teste_bug11763507	root@localhost	SYSTEM	ONE TIME	#	#	#	#	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+SHOW CREATE EVENT teste_bug11763507;
+Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
+teste_bug11763507		SYSTEM	#	latin1	latin1_swedish_ci	latin1_swedish_ci
+SHOW CREATE EVENT TESTE_bug11763507;
+Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
+teste_bug11763507		SYSTEM	#	latin1	latin1_swedish_ci	latin1_swedish_ci
+DROP EVENT teste_bug11763507;
+#END OF BUG#11763507 test.
 # ------------------------------------------------------------------
 # -- End of 5.1 tests
 # ------------------------------------------------------------------
+set @@global.concurrent_insert= @old_concurrent_insert;

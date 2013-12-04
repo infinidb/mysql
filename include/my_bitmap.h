@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _my_bitmap_h_
 #define _my_bitmap_h_
@@ -149,31 +151,16 @@ bitmap_is_set(const MY_BITMAP *map,uint bit)
 
 static inline my_bool bitmap_cmp(const MY_BITMAP *map1, const MY_BITMAP *map2)
 {
-  *(map1)->last_word_ptr|= (map1)->last_word_mask;
-  *(map2)->last_word_ptr|= (map2)->last_word_mask;
-  return memcmp((map1)->bitmap, (map2)->bitmap, 4*no_words_in_map((map1)))==0;
+  if (memcmp(map1->bitmap, map2->bitmap, 4*(no_words_in_map(map1)-1)) != 0)
+    return FALSE;
+  return ((*map1->last_word_ptr | map1->last_word_mask) ==
+          (*map2->last_word_ptr | map2->last_word_mask));
 }
 
 #define bitmap_clear_all(MAP) \
   { memset((MAP)->bitmap, 0, 4*no_words_in_map((MAP))); }
 #define bitmap_set_all(MAP) \
   (memset((MAP)->bitmap, 0xFF, 4*no_words_in_map((MAP))))
-
-/**
-   check, set and clear a bit of interest of an integer.
-
-   If the bit is out of range @retval -1. Otherwise
-   bit_is_set   @return 0 or 1 reflecting the bit is set or not;
-   bit_do_set   @return 1 (bit is set 1)
-   bit_do_clear @return 0 (bit is cleared to 0)
-*/
-
-#define bit_is_set(I,B)   (sizeof(I) * CHAR_BIT > (B) ?                 \
-                           (((I) & (ULL(1) << (B))) == 0 ? 0 : 1) : -1)
-#define bit_do_set(I,B)   (sizeof(I) * CHAR_BIT > (B) ?         \
-                           ((I) |= (ULL(1) << (B)), 1) : -1)
-#define bit_do_clear(I,B) (sizeof(I) * CHAR_BIT > (B) ?         \
-                           ((I) &= ~(ULL(1) << (B)), 0) : -1)
 
 #ifdef	__cplusplus
 }

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* open a isam-database */
 
@@ -139,7 +141,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	       (uchar*) myisam_file_magic, 4))
     {
       DBUG_PRINT("error",("Wrong header in %s",name_buff));
-      DBUG_DUMP("error_dump",(char*) share->state.header.file_version,
+      DBUG_DUMP("error_dump", share->state.header.file_version,
 		head_length);
       my_errno=HA_ERR_NOT_A_TABLE;
       goto err;
@@ -652,6 +654,9 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   myisam_open_list=list_add(myisam_open_list,&m_info->open_list);
 
   pthread_mutex_unlock(&THR_LOCK_myisam);
+
+  bzero(info.buff, share->base.max_key_block_length * 2);
+
   if (myisam_log_file >= 0)
   {
     intern_filename(name_buff,share->index_file_name);

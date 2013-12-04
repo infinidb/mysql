@@ -150,3 +150,18 @@ iONkSBcBAAAAKwAAAMQBAAAQABAAAAAAAAEAA//4AQAAAAMAMTIzAQAAAA==
 ';
 
 drop table t1, char63_utf8, char128_utf8;
+
+call mtr.add_suppression("Slave SQL.*master suffers from this bug: http:..bugs.mysql.com.bug.php.id=37426.* Error_code: 1105");
+call mtr.add_suppression("Slave SQL.*Table definition on master and slave does not match: Column 1 size mismatch.* Error_code: 1535");
+
+--echo #
+--echo # Bug #54393: crash and/or valgrind errors in 
+--echo # mysql_client_binlog_statement
+--echo #
+--error ER_SYNTAX_ERROR
+BINLOG '';
+BINLOG '123';
+--error ER_SYNTAX_ERROR
+BINLOG '-2079193929';
+--error ER_SYNTAX_ERROR
+BINLOG 'xç↓%~∙D╒ƒ╡';

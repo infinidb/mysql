@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -116,16 +118,22 @@ char* query_table_status(THD *thd,const char *db,const char *table_name);
 #define PREV_BITS(type,A)	((type) (((type) 1 << (A)) -1))
 #define all_bits_set(A,B) ((A) & (B) != (B))
 
+/* Version numbers for deprecation messages */
+#define VER_BETONY  "5.5"
+#define VER_CELOSIA "5.6"
+
 #define WARN_DEPRECATED(Thd,Ver,Old,New)                                             \
   do {                                                                               \
     DBUG_ASSERT(strncmp(Ver, MYSQL_SERVER_VERSION, sizeof(Ver)-1) > 0);              \
-    if (((uchar*)Thd) != NULL)                                                         \
+    if (((uchar*)Thd) != NULL)                                                       \
       push_warning_printf(((THD *)Thd), MYSQL_ERROR::WARN_LEVEL_WARN,                \
-                        ER_WARN_DEPRECATED_SYNTAX, ER(ER_WARN_DEPRECATED_SYNTAX_WITH_VER), \
-                        (Old), (Ver), (New));                                        \
+                        ER_WARN_DEPRECATED_SYNTAX,                                   \
+                        ER(ER_WARN_DEPRECATED_SYNTAX),                               \
+                        (Old), (New));                                               \
     else                                                                             \
-      sql_print_warning("The syntax '%s' is deprecated and will be removed "         \
-                        "in MySQL %s. Please use %s instead.", (Old), (Ver), (New)); \
+      sql_print_warning("'%s' is deprecated and will be removed "                    \
+                        "in a future release. Please use '%s' instead.",             \
+                        (Old), (New));                                               \
   } while(0)
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
@@ -498,6 +506,41 @@ protected:
 */
 #define MAX_TIME_ZONE_NAME_LENGTH       (NAME_LEN + 1)
 
+/*
+  Check how many bytes are available on buffer.
+
+  @param buf_start    Pointer to buffer start.
+  @param buf_current  Pointer to the current position on buffer.
+  @param buf_len      Buffer length.
+
+  @return             Number of bytes available on event buffer.
+*/
+template <class T> T available_buffer(const char* buf_start,
+                                      const char* buf_current,
+                                      T buf_len)
+{
+  return buf_len - (buf_current - buf_start);
+}
+
+/*
+  Check if jump value is within buffer limits.
+
+  @param jump         Number of positions we want to advance.
+  @param buf_start    Pointer to buffer start
+  @param buf_current  Pointer to the current position on buffer.
+  @param buf_len      Buffer length.
+
+  @return      True   If jump value is within buffer limits.
+               False  Otherwise.
+*/
+template <class T> bool valid_buffer_range(T jump,
+                                           const char* buf_start,
+                                           const char* buf_current,
+                                           T buf_len)
+{
+  return (jump <= available_buffer(buf_start, buf_current, buf_len));
+}
+
 /* The rest of the file is included in the server only */
 #ifndef MYSQL_CLIENT
 
@@ -565,34 +608,45 @@ protected:
 
 #define MY_CHARSET_BIN_MB_MAXLEN 1
 
+/*
+  Flags below are set when we perform
+  context analysis of the statement and make
+  subqueries non-const. It prevents subquery
+  evaluation at context analysis stage.
+*/
+
+/*
+  Don't evaluate this subquery during statement prepare even if
+  it's a constant one. The flag is switched off in the end of
+  mysqld_stmt_prepare.
+*/ 
+#define CONTEXT_ANALYSIS_ONLY_PREPARE 1
+/*
+  Special JOIN::prepare mode: changing of query is prohibited.
+  When creating a view, we need to just check its syntax omitting
+  any optimizations: afterwards definition of the view will be
+  reconstructed by means of ::print() methods and written to
+  to an .frm file. We need this definition to stay untouched.
+*/ 
+#define CONTEXT_ANALYSIS_ONLY_VIEW    2
+/*
+  Don't evaluate this subquery during derived table prepare even if
+  it's a constant one.
+*/
+#define CONTEXT_ANALYSIS_ONLY_DERIVED 4
+
 // uncachable cause
 #define UNCACHEABLE_DEPENDENT   1
 #define UNCACHEABLE_RAND        2
 #define UNCACHEABLE_SIDEEFFECT	4
 /// forcing to save JOIN for explain
 #define UNCACHEABLE_EXPLAIN     8
-/** Don't evaluate subqueries in prepare even if they're not correlated */
-#define UNCACHEABLE_PREPARE    16
 /* For uncorrelated SELECT in an UNION with some correlated SELECTs */
-#define UNCACHEABLE_UNITED     32
-#define UNCACHEABLE_CHECKOPTION   64
+#define UNCACHEABLE_UNITED     16
+#define UNCACHEABLE_CHECKOPTION 32
 
 /* Used to check GROUP BY list in the MODE_ONLY_FULL_GROUP_BY mode */
 #define UNDEF_POS (-1)
-#ifdef EXTRA_DEBUG
-/**
-  Sync points allow us to force the server to reach a certain line of code
-  and block there until the client tells the server it is ok to go on.
-  The client tells the server to block with SELECT GET_LOCK()
-  and unblocks it with SELECT RELEASE_LOCK(). Used for debugging difficult
-  concurrency problems
-*/
-#define DBUG_SYNC_POINT(lock_name,lock_timeout) \
- debug_sync_point(lock_name,lock_timeout)
-void debug_sync_point(const char* lock_name, uint lock_timeout);
-#else
-#define DBUG_SYNC_POINT(lock_name,lock_timeout)
-#endif /* EXTRA_DEBUG */
 
 /* BINLOG_DUMP options */
 
@@ -655,53 +709,14 @@ enum enum_check_fields
   CHECK_FIELD_ERROR_FOR_NULL
 };
 
-                                  
-/** Struct to handle simple linked lists. */
-typedef struct st_sql_list {
-  uint elements;
-  uchar *first;
-  uchar **next;
-
-  st_sql_list() {}                              /* Remove gcc warning */
-  inline void empty()
-  {
-    elements=0;
-    first=0;
-    next= &first;
-  }
-  inline void link_in_list(uchar *element,uchar **next_ptr)
-  {
-    elements++;
-    (*next)=element;
-    next= next_ptr;
-    *next=0;
-  }
-  inline void save_and_clear(struct st_sql_list *save)
-  {
-    *save= *this;
-    empty();
-  }
-  inline void push_front(struct st_sql_list *save)
-  {
-    *save->next= first;				/* link current list last */
-    first= save->first;
-    elements+= save->elements;
-  }
-  inline void push_back(struct st_sql_list *save)
-  {
-    if (save->first)
-    {
-      *next= save->first;
-      next= save->next;
-      elements+= save->elements;
-    }
-  }
-} SQL_LIST;
-
 #if defined(MYSQL_DYNAMIC_PLUGIN) && defined(_WIN32)
 extern "C" THD *_current_thd_noinline();
 #define _current_thd() _current_thd_noinline()
 #else
+/*
+  THR_THD is a key which will be used to set/get THD* for a thread,
+  using my_pthread_setspecific_ptr()/my_thread_getspecific_ptr().
+*/
 extern pthread_key(THD*, THR_THD);
 inline THD *_current_thd(void)
 {
@@ -783,6 +798,7 @@ typedef Comp_creator* (*chooser_compare_func_creator)(bool invert);
 #ifdef USE_CALPONT_REGEX
 #undef USE_REGEX
 #endif
+typedef SQL_I_List<ORDER> SQL_LIST;
 #include "item.h"
 extern my_decimal decimal_zero;
 
@@ -828,7 +844,7 @@ bool delete_precheck(THD *thd, TABLE_LIST *tables);
 bool insert_precheck(THD *thd, TABLE_LIST *tables);
 bool create_table_precheck(THD *thd, TABLE_LIST *tables,
                            TABLE_LIST *create_table);
-int append_query_string(CHARSET_INFO *csinfo,
+int append_query_string(THD *thd, CHARSET_INFO *csinfo,
                         String const *from, String *to);
 
 void get_default_definer(THD *thd, LEX_USER *definer);
@@ -864,7 +880,7 @@ void sql_print_warning(const char *format, ...) ATTRIBUTE_FORMAT(printf, 1, 2);
 void sql_print_information(const char *format, ...)
   ATTRIBUTE_FORMAT(printf, 1, 2);
 typedef void (*sql_print_message_func)(const char *format, ...)
-  ATTRIBUTE_FORMAT(printf, 1, 2);
+  ATTRIBUTE_FORMAT_FPTR(printf, 1, 2);
 extern sql_print_message_func sql_print_message_handlers[];
 
 int error_log_print(enum loglevel level, const char *format,
@@ -1041,8 +1057,8 @@ check_and_unset_inject_value(int value)
 
 #endif
 
-void write_bin_log(THD *thd, bool clear_error,
-                   char const *query, ulong query_length);
+int write_bin_log(THD *thd, bool clear_error,
+                  char const *query, ulong query_length);
 
 /* sql_connect.cc */
 int check_user(THD *thd, enum enum_server_command command, 
@@ -1054,7 +1070,11 @@ void reset_mqh(LEX_USER *lu, bool get_them);
 bool check_mqh(THD *thd, uint check_command);
 void time_out_user_resource_limits(THD *thd, USER_CONN *uc);
 void decrease_user_connections(USER_CONN *uc);
-void thd_init_client_charset(THD *thd, uint cs_number);
+bool thd_init_client_charset(THD *thd, uint cs_number);
+inline bool is_supported_parser_charset(CHARSET_INFO *cs)
+{
+  return test(cs->mbminlen == 1);
+}
 bool setup_connection_thread_globals(THD *thd);
 
 int mysql_create_db(THD *thd, char *db, HA_CREATE_INFO *create, bool silent);
@@ -1084,7 +1104,7 @@ bool mysql_opt_change_db(THD *thd,
                          bool force_switch,
                          bool *cur_db_changed);
 
-void mysql_parse(THD *thd, const char *inBuf, uint length,
+void mysql_parse(THD *thd, char *rawbuf, uint length,
                  const char ** semicolon);
 
 bool mysql_test_parse_for_slave(THD *thd,char *inBuf,uint length);
@@ -1107,7 +1127,8 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
 		      char* packet, uint packet_length);
 void log_slow_statement(THD *thd);
 bool check_dup(const char *db, const char *name, TABLE_LIST *tables);
-bool compare_record(TABLE *table);
+bool records_are_comparable(const TABLE *table);
+bool compare_records(const TABLE *table);
 bool append_file_to_dir(THD *thd, const char **filename_ptr, 
                         const char *table_name);
 void wait_while_table_is_used(THD *thd, TABLE *table,
@@ -1122,7 +1143,7 @@ uint cached_table_definitions(void);
 void kill_mysql(void);
 void close_connection(THD *thd, uint errcode, bool lock);
 bool reload_acl_and_cache(THD *thd, ulong options, TABLE_LIST *tables, 
-                          bool *write_to_binlog);
+                          int *write_to_binlog);
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
 bool check_access(THD *thd, ulong access, const char *db, ulong *save_priv,
 		  bool no_grant, bool no_errors, bool schema_db);
@@ -1197,7 +1218,7 @@ int setup_group(THD *thd, Item **ref_pointer_array, TABLE_LIST *tables,
 		List<Item> &fields, List<Item> &all_fields, ORDER *order,
 		bool *hidden_group_fields);
 bool fix_inner_refs(THD *thd, List<Item> &all_fields, SELECT_LEX *select,
-                   Item **ref_pointer_array);
+                   Item **ref_pointer_array, ORDER *group_list= NULL);
 
 bool handle_select(THD *thd, LEX *lex, select_result *result,
                    ulong setup_tables_done_option);
@@ -1285,12 +1306,37 @@ int mysql_prepare_delete(THD *thd, TABLE_LIST *table_list, Item **conds);
 // @InfiniDB. Make conds argument reference to pointer so the optimization
 // result can be passed in to the InfiniDB connector.
 bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *& conds,
-                  SQL_LIST *order, ha_rows rows, ulonglong options,
+                  SQL_I_List<ORDER> *order, ha_rows rows, ulonglong options,
                   bool reset_auto_increment);
 bool mysql_truncate(THD *thd, TABLE_LIST *table_list, bool dont_send_ok);
 bool mysql_create_or_drop_trigger(THD *thd, TABLE_LIST *tables, bool create);
 uint create_table_def_key(THD *thd, char *key, TABLE_LIST *table_list,
                           bool tmp_table);
+
+/**
+  Create a table cache key for non-temporary table.
+
+  @param key         Buffer for key (must be at least NAME_LEN*2+2 bytes).
+  @param db          Database name.
+  @param table_name  Table name.
+
+  @return Length of key.
+
+  @sa create_table_def_key(thd, char *, table_list, bool)
+*/
+
+inline uint
+create_table_def_key(char *key, const char *db, const char *table_name)
+{
+  /*
+    In theory caller should ensure that both db and table_name are
+    not longer than NAME_LEN bytes. In practice we play safe to avoid
+    buffer overruns.
+  */
+  return (uint)(strmake(strmake(key, db, NAME_LEN) + 1, table_name,
+                        NAME_LEN) - key + 1);
+}
+
 TABLE_SHARE *get_table_share(THD *thd, TABLE_LIST *table_list, char *key,
                              uint key_length, uint db_flags, int *error);
 void release_table_share(TABLE_SHARE *share, enum release_type type);
@@ -1311,7 +1357,8 @@ bool fix_merge_after_open(TABLE_LIST *old_child_list, TABLE_LIST **old_last,
                           TABLE_LIST *new_child_list, TABLE_LIST **new_last);
 bool reopen_table(TABLE *table);
 bool reopen_tables(THD *thd,bool get_locks,bool in_refresh);
-thr_lock_type read_lock_type_for_table(THD *thd, TABLE *table);
+thr_lock_type read_lock_type_for_table(THD *thd, LEX *lex,
+                                       TABLE_LIST *table_list);
 void close_data_files_and_morph_locks(THD *thd, const char *db,
                                       const char *table_name);
 void close_handle_and_leave_table_as_lock(TABLE *table);
@@ -1451,8 +1498,18 @@ bool get_schema_tables_result(JOIN *join,
                               enum enum_schema_table_state executed_place);
 enum enum_schema_tables get_schema_table_idx(ST_SCHEMA_TABLE *schema_table);
 
-#define is_schema_db(X) \
-  !my_strcasecmp(system_charset_info, INFORMATION_SCHEMA_NAME.str, (X))
+inline bool is_schema_db(const char *name, size_t len)
+{
+  return (INFORMATION_SCHEMA_NAME.length == len &&
+          !my_strcasecmp(system_charset_info,
+                         INFORMATION_SCHEMA_NAME.str, name));  
+}
+
+inline bool is_schema_db(const char *name)
+{
+  return !my_strcasecmp(system_charset_info,
+                        INFORMATION_SCHEMA_NAME.str, name);
+}
 
 /* sql_prepare.cc */
 
@@ -1514,13 +1571,6 @@ SQL_SELECT *make_select(TABLE *head, table_map const_tables,
 			table_map read_tables, COND *conds,
                         bool allow_null_cond,  int *error);
 extern Item **not_found_item;
-
-/*
-  A set of constants used for checking non aggregated fields and sum
-  functions mixture in the ONLY_FULL_GROUP_BY_MODE.
-*/
-#define NON_AGG_FIELD_USED  1
-#define SUM_FUNC_USED       2
 
 /*
   This enumeration type is used only by the function find_item_in_list
@@ -1605,7 +1655,7 @@ int lock_tables(THD *thd, TABLE_LIST *tables, uint counter, bool *need_reopen);
 int decide_logging_format(THD *thd, TABLE_LIST *tables);
 TABLE *open_temporary_table(THD *thd, const char *path, const char *db,
 			    const char *table_name, bool link_in_list);
-bool rm_temporary_table(handlerton *base, char *path);
+bool rm_temporary_table(handlerton *base, const char *path);
 void free_io_cache(TABLE *entry);
 void intern_close_table(TABLE *entry);
 bool close_thread_table(THD *thd, TABLE **table_ptr);
@@ -1770,7 +1820,7 @@ extern pthread_mutex_t LOCK_gdl;
 #define WFRM_PACK_FRM 4
 #define WFRM_KEEP_SHARE 8
 bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags);
-int abort_and_upgrade_lock(ALTER_PARTITION_PARAM_TYPE *lpt);
+int abort_and_upgrade_lock_and_close_table(ALTER_PARTITION_PARAM_TYPE *lpt);
 void close_open_tables_and_downgrade(ALTER_PARTITION_PARAM_TYPE *lpt);
 void mysql_wait_completed_table(ALTER_PARTITION_PARAM_TYPE *lpt, TABLE *my_table);
 
@@ -1866,6 +1916,12 @@ void sql_perror(const char *message);
 
 bool fn_format_relative_to_data_home(char * to, const char *name,
 				     const char *dir, const char *extension);
+/**
+  Test a file path to determine if the path is compatible with the secure file
+  path restriction.
+*/
+bool is_secure_file_path(char *path);
+
 #ifdef MYSQL_SERVER
 File open_binlog(IO_CACHE *log, const char *log_file_name,
                  const char **errmsg);
@@ -1985,6 +2041,7 @@ extern ulong slave_net_timeout, slave_trans_retries;
 extern uint max_user_connections;
 extern ulong what_to_log,flush_time;
 extern ulong query_buff_size;
+extern ulong slave_max_allowed_packet;
 extern ulong max_prepared_stmt_count, prepared_stmt_count;
 extern ulong binlog_cache_size, open_files_limit;
 extern ulonglong max_binlog_cache_size;
@@ -2005,6 +2062,7 @@ extern my_bool relay_log_purge, opt_innodb_safe_binlog, opt_innodb;
 extern uint test_flags,select_errors,ha_open_options;
 extern uint protocol_version, mysqld_port, dropping_tables;
 extern uint delay_key_write_options;
+extern ulong max_long_data_size;
 #endif /* MYSQL_SERVER */
 #if defined MYSQL_SERVER || defined INNODB_COMPATIBILITY_HOOKS
 extern MYSQL_PLUGIN_IMPORT uint lower_case_table_names;
@@ -2024,6 +2082,7 @@ extern my_bool opt_log, opt_slow_log;
 extern ulong log_output_options;
 extern my_bool opt_log_queries_not_using_indexes;
 extern bool opt_disable_networking, opt_skip_show_db;
+extern bool opt_skip_name_resolve;
 extern bool opt_ignore_builtin_innodb;
 extern my_bool opt_character_set_client_handshake;
 extern bool volatile abort_loop, shutdown_in_progress;
@@ -2060,6 +2119,10 @@ extern TABLE_LIST general_log, slow_log;
 extern FILE *bootstrap_file;
 extern int bootstrap_error;
 extern FILE *stderror_file;
+/*
+  THR_MALLOC is a key which will be used to set/get MEM_ROOT** for a thread,
+  using my_pthread_setspecific_ptr()/my_thread_getspecific_ptr().
+*/
 extern pthread_key(MEM_ROOT**,THR_MALLOC);
 extern pthread_mutex_t LOCK_mysql_create_db,LOCK_Acl,LOCK_open, LOCK_lock_db,
        LOCK_mapped_file,LOCK_user_locks, LOCK_status,
@@ -2296,7 +2359,7 @@ void update_create_info_from_table(HA_CREATE_INFO *info, TABLE *form);
 int rename_file_ext(const char * from,const char * to,const char * ext);
 bool check_db_name(LEX_STRING *db);
 bool check_column_name(const char *name);
-bool check_table_name(const char *name, uint length);
+bool check_table_name(const char *name, uint length, bool check_for_path_chars);
 char *get_field(MEM_ROOT *mem, Field *field);
 bool get_field(MEM_ROOT *mem, Field *field, class String *res);
 int wild_case_compare(CHARSET_INFO *cs, const char *str,const char *wildstr);
@@ -2313,14 +2376,14 @@ enum enum_explain_filename_mode
 {
   EXPLAIN_ALL_VERBOSE= 0,
   EXPLAIN_PARTITIONS_VERBOSE,
-  EXPLAIN_PARTITIONS_AS_COMMENT,
-  EXPLAIN_PARTITIONS_AS_COMMENT_NO_QUOTING
+  EXPLAIN_PARTITIONS_AS_COMMENT
 };
-uint explain_filename(const char *from, char *to, uint to_length,
+uint explain_filename(THD* thd, const char *from, char *to, uint to_length,
                       enum_explain_filename_mode explain_mode);
 uint filename_to_tablename(const char *from, char *to, uint to_length);
 uint tablename_to_filename(const char *from, char *to, uint to_length);
 uint check_n_cut_mysql50_prefix(const char *from, char *to, uint to_length);
+bool check_mysql50_prefix(const char *name);
 #endif /* MYSQL_SERVER || INNODB_COMPATIBILITY_HOOKS */
 #ifdef MYSQL_SERVER
 uint build_table_filename(char *buff, size_t bufflen, const char *db,
@@ -2401,6 +2464,11 @@ inline bool add_order_to_list(THD *thd, Item *item, bool asc)
   return thd->lex->current_select->add_order_to_list(thd, item, asc);
 }
 
+inline bool add_gorder_to_list(THD *thd, Item *item, bool asc)
+{
+  return thd->lex->current_select->add_gorder_to_list(thd, item, asc);
+}
+
 inline bool add_group_to_list(THD *thd, Item *item, bool asc)
 {
   return thd->lex->current_select->add_group_to_list(thd, item, asc);
@@ -2470,6 +2538,7 @@ inline void setup_table_map(TABLE *table, TABLE_LIST *table_list, uint tablenr)
   table->tablenr= tablenr;
   table->map= (table_map) 1 << tablenr;
   table->force_index= table_list->force_index;
+  table->force_index_order= table->force_index_group= 0;
   table->covering_keys= table->s->keys_for_keyread;
   table->merge_keys.clear_all();
 }

@@ -87,8 +87,8 @@ static os_file_t	files[1000];
 static mutex_t		ios_mutex;
 static ulint		ios;
 
-static ulint		n[SRV_MAX_N_IO_THREADS + 5];
-static os_thread_id_t	thread_ids[SRV_MAX_N_IO_THREADS + 5];
+static ulint		n[SRV_MAX_N_IO_THREADS + 6];
+static os_thread_id_t	thread_ids[SRV_MAX_N_IO_THREADS + 6];
 
 /* We use this mutex to test the return value of pthread_mutex_trylock
    on successful locking. HP-UX does NOT return 0, though Linux et al do. */
@@ -101,20 +101,6 @@ static char*	srv_monitor_file_name;
 #define SRV_N_PENDING_IOS_PER_THREAD	OS_AIO_N_PENDING_IOS_PER_THREAD
 #define SRV_MAX_N_PENDING_SYNC_IOS	100
 
-
-/* Avoid warnings when using purify */
-
-#ifdef HAVE_purify
-static int inno_bcmp(register const char *s1, register const char *s2,
-	register uint len)
-{
-	while ((len-- != 0) && (*s1++ == *s2++))
-		;
-
-	return(len + 1);
-}
-#define memcmp(A,B,C) inno_bcmp((A),(B),(C))
-#endif
 
 static
 char*
@@ -1261,6 +1247,23 @@ innobase_start_or_create_for_mysql(void)
 
 	fil_init(srv_max_n_open_files);
 
+	/* Print time to initialize the buffer pool */
+	ut_print_timestamp(stderr);
+	fprintf(stderr,
+		"  InnoDB: Initializing buffer pool, size =");
+
+	if (srv_pool_size * UNIV_PAGE_SIZE >= 1024 * 1024 * 1024) {
+		fprintf(stderr,
+			" %.1fG\n",
+			((double) (srv_pool_size * UNIV_PAGE_SIZE))
+				 / (1024 * 1024 * 1024));
+	} else {
+		fprintf(stderr,
+			" %.1fM\n",
+			((double) (srv_pool_size * UNIV_PAGE_SIZE))
+				 / (1024 * 1024));
+	}
+
 	if (srv_use_awe) {
 		fprintf(stderr,
 			"InnoDB: Using AWE: Memory window is %lu MB"
@@ -1281,6 +1284,8 @@ innobase_start_or_create_for_mysql(void)
 				    srv_pool_size);
 	}
 
+	ut_print_timestamp(stderr);
+
 	if (ret == NULL) {
 		fprintf(stderr,
 			"InnoDB: Fatal error: cannot allocate the memory"
@@ -1288,6 +1293,9 @@ innobase_start_or_create_for_mysql(void)
 
 		return(DB_ERROR);
 	}
+
+	fprintf(stderr,
+		"  InnoDB: Completed initialization of buffer pool\n");
 
 	fsp_init();
 	log_init();
@@ -1596,15 +1604,20 @@ innobase_start_or_create_for_mysql(void)
 	/* fprintf(stderr, "Max allowed record size %lu\n",
 	page_get_free_space_of_empty() / 2); */
 
-	/* Create the thread which watches the timeouts for lock waits
-	and prints InnoDB monitor info */
+	/* Create the thread which watches the timeouts for lock
+	waits */
 
-	os_thread_create(&srv_lock_timeout_and_monitor_thread, NULL,
+	os_thread_create(&srv_lock_timeout_thread, NULL,
 			 thread_ids + 2 + SRV_MAX_N_IO_THREADS);
 
 	/* Create the thread which warns of long semaphore waits */
 	os_thread_create(&srv_error_monitor_thread, NULL,
 			 thread_ids + 3 + SRV_MAX_N_IO_THREADS);
+
+	/* Create the thread which prints InnoDB monitor info */
+	os_thread_create(&srv_monitor_thread, NULL,
+			 thread_ids + 4 + SRV_MAX_N_IO_THREADS);
+
 	srv_was_started = TRUE;
 	srv_is_being_started = FALSE;
 

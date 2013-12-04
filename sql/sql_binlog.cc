@@ -1,4 +1,5 @@
-/* Copyright (C) 2005-2006 MySQL AB
+/*
+   Copyright (c) 2005, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #include "rpl_rli.h"
@@ -42,9 +44,20 @@ void mysql_client_binlog_statement(THD* thd)
   if (check_global_access(thd, SUPER_ACL))
     DBUG_VOID_RETURN;
 
-  size_t coded_len= thd->lex->comment.length + 1;
+  size_t coded_len= thd->lex->comment.length;
+  if (!coded_len)
+  {
+    my_error(ER_SYNTAX_ERROR, MYF(0));
+    DBUG_VOID_RETURN;
+  }
   size_t decoded_len= base64_needed_decoded_length(coded_len);
-  DBUG_ASSERT(coded_len > 0);
+
+  /*
+    thd->options will be changed when applying the event. But we don't expect
+    it be changed permanently after BINLOG statement, so backup it first.
+    It will be restored at the end of this function.
+  */
+  ulonglong thd_options= thd->options;
 
   /*
     Allocation
@@ -56,17 +69,20 @@ void mysql_client_binlog_statement(THD* thd)
     Format_description_event.
   */
   my_bool have_fd_event= TRUE;
-  if (!thd->rli_fake)
+  int err;
+  Relay_log_info *rli;
+  rli= thd->rli_fake;
+  if (!rli)
   {
-    thd->rli_fake= new Relay_log_info;
+    rli= thd->rli_fake= new Relay_log_info;
 #ifdef HAVE_purify
-    thd->rli_fake->is_fake= TRUE;
+    rli->is_fake= TRUE;
 #endif
     have_fd_event= FALSE;
   }
-  if (thd->rli_fake && !thd->rli_fake->relay_log.description_event_for_exec)
+  if (rli && !rli->relay_log.description_event_for_exec)
   {
-    thd->rli_fake->relay_log.description_event_for_exec=
+    rli->relay_log.description_event_for_exec=
       new Format_description_log_event(4);
     have_fd_event= FALSE;
   }
@@ -78,16 +94,16 @@ void mysql_client_binlog_statement(THD* thd)
   /*
     Out of memory check
   */
-  if (!(thd->rli_fake &&
-        thd->rli_fake->relay_log.description_event_for_exec &&
+  if (!(rli &&
+        rli->relay_log.description_event_for_exec &&
         buf))
   {
     my_error(ER_OUTOFMEMORY, MYF(0), 1);  /* needed 1 bytes */
     goto end;
   }
 
-  thd->rli_fake->sql_thd= thd;
-  thd->rli_fake->no_storage= TRUE;
+  rli->sql_thd= thd;
+  rli->no_storage= TRUE;
 
   for (char const *strptr= thd->lex->comment.str ;
        strptr < thd->lex->comment.str + thd->lex->comment.length ; )
@@ -142,14 +158,16 @@ void mysql_client_binlog_statement(THD* thd)
       /*
         Checking that the first event in the buffer is not truncated.
       */
-      ulong event_len= uint4korr(bufptr + EVENT_LEN_OFFSET);
-      DBUG_PRINT("info", ("event_len=%lu, bytes_decoded=%d",
-                          event_len, bytes_decoded));
-      if (bytes_decoded < EVENT_LEN_OFFSET || (uint) bytes_decoded < event_len)
+      ulong event_len;
+      if (bytes_decoded < EVENT_LEN_OFFSET + 4 || 
+          (event_len= uint4korr(bufptr + EVENT_LEN_OFFSET)) > 
+           (uint) bytes_decoded)
       {
         my_error(ER_SYNTAX_ERROR, MYF(0));
         goto end;
       }
+      DBUG_PRINT("info", ("event_len=%lu, bytes_decoded=%d",
+                          event_len, bytes_decoded));
 
       /*
         If we have not seen any Format_description_event, then we must
@@ -170,8 +188,7 @@ void mysql_client_binlog_statement(THD* thd)
       }
 
       ev= Log_event::read_log_event(bufptr, event_len, &error,
-                                    thd->rli_fake->relay_log.
-                                      description_event_for_exec);
+                                    rli->relay_log.description_event_for_exec);
 
       DBUG_PRINT("info",("binlog base64 err=%s", error));
       if (!ev)
@@ -188,17 +205,6 @@ void mysql_client_binlog_statement(THD* thd)
       bufptr += event_len;
 
       DBUG_PRINT("info",("ev->get_type_code()=%d", ev->get_type_code()));
-#ifndef HAVE_purify
-      /*
-        This debug printout should not be used for valgrind builds
-        since it will read from unassigned memory.
-      */
-      DBUG_PRINT("info",("bufptr+EVENT_TYPE_OFFSET: 0x%lx",
-                         (long) (bufptr+EVENT_TYPE_OFFSET)));
-      DBUG_PRINT("info", ("bytes_decoded: %d   bufptr: 0x%lx  buf[EVENT_LEN_OFFSET]: %lu",
-                          bytes_decoded, (long) bufptr,
-                          (ulong) uint4korr(bufptr+EVENT_LEN_OFFSET)));
-#endif
       ev->thd= thd;
       /*
         We go directly to the application phase, since we don't need
@@ -209,18 +215,10 @@ void mysql_client_binlog_statement(THD* thd)
         reporting.
       */
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
-      if (apply_event_and_update_pos(ev, thd, thd->rli_fake, FALSE))
-      {
-        delete ev;
-        /*
-          TODO: Maybe a better error message since the BINLOG statement
-          now contains several events.
-        */
-        my_error(ER_UNKNOWN_ERROR, MYF(0), "Error executing BINLOG statement");
-        goto end;
-      }
+      err= ev->apply_event(rli);
+#else
+      err= 0;
 #endif
-
       /*
         Format_description_log_event should not be deleted because it
         will be used to read info about the relay log's format; it
@@ -228,8 +226,17 @@ void mysql_client_binlog_statement(THD* thd)
         i.e. when this thread terminates.
       */
       if (ev->get_type_code() != FORMAT_DESCRIPTION_EVENT)
-        delete ev;
+        delete ev; 
       ev= 0;
+      if (err)
+      {
+        /*
+          TODO: Maybe a better error message since the BINLOG statement
+          now contains several events.
+        */
+        my_error(ER_UNKNOWN_ERROR, MYF(0));
+        goto end;
+      }
     }
   }
 
@@ -238,7 +245,8 @@ void mysql_client_binlog_statement(THD* thd)
   my_ok(thd);
 
 end:
-  thd->rli_fake->clear_tables_to_lock();
+  thd->options= thd_options;
+  rli->clear_tables_to_lock();
   my_free(buf, MYF(MY_ALLOW_ZERO_PTR));
   DBUG_VOID_RETURN;
 }

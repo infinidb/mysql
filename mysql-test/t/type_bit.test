@@ -397,6 +397,17 @@ insert into t2bit7 values (b'110011011111111');
 select bin(a1) from t1bit7, t2bit7 where t1bit7.a1=t2bit7.b1; 
 drop table t1bit7, t2bit7; 
 
+
+--echo #
+--echo # Bug42803: Field_bit does not have unsigned_flag field, 
+--echo # can lead to bad memory access
+--echo #
+CREATE TABLE t1 (a BIT(7), b BIT(9), KEY(a, b));
+INSERT INTO t1 VALUES(0, 0), (5, 3), (5, 6), (6, 4), (7, 0);
+EXPLAIN SELECT a+0, b+0 FROM t1 WHERE a > 4 and b < 7 ORDER BY 2;
+DROP TABLE t1;
+
+
 --echo End of 5.0 tests
 
 #
@@ -413,5 +424,18 @@ insert into t1 values(0x81);
 select hex(a) from t1;
 show create table t1;
 drop table t1;
+
+--echo #
+--echo # Bug#50591 bit(31) causes Duplicate entry '1-NULL' for key 'group_key'
+--echo #
+CREATE TABLE t1(a INT, b BIT(7) NOT NULL);
+INSERT INTO t1 VALUES (NULL, 0),(NULL, 0);
+SELECT SUM(a) FROM t1 GROUP BY b, a;
+DROP TABLE t1;
+
+CREATE TABLE t1(a INT, b BIT(7) NOT NULL, c BIT(8) NOT NULL);
+INSERT INTO t1 VALUES (NULL, 0, 0),(NULL, 0, 0);
+SELECT SUM(a) FROM t1 GROUP BY c, b, a;
+DROP TABLE t1;
 
 --echo End of 5.1 tests

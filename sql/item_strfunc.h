@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -24,6 +26,16 @@
 
 class Item_str_func :public Item_func
 {
+protected:
+  /**
+     Sets the result value of the function an empty string, using the current
+     character set. No memory is allocated.
+     @retval A pointer to the str_value member.
+   */
+  String *make_empty_result() {
+    str_value.set("", 0, collation.collation);
+    return &str_value; 
+  }
 public:
   Item_str_func() :Item_func() { decimals=NOT_FIXED_DEC; }
   Item_str_func(Item *a) :Item_func(a) {decimals=NOT_FIXED_DEC; }
@@ -353,12 +365,22 @@ public:
 
 class Item_func_encode :public Item_str_func
 {
+private:
+  /** Whether the PRNG has already been seeded. */
+  bool seeded;
+protected:
+  SQL_CRYPT sql_crypt;
 public:
   Item_func_encode(Item *a, Item *seed):
     Item_str_func(a, seed) {}
   String *val_str(String *);
   void fix_length_and_dec();
   const char *func_name() const { return "encode"; }
+protected:
+  virtual void crypto_transform(String *);
+private:
+  /** Provide a seed for the PRNG sequence. */
+  bool seed();
 };
 
 
@@ -366,8 +388,9 @@ class Item_func_decode :public Item_func_encode
 {
 public:
   Item_func_decode(Item *a, Item *seed): Item_func_encode(a, seed) {}
-  String *val_str(String *);
   const char *func_name() const { return "decode"; }
+protected:
+  void crypto_transform(String *);
 };
 
 
@@ -692,13 +715,16 @@ public:
   void fix_length_and_dec()
   {
     collation.set(args[0]->collation);
-    max_length= args[0]->max_length * 2 + 2;
+    ulonglong max_result_length= (ulonglong) args[0]->max_length * 2 +
+                                  2 * collation.collation->mbmaxlen;
+    max_length= (uint32) min(max_result_length, MAX_BLOB_WIDTH);
   }
 };
 
 class Item_func_conv_charset :public Item_str_func
 {
   bool use_cached_value;
+  String tmp_value;
 public:
   bool safe;
   CHARSET_INFO *conv_charset; // keep it public

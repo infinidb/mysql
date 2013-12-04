@@ -1,4 +1,5 @@
-/* Copyright (C) 2004 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Written by Anjuta Widenius
@@ -29,6 +31,7 @@
 #include <my_getopt.h>
 #include <assert.h>
 #include <my_dir.h>
+#include <mysql_version.h>
 
 #define MAX_ROWS  1000
 #define HEADER_LENGTH 32                /* Length of header in errmsg.sys */
@@ -99,31 +102,29 @@ static struct my_option my_long_options[]=
   {"debug", '#', "This is a non-debug version. Catch this and exit",
    0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
-  {"debug", '#', "Output debug log", (uchar**) & default_dbug_option,
-   (uchar**) & default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug", '#', "Output debug log", &default_dbug_option,
+   &default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"debug-info", 'T', "Print some debug info at exit.", (uchar**) & info_flag,
-   (uchar**) & info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug-info", 'T', "Print some debug info at exit.", &info_flag,
+   &info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"help", '?', "Displays this help and exits.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Prints version", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"charset", 'C', "Charset dir", (uchar**) & charsets_dir,
-   (uchar**) & charsets_dir,
+  {"charset", 'C', "Charset dir", &charsets_dir, &charsets_dir,
    0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"in_file", 'F', "Input file", (uchar**) & TXTFILE, (uchar**) & TXTFILE,
+  {"in_file", 'F', "Input file", &TXTFILE, &TXTFILE,
    0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"out_dir", 'D', "Output base directory", (uchar**) & DATADIRECTORY,
-   (uchar**) & DATADIRECTORY,
+  {"out_dir", 'D', "Output base directory", &DATADIRECTORY, &DATADIRECTORY,
    0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"out_file", 'O', "Output filename (errmsg.sys)", (uchar**) & OUTFILE,
-   (uchar**) & OUTFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"header_file", 'H', "mysqld_error.h file ", (uchar**) & HEADERFILE,
-   (uchar**) & HEADERFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"name_file", 'N', "mysqld_ername.h file ", (uchar**) & NAMEFILE,
-   (uchar**) & NAMEFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"state_file", 'S', "sql_state.h file", (uchar**) & STATEFILE,
-   (uchar**) & STATEFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"out_file", 'O', "Output filename (errmsg.sys)", &OUTFILE,
+   &OUTFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"header_file", 'H', "mysqld_error.h file ", &HEADERFILE,
+   &HEADERFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"name_file", 'N', "mysqld_ername.h file ", &NAMEFILE,
+   &NAMEFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"state_file", 'S', "sql_state.h file", &STATEFILE,
+   &STATEFILE, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -175,6 +176,23 @@ int main(int argc, char *argv[])
       fprintf(stderr, "Failed to parse input file %s\n", TXTFILE);
       DBUG_RETURN(1);
     }
+#if MYSQL_VERSION_ID >= 50100 && MYSQL_VERSION_ID < 50500
+/* Number of error messages in 5.1 - do not change this number! */
+#define MYSQL_OLD_GA_ERROR_MESSAGE_COUNT 641
+#elif MYSQL_VERSION_ID >= 50500 && MYSQL_VERSION_ID < 50600
+/* Number of error messages in 5.5 - do not change this number! */
+#define MYSQL_OLD_GA_ERROR_MESSAGE_COUNT 728
+#endif
+#if MYSQL_OLD_GA_ERROR_MESSAGE_COUNT
+    if (row_count != MYSQL_OLD_GA_ERROR_MESSAGE_COUNT)
+    {
+      fprintf(stderr, "Can only add new error messages to latest GA. ");
+      fprintf(stderr, "Use ER_UNKNOWN_ERROR instead.\n");
+      fprintf(stderr, "Expected %u messages, found %u.\n",
+              MYSQL_OLD_GA_ERROR_MESSAGE_COUNT, row_count);
+      DBUG_RETURN(1);
+    }
+#endif
     if (lang_head == NULL || error_head == NULL)
     {
       fprintf(stderr, "Failed to parse input file %s\n", TXTFILE);
@@ -641,9 +659,9 @@ static struct message *find_message(struct errors *err, const char *lang,
 static ha_checksum checksum_format_specifier(const char* msg)
 {
   ha_checksum chksum= 0;
-  const char* p= msg;
-  const char* start= 0;
-  int num_format_specifiers= 0;
+  const uchar* p= (const uchar*) msg;
+  const uchar* start= NULL;
+  uint32 num_format_specifiers= 0;
   while (*p)
   {
 
@@ -660,7 +678,7 @@ static ha_checksum checksum_format_specifier(const char* msg)
       case 'u':
       case 'x':
       case 's':
-        chksum= my_checksum(chksum, start, (uint) (p - start));
+        chksum= my_checksum(chksum, start, (uint) (p + 1 - start));
         start= 0; /* Not in format specifier anymore */
         break;
 
@@ -833,7 +851,6 @@ static struct message *parse_message_string(struct message *new_message,
 static struct errors *parse_error_string(char *str, int er_count)
 {
   struct errors *new_error;
-  char *start;
   DBUG_ENTER("parse_error_string");
   DBUG_PRINT("enter", ("str: %s", str));
 
@@ -844,7 +861,6 @@ static struct errors *parse_error_string(char *str, int er_count)
     DBUG_RETURN(0);				/* OOM: Fatal error */
 
   /* getting the error name */
-  start= str;
   str= skip_delimiters(str);
 
   if (!(new_error->er_name= get_word(&str)))
@@ -1030,8 +1046,10 @@ static char *parse_text_line(char *pos)
 {
   int i, nr;
   char *row= pos;
+  size_t len;
   DBUG_ENTER("parse_text_line");
 
+  len= strlen (pos);
   while (*pos)
   {
     if (*pos == '\\')
@@ -1039,11 +1057,11 @@ static char *parse_text_line(char *pos)
       switch (*++pos) {
       case '\\':
       case '"':
-	VOID(strmov(pos - 1, pos));
+	VOID(memmove (pos - 1, pos, len - (row - pos)));
 	break;
       case 'n':
 	pos[-1]= '\n';
-	VOID(strmov(pos, pos + 1));
+	VOID(memmove (pos, pos + 1, len - (row - pos)));
 	break;
       default:
 	if (*pos >= '0' && *pos < '8')
@@ -1053,10 +1071,10 @@ static char *parse_text_line(char *pos)
 	    nr= nr * 8 + (*(pos++) - '0');
 	  pos -= i;
 	  pos[-1]= nr;
-	  VOID(strmov(pos, pos + i));
+	  VOID(memmove (pos, pos + i, len - (row - pos)));
 	}
 	else if (*pos)
-	  VOID(strmov(pos - 1, pos));		/* Remove '\' */
+	  VOID(memmove (pos - 1, pos, len - (row - pos)));		/* Remove '\' */
       }
     }
     else

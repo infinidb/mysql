@@ -257,6 +257,13 @@ os_file_get_last_error(
 				" software or another instance\n"
 				"InnoDB: of MySQL."
 				" Please close it to get rid of this error.\n");
+		} else if (err == ERROR_OPERATION_ABORTED) {
+			fprintf(stderr,
+				"InnoDB: The error means that the I/O"
+				" operation has been aborted\n"
+				"InnoDB: because of either a thread exit"
+				" or an application request.\n"
+				"InnoDB: Retry attempt is made.\n");
 		} else {
 			fprintf(stderr,
 				"InnoDB: Some operating system error numbers"
@@ -278,6 +285,8 @@ os_file_get_last_error(
 	} else if (err == ERROR_SHARING_VIOLATION
 		   || err == ERROR_LOCK_VIOLATION) {
 		return(OS_FILE_SHARING_VIOLATION);
+	} else if (err == ERROR_OPERATION_ABORTED) {
+		return(OS_FILE_OPERATION_ABORTED);
 	} else {
 		return(100 + err);
 	}
@@ -401,6 +410,10 @@ os_file_handle_error_cond_exit(
 	} else if (err == OS_FILE_SHARING_VIOLATION) {
 
 		os_thread_sleep(10000000);  /* 10 sec */
+		return(TRUE);
+	} else if (err == OS_FILE_OPERATION_ABORTED) {
+
+		os_thread_sleep(100000);	/* 100 ms */
 		return(TRUE);
 	} else {
 		if (name) {
@@ -746,7 +759,15 @@ next_file:
 #ifdef HAVE_READDIR_R
 	ret = readdir_r(dir, (struct dirent*)dirent_buf, &ent);
 
-	if (ret != 0) {
+	if (ret != 0
+#ifdef UNIV_AIX
+	    /* On AIX, only if we got non-NULL 'ent' (result) value and
+	    a non-zero 'ret' (return) value, it indicates a failed
+	    readdir_r() call. An NULL 'ent' with an non-zero 'ret'
+	    would indicate the "end of the directory" is reached. */
+	    && ent != NULL
+#endif
+	   ) {
 		fprintf(stderr,
 			"InnoDB: cannot read directory %s, error %lu\n",
 			dirname, (ulong)ret);
@@ -1117,9 +1138,12 @@ Tries to disable OS caching on an opened file descriptor. */
 void
 os_file_set_nocache(
 /*================*/
-	int		fd,		/* in: file descriptor to alter */
-	const char*	file_name,	/* in: used in the diagnostic message */
-	const char*	operation_name)	/* in: used in the diagnostic message,
+	int		fd		/* in: file descriptor to alter */
+	__attribute__((unused)),
+	const char*	file_name	/* in: used in the diagnostic message */
+	__attribute__((unused)),
+	const char*	operation_name __attribute__((unused)))
+					/* in: used in the diagnostic message,
 					we call os_file_set_nocache()
 					immediately after opening or creating
 					a file, so this is either "open" or
@@ -1191,6 +1215,14 @@ os_file_create(
 	DWORD		create_flag;
 	DWORD		attributes;
 	ibool		retry;
+
+	DBUG_EXECUTE_IF(
+		"ib_create_table_fail_disk_full",
+		*success = FALSE;
+		SetLastError(ERROR_DISK_FULL);
+		return((os_file_t) -1);
+	);
+
 try_again:
 	ut_a(name);
 
@@ -1293,8 +1325,13 @@ try_again:
 	int		create_flag;
 	ibool		retry;
 	const char*	mode_str	= NULL;
-	const char*	type_str	= NULL;
-	const char*	purpose_str	= NULL;
+
+	DBUG_EXECUTE_IF(
+		"ib_create_table_fail_disk_full",
+		*success = FALSE;
+		errno = ENOSPC;
+		return((os_file_t) -1);
+	);
 
 try_again:
 	ut_a(name);
@@ -1314,26 +1351,9 @@ try_again:
 		ut_error;
 	}
 
-	if (type == OS_LOG_FILE) {
-		type_str = "LOG";
-	} else if (type == OS_DATA_FILE) {
-		type_str = "DATA";
-	} else {
-		ut_error;
-	}
+	ut_a(type == OS_LOG_FILE || type == OS_DATA_FILE);
+	ut_a(purpose == OS_FILE_AIO || purpose == OS_FILE_NORMAL);
 
-	if (purpose == OS_FILE_AIO) {
-		purpose_str = "AIO";
-	} else if (purpose == OS_FILE_NORMAL) {
-		purpose_str = "NORMAL";
-	} else {
-		ut_error;
-	}
-
-#if 0
-	fprintf(stderr, "Opening file %s, mode %s, type %s, purpose %s\n",
-		name, mode_str, type_str, purpose_str);
-#endif
 #ifdef O_SYNC
 	/* We let O_SYNC only affect log files; note that we map O_DSYNC to
 	O_SYNC because the datasync options seemed to corrupt files in 2001
@@ -2202,7 +2222,10 @@ os_file_read(
 	ibool		retry;
 	ulint		i;
 
+	/* On 64-bit Windows, ulint is 64 bits. But offset and n should be
+	no more than 32 bits. */
 	ut_a((offset & 0xFFFFFFFFUL) == offset);
+	ut_a((n & 0xFFFFFFFFUL) == n);
 
 	os_n_file_reads++;
 	os_bytes_read_since_printout += n;
@@ -2319,7 +2342,10 @@ os_file_read_no_error_handling(
 	ibool		retry;
 	ulint		i;
 
+	/* On 64-bit Windows, ulint is 64 bits. But offset and n should be
+	no more than 32 bits. */
 	ut_a((offset & 0xFFFFFFFFUL) == offset);
+	ut_a((n & 0xFFFFFFFFUL) == n);
 
 	os_n_file_reads++;
 	os_bytes_read_since_printout += n;
@@ -2442,7 +2468,10 @@ os_file_write(
 	ulint		n_retries	= 0;
 	ulint		err;
 
-	ut_a((offset & 0xFFFFFFFF) == offset);
+	/* On 64-bit Windows, ulint is 64 bits. But offset and n should be
+	no more than 32 bits. */
+	ut_a((offset & 0xFFFFFFFFUL) == offset);
+	ut_a((n & 0xFFFFFFFFUL) == n);
 
 	os_n_file_writes++;
 
@@ -3240,14 +3269,16 @@ os_aio_array_reserve_slot(
 	ulint		len)	/* in: length of the block to read or write */
 {
 	os_aio_slot_t*	slot;
+	ulint		i;
 #ifdef WIN_ASYNC_IO
 	OVERLAPPED*	control;
 
+	ut_a((len & 0xFFFFFFFFUL) == len);
 #elif defined(POSIX_ASYNC_IO)
 
 	struct aiocb*	control;
 #endif
-	ulint		i;
+
 loop:
 	os_mutex_enter(array->mutex);
 
@@ -3512,6 +3543,9 @@ os_aio(
 	ut_ad(n % OS_FILE_LOG_BLOCK_SIZE == 0);
 	ut_ad(offset % OS_FILE_LOG_BLOCK_SIZE == 0);
 	ut_ad(os_aio_validate());
+#ifdef WIN_ASYNC_IO
+	ut_ad((n & 0xFFFFFFFFUL) == n);
+#endif
 
 	wake_later = mode & OS_AIO_SIMULATED_WAKE_LATER;
 	mode = mode & (~OS_AIO_SIMULATED_WAKE_LATER);
@@ -3692,6 +3726,7 @@ os_aio_windows_handle(
 	ibool		ret_val;
 	BOOL		ret;
 	DWORD		len;
+	BOOL		retry		= FALSE;
 
 	if (segment == ULINT_UNDEFINED) {
 		array = os_aio_sync_array;
@@ -3745,13 +3780,53 @@ os_aio_windows_handle(
 			ut_a(TRUE == os_file_flush(slot->file));
 		}
 # endif /* UNIV_DO_FLUSH */
+	} else if (os_file_handle_error(slot->name, "Windows aio")) {
+
+		retry = TRUE;
 	} else {
-		os_file_handle_error(slot->name, "Windows aio");
 
 		ret_val = FALSE;
 	}
 
 	os_mutex_exit(array->mutex);
+
+	if (retry) {
+		/* retry failed read/write operation synchronously.
+		No need to hold array->mutex. */
+
+		ut_a((slot->len & 0xFFFFFFFFUL) == slot->len);
+
+		switch (slot->type) {
+		case OS_FILE_WRITE:
+			ret = WriteFile(slot->file, slot->buf,
+					(DWORD) slot->len, &len,
+					&(slot->control));
+
+			break;
+		case OS_FILE_READ:
+			ret = ReadFile(slot->file, slot->buf,
+				       (DWORD) slot->len, &len,
+				       &(slot->control));
+
+			break;
+		default:
+			ut_error;
+		}
+
+		if (!ret && GetLastError() == ERROR_IO_PENDING) {
+			/* aio was queued successfully!
+			We want a synchronous i/o operation on a
+			file where we also use async i/o: in Windows
+			we must use the same wait mechanism as for
+			async i/o */
+
+			ret = GetOverlappedResult(slot->file,
+						  &(slot->control),
+						  &len, TRUE);
+		}
+
+		ret_val = ret && len == slot->len;
+	}
 
 	os_aio_array_free_slot(array, slot);
 
@@ -3913,6 +3988,9 @@ os_aio_simulated_handle(
 	ibool		ret;
 	ulint		n;
 	ulint		i;
+
+	/* Fix compiler warning */
+	*consecutive_ios = NULL;
 
 	segment = os_aio_get_array_and_local_segment(&array, global_segment);
 

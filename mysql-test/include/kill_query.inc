@@ -44,7 +44,7 @@ connection master;
 # kill the query that is waiting
 eval kill query $connection_id;
 
-if (`SELECT '$debug_lock' != ''`)
+if ($debug_lock)
 {
   # release the lock to allow binlog continue
   eval SELECT RELEASE_LOCK($debug_lock);
@@ -52,12 +52,12 @@ if (`SELECT '$debug_lock' != ''`)
 
 # reap the result of the waiting query
 connection $connection_name;
-error 0, 1317, 1307, 1306, 1334, 1305;
+error 0, 1317, 1307, 1306, 1334, 1305, 1034;
 reap;
 
 connection master;
 
-if (`SELECT '$debug_lock' != ''`)
+if ($debug_lock)
 {
   # get lock again to make the next query wait
   eval SELECT GET_LOCK($debug_lock, 10);

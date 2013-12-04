@@ -820,16 +820,13 @@ i
 drop table t1;
 create temporary table t1 (j int);
 create table if not exists t1 select 1;
-Warnings:
-Note	1050	Table 't1' already exists
 select * from t1;
 j
-1
 drop temporary table t1;
 select * from t1;
-ERROR 42S02: Table 'test.t1' doesn't exist
+1
+1
 drop table t1;
-ERROR 42S02: Unknown table 't1'
 create table t1 (i int);
 insert into t1 values (1), (2);
 lock tables t1 read;
@@ -1572,6 +1569,19 @@ CREATE TABLE IF NOT EXISTS t2 (a INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY)
 SELECT a FROM t1;
 ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
 DROP TABLE t1, t2;
+#
+# BUG#46384 - mysqld segfault when trying to create table with same 
+#             name as existing view
+#
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (a INT);
+INSERT INTO t1 VALUES (1),(2),(3);
+INSERT INTO t2 VALUES (1),(2),(3);
+CREATE VIEW v1 AS SELECT t1.a FROM t1, t2;
+CREATE TABLE v1 AS SELECT * FROM t1;
+ERROR 42S01: Table 'v1' already exists
+DROP VIEW v1;
+DROP TABLE t1,t2;
 End of 5.0 tests
 CREATE TABLE t1 (a int, b int);
 insert into t1 values (1,1),(1,2);

@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -115,8 +115,11 @@ Prints warnings of long semaphore waits to stderr.
 @return	TRUE if fatal semaphore wait threshold was exceeded */
 UNIV_INTERN
 ibool
-sync_array_print_long_waits(void);
-/*=============================*/
+sync_array_print_long_waits(
+/*========================*/
+	os_thread_id_t*	waiter,	/*!< out: longest waiting thread */
+	const void**	sema)	/*!< out: longest-waited-for semaphore */
+	__attribute__((nonnull));
 /********************************************************************//**
 Validates the integrity of the wait array. Checks
 that the number of reserved cells equals the count variable. */

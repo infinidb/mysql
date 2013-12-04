@@ -1,4 +1,5 @@
-/* Copyright 2007 MySQL AB. All rights reserved.
+/*
+   Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #include "rpl_rli.h"
@@ -224,8 +226,38 @@ unpack_row(Relay_log_info const *rli,
       /* Field...::unpack() cannot return 0 */
       DBUG_ASSERT(pack_ptr != NULL);
 
-      if ((null_bits & null_mask) && f->maybe_null())
-        f->set_null();
+      if (null_bits & null_mask)
+      {
+        if (f->maybe_null())
+        {
+          DBUG_PRINT("debug", ("Was NULL; null mask: 0x%x; null bits: 0x%x",
+                               null_mask, null_bits));
+          /** 
+            Calling reset just in case one is unpacking on top a 
+            record with data. 
+
+            This could probably go into set_null() but doing so, 
+            (i) triggers assertion in other parts of the code at 
+            the moment; (ii) it would make us reset the field,
+            always when setting null, which right now doesn't seem 
+            needed anywhere else except here.
+
+            TODO: maybe in the future we should consider moving 
+                  the reset to make it part of set_null. But then
+                  the assertions triggered need to be 
+                  addressed/revisited.
+           */
+          f->reset();
+          f->set_null();
+        }
+        else
+        {
+          f->set_default();
+          push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
+                              ER_BAD_NULL_ERROR, ER(ER_BAD_NULL_ERROR),
+                              f->field_name);
+        }
+      }
       else
       {
         f->set_notnull();
@@ -305,17 +337,14 @@ unpack_row(Relay_log_info const *rli,
   @param table  Table whose record[0] buffer is prepared. 
   @param skip   Number of columns for which default/nullable check 
                 should be skipped.
-  @param check  Indicates if errors should be raised when checking 
-                default/nullable field properties.
-                
+  @param check  Specifies if lack of default error needs checking.
+
   @returns 0 on success or a handler level error code
  */ 
-int prepare_record(TABLE *const table, 
-                   const uint skip, const bool check)
+int prepare_record(TABLE *const table, const uint skip, const bool check)
 {
   DBUG_ENTER("prepare_record");
 
-  int error= 0;
   restore_record(table, s->default_values);
 
   /*
@@ -326,21 +355,28 @@ int prepare_record(TABLE *const table,
   if (skip >= table->s->fields || !check)
     DBUG_RETURN(0);
 
-  /* Checking if exists default/nullable fields in the default values. */
-
-  for (Field **field_ptr= table->field+skip ; *field_ptr ; ++field_ptr)
+  /*
+    For fields the extra fields on the slave, we check if they have a default.
+    The check follows the same rules as the INSERT query without specifying an
+    explicit value for a field not having the explicit default 
+    (@c check_that_all_fields_are_given_values()).
+  */
+  for (Field **field_ptr= table->field+skip; *field_ptr; ++field_ptr)
   {
-    uint32 const mask= NOT_NULL_FLAG | NO_DEFAULT_VALUE_FLAG;
     Field *const f= *field_ptr;
-
-    if (((f->flags & mask) == mask))
+    if ((f->flags &  NO_DEFAULT_VALUE_FLAG) &&
+        (f->real_type() != MYSQL_TYPE_ENUM))
     {
-      my_error(ER_NO_DEFAULT_FOR_FIELD, MYF(0), f->field_name);
-      error = HA_ERR_ROWS_EVENT_APPLY;
+      f->set_default();
+      push_warning_printf(current_thd,
+                          MYSQL_ERROR::WARN_LEVEL_WARN,
+                          ER_NO_DEFAULT_FOR_FIELD,
+                          ER(ER_NO_DEFAULT_FOR_FIELD),
+                          f->field_name);
     }
   }
 
-  DBUG_RETURN(error);
+  DBUG_RETURN(0);
 }
 
 #endif // HAVE_REPLICATION

@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -84,7 +84,7 @@ private:
 // DES_EDE3
 class DES_EDE3 : public Mode_BASE {
 public:
-    DES_EDE3(CipherDir DIR, Mode MODE) 
+    DES_EDE3(CipherDir DIR, Mode MODE)
         : Mode_BASE(DES_BLOCK_SIZE, DIR, MODE) {}
 
     void SetKey(const byte*, word32, CipherDir dir);

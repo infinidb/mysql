@@ -865,7 +865,103 @@ DROP PROCEDURE p_suid;
 DROP FUNCTION f_suid;
 DROP TABLE t1;
 
+--echo #
+--echo # Bug #48872 : Privileges for stored functions ignored if function name 
+--echo #  is mixed case
+--echo #
+
+CREATE DATABASE B48872;
+USE B48872;
+CREATE TABLE `TestTab` (id INT);
+INSERT INTO `TestTab` VALUES (1),(2);
+CREATE FUNCTION `f_Test`() RETURNS INT RETURN 123;
+CREATE FUNCTION `f_Test_denied`() RETURNS INT RETURN 123;
+CREATE USER 'tester';
+CREATE USER 'Tester';
+GRANT SELECT ON TABLE `TestTab` TO 'tester';
+GRANT EXECUTE ON FUNCTION `f_Test` TO 'tester';
+GRANT EXECUTE ON FUNCTION `f_Test_denied` TO 'Tester';
+
+SELECT f_Test();
+SELECT * FROM TestTab;
+
+CONNECT (con_tester,localhost,tester,,B48872);
+CONNECT (con_tester_denied,localhost,Tester,,B48872);
+CONNECTION con_tester;
+
+SELECT * FROM TestTab;
+SELECT `f_Test`();
+SELECT `F_TEST`();
+SELECT f_Test();
+SELECT F_TEST();
+
+CONNECTION con_tester_denied;
+
+--disable_result_log
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT * FROM TestTab;
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT `f_Test`();
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT `F_TEST`();
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT f_Test();
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT F_TEST();
+--enable_result_log
+SELECT `f_Test_denied`();
+SELECT `F_TEST_DENIED`();
+
+CONNECTION default;
+DISCONNECT con_tester;
+DISCONNECT con_tester_denied;
+DROP TABLE `TestTab`;
+DROP FUNCTION `f_Test`;
+DROP FUNCTION `f_Test_denied`;
+
+USE test;
+DROP USER 'tester';
+DROP USER 'Tester';
+DROP DATABASE B48872;
+
 --echo End of 5.0 tests.
+
+--echo #
+--echo # Bug#11882603 SELECT_ACL ON ANY COLUMN IN MYSQL.PROC ALLOWS TO SEE
+--echo #              DEFINITION OF ANY ROUTINE. 
+--echo #
+
+--disable_warnings
+DROP DATABASE IF EXISTS db1;
+--enable_warnings
+
+CREATE DATABASE db1;
+CREATE PROCEDURE db1.p1() SELECT 1;
+CREATE USER user2@localhost IDENTIFIED BY '';
+GRANT SELECT(db) ON mysql.proc TO user2@localhost;
+ 
+--echo # Connection con2 as user2
+connect (con2, localhost, user2);
+--echo # The statement below before disclosed info from body_utf8 column.
+--error ER_SP_DOES_NOT_EXIST
+SHOW CREATE PROCEDURE db1.p1;
+
+--echo # Check that SHOW works with SELECT grant on whole table
+--echo # Connection default
+connection default;
+GRANT SELECT ON mysql.proc TO user2@localhost;
+
+--echo # Connection con2
+connection con2;
+--echo # This should work
+SHOW CREATE PROCEDURE db1.p1;
+
+--echo # Connection default
+connection default;
+disconnect con2;
+DROP USER user2@localhost;
+DROP DATABASE db1;
+
 
 # Wait till all disconnects are completed
 --source include/wait_until_count_sessions.inc

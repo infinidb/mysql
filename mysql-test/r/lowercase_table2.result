@@ -56,6 +56,7 @@ CREATE DATABASE `TEST_$1`;
 SHOW DATABASES LIKE "TEST%";
 Database (TEST%)
 TEST_$1
+test
 DROP DATABASE `test_$1`;
 CREATE TABLE T1 (a int) engine=innodb;
 INSERT INTO T1 VALUES (1);
@@ -171,6 +172,36 @@ create table myUC (i int);
 select TABLE_SCHEMA,TABLE_NAME FROM information_schema.TABLES
 where TABLE_SCHEMA ='mysqltest_LC2';
 TABLE_SCHEMA	TABLE_NAME
-mysqltest_LC2	myUC
+mysqltest_lc2	myUC
 use test;
 drop database mysqltest_LC2;
+#
+# Bug #11758687: 50924: object names not resolved correctly 
+#   on lctn2 systems
+#
+CREATE DATABASE BUP_XPFM_COMPAT_DB2;
+CREATE TABLE BUP_XPFM_COMPAT_DB2.TABLE2 (c13 INT) DEFAULT CHARSET latin1;
+CREATE TABLE BUP_XPFM_COMPAT_DB2.table1 (c13 INT) DEFAULT CHARSET latin1;
+CREATE TABLE bup_xpfm_compat_db2.table3 (c13 INT) DEFAULT CHARSET latin1;
+CREATE TRIGGER BUP_XPFM_COMPAT_DB2.trigger1 AFTER INSERT
+ON BUP_XPFM_COMPAT_DB2.table1 FOR EACH ROW
+update BUP_XPFM_COMPAT_DB2.table1 set c13=12;
+|
+CREATE TRIGGER BUP_XPFM_COMPAT_DB2.TRIGGER2 AFTER INSERT
+ON BUP_XPFM_COMPAT_DB2.TABLE2 FOR EACH ROW
+update BUP_XPFM_COMPAT_DB2.table1 set c13=12;
+|
+CREATE TRIGGER BUP_XPFM_COMPAT_DB2.TrigGer3 AFTER INSERT
+ON BUP_XPFM_COMPAT_DB2.TaBle3 FOR EACH ROW
+update BUP_XPFM_COMPAT_DB2.table1 set c13=12;
+|
+SELECT trigger_schema, trigger_name, event_object_table FROM
+INFORMATION_SCHEMA.TRIGGERS
+WHERE trigger_schema COLLATE utf8_bin = 'BUP_XPFM_COMPAT_DB2'
+  ORDER BY trigger_schema, trigger_name;
+trigger_schema	trigger_name	event_object_table
+BUP_XPFM_COMPAT_DB2	trigger1	table1
+BUP_XPFM_COMPAT_DB2	TRIGGER2	TABLE2
+BUP_XPFM_COMPAT_DB2	TrigGer3	table3
+DROP DATABASE BUP_XPFM_COMPAT_DB2;
+End of 5.1 tests

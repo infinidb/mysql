@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -178,7 +178,8 @@ void RSA_Encryptor<Pad>::Encrypt(const byte* plain, word32 sz, byte* cipher,
                                  RandomNumberGenerator& rng)
 {
     PK_Lengths lengths(key_.GetModulus());
-    assert(sz <= lengths.FixedMaxPlaintextLength());
+    if (sz > lengths.FixedMaxPlaintextLength())
+        return;
 
     ByteBlock paddedBlock(lengths.PaddedBlockByteLength());
     padding_.Pad(plain, sz, paddedBlock.get_buffer(),
@@ -195,7 +196,6 @@ word32 RSA_Decryptor<Pad>::Decrypt(const byte* cipher, word32 sz, byte* plain,
                                    RandomNumberGenerator& rng)
 {
     PK_Lengths lengths(key_.GetModulus());
-    assert(sz == lengths.FixedCiphertextLength());
 
     if (sz != lengths.FixedCiphertextLength())
         return 0;

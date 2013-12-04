@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -37,9 +37,11 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0rseg.h"
 #include "trx0undo.h"
 #include "srv0srv.h"
+#include "srv0start.h"
 #include "trx0purge.h"
 #include "log0log.h"
 #include "os0file.h"
+#include "read0read.h"
 
 /** The file format tag structure with id and name. */
 struct file_format_struct {
@@ -124,6 +126,11 @@ static const char*	file_format_name_map[] = {
 /** The number of elements in the file format name array. */
 static const ulint	FILE_FORMAT_NAME_N
 	= sizeof(file_format_name_map) / sizeof(file_format_name_map[0]);
+
+#ifdef UNIV_DEBUG
+/* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
+UNIV_INTERN uint	trx_rseg_n_slots_debug = 0;
+#endif
 
 #ifndef UNIV_HOTBACKUP
 /** This is used to track the maximum file format id known to InnoDB. It's
@@ -319,10 +326,9 @@ start_again:
 
 		for (i = 0; i < 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE
 			     + FSP_EXTENT_SIZE / 2; i++) {
-			page_no = fseg_alloc_free_page(fseg_header,
-						       prev_page_no + 1,
-						       FSP_UP, &mtr);
-			if (page_no == FIL_NULL) {
+			new_block = fseg_alloc_free_page(
+				fseg_header, prev_page_no + 1, FSP_UP, &mtr);
+			if (new_block == NULL) {
 				fprintf(stderr,
 					"InnoDB: Cannot create doublewrite"
 					" buffer: you must\n"
@@ -343,10 +349,8 @@ start_again:
 			the page position in the tablespace, then the page
 			has not been written to in doublewrite. */
 
-			new_block = buf_page_get(TRX_SYS_SPACE, 0, page_no,
-						 RW_X_LATCH, &mtr);
-			buf_block_dbg_add_level(new_block,
-						SYNC_NO_ORDER_CHECK);
+			ut_ad(rw_lock_get_x_lock_count(&new_block->lock) == 1);
+			page_no = buf_block_get_page_no(new_block);
 
 			if (i == FSP_EXTENT_SIZE / 2) {
 				ut_a(page_no == FSP_EXTENT_SIZE);
@@ -583,8 +587,8 @@ trx_sys_doublewrite_init_or_restore_pages(
 						" recover the database"
 						" with the my.cnf\n"
 						"InnoDB: option:\n"
-						"InnoDB: set-variable="
-						"innodb_force_recovery=6\n");
+						"InnoDB:"
+						" innodb_force_recovery=6\n");
 					exit(1);
 				}
 
@@ -1532,4 +1536,92 @@ trx_sys_file_format_id_to_name(
 	return(file_format_name_map[id]);
 }
 
+#endif /* !UNIV_HOTBACKUP */
+
+#ifndef UNIV_HOTBACKUP
+/*********************************************************************
+Shutdown/Close the transaction system. */
+UNIV_INTERN
+void
+trx_sys_close(void)
+/*===============*/
+{
+	trx_t*		trx;
+	trx_rseg_t*	rseg;
+	read_view_t*	view;
+
+	ut_ad(trx_sys != NULL);
+	ut_ad(srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS);
+
+	/* Check that all read views are closed except read view owned
+	by a purge. */
+
+	if (UT_LIST_GET_LEN(trx_sys->view_list) > 1) {
+		fprintf(stderr,
+			"InnoDB: Error: all read views were not closed"
+			" before shutdown:\n"
+			"InnoDB: %lu read views open \n",
+			UT_LIST_GET_LEN(trx_sys->view_list) - 1);
+	}
+
+	sess_close(trx_dummy_sess);
+	trx_dummy_sess = NULL;
+
+	trx_purge_sys_close();
+
+	mutex_enter(&kernel_mutex);
+
+	/* Free the double write data structures. */
+	ut_a(trx_doublewrite != NULL);
+	ut_free(trx_doublewrite->write_buf_unaligned);
+	trx_doublewrite->write_buf_unaligned = NULL;
+
+	mem_free(trx_doublewrite->buf_block_arr);
+	trx_doublewrite->buf_block_arr = NULL;
+
+	mutex_free(&trx_doublewrite->mutex);
+	mem_free(trx_doublewrite);
+	trx_doublewrite = NULL;
+
+	/* Only prepared transactions may be left in the system. Free them. */
+	ut_a(UT_LIST_GET_LEN(trx_sys->trx_list) == trx_n_prepared);
+
+	while ((trx = UT_LIST_GET_FIRST(trx_sys->trx_list)) != NULL) {
+		trx_free_prepared(trx);
+	}
+
+	/* There can't be any active transactions. */
+	rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+
+	while (rseg != NULL) {
+		trx_rseg_t*	prev_rseg = rseg;
+
+		rseg = UT_LIST_GET_NEXT(rseg_list, prev_rseg);
+		UT_LIST_REMOVE(rseg_list, trx_sys->rseg_list, prev_rseg);
+
+		trx_rseg_mem_free(prev_rseg);
+	}
+
+	view = UT_LIST_GET_FIRST(trx_sys->view_list);
+
+	while (view != NULL) {
+		read_view_t*	prev_view = view;
+
+		view = UT_LIST_GET_NEXT(view_list, prev_view);
+
+		/* Views are allocated from the trx_sys->global_read_view_heap.
+		So, we simply remove the element here. */
+		UT_LIST_REMOVE(view_list, trx_sys->view_list, prev_view);
+	}
+
+	ut_a(UT_LIST_GET_LEN(trx_sys->trx_list) == 0);
+	ut_a(UT_LIST_GET_LEN(trx_sys->rseg_list) == 0);
+	ut_a(UT_LIST_GET_LEN(trx_sys->view_list) == 0);
+	ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
+
+	mem_free(trx_sys);
+
+	trx_sys = NULL;
+	mutex_exit(&kernel_mutex);
+}
 #endif /* !UNIV_HOTBACKUP */

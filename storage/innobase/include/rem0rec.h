@@ -19,6 +19,9 @@ if and only if the record is the first user record on a non-leaf
 B-tree page that is the leftmost page on its level
 (PAGE_LEVEL is nonzero and FIL_PAGE_PREV is FIL_NULL). */
 #define REC_INFO_MIN_REC_FLAG	0x10UL
+/* The deleted flag in info bits */
+#define REC_INFO_DELETED_FLAG	0x20UL	/* when bit is set to 1, it means the
+					record has been delete marked */
 
 /* Number of extra bytes in an old-style record,
 in addition to the data and the offsets */
@@ -336,6 +339,19 @@ rec_offs_any_extern(
 /*================*/
 				/* out: TRUE if a field is stored externally */
 	const ulint*	offsets);/* in: array returned by rec_get_offsets() */
+#if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
+/********************************************************
+Determine if the offsets are for a record containing null BLOB pointers. */
+UNIV_INLINE
+const byte*
+rec_offs_any_null_extern(
+/*=====================*/
+					/* out: first field containing
+					a null BLOB pointer,
+					or NULL if none found */
+	rec_t*		rec,		/*!< in: record */
+	const ulint*	offsets);	/*!< in: rec_get_offsets(rec) */
+#endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 /***************************************************************
 Sets the value of the ith field extern storage bit. */
 UNIV_INLINE

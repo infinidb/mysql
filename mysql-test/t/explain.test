@@ -1,5 +1,5 @@
 #
-# Test of different EXPLAIN's
+# Test of different EXPLAINs
 
 --disable_warnings
 drop table if exists t1;
@@ -135,8 +135,40 @@ EXPLAIN EXTENDED SELECT COUNT(a) FROM t1 USE KEY(a);
 
 DROP TABLE t1;
 
+#
+# Bug#45989 memory leak after explain encounters an error in the query
+#
+CREATE TABLE t1(a LONGTEXT);
+INSERT INTO t1 VALUES (repeat('a',@@global.max_allowed_packet));
+INSERT INTO t1 VALUES (repeat('b',@@global.max_allowed_packet));
+--error ER_BAD_FIELD_ERROR
+EXPLAIN SELECT DISTINCT 1 FROM t1,
+        (SELECT DISTINCTROW a AS away FROM t1 GROUP BY a WITH ROLLUP) as d1
+         WHERE t1.a = d1.a;
+DROP TABLE t1;
 
-# End of 5.0 tests.
+--echo #
+--echo # Bug#48295:
+--echo # explain extended crash with subquery and ONLY_FULL_GROUP_BY sql_mode
+--echo #
+
+CREATE TABLE t1 (f1 INT);
+
+SELECT @@session.sql_mode INTO @old_sql_mode;
+SET SESSION sql_mode='ONLY_FULL_GROUP_BY';
+
+# EXPLAIN EXTENDED (with subselect). used to crash.
+# This is actually a valid query for this sql_mode,
+# but it was transformed in such a way that it failed, see
+# Bug#12329653 - EXPLAIN, UNION, PREPARED STATEMENT, CRASH, SQL_FULL_GROUP_BY
+EXPLAIN EXTENDED SELECT 1 FROM t1
+                          WHERE f1 > ALL( SELECT t.f1 FROM t1,t1 AS t );
+
+SET SESSION sql_mode=@old_sql_mode;
+
+DROP TABLE t1;
+
+--echo End of 5.0 tests.
 
 --echo #
 --echo # Bug#37870: Usage of uninitialized value caused failed assertion.
@@ -155,5 +187,82 @@ EXPLAIN SELECT OUTR.dt FROM t1 AS OUTR WHERE OUTR.dt IN ( SELECT INNR.dt FROM t2
 flush tables;
 SELECT OUTR.dt FROM t1 AS OUTR WHERE OUTR.dt IN ( SELECT INNR.dt FROM t2 AS INNR WHERE OUTR.t < '2005-11-13 7:41:31' );
 drop tables t1, t2;
+
+--echo #
+--echo # Bug#47669: Query showed by EXPLAIN EXTENDED gives different result from original query
+--echo #
+
+CREATE TABLE t1 (c int);
+INSERT INTO t1 VALUES (NULL);
+CREATE TABLE t2 (d int);
+INSERT INTO t2 VALUES (NULL), (0);
+EXPLAIN EXTENDED SELECT (SELECT 1 FROM t2 WHERE d = c) FROM t1;
+DROP TABLE t1, t2;
+
+
+--echo #
+--echo # Bug #48419: another explain crash..
+--echo #
+
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (b BLOB, KEY b(b(100)));
+INSERT INTO t2 VALUES ('1'), ('2'), ('3');
+
+FLUSH TABLES;
+
+EXPLAIN SELECT 1 FROM t1 WHERE a = (SELECT 1 FROM t1 t JOIN t2 WHERE b <= 1 AND t.a);
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug #48573: difference of index selection between rpm binary and
+--echo #             .tar.gz, windows vs linux..
+--echo #
+
+CREATE TABLE t1(c1 INT, c2 INT, c4 INT, c5 INT, KEY(c2, c5), KEY(c2, c4, c5));
+INSERT INTO t1 VALUES(4, 1, 1, 1);
+INSERT INTO t1 VALUES(3, 1, 1, 1);
+INSERT INTO t1 VALUES(2, 1, 1, 1);
+INSERT INTO t1 VALUES(1, 1, 1, 1);
+
+EXPLAIN SELECT c1 FROM t1 WHERE c2 = 1 AND c4 = 1 AND c5 = 1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#56814 Explain + subselect + fulltext crashes server
+--echo #
+
+CREATE TABLE t1(f1 VARCHAR(6) NOT NULL,
+FULLTEXT KEY(f1),UNIQUE(f1));
+INSERT INTO t1 VALUES ('test');
+
+EXPLAIN SELECT 1 FROM t1
+WHERE 1 > ALL((SELECT 1 FROM t1 JOIN t1 a ON (MATCH(t1.f1) AGAINST (""))
+WHERE t1.f1 GROUP BY t1.f1));
+
+PREPARE stmt FROM
+'EXPLAIN SELECT 1 FROM t1
+ WHERE 1 > ALL((SELECT 1 FROM t1 RIGHT OUTER JOIN t1 a
+ ON (MATCH(t1.f1) AGAINST (""))
+ WHERE t1.f1 GROUP BY t1.f1))';
+
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+
+PREPARE stmt FROM
+'EXPLAIN SELECT 1 FROM t1
+ WHERE 1 > ALL((SELECT 1 FROM t1 JOIN t1 a
+ ON (MATCH(t1.f1) AGAINST (""))
+ WHERE t1.f1 GROUP BY t1.f1))';
+
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+
+DROP TABLE t1;
 
 --echo End of 5.1 tests.

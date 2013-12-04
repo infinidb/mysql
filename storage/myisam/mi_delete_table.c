@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2001, 2004, 2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +12,49 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   deletes a table
 */
 
 #include "fulltext.h"
+
+
+/**
+  Remove MyISAM data/index file safely
+
+  @details
+    If name is a symlink and file it is pointing to is not in
+    data directory, file is also removed.
+
+  @param name    file to remove
+  
+  @returns
+    0 on success or my_errno on failure
+*/
+
+static int _mi_safe_delete_file(const char *name)
+{
+  DBUG_ENTER("_mi_safe_delete_file");
+  if (my_is_symlink(name) && (*myisam_test_invalid_symlink)(name))
+  {
+    /*
+      Symlink is pointing to file in data directory.
+      Remove symlink, keep file.
+    */
+    if (my_delete(name, MYF(MY_WME)))
+      DBUG_RETURN(my_errno);
+  }
+  else
+  {
+    if (my_delete_with_symlink(name, MYF(MY_WME)))
+      DBUG_RETURN(my_errno);
+  }
+  DBUG_RETURN(0);
+}
+
 
 int mi_delete_table(const char *name)
 {
@@ -58,12 +95,12 @@ int mi_delete_table(const char *name)
 #endif /* USE_RAID */
 
   fn_format(from,name,"",MI_NAME_IEXT,MY_UNPACK_FILENAME|MY_APPEND_EXT);
-  if (my_delete_with_symlink(from, MYF(MY_WME)))
+  if (_mi_safe_delete_file(from))
     DBUG_RETURN(my_errno);
   fn_format(from,name,"",MI_NAME_DEXT,MY_UNPACK_FILENAME|MY_APPEND_EXT);
 #ifdef USE_RAID
   if (raid_type)
     DBUG_RETURN(my_raid_delete(from, raid_chunks, MYF(MY_WME)) ? my_errno : 0);
 #endif
-  DBUG_RETURN(my_delete_with_symlink(from, MYF(MY_WME)) ? my_errno : 0);
+  DBUG_RETURN(_mi_safe_delete_file(from));
 }

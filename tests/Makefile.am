@@ -1,19 +1,19 @@
-# Copyright (C) 2000-2006 MySQL AB
+# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 #
-# This library is free software; you can redistribute it and/or
+# This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
 # License as published by the Free Software Foundation; version 2
 # of the License.
 #
-# This library is distributed in the hope that it will be useful,
+# This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # Library General Public License for more details.
 #
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-# MA 02111-1307, USA
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
 
 ## Process this file with automake to create Makefile.in
 
@@ -32,6 +32,7 @@ EXTRA_DIST =		auto_increment.res auto_increment.tst \
 			grant.pl grant.res test_delayed_insert.pl \
 			pmail.pl mail_to_db.pl table_types.pl \
 			myisam-big-rows.tst \
+			mysql_client_fw.c \
 			CMakeLists.txt
 
 bin_PROGRAMS =		mysql_client_test
@@ -46,6 +47,7 @@ LDADD =			@CLIENT_EXTRA_LDFLAGS@ \
 mysql_client_test_LDADD= $(LDADD) $(CXXLDFLAGS)
 mysql_client_test_SOURCES= mysql_client_test.c\
 			$(top_srcdir)/mysys/my_memmem.c
+mysql_client_test.o:	mysql_client_fw.c
 
 insert_test_SOURCES=       insert_test.c
 select_test_SOURCES=       select_test.c

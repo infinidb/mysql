@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -63,8 +63,8 @@ protected:
     word32          buffLen_;   // in bytes
     HashLengthType  loLen_;     // length in bytes
     HashLengthType  hiLen_;     // length in bytes
-    word32  digest_[MaxDigestSz];
-    word32  buffer_[MaxBufferSz / sizeof(word32)];
+    word32          digest_[MaxDigestSz];
+    word32          buffer_[MaxBufferSz / sizeof(word32)];
 
     virtual void Transform() = 0;
 

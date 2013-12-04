@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* key handling functions */
 
@@ -296,23 +298,17 @@ int _mi_prefix_search(MI_INFO *info, register MI_KEYDEF *keyinfo, uchar *page,
     flag is the value returned by ha_key_cmp and as treated as final
   */
   int flag=0, my_flag=-1;
-  uint nod_flag, length, len, matched, cmplen, kseg_len;
-  uint prefix_len,suffix_len;
-  int key_len_skip, seg_len_pack, key_len_left;
+  uint nod_flag, UNINIT_VAR(length), len, matched, cmplen, kseg_len;
+  uint UNINIT_VAR(prefix_len), suffix_len;
+  int key_len_skip, UNINIT_VAR(seg_len_pack), key_len_left;
   uchar *end, *kseg, *vseg;
   uchar *sort_order=keyinfo->seg->charset->sort_order;
   uchar tt_buff[MI_MAX_KEY_BUFF+2], *t_buff=tt_buff+2;
-  uchar *saved_from, *saved_to, *saved_vseg;
+  uchar *UNINIT_VAR(saved_from), *UNINIT_VAR(saved_to);
+  uchar *UNINIT_VAR(saved_vseg);
   uint  saved_length=0, saved_prefix_len=0;
   uint  length_pack;
   DBUG_ENTER("_mi_prefix_search");
-
-  LINT_INIT(length);
-  LINT_INIT(prefix_len);
-  LINT_INIT(seg_len_pack);
-  LINT_INIT(saved_from);
-  LINT_INIT(saved_to);
-  LINT_INIT(saved_vseg);
 
   t_buff[0]=0;                                  /* Avoid bugs */
   end= page+mi_getint(page);
@@ -821,7 +817,7 @@ uint _mi_get_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
 	    DBUG_PRINT("error",
                        ("Found too long null packed key: %u of %u at 0x%lx",
                         length, keyseg->length, (long) *page_pos));
-	    DBUG_DUMP("key",(char*) *page_pos,16);
+	    DBUG_DUMP("key", *page_pos, 16);
             mi_print_error(keyinfo->share, HA_ERR_CRASHED);
 	    my_errno=HA_ERR_CRASHED;
 	    return 0;
@@ -878,7 +874,7 @@ uint _mi_get_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
       {
         DBUG_PRINT("error",("Found too long packed key: %u of %u at 0x%lx",
                             length, keyseg->length, (long) *page_pos));
-        DBUG_DUMP("key",(char*) *page_pos,16);
+        DBUG_DUMP("key", *page_pos, 16);
         mi_print_error(keyinfo->share, HA_ERR_CRASHED);
         my_errno=HA_ERR_CRASHED;
         return 0;                               /* Error */
@@ -950,7 +946,7 @@ uint _mi_get_binary_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
       DBUG_PRINT("error",
                  ("Found too long binary packed key: %u of %u at 0x%lx",
                   length, keyinfo->maxlength, (long) *page_pos));
-      DBUG_DUMP("key",(char*) *page_pos,16);
+      DBUG_DUMP("key", *page_pos, 16);
       mi_print_error(keyinfo->share, HA_ERR_CRASHED);
       my_errno=HA_ERR_CRASHED;
       DBUG_RETURN(0);                                 /* Wrong key */

@@ -1,4 +1,5 @@
-/* Copyright (C) 2001-2006 MySQL AB & Sasha
+/*
+   Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @file
@@ -559,7 +561,12 @@ HOSTS";
 	goto err;
       }
       si->server_id = log_server_id;
-      my_hash_insert(&slave_list, (uchar*)si);
+      if (my_hash_insert(&slave_list, (uchar*)si))
+      {
+        error= "the slave is out of memory";
+        pthread_mutex_unlock(&LOCK_slave_list);
+        goto err;
+      }
     }
     strmake(si->host, row[1], sizeof(si->host)-1);
     si->port = atoi(row[port_ind]);
@@ -638,9 +645,11 @@ err:
   if (recovery_captain)
     mysql_close(recovery_captain);
   delete thd;
+
+  DBUG_LEAVE;                                   // Must match DBUG_ENTER()
   my_thread_end();
   pthread_exit(0);
-  DBUG_RETURN(0);
+  return 0;                                     // Avoid compiler warnings
 }
 #endif
 
@@ -969,7 +978,7 @@ bool load_master_data(THD* thd)
           host was specified; there could have been a problem when replication
           started, which led to relay log's IO_CACHE to not be inited.
         */
-        if (flush_master_info(active_mi, 0))
+        if (flush_master_info(active_mi, FALSE, FALSE))
           sql_print_error("Failed to flush master info file");
       }
       mysql_free_result(master_status_res);

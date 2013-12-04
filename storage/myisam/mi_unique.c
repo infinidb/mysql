@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Functions to check if a row is unique */
 
@@ -56,7 +58,7 @@ my_bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,
     if (_mi_search_next(info,info->s->keyinfo+def->key, info->lastkey,
 			MI_UNIQUE_HASH_LENGTH, SEARCH_BIGGER,
 			info->s->state.key_root[def->key]) ||
-	bcmp((char*) info->lastkey, (char*) key_buff, MI_UNIQUE_HASH_LENGTH))
+	memcmp(info->lastkey, key_buff, MI_UNIQUE_HASH_LENGTH))
     {
       info->page_changed=1;			/* Can't optimize read next */
       info->lastpos=lastpos;

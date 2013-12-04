@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -36,6 +36,9 @@ Created 1/8/1996 Heikki Tuuri
 #ifndef UNIV_HOTBACKUP
 # include "lock0lock.h"
 #endif /* !UNIV_HOTBACKUP */
+#ifdef UNIV_BLOB_DEBUG
+# include "ut0rbt.h"
+#endif /* UNIV_BLOB_DEBUG */
 
 #define	DICT_HEAP_SIZE		100	/*!< initial memory heap size when
 					creating a table or index object */
@@ -59,7 +62,7 @@ dict_mem_table_create(
 	mem_heap_t*	heap;
 
 	ut_ad(name);
-	ut_a(!(flags & (~0 << DICT_TF_BITS)));
+	ut_a(!(flags & (~0 << DICT_TF2_BITS)));
 
 	heap = mem_heap_create(DICT_HEAP_SIZE);
 
@@ -68,7 +71,8 @@ dict_mem_table_create(
 	table->heap = heap;
 
 	table->flags = (unsigned int) flags;
-	table->name = mem_heap_strdup(heap, name);
+	table->name = ut_malloc(strlen(name) + 1);
+	memcpy(table->name, name, strlen(name) + 1);
 	table->space = (unsigned int) space;
 	table->n_cols = (unsigned int) (n_cols + DATA_N_SYS_COLS);
 
@@ -106,6 +110,7 @@ dict_mem_table_free(
 #ifndef UNIV_HOTBACKUP
 	mutex_free(&(table->autoinc_mutex));
 #endif /* UNIV_HOTBACKUP */
+	ut_free(table->name);
 	mem_heap_free(table->heap);
 }
 
@@ -314,6 +319,12 @@ dict_mem_index_free(
 {
 	ut_ad(index);
 	ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
+#ifdef UNIV_BLOB_DEBUG
+	if (index->blobs) {
+		mutex_free(&index->blobs_mutex);
+		rbt_free(index->blobs);
+	}
+#endif /* UNIV_BLOB_DEBUG */
 
 	mem_heap_free(index->heap);
 }

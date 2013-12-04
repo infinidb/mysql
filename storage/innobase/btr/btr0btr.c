@@ -464,6 +464,16 @@ btr_page_free_low(
 	page_no = buf_frame_get_page_no(page);
 
 	fseg_free_page(seg_header, space, page_no, mtr);
+
+	/* The page was marked free in the allocation bitmap, but it
+	should remain buffer-fixed until mtr_commit(mtr) or until it
+	is explicitly freed from the mini-transaction. */
+	ut_ad(mtr_memo_contains(mtr, buf_block_align(page),
+				MTR_MEMO_PAGE_X_FIX));
+	/* TODO: Discard any operations on the page from the redo log
+	and remove the block from the flush list and the buffer pool.
+	This would free up buffer pool earlier and reduce writes to
+	both the tablespace and the redo log. */
 }
 
 /******************************************************************
@@ -479,6 +489,7 @@ btr_page_free(
 {
 	ulint		level;
 
+	ut_ad(fil_page_get_type(page) == FIL_PAGE_INDEX);
 	ut_ad(mtr_memo_contains(mtr, buf_block_align(page),
 				MTR_MEMO_PAGE_X_FIX));
 	level = btr_page_get_level(page, mtr);
@@ -610,7 +621,7 @@ btr_page_get_father_for_rec(
 		      "InnoDB: corruption. If the crash happens at "
 		      "the database startup, see\n"
 		      "InnoDB: http://dev.mysql.com/doc/refman/5.1/en/"
-		      "forcing-recovery.html about\n"
+		      "forcing-innodb-recovery.html about\n"
 		      "InnoDB: forcing recovery. "
 		      "Then dump + drop + reimport.\n", stderr);
 	}
@@ -709,8 +720,15 @@ btr_create(
 	} else {
 		/* It is a non-ibuf tree: create a file segment for leaf
 		pages */
-		fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF,
-			    mtr);
+		if (!fseg_create(space, page_no,
+				 PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
+			/* Not enough space for new segment, free root
+			segment before return. */
+			btr_free_root(space, page_no, mtr);
+
+			return(FIL_NULL);
+		}
+
 		/* The fseg create acquires a second latch on the page,
 		therefore we must declare it: */
 #ifdef UNIV_SYNC_DEBUG
@@ -1955,6 +1973,7 @@ btr_lift_page_up(
 	ulint		root_page_no;
 	ulint		ancestors;
 	ulint		i;
+	ibool		lift_father_up	= FALSE;
 
 	ut_ad(btr_page_get_prev(page, mtr) == FIL_NULL);
 	ut_ad(btr_page_get_next(page, mtr) == FIL_NULL);
@@ -1989,6 +2008,27 @@ btr_lift_page_up(
 		pages[ancestors++] = iter_page;
 	}
 
+	if (ancestors > 1 && page_level == 0) {
+		/* The father page also should be the only on its level (not
+		root). We should lift up the father page at first.
+		Because the leaf page should be lifted up only for root page.
+		The freeing page is based on page_level (==0 or !=0)
+		to choose segment. If the page_level is changed ==0 from !=0,
+		later freeing of the page doesn't find the page allocation
+		to be freed.*/
+
+		lift_father_up = TRUE;
+		page = father_page;
+		page_level = btr_page_get_level(page, mtr);
+
+		ut_ad(btr_page_get_prev(page, mtr) == FIL_NULL);
+		ut_ad(btr_page_get_next(page, mtr) == FIL_NULL);
+		ut_ad(mtr_memo_contains(mtr, buf_block_align(page),
+					MTR_MEMO_PAGE_X_FIX));
+
+		father_page = pages[1];
+	}
+
 	btr_search_drop_page_hash_index(page);
 
 	/* Make the father empty */
@@ -2000,7 +2040,7 @@ btr_lift_page_up(
 	lock_update_copy_and_discard(father_page, page);
 
 	/* Go upward to root page, decreasing levels by one. */
-	for (i = 0; i < ancestors; i++) {
+	for (i = lift_father_up ? 1 : 0; i < ancestors; i++) {
 		iter_page = pages[i];
 
 		ut_ad(btr_page_get_level(iter_page, mtr) == (page_level + 1));
@@ -2053,7 +2093,6 @@ btr_compress(
 	ulint		n_recs;
 	ulint		max_ins_size;
 	ulint		max_ins_size_reorg;
-	ulint		level;
 	ulint		comp;
 
 	page = btr_cur_get_page(cursor);
@@ -2065,7 +2104,6 @@ btr_compress(
 				MTR_MEMO_X_LOCK));
 	ut_ad(mtr_memo_contains(mtr, buf_block_align(page),
 				MTR_MEMO_PAGE_X_FIX));
-	level = btr_page_get_level(page, mtr);
 	space = dict_index_get_space(index);
 
 	left_page_no = btr_page_get_prev(page, mtr);

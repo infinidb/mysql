@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Return error-text for system error messages and handler messages */
 
@@ -27,12 +29,12 @@
 #include "../storage/ndb/src/kernel/error/ndbd_exit_codes.c"
 #include "../storage/ndb/include/mgmapi/mgmapi_error.h"
 #endif
+#include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 static my_bool verbose, print_all_codes;
 
 #include "../include/my_base.h"
 #include "../mysys/my_handler_errors.h"
-#include "../include/my_handler.h"
 
 #ifdef WITH_NDBCLUSTER_STORAGE_ENGINE
 static my_bool ndb_code;
@@ -60,18 +62,18 @@ static struct my_option my_long_options[] =
   {"info", 'I', "Synonym for --help.",  0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef WITH_NDBCLUSTER_STORAGE_ENGINE
-  {"ndb", 257, "Ndbcluster storage engine specific error codes.",  (uchar**) &ndb_code,
-   (uchar**) &ndb_code, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"ndb", 257, "Ndbcluster storage engine specific error codes.", &ndb_code,
+   &ndb_code, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
 #ifdef HAVE_SYS_ERRLIST
   {"all", 'a', "Print all the error messages and the number.",
-   (uchar**) &print_all_codes, (uchar**) &print_all_codes, 0, GET_BOOL, NO_ARG,
+   &print_all_codes, &print_all_codes, 0, GET_BOOL, NO_ARG,
    0, 0, 0, 0, 0, 0},
 #endif
   {"silent", 's', "Only print the error message.", 0, 0, 0, GET_NO_ARG, NO_ARG,
    0, 0, 0, 0, 0, 0},
-  {"verbose", 'v', "Print error code and message (default).", (uchar**) &verbose,
-   (uchar**) &verbose, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
+  {"verbose", 'v', "Print error code and message (default).", &verbose,
+   &verbose, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
   {"version", 'V', "Displays version information and exits.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
@@ -114,7 +116,7 @@ static void print_version(void)
 static void usage(void)
 {
   print_version();
-  puts("This software comes with ABSOLUTELY NO WARRANTY. This is free software,\nand you are welcome to modify and redistribute it under the GPL license\n");
+  puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   printf("Print a description for a system error code or a MySQL error code.\n");
   printf("If you want to get the error for a negative error code, you should use\n-- before the first error code to tell perror that there was no more options.\n\n");
   printf("Usage: %s [OPTIONS] [ERRORCODE [ERRORCODE...]]\n",my_progname);
@@ -183,6 +185,36 @@ static const char *get_ha_error_msg(int code)
       return ha_err_ptr->msg;
   return NullS;
 }
+
+
+/*
+  Register handler error messages for usage with my_error()
+
+  NOTES
+    This is safe to call multiple times as my_error_register()
+    will ignore calls to register already registered error numbers.
+*/
+void my_handler_error_register(void)
+{
+  /*
+    If you got compilation error here about compile_time_assert array, check
+    that every HA_ERR_xxx constant has a corresponding error message in
+    handler_error_messages[] list (check mysys/ma_handler_errors.h and
+    include/my_base.h).
+  */
+  compile_time_assert(HA_ERR_FIRST + array_elements(handler_error_messages) ==
+                      HA_ERR_LAST + 1);
+  my_error_register(handler_error_messages, HA_ERR_FIRST,
+                    HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
+}
+
+
+void my_handler_error_unregister(void)
+{
+  my_error_unregister(HA_ERR_FIRST,
+                      HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
+}
+
 
 
 #if defined(__WIN__)

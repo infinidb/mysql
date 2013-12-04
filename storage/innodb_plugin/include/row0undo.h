@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -87,10 +87,6 @@ that index record. */
 enum undo_exec {
 	UNDO_NODE_FETCH_NEXT = 1,	/*!< we should fetch the next
 					undo log record */
-	UNDO_NODE_PREV_VERS,		/*!< the roll ptr to previous
-					version of a row is stored in
-					node, and undo should be done
-					based on it */
 	UNDO_NODE_INSERT,		/*!< undo a fresh insert of a
 					row to a table */
 	UNDO_NODE_MODIFY		/*!< undo a modify operation
@@ -108,9 +104,6 @@ struct undo_node_struct{
 	undo_no_t	undo_no;/*!< undo number of the record */
 	ulint		rec_type;/*!< undo log record type: TRX_UNDO_INSERT_REC,
 				... */
-	roll_ptr_t	new_roll_ptr;
-				/*!< roll ptr to restore to clustered index
-				record */
 	trx_id_t	new_trx_id; /*!< trx id to restore to clustered index
 				record */
 	btr_pcur_t	pcur;	/*!< persistent cursor used in searching the

@@ -1,13 +1,21 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, 2009, Google Inc.
+Copyright (c) 2009, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
 briefly in the InnoDB documentation. The contributions by Google are
 incorporated with their permission, and subject to the conditions contained in
 the file COPYING.Google.
+
+Portions of this file contain modifications contributed and copyrighted
+by Percona Inc.. Those modifications are
+gratefully acknowledged and are described briefly in the InnoDB
+documentation. The contributions by Percona Inc. are incorporated with
+their permission, and subject to the conditions contained in the file
+COPYING.Percona.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -18,36 +26,10 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
-/***********************************************************************
-
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
-Copyright (c) 2009, Percona Inc.
-
-Portions of this file contain modifications contributed and copyrighted
-by Percona Inc.. Those modifications are
-gratefully acknowledged and are described briefly in the InnoDB
-documentation. The contributions by Percona Inc. are incorporated with
-their permission, and subject to the conditions contained in the file
-COPYING.Percona.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
-Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-
-***********************************************************************/
 
 /**************************************************//**
 @file include/srv0srv.h
@@ -161,6 +143,7 @@ extern ulint	srv_mem_pool_size;
 extern ulint	srv_lock_table_size;
 
 extern ulint	srv_n_file_io_threads;
+extern my_bool	srv_random_read_ahead;
 extern ulong	srv_read_ahead_threshold;
 extern ulint	srv_n_read_io_threads;
 extern ulint	srv_n_write_io_threads;
@@ -171,6 +154,11 @@ extern ulong    srv_io_capacity;
 capacity. PCT_IO(5) -> returns the number of IO operations that
 is 5% of the max where max is srv_io_capacity.  */
 #define PCT_IO(p) ((ulong) (srv_io_capacity * ((double) p / 100.0)))
+
+/* The "innodb_stats_method" setting, decides how InnoDB is going
+to treat NULL value when collecting statistics. It is not defined
+as enum type because the configure option takes unsigned integer type. */
+extern ulong	srv_innodb_stats_method;
 
 #ifdef UNIV_LOG_ARCHIVE
 extern ibool	srv_log_archive_on;
@@ -227,7 +215,8 @@ extern ibool	srv_print_innodb_tablespace_monitor;
 extern ibool	srv_print_verbose_log;
 extern ibool	srv_print_innodb_table_monitor;
 
-extern ibool	srv_lock_timeout_and_monitor_active;
+extern ibool	srv_lock_timeout_active;
+extern ibool	srv_monitor_active;
 extern ibool	srv_error_monitor_active;
 
 extern ulong	srv_n_spin_wait_rounds;
@@ -255,7 +244,12 @@ extern	ibool	srv_print_latch_waits;
 
 extern ulint	srv_activity_count;
 extern ulint	srv_fatal_semaphore_wait_threshold;
+#define SRV_SEMAPHORE_WAIT_EXTENSION	7200
 extern ulint	srv_dml_needed_delay;
+
+#ifdef UNIV_DEBUG
+extern my_bool	srv_purge_view_update_only_debug;
+#endif /* UNIV_DEBUG */
 
 extern mutex_t*	kernel_mutex_temp;/* mutex protecting the server, trx structs,
 				query threads, and lock table: we allocate
@@ -315,10 +309,6 @@ extern ulint srv_buf_pool_flushed;
 /** Number of buffer pool reads that led to the
 reading of a disk page */
 extern ulint srv_buf_pool_reads;
-/** Number of sequential read-aheads */
-extern ulint srv_read_ahead_seq;
-/** Number of random read-aheads */
-extern ulint srv_read_ahead_rnd;
 
 /** Status variables to be passed to MySQL */
 typedef struct export_var_struct export_struc;
@@ -384,6 +374,19 @@ enum {
 					in connection with recovery */
 };
 
+/* Alternatives for srv_innodb_stats_method, which could be changed by
+setting innodb_stats_method */
+enum srv_stats_method_name_enum {
+	SRV_STATS_NULLS_EQUAL,		/* All NULL values are treated as
+					equal. This is the default setting
+					for innodb_stats_method */
+	SRV_STATS_NULLS_UNEQUAL,	/* All NULL values are treated as
+					NOT equal. */
+	SRV_STATS_NULLS_IGNORED		/* NULL values are ignored */
+};
+
+typedef enum srv_stats_method_name_enum		srv_stats_method_name_t;
+
 #ifndef UNIV_HOTBACKUP
 /** Types of threads existing in the system. */
 enum srv_thread_type {
@@ -415,7 +418,7 @@ void
 srv_init(void);
 /*==========*/
 /*********************************************************************//**
-Frees the OS fast mutex created in srv_boot(). */
+Frees the data structures created in srv_init(). */
 UNIV_INTERN
 void
 srv_free(void);
@@ -544,15 +547,23 @@ srv_release_mysql_thread_if_suspended(
 				MySQL OS thread	 */
 /*********************************************************************//**
 A thread which wakes up threads whose lock wait may have lasted too long.
-This also prints the info output by various InnoDB monitors.
 @return	a dummy parameter */
 UNIV_INTERN
 os_thread_ret_t
-srv_lock_timeout_and_monitor_thread(
-/*================================*/
+srv_lock_timeout_thread(
+/*====================*/
 	void*	arg);	/*!< in: a dummy parameter required by
 			os_thread_create */
 /*********************************************************************//**
+A thread which prints the info output by various InnoDB monitors.
+@return	a dummy parameter */
+UNIV_INTERN
+os_thread_ret_t
+srv_monitor_thread(
+/*===============*/
+	void*	arg);	/*!< in: a dummy parameter required by
+			os_thread_create */
+/*************************************************************************
 A thread which prints warnings about semaphore waits which have lasted
 too long. These can be used to track bugs which cause hangs.
 @return	a dummy parameter */
@@ -563,12 +574,15 @@ srv_error_monitor_thread(
 	void*	arg);	/*!< in: a dummy parameter required by
 			os_thread_create */
 /******************************************************************//**
-Outputs to a file the output of the InnoDB Monitor. */
+Outputs to a file the output of the InnoDB Monitor.
+@return FALSE if not all information printed
+due to failure to obtain necessary mutex */
 UNIV_INTERN
-void
+ibool
 srv_printf_innodb_monitor(
 /*======================*/
 	FILE*	file,		/*!< in: output stream */
+	ibool	nowait,		/*!< in: whether to wait for kernel mutex */
 	ulint*	trx_start,	/*!< out: file position of the start of
 				the list of active transactions */
 	ulint*	trx_end);	/*!< out: file position of the end of
@@ -605,13 +619,14 @@ struct export_var_struct{
 #ifdef UNIV_DEBUG
 	ulint innodb_buffer_pool_pages_latched;	/*!< Latched pages */
 #endif /* UNIV_DEBUG */
-	ulint innodb_buffer_pool_read_requests;	/*!< buf_pool->n_page_gets */
+	ulint innodb_buffer_pool_read_requests;	/*!< buf_pool->stat.n_page_gets */
 	ulint innodb_buffer_pool_reads;		/*!< srv_buf_pool_reads */
 	ulint innodb_buffer_pool_wait_free;	/*!< srv_buf_pool_wait_free */
 	ulint innodb_buffer_pool_pages_flushed;	/*!< srv_buf_pool_flushed */
 	ulint innodb_buffer_pool_write_requests;/*!< srv_buf_pool_write_requests */
-	ulint innodb_buffer_pool_read_ahead_seq;/*!< srv_read_ahead_seq */
 	ulint innodb_buffer_pool_read_ahead_rnd;/*!< srv_read_ahead_rnd */
+	ulint innodb_buffer_pool_read_ahead;	/*!< srv_read_ahead */
+	ulint innodb_buffer_pool_read_ahead_evicted;/*!< srv_read_ahead evicted*/
 	ulint innodb_dblwr_pages_written;	/*!< srv_dblwr_pages_written */
 	ulint innodb_dblwr_writes;		/*!< srv_dblwr_writes */
 	ibool innodb_have_atomic_builtins;	/*!< HAVE_ATOMIC_BUILTINS */
@@ -623,9 +638,9 @@ struct export_var_struct{
 	ulint innodb_os_log_pending_writes;	/*!< srv_os_log_pending_writes */
 	ulint innodb_os_log_pending_fsyncs;	/*!< fil_n_pending_log_flushes */
 	ulint innodb_page_size;			/*!< UNIV_PAGE_SIZE */
-	ulint innodb_pages_created;		/*!< buf_pool->n_pages_created */
-	ulint innodb_pages_read;		/*!< buf_pool->n_pages_read */
-	ulint innodb_pages_written;		/*!< buf_pool->n_pages_written */
+	ulint innodb_pages_created;		/*!< buf_pool->stat.n_pages_created */
+	ulint innodb_pages_read;		/*!< buf_pool->stat.n_pages_read */
+	ulint innodb_pages_written;		/*!< buf_pool->stat.n_pages_written */
 	ulint innodb_row_lock_waits;		/*!< srv_n_lock_wait_count */
 	ulint innodb_row_lock_current_waits;	/*!< srv_n_lock_wait_current_count */
 	ib_int64_t innodb_row_lock_time;	/*!< srv_n_lock_wait_time
@@ -639,6 +654,11 @@ struct export_var_struct{
 	ulint innodb_rows_inserted;		/*!< srv_n_rows_inserted */
 	ulint innodb_rows_updated;		/*!< srv_n_rows_updated */
 	ulint innodb_rows_deleted;		/*!< srv_n_rows_deleted */
+#ifdef UNIV_DEBUG
+	ulint innodb_purge_trx_id_age;		/*!< max_trx_id - purged trx_id */
+	ulint innodb_purge_view_trx_id_age;	/*!< rw_max_trx_id
+						- purged view's min trx_id */
+#endif /* UNIV_DEBUG */
 };
 
 /** The server system struct */

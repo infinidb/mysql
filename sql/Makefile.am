@@ -1,4 +1,4 @@
-# Copyright (C) 2000-2006 MySQL AB
+# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,8 +11,8 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- 
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
 # Copyright (C) 2013 Calpont Corp.
 
 #called from the top level Makefile
@@ -43,7 +43,6 @@ mysqld_DEPENDENCIES=	@mysql_plugin_libs@ $(SUPPORTING_LIBS) libndb.la
 LDADD = $(SUPPORTING_LIBS) @ZLIB_LIBS@ @NDB_SCI_LIBS@
 mysqld_LDADD =		libndb.la \
 			@MYSQLD_EXTRA_LDFLAGS@ \
-			@pstack_libs@ \
 			@mysql_plugin_libs@ \
 			$(LDADD)  $(CXXLDFLAGS) $(WRAPLIBS) @LIBDL@ \
 			$(yassl_libs) $(openssl_libs) @MYSQLD_EXTRA_LIBS@
@@ -60,6 +59,7 @@ noinst_HEADERS =	item.h item_func.h item_sum.h item_cmpfunc.h \
 			ha_ndbcluster.h ha_ndbcluster_cond.h \
 			ha_ndbcluster_binlog.h ha_ndbcluster_tables.h \
 			ha_partition.h rpl_constants.h \
+			debug_sync.h \
 			opt_range.h protocol.h rpl_tblmap.h rpl_utility.h \
 			rpl_reporting.h \
 			log.h sql_show.h rpl_rli.h rpl_mi.h \
@@ -73,6 +73,7 @@ noinst_HEADERS =	item.h item_func.h item_sum.h item_cmpfunc.h \
 			tztime.h my_decimal.h\
 			sp_head.h sp_pcontext.h sp_rcontext.h sp.h sp_cache.h \
 			parse_file.h sql_view.h	sql_trigger.h \
+			mem_root_array.h \
 			sql_array.h sql_cursor.h events.h scheduler.h \
                         event_db_repository.h event_queue.h \
 			sql_plugin.h authors.h event_parse_data.h \
@@ -106,6 +107,8 @@ mysqld_SOURCES =	sql_lex.cc sql_handler.cc sql_partition.cc \
 			discover.cc time.cc opt_range.cc opt_sum.cc \
 		   	records.cc filesort.cc handler.cc \
 		        ha_partition.cc \
+			debug_sync.cc \
+			signal_handler.cc \
 			sql_db.cc sql_table.cc sql_rename.cc sql_crypt.cc \
 			sql_load.cc mf_iocache.cc field_conv.cc sql_show.cc \
 			sql_udf.cc sql_analyse.cc sql_analyse.h sql_cache.cc \
@@ -147,7 +150,7 @@ DEFS =			-DMYSQL_SERVER \
 			-DHAVE_EVENT_SCHEDULER \
 			@DEFS@
 
-BUILT_MAINT_SRC =	sql_yacc.cc sql_yacc.h
+BUILT_MAINT_SRC =	sql_yacc.cc sql_yacc.$(YACC_HEXT)
 BUILT_SOURCES =		$(BUILT_MAINT_SRC) lex_hash.h link_sources
 EXTRA_DIST =		udf_example.c udf_example.def $(BUILT_MAINT_SRC) \
 			nt_servc.cc nt_servc.h \

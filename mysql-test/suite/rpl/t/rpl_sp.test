@@ -568,9 +568,7 @@ connection master;
 
 # Final inspection which verifies how all statements of this test file
 # were written to the binary log.
---replace_column 2 # 5 #
---replace_regex /table_id: [0-9]+/table_id: #/
-show binlog events in 'master-bin.000001' from 106;
+--source include/show_binlog_events.inc
 
 
 # Restore log_bin_trust_function_creators to its original value.
@@ -645,3 +643,4 @@ drop function mysqltestbug36570_f1;
 
 # Cleanup
 sync_slave_with_master;
+--source include/rpl_end.inc

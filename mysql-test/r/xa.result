@@ -74,6 +74,23 @@ ERROR XA102: XA_RBDEADLOCK: Transaction branch was rolled back: deadlock was det
 xa rollback 'a','c';
 xa start 'a','c';
 drop table t1;
+#
+# BUG#51342 - more xid crashing
+#
+CREATE TABLE t1(a INT) ENGINE=InnoDB;
+XA START 'x';
+SET SESSION autocommit=0;
+INSERT INTO t1 VALUES(1);
+SET SESSION autocommit=1;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  ACTIVE state
+SELECT @@autocommit;
+@@autocommit
+0
+INSERT INTO t1 VALUES(1);
+XA END 'x';
+XA COMMIT 'x' ONE PHASE;
+DROP TABLE t1;
+SET SESSION autocommit=1;
 End of 5.0 tests
 xa start 'a';
 xa end 'a';
@@ -89,3 +106,28 @@ xa start 'a';
 xa end 'a';
 xa prepare 'a';
 xa commit 'a';
+CREATE TABLE t1(a INT, KEY(a)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(1),(2);
+BEGIN;
+UPDATE t1 SET a=3 WHERE a=1;
+BEGIN;
+UPDATE t1 SET a=4 WHERE a=2;
+UPDATE t1 SET a=5 WHERE a=2;
+UPDATE t1 SET a=5 WHERE a=1;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
+ROLLBACK;
+BEGIN;
+UPDATE t1 SET a=3 WHERE a=1;
+XA START 'xid1';
+UPDATE t1 SET a=4 WHERE a=2;
+UPDATE t1 SET a=5 WHERE a=2;
+UPDATE t1 SET a=5 WHERE a=1;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+XA END 'xid1';
+ERROR XA102: XA_RBDEADLOCK: Transaction branch was rolled back: deadlock was detected
+XA ROLLBACK 'xid1';
+XA START 'xid1';
+XA END 'xid1';
+XA ROLLBACK 'xid1';
+DROP TABLE t1;

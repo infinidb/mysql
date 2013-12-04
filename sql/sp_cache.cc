@@ -1,4 +1,6 @@
-/* Copyright (C) 2002 MySQL AB
+/*
+   Copyright (c) 2003-2008 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #ifdef USE_PRAGMA_IMPLEMENTATION
@@ -36,10 +39,16 @@ public:
   sp_cache();
   ~sp_cache();
 
-  inline void insert(sp_head *sp)
+  /**
+   Inserts a sp_head object into a hash table.
+
+   @returns Success status
+     @return TRUE Failure
+     @return FALSE Success
+  */
+  inline bool insert(sp_head *sp)
   {
-    /* TODO: why don't we check return value? */
-    my_hash_insert(&m_hashtable, (const uchar *)sp);
+    return my_hash_insert(&m_hashtable, (const uchar *)sp);
   }
 
   inline sp_head *lookup(char *name, uint namelen)
@@ -169,8 +178,9 @@ sp_head *sp_cache_lookup(sp_cache **cp, sp_name *name)
     sp_cache_invalidate()
       
   NOTE
-    This is called when a VIEW definition is modifed. We can't destroy sp_head
-    objects here as one may modify VIEW definitions from prelocking-free SPs.
+    This is called when a VIEW definition is created or modified (and in some
+    other contexts). We can't destroy sp_head objects here as one may modify
+    VIEW definitions from prelocking-free SPs.
 */
 
 void sp_cache_invalidate()

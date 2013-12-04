@@ -53,7 +53,6 @@ flush privileges;
 DROP PROCEDURE IF EXISTS sp1;
 --enable_warnings
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user1a, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -75,7 +74,6 @@ USE db_storedproc_1;
 --source suite/funcs_1/include/show_connection.inc
 
 GRANT CREATE ROUTINE ON db_storedproc_1.* TO 'user_1'@'localhost';
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user1b, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -120,7 +118,6 @@ grant create routine on db_storedproc_1.* to 'user_1'@'localhost';
 flush privileges;
 
 #  disconnect default;
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user2, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -152,10 +149,6 @@ USE db_storedproc_1;
 
 drop user 'user_1'@'localhost';
 DROP PROCEDURE sp3;
-# This drop function shouldn't generated a warning as the
-# privileges should have been removed when the user was
-# dropped. Reported as Bug#36544 DROP USER does not remove
-# stored function privileges
 DROP FUNCTION fn1;
 
 
@@ -187,7 +180,6 @@ delimiter ;//
 
 #disconnect default;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user3, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -234,7 +226,6 @@ grant SELECT on db_storedproc_1.* to 'user_2'@'localhost';
 grant execute on db_storedproc_1.* to 'user_2'@'localhost';
 flush privileges;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user5_1, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -258,7 +249,6 @@ delimiter ;//
 
 disconnect user5_1;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user5_2, localhost, user_2, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -365,7 +355,6 @@ GRANT SELECT  ON db_storedproc_1.* TO 'user_2'@'localhost';
 GRANT EXECUTE ON db_storedproc_1.* TO 'user_2'@'localhost';
 FLUSH PRIVILEGES;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user6_1, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -389,7 +378,6 @@ delimiter ;//
 
 disconnect user6_1;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user6_2, localhost, user_2, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -407,7 +395,6 @@ GRANT INSERT  ON db_storedproc_1.* TO 'user_2'@'localhost';
 FLUSH PRIVILEGES;
 disconnect user6_2;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user6_3, localhost, user_2, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 CALL sp3166_s_i();
@@ -422,7 +409,6 @@ CALL sp3166_sel();
 REVOKE SELECT ON db_storedproc_1.* FROM 'user_2'@'localhost';
 FLUSH PRIVILEGES;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user6_4, localhost, user_2, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 --error ER_TABLEACCESS_DENIED_ERROR
@@ -439,7 +425,6 @@ CALL sp3166_s_i();
 REVOKE EXECUTE on db_storedproc_1.* FROM 'user_2'@'localhost';
 FLUSH PRIVILEGES;
 
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (user6_5, localhost, user_2, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 --error ER_PROCACCESS_DENIED_ERROR

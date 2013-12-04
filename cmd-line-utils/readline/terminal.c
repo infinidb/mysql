@@ -18,7 +18,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 #define READLINE_LIBRARY
 
 #if defined (HAVE_CONFIG_H)
@@ -268,7 +268,7 @@ _rl_get_screen_size (tty, ignore_env)
 
 #if !defined (__DJGPP__)
       if (_rl_screenwidth <= 0 && term_string_buffer)
-	_rl_screenwidth = tgetnum ("co");
+	_rl_screenwidth = tgetnum ((char *)"co");
 #endif
     }
 
@@ -284,7 +284,7 @@ _rl_get_screen_size (tty, ignore_env)
 
 #if !defined (__DJGPP__)
       if (_rl_screenheight <= 0 && term_string_buffer)
-	_rl_screenheight = tgetnum ("li");
+	_rl_screenheight = tgetnum ((char *)"li");
 #endif
     }
 
@@ -516,7 +516,7 @@ _rl_init_terminal_io (terminal_name)
   if (!_rl_term_cr)
     _rl_term_cr = "\r";
 
-  _rl_term_autowrap = tgetflag ("am") && tgetflag ("xn");
+  _rl_term_autowrap = tgetflag ((char *)"am") && tgetflag ((char *)"xn");
 
   /* Allow calling application to set default height and width, using
      rl_set_screen_size */
@@ -531,7 +531,7 @@ _rl_init_terminal_io (terminal_name)
 
   /* Check to see if this terminal has a meta key and clear the capability
      variables if there is none. */
-  term_has_meta = (tgetflag ("km") || tgetflag ("MT"));
+  term_has_meta = (tgetflag ((char *)"km") || tgetflag ((char *)"MT"));
   if (!term_has_meta)
     _rl_term_mm = _rl_term_mo = (char *)NULL;
 

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* This file is included by all internal myisam files */
 
@@ -424,6 +426,8 @@ typedef struct st_mi_sort_param
 
 #define get_pack_length(length) ((length) >= 255 ? 3 : 1)
 
+#define portable_sizeof_char_ptr 8
+
 #define MI_MIN_BLOCK_LENGTH	20	/* Because of delete-link */
 #define MI_EXTEND_BLOCK_LENGTH	20	/* Don't use to small record-blocks */
 #define MI_SPLIT_LENGTH	((MI_EXTEND_BLOCK_LENGTH+4)*2)
@@ -437,7 +441,6 @@ typedef struct st_mi_sort_param
 #define MI_MAX_BLOCK_LENGTH	((((ulong) 1 << 24)-1) & (~ (ulong) (MI_DYN_ALIGN_SIZE-1)))
 #define MI_REC_BUFF_OFFSET      ALIGN_SIZE(MI_DYN_DELETE_BLOCK_HEADER+sizeof(uint32))
 
-#define MEMMAP_EXTRA_MARGIN	7	/* Write this as a suffix for file */
 
 #define PACK_TYPE_SELECTED	1	/* Bits in field->pack_type */
 #define PACK_TYPE_SPACE_FIELDS	2
@@ -763,6 +766,7 @@ int mi_open_datafile(MI_INFO *info, MYISAM_SHARE *share, const char *orn_name,
 int mi_open_keyfile(MYISAM_SHARE *share);
 void mi_setup_functions(register MYISAM_SHARE *share);
 my_bool mi_dynmap_file(MI_INFO *info, my_off_t size);
+int mi_munmap_file(MI_INFO *info);
 void mi_remap_file(MI_INFO *info, my_off_t size);
 
     /* Functions needed by mi_check */

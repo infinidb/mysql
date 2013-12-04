@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqlimport\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 09/09/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYSQLIMPORT\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLIMPORT\FR" "1" "09/09/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -39,7 +48,7 @@ SQL statement\&. Most options to
 correspond directly to clauses of
 LOAD DATA INFILE
 syntax\&. See
-Section\ \&12.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
+Section\ \&13.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
 .PP
 Invoke
 \fBmysqlimport\fR
@@ -57,7 +66,7 @@ shell> \fBmysqlimport [\fR\fB\fIoptions\fR\fR\fB] \fR\fB\fIdb_name\fR\fR\fB \fR\
 .PP
 For each text file named on the command line,
 \fBmysqlimport\fR
-strips any extension from the file name and uses the result to determine the name of the table into which to import the file\'s contents\&. For example, files named
+strips any extension from the file name and uses the result to determine the name of the table into which to import the file\*(Aqs contents\&. For example, files named
 patient\&.txt,
 patient\&.text, and
 patient
@@ -65,8 +74,14 @@ all would be imported into a table named
 patient\&.
 .PP
 \fBmysqlimport\fR
-supports the options in the following list\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+supports the following options, which can be specified on the command line or in the
+[mysqlimport]
+and
+[client]
+groups of an option file\&.
+\fBmysqlimport\fR
+also supports the options for processing option files described at
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .sp
 .RS 4
 .ie n \{\
@@ -92,12 +107,31 @@ Display a help message and exit\&.
 .sp -1
 .IP \(bu 2.3
 .\}
+.\" mysqlimport: bind-address option
+.\" bind-address option: mysqlimport
+\fB\-\-bind\-address=\fR\fB\fIip_address\fR\fR
+.sp
+On a computer having multiple network interfaces, this option can be used to select which interface is employed when connecting to the MySQL server\&.
+.sp
+This option is supported only in the version of
+\fBmysqlimport\fR
+that is supplied with MySQL Cluster, beginning with MySQL Cluster NDB 6\&.3\&.4\&. It is not available in standard MySQL 5\&.1 releases\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 .\" mysqlimport: character-sets-dir option
 .\" character-sets-dir option: mysqlimport
 \fB\-\-character\-sets\-dir=\fR\fB\fIpath\fR\fR
 .sp
 The directory where character sets are installed\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
 .RE
 .sp
 .RS 4
@@ -148,8 +182,8 @@ Compress all information sent between the client and the server if both support 
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. The default is
-\'d:t:o\'\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. The default is
+\*(Aqd:t:o\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -197,7 +231,13 @@ Print debugging information and memory and CPU usage statistics when the program
 Use
 \fIcharset_name\fR
 as the default character set\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
+.sp
+Some options, such as
+\fB\-\-opt\fR, automatically enable
+\fB\-\-lock\-tables\fR\&. If you want to override this, use
+\fB\-\-skip\-lock\-tables\fR
+at the end of the option list\&.
 .RE
 .sp
 .RS 4
@@ -239,7 +279,7 @@ Empty the table before importing the text file\&.
 .sp
 These options have the same meaning as the corresponding clauses for
 LOAD DATA INFILE\&. See
-Section\ \&12.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
+Section\ \&13.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
 .RE
 .sp
 .RS 4
@@ -328,7 +368,7 @@ lines of the data file\&.
 This option has the same meaning as the corresponding clause for
 LOAD DATA INFILE\&. For example, to import Windows files that have lines terminated with carriage return/linefeed pairs, use
 \fB\-\-lines\-terminated\-by="\er\en"\fR\&. (You might have to double the backslashes, depending on the escaping conventions of your command interpreter\&.) See
-Section\ \&12.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
+Section\ \&13.2.6, \(lqLOAD DATA INFILE Syntax\(rq\&.
 .RE
 .sp
 .RS 4
@@ -379,8 +419,9 @@ tables for writing before processing any text files\&. This ensures that all tab
 .sp
 Use
 LOW_PRIORITY
-when loading the table\&. This affects only storage engines that use only table\-level locking (MyISAM,
-MEMORY,
+when loading the table\&. This affects only storage engines that use only table\-level locking (such as
+MyISAM,
+MEMORY, and
 MERGE)\&.
 .RE
 .sp
@@ -405,10 +446,12 @@ value following the
 \fB\-\-password\fR
 or
 \fB\-p\fR
-option on the command line, you are prompted for one\&.
+option on the command line,
+\fBmysqlimport\fR
+prompts for one\&.
 .sp
 Specifying a password on the command line should be considered insecure\&. See
-Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
+Section\ \&6.1.2.1, \(lqEnd-User Guidelines for Password Security\(rq\&. You can use an option file to avoid giving the password on the command line\&.
 .RE
 .sp
 .RS 4
@@ -424,7 +467,7 @@ Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
 \fB\-\-pipe\fR,
 \fB\-W\fR
 .sp
-On Windows, connect to the server via a named pipe\&. This option applies only for connections to a local server, and only if the server supports named\-pipe connections\&.
+On Windows, connect to the server using a named pipe\&. This option applies only if the server supports named\-pipe connections\&.
 .RE
 .sp
 .RS 4
@@ -455,7 +498,7 @@ The TCP/IP port number to use for the connection\&.
 .\" protocol option: mysqlimport
 \fB\-\-protocol={TCP|SOCKET|PIPE|MEMORY}\fR
 .sp
-The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the allowable values, see
+The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the permissible values, see
 Section\ \&4.2.2, \(lqConnecting to the MySQL Server\(rq\&.
 .RE
 .sp
@@ -528,8 +571,8 @@ localhost, the Unix socket file to use, or, on Windows, the name of the named pi
 .sp
 Options that begin with
 \fB\-\-ssl\fR
-specify whether to connect to the server via SSL and indicate where to find SSL keys and certificates\&. See
-Section\ \&5.5.7.3, \(lqSSL Command Options\(rq\&.
+specify whether to connect to the server using SSL and indicate where to find SSL keys and certificates\&. See
+Section\ \&6.3.6.4, \(lqSSL Command Options\(rq\&.
 .RE
 .sp
 .RS 4
@@ -604,7 +647,7 @@ Here is a sample session that demonstrates use of
 .RS 4
 .\}
 .nf
-shell> \fBmysql \-e \'CREATE TABLE imptest(id INT, n VARCHAR(30))\' test\fR
+shell> \fBmysql \-e \*(AqCREATE TABLE imptest(id INT, n VARCHAR(30))\*(Aq test\fR
 shell> \fBed\fR
 a
 100     Max Sydow
@@ -619,7 +662,7 @@ shell> \fBod \-c imptest\&.txt\fR
 0000040
 shell> \fBmysqlimport \-\-local test imptest\&.txt\fR
 test\&.imptest: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
-shell> \fBmysql \-e \'SELECT * FROM imptest\' test\fR
+shell> \fBmysql \-e \*(AqSELECT * FROM imptest\*(Aq test\fR
 +\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
 | id   | n             |
 +\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
@@ -633,7 +676,7 @@ shell> \fBmysql \-e \'SELECT * FROM imptest\' test\fR
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -646,4 +689,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

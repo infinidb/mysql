@@ -2494,10 +2494,10 @@ ER_TOO_BIG_SELECT 42000
         cze "Zadan-Bý SELECT by procházel pøíli¹ mnoho záznamù a trval velmi dlouho. Zkontrolujte tvar WHERE a je-li SELECT v poøádku, pou¾ijte SET SQL_BIG_SELECTS=1"
         dan "SELECT ville undersøge for mange poster og ville sandsynligvis tage meget lang tid. Undersøg WHERE delen og brug SET SQL_BIG_SELECTS=1 hvis udtrykket er korrekt"
         nla "Het SELECT-statement zou te veel records analyseren en dus veel tijd in beslagnemen. Kijk het WHERE-gedeelte van de query na en kies SET SQL_BIG_SELECTS=1 als het stament in orde is."
-        eng "The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET SQL_MAX_JOIN_SIZE=# if the SELECT is okay"
+        eng "The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay"
         est "SELECT lause peab läbi vaatama suure hulga kirjeid ja võtaks tõenäoliselt liiga kaua aega. Tasub kontrollida WHERE klauslit ja vajadusel kasutada käsku SET SQL_BIG_SELECTS=1"
         fre "SELECT va devoir examiner beaucoup d'enregistrements ce qui va prendre du temps. Vérifiez la clause WHERE et utilisez SET SQL_BIG_SELECTS=1 si SELECT se passe bien"
-        ger "Die Ausführung des SELECT würde zu viele Datensätze untersuchen und wahrscheinlich sehr lange dauern. Bitte WHERE-Klausel überprüfen und gegebenenfalls SET SQL_BIG_SELECTS=1 oder SET SQL_MAX_JOIN_SIZE=# verwenden"
+        ger "Die Ausführung des SELECT würde zu viele Datensätze untersuchen und wahrscheinlich sehr lange dauern. Bitte WHERE-Klausel überprüfen und gegebenenfalls SET SQL_BIG_SELECTS=1 oder SET MAX_JOIN_SIZE=# verwenden"
         greek "Ôï SELECT èá åîåôÜóåé ìåãÜëï áñéèìü åããñáöþí êáé ðéèáíþò èá êáèõóôåñÞóåé. Ðáñáêáëþ åîåôÜóôå ôéò ðáñáìÝôñïõò ôïõ WHERE êáé ÷ñçóéìïðïéåßóôå SET SQL_BIG_SELECTS=1 áí ôï SELECT åßíáé óùóôü"
         hun "A SELECT tul sok rekordot fog megvizsgalni es nagyon sokaig fog tartani. Ellenorizze a WHERE-t es hasznalja a SET SQL_BIG_SELECTS=1 beallitast, ha a SELECT okay"
         ita "La SELECT dovrebbe esaminare troppi record e usare troppo tempo. Controllare la WHERE e usa SET SQL_BIG_SELECTS=1 se e` tutto a posto."
@@ -4702,7 +4702,7 @@ ER_NOT_SUPPORTED_YET 42000
         swe "Denna version av MySQL kan ännu inte utföra '%s'"
 ER_MASTER_FATAL_ERROR_READING_BINLOG  
         nla "Kreeg fatale fout %d: '%-.128s' van master tijdens lezen van data uit binaire log"
-        eng "Got fatal error %d: '%-.128s' from master when reading data from binary log"
+        eng "Got fatal error %d from master when reading data from binary log: '%-.128s'"
         ger "Schwerer Fehler %d: '%-.128s vom Master beim Lesen des binären Logs"
         ita "Errore fatale %d: '%-.128s' dal master leggendo i dati dal log binario"
         por "Obteve fatal erro %d: '%-.128s' do master quando lendo dados do binary log"
@@ -5027,7 +5027,7 @@ ER_UNKNOWN_STORAGE_ENGINE 42000
 # When using this error code, use ER(ER_WARN_DEPRECATED_SYNTAX_WITH_VER)
 # for the message string.  See, for example, code in mysql_priv.h.
 ER_WARN_DEPRECATED_SYNTAX  
-        eng "'%s' is deprecated; use '%s' instead"
+        eng "'%s' is deprecated and will be removed in a future release. Please use %s instead"
         ger "'%s' ist veraltet. Bitte benutzen Sie '%s'"
         por "'%s' é desatualizado. Use '%s' em seu lugar"
         spa "'%s' está desaprobado, use '%s' en su lugar"
@@ -5138,11 +5138,11 @@ ER_SP_BADSTATEMENT 0A000
         eng "%s is not allowed in stored procedures"
         ger "%s ist in gespeicherten Prozeduren nicht erlaubt"
 ER_UPDATE_LOG_DEPRECATED_IGNORED 42000 
-        eng "The update log is deprecated and replaced by the binary log; SET SQL_LOG_UPDATE has been ignored"
-        ger "Das Update-Log ist veraltet und wurde durch das Binär-Log ersetzt. SET SQL_LOG_UPDATE wird ignoriert"
+        eng "The update log is deprecated and replaced by the binary log; SET SQL_LOG_UPDATE has been ignored. This option will be removed in MySQL 5.6."
+        ger "Das Update-Log ist veraltet und wurde durch das Binär-Log ersetzt. SET SQL_LOG_UPDATE wird ignoriert. Diese Option wird in MySQL 5.6 entfernt."
 ER_UPDATE_LOG_DEPRECATED_TRANSLATED 42000 
-        eng "The update log is deprecated and replaced by the binary log; SET SQL_LOG_UPDATE has been translated to SET SQL_LOG_BIN"
-        ger "Das Update-Log ist veraltet und wurde durch das Binär-Log ersetzt. SET SQL_LOG_UPDATE wurde in SET SQL_LOG_BIN übersetzt"
+        eng "The update log is deprecated and replaced by the binary log; SET SQL_LOG_UPDATE has been translated to SET SQL_LOG_BIN. This option will be removed in MySQL 5.6."
+        ger "Das Update-Log ist veraltet und wurde durch das Binär-Log ersetzt. SET SQL_LOG_UPDATE wurde in SET SQL_LOG_BIN übersetzt. Diese Option wird in MySQL 5.6 entfernt."
 ER_QUERY_INTERRUPTED 70100 
         eng "Query execution was interrupted"
         ger "Ausführung der Abfrage wurde unterbrochen"
@@ -5696,8 +5696,8 @@ ER_PARTITION_WRONG_NO_SUBPART_ERROR
         eng "Wrong number of subpartitions defined, mismatch with previous setting"
         ger "Falsche Anzahl von Unterpartitionen definiert, stimmt nicht mit vorherigen Einstellungen überein"
         swe "Antal subpartitioner definierade och antal subpartitioner är inte lika"
-ER_CONST_EXPR_IN_PARTITION_FUNC_ERROR
-        eng "Constant/Random expression in (sub)partitioning function is not allowed"
+ER_WRONG_EXPR_IN_PARTITION_FUNC_ERROR
+        eng "Constant, random or timezone-dependent expressions in (sub)partitioning function are not allowed"
         ger "Konstante oder Random-Ausdrücke in (Unter-)Partitionsfunktionen sind nicht erlaubt"
         swe "Konstanta uttryck eller slumpmässiga uttryck är inte tillåtna (sub)partitioneringsfunktioner"
 ER_NO_CONST_EXPR_IN_RANGE_OR_LIST_ERROR
@@ -6206,3 +6206,10 @@ ER_TOO_MANY_CONCURRENT_TRXS
 
 WARN_NON_ASCII_SEPARATOR_NOT_IMPLEMENTED
   eng "Non-ASCII separator arguments are not fully supported"
+
+ER_DEBUG_SYNC_TIMEOUT
+  eng "debug sync point wait timed out"
+  ger "Debug Sync Point Wartezeit überschritten"
+ER_DEBUG_SYNC_HIT_LIMIT
+  eng "debug sync point hit limit reached"
+  ger "Debug Sync Point Hit Limit erreicht"

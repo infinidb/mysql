@@ -1307,12 +1307,12 @@ explain extended select encode(f1,'zxcv') as 'enc' from t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t1	system	NULL	NULL	NULL	NULL	0	0.00	const row not found
 Warnings:
-Note	1003	select encode('','zxcv') AS `enc` from `test`.`t1`
+Note	1003	select encode(NULL,'zxcv') AS `enc` from `test`.`t1`
 explain extended select decode(f1,'zxcv') as 'enc' from t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t1	system	NULL	NULL	NULL	NULL	0	0.00	const row not found
 Warnings:
-Note	1003	select decode('','zxcv') AS `enc` from `test`.`t1`
+Note	1003	select decode(NULL,'zxcv') AS `enc` from `test`.`t1`
 drop table t1;
 create table t1 (a bigint not null)engine=myisam;
 insert into t1 set a = 1024*1024*1024*4;
@@ -2534,6 +2534,15 @@ SELECT LOAD_FILE(a) FROM t1;
 LOAD_FILE(a)
 NULL
 DROP TABLE t1;
+CREATE TABLE t1 (f2 VARCHAR(20));
+CREATE TABLE t2 (f2 VARCHAR(20));
+INSERT INTO t1 VALUES ('MIN'),('MAX');
+INSERT INTO t2 VALUES ('LOAD');
+SELECT CONCAT_WS('_', (SELECT t2.f2 FROM t2), t1.f2) AS concat_name FROM t1;
+concat_name
+LOAD_MIN
+LOAD_MAX
+DROP TABLE t1, t2;
 End of 5.0 tests
 drop table if exists t1;
 create table t1(f1 tinyint default null)engine=myisam;
@@ -2549,3 +2558,74 @@ id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	PRIMARY	<derived2>	ALL	NULL	NULL	NULL	NULL	2	Using join buffer
 2	DERIVED	t1	ALL	NULL	NULL	NULL	NULL	2	
 drop table t1;
+#
+# Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
+#
+DROP TABLE IF EXISTS t1, t2;
+CREATE TABLE t1 (a VARCHAR(20), b INT);
+CREATE TABLE t2 (a VARCHAR(20), b INT);
+INSERT INTO t1 VALUES ('ABC', 1);
+INSERT INTO t2 VALUES ('ABC', 1);
+SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
+FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
+DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
+secret
+SELECT DECODE((SELECT ENCODE('secret', 'ABC') FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
+FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
+DECODE((SELECT ENCODE('secret', 'ABC') FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
+secret
+SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), 'ABC')
+FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
+DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), 'ABC')
+secret
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES ('EDF', 3), ('BCD', 2), ('ABC', 1);
+INSERT INTO t2 VALUES ('EDF', 3), ('BCD', 2), ('ABC', 1);
+SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b LIMIT 1), t2.a)
+FROM t2 WHERE t2.b = 1 GROUP BY t2.b;
+DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b LIMIT 1), t2.a)
+secret
+DROP TABLE t1, t2;
+#
+# Bug#52164 Assertion failed: param.sort_length, file .\filesort.cc, line 149
+#
+CREATE TABLE t1 (a LONGBLOB NOT NULL);
+INSERT INTO t1 VALUES (''),('');
+SELECT 1 FROM t1, t1 t2
+ORDER BY QUOTE(t1.a);
+1
+1
+1
+1
+1
+DROP TABLE t1;
+#
+# Bug#57913 large negative number to string conversion functions crash
+# Bug#57810 case/when/then : Assertion failed: length || !scale
+#
+SELECT '1' IN ('1', SUBSTRING(-9223372036854775809, 1));
+'1' IN ('1', SUBSTRING(-9223372036854775809, 1))
+1
+SELECT CONVERT(('' IN (REVERSE(CAST(('') AS DECIMAL)), '')), CHAR(3));
+CONVERT(('' IN (REVERSE(CAST(('') AS DECIMAL)), '')), CHAR(3))
+1
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: ''
+# 
+# Bug#58165: "my_empty_string" gets modified and causes LOAD DATA to fail
+# and other crashes
+#
+CREATE TABLE t1 ( a TEXT );
+SELECT 'aaaaaaaaaaaaaa' INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/bug58165.txt';;
+SELECT insert( substring_index( 'a', 'a', 'b' ), 1, 0, 'x' );
+insert( substring_index( 'a', 'a', 'b' ), 1, 0, 'x' )
+x
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: 'b'
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bug58165.txt' INTO TABLE t1;;
+SELECT * FROM t1;
+a
+aaaaaaaaaaaaaa
+DROP TABLE t1;
+End of 5.1 tests

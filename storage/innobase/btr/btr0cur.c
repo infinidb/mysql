@@ -31,6 +31,7 @@ Created 10/16/1994 Heikki Tuuri
 #include "btr0sea.h"
 #include "row0upd.h"
 #include "trx0rec.h"
+#include "trx0roll.h" /* trx_roll_crash_recv_trx */
 #include "que0que.h"
 #include "row0row.h"
 #include "srv0srv.h"
@@ -47,6 +48,10 @@ ulint	btr_cur_n_non_sea	= 0;
 ulint	btr_cur_n_sea		= 0;
 ulint	btr_cur_n_non_sea_old	= 0;
 ulint	btr_cur_n_sea_old	= 0;
+
+#ifdef UNIV_DEBUG
+uint	btr_cur_limit_optimistic_insert_debug = 0;
+#endif /* UNIV_DEBUG */
 
 /* In the optimistic insert, if the insert does not fit, but this much space
 can be released by page reorganize, then it is reorganized */
@@ -65,6 +70,20 @@ this many index pages */
 						FIL_NULL if none */
 /*--------------------------------------*/
 #define BTR_BLOB_HDR_SIZE		8
+
+/* Estimated table level stats from sampled value. */
+#define	BTR_TABLE_STATS_FROM_SAMPLE(value, index, ext_size, not_empty)	\
+	((value * (ib_longlong) index->stat_n_leaf_pages		\
+	  + BTR_KEY_VAL_ESTIMATE_N_PAGES - 1 + ext_size			\
+	  + not_empty)							\
+	 / (BTR_KEY_VAL_ESTIMATE_N_PAGES + ext_size))
+
+#if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
+/* A BLOB field reference full of zero, for use in assertions and tests.
+Initially, BLOB field references are set to zero, in
+dtuple_convert_big_rec(). */
+const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE];
+#endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
 /***********************************************************************
 Marks all extern fields in a record as owned by the record. This function
@@ -306,7 +325,12 @@ btr_cur_search_to_nth_level(
 	ut_ad(dict_index_check_search_tuple(index, tuple));
 	ut_ad(!(index->type & DICT_IBUF) || ibuf_inside());
 	ut_ad(dtuple_check_typed(tuple));
+	ut_ad(index->page != FIL_NULL);
 
+	UNIV_MEM_INVALID(&cursor->up_match, sizeof cursor->up_match);
+	UNIV_MEM_INVALID(&cursor->up_bytes, sizeof cursor->up_bytes);
+	UNIV_MEM_INVALID(&cursor->low_match, sizeof cursor->low_match);
+	UNIV_MEM_INVALID(&cursor->low_bytes, sizeof cursor->low_bytes);
 #ifdef UNIV_DEBUG
 	cursor->up_match = ULINT_UNDEFINED;
 	cursor->low_match = ULINT_UNDEFINED;
@@ -1002,6 +1026,9 @@ calculate_sizes_again:
 		goto calculate_sizes_again;
 	}
 
+	LIMIT_OPTIMISTIC_INSERT_DEBUG(page_get_n_recs(page),
+				      goto fail);
+
 	/* If there have been many consecutive inserts, and we are on the leaf
 	level, check if we have to split the page to reserve enough free space
 	for future updates of records. */
@@ -1014,7 +1041,9 @@ calculate_sizes_again:
 	    && (0 == level)
 	    && (btr_page_get_split_rec_to_right(cursor, &dummy_rec)
 		|| btr_page_get_split_rec_to_left(cursor, &dummy_rec))) {
-
+#ifdef UNIV_DEBUG
+fail:
+#endif /* UNIV_DEBUG */
 		if (big_rec_vec) {
 			dtuple_convert_back_big_rec(index, entry, big_rec_vec);
 		}
@@ -1565,7 +1594,6 @@ btr_cur_optimistic_update(
 	ulint		old_rec_size;
 	dtuple_t*	new_entry;
 	dulint		roll_ptr;
-	trx_t*		trx;
 	mem_heap_t*	heap;
 	ibool		reorganized	= FALSE;
 	ulint		i;
@@ -1578,6 +1606,10 @@ btr_cur_optimistic_update(
 
 	heap = mem_heap_create(1024);
 	offsets = rec_get_offsets(rec, index, NULL, ULINT_UNDEFINED, &heap);
+#if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
+	ut_a(!rec_offs_any_null_extern(rec, offsets)
+	     || thr_get_trx(thr) == trx_roll_crash_recv_trx);
+#endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
 #ifdef UNIV_DEBUG
 	if (btr_cur_print_record_ops && thr) {
@@ -1684,13 +1716,11 @@ btr_cur_optimistic_update(
 
 	page_cur_move_to_prev(page_cursor);
 
-	trx = thr_get_trx(thr);
-
 	if (!(flags & BTR_KEEP_SYS_FLAG)) {
 		row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR,
 					      roll_ptr);
 		row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID,
-					      trx->id);
+					      thr_get_trx(thr)->id);
 	}
 
 	rec = btr_cur_insert_if_possible(cursor, new_entry, &reorganized, mtr);
@@ -2356,21 +2386,22 @@ btr_cur_del_mark_set_sec_rec(
 }
 
 /***************************************************************
-Sets a secondary index record delete mark to FALSE. This function is only
+Sets a secondary index record delete mark. This function is only
 used by the insert buffer insert merge mechanism. */
 
 void
-btr_cur_del_unmark_for_ibuf(
-/*========================*/
+btr_cur_set_deleted_flag_for_ibuf(
+/*==============================*/
 	rec_t*		rec,	/* in: record to delete unmark */
+	ibool		val,	/* in: value to set */
 	mtr_t*		mtr)	/* in: mtr */
 {
 	/* We do not need to reserve btr_search_latch, as the page has just
 	been read to the buffer pool and there cannot be a hash index to it. */
 
-	rec_set_deleted_flag(rec, page_is_comp(buf_frame_align(rec)), FALSE);
+	rec_set_deleted_flag(rec, page_is_comp(buf_frame_align(rec)), val);
 
-	btr_cur_del_mark_set_sec_rec_log(rec, FALSE, mtr);
+	btr_cur_del_mark_set_sec_rec_log(rec, val, mtr);
 }
 
 /*==================== B-TREE RECORD REMOVE =========================*/
@@ -2771,6 +2802,8 @@ btr_estimate_n_rows_in_range(
 				n_rows = n_rows * 2;
 			}
 
+			DBUG_EXECUTE_IF("bug14007649", return(n_rows););
+
 			/* Do not estimate the number of rows in the range
 			to over 1 / 2 of the estimated rows in the whole
 			table */
@@ -2835,9 +2868,47 @@ btr_estimate_n_rows_in_range(
 }
 
 /***********************************************************************
+Record the number of non_null key values in a given index for
+each n-column prefix of the index where n < dict_index_get_n_unique(index).
+The estimates are eventually stored in the array:
+index->stat_n_non_null_key_vals. */
+static
+void
+btr_record_not_null_field_in_rec(
+/*=============================*/
+	ulint		n_unique,	/* in: dict_index_get_n_unique(index),
+					number of columns uniquely determine
+					an index entry */
+	const ulint*	offsets,	/* in: rec_get_offsets(rec, index),
+					its size could be for all fields or
+					that of "n_unique" */
+	ib_longlong*	n_not_null)	/* in/out: array to record number of
+					not null rows for n-column prefix */
+{
+	ulint	i;
+
+	ut_ad(rec_offs_n_fields(offsets) >= n_unique);
+
+	if (n_not_null == NULL) {
+		return;
+	}
+
+	for (i = 0; i < n_unique; i++) {
+		if (rec_offs_nth_sql_null(offsets, i)) {
+			break;
+		}
+
+		n_not_null[i]++;
+	}
+}
+
+/***********************************************************************
 Estimates the number of different key values in a given index, for
 each n-column prefix of the index where n <= dict_index_get_n_unique(index).
-The estimates are stored in the array index->stat_n_diff_key_vals. */
+The estimates are stored in the array index->stat_n_diff_key_vals.
+If innodb_stats_method is "nulls_ignored", we also record the number of
+non-null values for each prefix and store the estimates in
+array index->stat_n_non_null_key_vals. */
 
 void
 btr_estimate_number_of_different_key_vals(
@@ -2851,6 +2922,8 @@ btr_estimate_number_of_different_key_vals(
 	ulint		matched_fields;
 	ulint		matched_bytes;
 	ib_longlong*	n_diff;
+	ib_longlong*	n_not_null;
+	ibool		stats_null_not_equal;
 	ulint		not_empty_flag	= 0;
 	ulint		total_external_size = 0;
 	ulint		i;
@@ -2858,24 +2931,47 @@ btr_estimate_number_of_different_key_vals(
 	ulint		add_on;
 	mtr_t		mtr;
 	mem_heap_t*	heap		= NULL;
-	ulint		offsets_rec_[REC_OFFS_NORMAL_SIZE];
-	ulint		offsets_next_rec_[REC_OFFS_NORMAL_SIZE];
-	ulint*		offsets_rec	= offsets_rec_;
-	ulint*		offsets_next_rec= offsets_next_rec_;
-	*offsets_rec_ = (sizeof offsets_rec_) / sizeof *offsets_rec_;
-	*offsets_next_rec_
-		= (sizeof offsets_next_rec_) / sizeof *offsets_next_rec_;
+	ulint*		offsets_rec	= NULL;
+	ulint*		offsets_next_rec = NULL;
 
 	n_cols = dict_index_get_n_unique(index);
 
-	n_diff = mem_alloc((n_cols + 1) * sizeof(ib_longlong));
+	heap = mem_heap_create((sizeof *n_diff + sizeof *n_not_null)
+			       * (n_cols + 1)
+			       + dict_index_get_n_fields(index)
+			       * (sizeof *offsets_rec
+				  + sizeof *offsets_next_rec));
 
-	memset(n_diff, 0, (n_cols + 1) * sizeof(ib_longlong));
+	n_diff = mem_heap_zalloc(heap, (n_cols + 1) * sizeof(ib_longlong));
+
+	n_not_null = NULL;
+
+	/* Check srv_innodb_stats_method setting, and decide whether we
+	need to record non-null value and also decide if NULL is
+	considered equal (by setting stats_null_not_equal value) */
+	switch (srv_innodb_stats_method) {
+	case SRV_STATS_NULLS_IGNORED:
+		n_not_null = mem_heap_zalloc(heap, (n_cols + 1)
+					     * sizeof *n_not_null);
+		/* fall through */
+
+	case SRV_STATS_NULLS_UNEQUAL:
+		/* for both SRV_STATS_NULLS_IGNORED and SRV_STATS_NULLS_UNEQUAL
+		case, we will treat NULLs as unequal value */
+		stats_null_not_equal = TRUE;
+		break;
+
+	case SRV_STATS_NULLS_EQUAL:
+		stats_null_not_equal = FALSE;
+		break;
+
+	default:
+		ut_error;
+	}
 
 	/* We sample some pages in the index to get an estimate */
 
 	for (i = 0; i < BTR_KEY_VAL_ESTIMATE_N_PAGES; i++) {
-		rec_t*	supremum;
 		mtr_start(&mtr);
 
 		btr_cur_open_at_rnd_pos(index, BTR_SEARCH_LEAF, &cursor, &mtr);
@@ -2888,18 +2984,25 @@ btr_estimate_number_of_different_key_vals(
 
 		page = btr_cur_get_page(&cursor);
 
-		supremum = page_get_supremum_rec(page);
 		rec = page_rec_get_next(page_get_infimum_rec(page));
 
-		if (rec != supremum) {
+		if (!page_rec_is_supremum(rec)) {
 			not_empty_flag = 1;
 			offsets_rec = rec_get_offsets(rec, index, offsets_rec,
 						      ULINT_UNDEFINED, &heap);
+
+			if (n_not_null) {
+				btr_record_not_null_field_in_rec(
+					n_cols, offsets_rec, n_not_null);
+			}
 		}
 
-		while (rec != supremum) {
+		while (!page_rec_is_supremum(rec)) {
 			rec_t*	next_rec = page_rec_get_next(rec);
-			if (next_rec == supremum) {
+			if (page_rec_is_supremum(next_rec)) {
+				total_external_size +=
+					btr_rec_get_externally_stored_len(
+						rec, offsets_rec);
 				break;
 			}
 
@@ -2907,11 +3010,13 @@ btr_estimate_number_of_different_key_vals(
 			matched_bytes = 0;
 			offsets_next_rec = rec_get_offsets(next_rec, index,
 							   offsets_next_rec,
-							   n_cols, &heap);
+							   ULINT_UNDEFINED,
+							   &heap);
 
 			cmp_rec_rec_with_match(rec, next_rec,
 					       offsets_rec, offsets_next_rec,
-					       index, &matched_fields,
+					       index, stats_null_not_equal,
+					       &matched_fields,
 					       &matched_bytes);
 
 			for (j = matched_fields + 1; j <= n_cols; j++) {
@@ -2919,6 +3024,11 @@ btr_estimate_number_of_different_key_vals(
 				a different prefix from the previous */
 
 				n_diff[j]++;
+			}
+
+			if (n_not_null) {
+				btr_record_not_null_field_in_rec(
+					n_cols, offsets_next_rec, n_not_null);
 			}
 
 			total_external_size
@@ -2955,10 +3065,6 @@ btr_estimate_number_of_different_key_vals(
 			}
 		}
 
-		offsets_rec = rec_get_offsets(rec, index, offsets_rec,
-					      ULINT_UNDEFINED, &heap);
-		total_external_size += btr_rec_get_externally_stored_len(
-			rec, offsets_rec);
 		mtr_commit(&mtr);
 	}
 
@@ -2971,14 +3077,8 @@ btr_estimate_number_of_different_key_vals(
 	included in index->stat_n_leaf_pages) */
 
 	for (j = 0; j <= n_cols; j++) {
-		index->stat_n_diff_key_vals[j]
-			= ((n_diff[j]
-			    * (ib_longlong)index->stat_n_leaf_pages
-			    + BTR_KEY_VAL_ESTIMATE_N_PAGES - 1
-			    + total_external_size
-			    + not_empty_flag)
-			   / (BTR_KEY_VAL_ESTIMATE_N_PAGES
-			      + total_external_size));
+		index->stat_n_diff_key_vals[j] = BTR_TABLE_STATS_FROM_SAMPLE(
+			n_diff[j], index, total_external_size, not_empty_flag);
 
 		/* If the tree is small, smaller than
 		10 * BTR_KEY_VAL_ESTIMATE_N_PAGES + total_external_size, then
@@ -2997,12 +3097,20 @@ btr_estimate_number_of_different_key_vals(
 		}
 
 		index->stat_n_diff_key_vals[j] += add_on;
+
+		/* Update the stat_n_non_null_key_vals[] with our
+		sampled result. stat_n_non_null_key_vals[] is created
+		and initialized to zero in dict_index_add_to_cache(),
+		along with stat_n_diff_key_vals[] array */
+		if (n_not_null != NULL && (j < n_cols)) {
+			index->stat_n_non_null_key_vals[j] =
+				 BTR_TABLE_STATS_FROM_SAMPLE(
+					n_not_null[j], index,
+					total_external_size, not_empty_flag);
+		}
 	}
 
-	mem_free(n_diff);
-	if (UNIV_LIKELY_NULL(heap)) {
-		mem_heap_free(heap);
-	}
+	mem_heap_free(heap);
 }
 
 /*================== EXTERNAL STORAGE OF BIG FIELDS ===================*/
@@ -3365,7 +3473,9 @@ btr_store_big_rec_extern_fields(
 	page_t*	page;
 	ulint	space_id;
 	page_t*	prev_page;
+#ifdef UNIV_SYNC_DEBUG
 	page_t*	rec_page;
+#endif /* UNIV_SYNC_DEBUG */
 	ulint	prev_page_no;
 	ulint	hint_page_no;
 	ulint	i;
@@ -3460,9 +3570,12 @@ btr_store_big_rec_extern_fields(
 
 			extern_len -= store_len;
 
-			rec_page = buf_page_get(space_id,
-						buf_frame_get_page_no(data),
-						RW_X_LATCH, &mtr);
+#ifdef UNIV_SYNC_DEBUG
+			rec_page =
+#endif /* UNIV_SYNC_DEBUG */
+			buf_page_get(space_id,
+				     buf_frame_get_page_no(data),
+				     RW_X_LATCH, &mtr);
 #ifdef UNIV_SYNC_DEBUG
 			buf_page_dbg_add_level(rec_page, SYNC_NO_ORDER_CHECK);
 #endif /* UNIV_SYNC_DEBUG */
@@ -3536,10 +3649,11 @@ btr_free_externally_stored_field(
 					X-latch to the index tree */
 {
 	page_t*	page;
+#ifdef UNIV_SYNC_DEBUG
 	page_t*	rec_page;
+#endif /* UNIV_SYNC_DEBUG */
 	ulint	space_id;
 	ulint	page_no;
-	ulint	offset;
 	ulint	extern_len;
 	ulint	next_page_no;
 	ulint	part_len;
@@ -3556,9 +3670,12 @@ btr_free_externally_stored_field(
 	for (;;) {
 		mtr_start(&mtr);
 
-		rec_page = buf_page_get(buf_frame_get_space_id(data),
-					buf_frame_get_page_no(data),
-					RW_X_LATCH, &mtr);
+#ifdef UNIV_SYNC_DEBUG
+		rec_page =
+#endif /* UNIV_SYNC_DEBUG */
+		buf_page_get(buf_frame_get_space_id(data),
+			     buf_frame_get_page_no(data),
+			     RW_X_LATCH, &mtr);
 #ifdef UNIV_SYNC_DEBUG
 		buf_page_dbg_add_level(rec_page, SYNC_NO_ORDER_CHECK);
 #endif /* UNIV_SYNC_DEBUG */
@@ -3568,8 +3685,6 @@ btr_free_externally_stored_field(
 		page_no = mach_read_from_4(data + local_len
 					   + BTR_EXTERN_PAGE_NO);
 
-		offset = mach_read_from_4(data + local_len
-					  + BTR_EXTERN_OFFSET);
 		extern_len = mach_read_from_4(data + local_len
 					      + BTR_EXTERN_LEN + 4);
 

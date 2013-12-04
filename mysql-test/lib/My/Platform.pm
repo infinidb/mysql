@@ -1,5 +1,6 @@
 # -*- cperl -*-
-# Copyright (C) 2004-2006 MySQL AB
+# Copyright (c) 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+# Use is subject to license terms.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -106,10 +107,13 @@ sub check_socket_path_length {
   my ($path)= @_;
 
   return 0 if IS_WINDOWS;
+  # This may not be true, but we can't test for it on AIX due to Perl bug
+  # See Bug #45771
+  return 0 if ($^O eq 'aix');
 
   require IO::Socket::UNIX;
 
-  my $truncated= 1; # Be negative
+  my $truncated= undef;
 
   # Create a tempfile name with same length as "path"
   my $tmpdir = tempdir( CLEANUP => 0);
@@ -122,6 +126,7 @@ sub check_socket_path_length {
        Local => $testfile,
        Listen => 1,
       );
+    $truncated= 1; # Be negatvie
 
     die "Could not create UNIX domain socket: $!"
       unless defined $sock;
@@ -132,6 +137,9 @@ sub check_socket_path_length {
     $truncated= 0; # Yes, it worked!
 
   };
+
+  die "Unexpected failure when checking socket path length: $@"
+    if $@ and not defined $truncated;
 
   $sock= undef;  # Close socket
   rmtree($tmpdir); # Remove the tempdir and any socket file created

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003, 2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Test av isam-databas: stor test */
 
@@ -406,7 +408,7 @@ int main(int argc, char *argv[])
   bmove(record2,record,reclength);
   if (heap_rsame(file,record,-1) || heap_rsame(file,record2,2))
     goto err;
-  if (bcmp(record2,record,reclength))
+  if (memcmp(record2,record,reclength))
   {
     puts("heap_rsame didn't find right record");
     goto end;
@@ -415,7 +417,7 @@ int main(int argc, char *argv[])
   puts("- Test of read through position");
   if (heap_rrnd(file,record,position))
     goto err;
-  if (bcmp(record3,record,reclength))
+  if (memcmp(record3,record,reclength))
   {
     puts("heap_frnd didn't find right record");
     goto end;

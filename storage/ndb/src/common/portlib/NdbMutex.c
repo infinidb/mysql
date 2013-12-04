@@ -1,4 +1,4 @@
-/* Copyright (C) 2003 MySQL AB
+/* Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 
 #include <ndb_global.h>
@@ -24,36 +24,31 @@ NdbMutex* NdbMutex_Create(void)
 {
   NdbMutex* pNdbMutex;
   int result;
-  DBUG_ENTER("NdbMutex_Create");
-  
+
   pNdbMutex = (NdbMutex*)NdbMem_Allocate(sizeof(NdbMutex));
-  DBUG_PRINT("info",("NdbMem_Allocate 0x%lx", (long) pNdbMutex));
-  
+
   if (pNdbMutex == NULL)
-    DBUG_RETURN(NULL);
-  
+    return NULL;
+
   result = pthread_mutex_init(pNdbMutex, NULL);
   assert(result == 0);
-			     
-  DBUG_RETURN(pNdbMutex);		     
+
+  return pNdbMutex;
 }
 
 
 int NdbMutex_Destroy(NdbMutex* p_mutex)
 {
   int result;
-  DBUG_ENTER("NdbMutex_Destroy");
 
   if (p_mutex == NULL)
-    DBUG_RETURN(-1);
+    return -1;
 
   result = pthread_mutex_destroy(p_mutex);
 
-  DBUG_PRINT("info",("NdbMem_Free 0x%lx", (long) p_mutex));
   NdbMem_Free(p_mutex);
-			     
-  DBUG_RETURN(result);
 
+  return result;
 }
 
 

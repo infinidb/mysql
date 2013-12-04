@@ -18,7 +18,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 /* The goal is to make the implementation transparent, so that you
    don't have to know what data types are used, just what functions
@@ -402,6 +402,7 @@ history_truncate_file (fname, lines)
   if (bp > buffer && ((file = open (filename, O_WRONLY|O_TRUNC|O_BINARY, 0600)) != -1))
     {
       bytes_written= write (file, bp, chars_read - (bp - buffer));
+      (void) bytes_written;
 
 #if defined (__BEOS__)
       /* BeOS ignores O_TRUNC. */

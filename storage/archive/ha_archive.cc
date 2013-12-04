@@ -1,17 +1,20 @@
-/* Copyright (C) 2003 MySQL AB
+/*
+   Copyright (c) 2004, 2012, Oracle and/or its affiliates. All rights reserved.
 
-  This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; version 2 of
+   the License.
 
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
 
-  You should have received a copy of the GNU General Public License
-  along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifdef USE_PRAGMA_IMPLEMENTATION
 #pragma implementation        // gcc: Class implementation
@@ -355,11 +358,20 @@ ARCHIVE_SHARE *ha_archive::get_share(const char *table_name, int *rc)
     */
     if (!(azopen(&archive_tmp, share->data_file_name, O_RDONLY|O_BINARY)))
     {
+      *rc= my_errno ? my_errno : -1;
+      pthread_mutex_unlock(&archive_mutex);
+      my_free(share, MYF(0));
       DBUG_RETURN(NULL);
     }
     stats.auto_increment_value= archive_tmp.auto_increment + 1;
     share->rows_recorded= (ha_rows)archive_tmp.rows;
     share->crashed= archive_tmp.dirty;
+    /*
+      If archive version is less than 3, It should be upgraded before
+      use.
+    */
+    if (archive_tmp.version < ARCHIVE_VERSION)
+      *rc= HA_ERR_TABLE_NEEDS_UPGRADE;
     azclose(&archive_tmp);
 
     VOID(my_hash_insert(&archive_open_tables, (uchar*) share));
@@ -491,15 +503,25 @@ int ha_archive::open(const char *name, int mode, uint open_options)
                       (open_options & HA_OPEN_FOR_REPAIR) ? "yes" : "no"));
   share= get_share(name, &rc);
 
-  if (rc == HA_ERR_CRASHED_ON_USAGE && !(open_options & HA_OPEN_FOR_REPAIR))
+ /*
+    Allow open on crashed table in repair mode only.
+    Block open on 5.0 ARCHIVE table. Though we have almost all
+    routines to access these tables, they were not well tested.
+    For now we have to refuse to open such table to avoid
+    potential data loss.
+  */
+  switch (rc)
   {
-    /* purecov: begin inspected */
+  case 0:
+    break;
+  case HA_ERR_CRASHED_ON_USAGE:
+    if (open_options & HA_OPEN_FOR_REPAIR)
+      break;
+    /* fall through */
+  case HA_ERR_TABLE_NEEDS_UPGRADE:
     free_share();
-    DBUG_RETURN(rc);
-    /* purecov: end */    
-  }
-  else if (rc == HA_ERR_OUT_OF_MEM)
-  {
+    /* fall through */
+  default:
     DBUG_RETURN(rc);
   }
 
@@ -522,8 +544,8 @@ int ha_archive::open(const char *name, int mode, uint open_options)
   {
     DBUG_RETURN(0);
   }
-  else
-    DBUG_RETURN(rc);
+
+  DBUG_RETURN(rc);
 }
 
 
@@ -738,6 +760,7 @@ uint32 ha_archive::max_row_length(const uchar *buf)
        ptr != end ;
        ptr++)
   {
+    if (!table->field[*ptr]->is_null())
       length += 2 + ((Field_blob*)table->field[*ptr])->get_length();
   }
 
@@ -845,7 +868,7 @@ int ha_archive::write_row(uchar *buf)
        */
       azflush(&(share->archive_write), Z_SYNC_FLUSH);
       /*
-        Set the position of the local read thread to the beginning postion.
+        Set the position of the local read thread to the beginning position.
       */
       if (read_data_header(&archive))
       {
@@ -993,6 +1016,7 @@ int ha_archive::rnd_init(bool scan)
   /* We rewind the file so that we can read from the beginning if scan */
   if (scan)
   {
+    scan_rows= stats.records;
     DBUG_PRINT("info", ("archive will retrieve %llu rows", 
                         (unsigned long long) scan_rows));
 
@@ -1087,11 +1111,22 @@ int ha_archive::unpack_row(azio_stream *file_to_read, uchar *record)
 
   /* Copy null bits */
   const uchar *ptr= record_buffer->buffer;
+  /*
+    Field::unpack() is not called when field is NULL. For VARCHAR
+    Field::unpack() only unpacks as much bytes as occupied by field
+    value. In these cases respective memory area on record buffer is
+    not initialized.
+
+    These uninitialized areas may be accessed by CHECKSUM TABLE or
+    by optimizer using temporary table (BUG#12997905). We may remove
+    this memset() when they're fixed.
+  */
+  memset(record, 0, table->s->reclength);
   memcpy(record, ptr, table->s->null_bytes);
   ptr+= table->s->null_bytes;
   for (Field **field=table->field ; *field ; field++)
   {
-    if (!((*field)->is_null()))
+    if (!((*field)->is_null_in_record(record)))
     {
       ptr= (*field)->unpack(record + (*field)->offset(table->record[0]), ptr);
     }
@@ -1249,13 +1284,12 @@ int ha_archive::rnd_pos(uchar * buf, uchar *pos)
 
 /*
   This method repairs the meta file. It does this by walking the datafile and 
-  rewriting the meta file. Currently it does this by calling optimize with
-  the extended flag.
+  rewriting the meta file. If EXTENDED repair is requested, we attempt to
+  recover as much data as possible.
 */
 int ha_archive::repair(THD* thd, HA_CHECK_OPT* check_opt)
 {
   DBUG_ENTER("ha_archive::repair");
-  check_opt->flags= T_EXTEND;
   int rc= optimize(thd, check_opt);
 
   if (rc)
@@ -1276,6 +1310,7 @@ int ha_archive::optimize(THD* thd, HA_CHECK_OPT* check_opt)
   azio_stream writer;
   char writer_filename[FN_REFLEN];
 
+  pthread_mutex_lock(&share->mutex);
   init_archive_reader();
 
   // now we close both our writer and our reader for the rename
@@ -1290,7 +1325,10 @@ int ha_archive::optimize(THD* thd, HA_CHECK_OPT* check_opt)
             MY_REPLACE_EXT | MY_UNPACK_FILENAME);
 
   if (!(azopen(&writer, writer_filename, O_CREAT|O_RDWR|O_BINARY)))
+  {
+    pthread_mutex_unlock(&share->mutex);
     DBUG_RETURN(HA_ERR_CRASHED_ON_USAGE); 
+  }
 
   /* 
     An extended rebuild is a lot more effort. We open up each row and re-record it. 
@@ -1349,7 +1387,14 @@ int ha_archive::optimize(THD* thd, HA_CHECK_OPT* check_opt)
     DBUG_PRINT("ha_archive", ("recovered %llu archive rows", 
                         (unsigned long long)share->rows_recorded));
 
-    if (rc && rc != HA_ERR_END_OF_FILE)
+    /*
+      If REPAIR ... EXTENDED is requested, try to recover as much data
+      from data file as possible. In this case if we failed to read a
+      record, we assume EOF. This allows massive data loss, but we can
+      hardly do more with broken zlib stream. And this is the only way
+      to restore at least what is still recoverable.
+    */
+    if (rc && rc != HA_ERR_END_OF_FILE && !(check_opt->flags & T_EXTEND))
       goto error;
   } 
 
@@ -1362,10 +1407,12 @@ int ha_archive::optimize(THD* thd, HA_CHECK_OPT* check_opt)
   rc = my_rename(writer_filename,share->data_file_name,MYF(0));
 
 
+  pthread_mutex_unlock(&share->mutex);
   DBUG_RETURN(rc);
 error:
   DBUG_PRINT("ha_archive", ("Failed to recover, error was %d", rc));
   azclose(&writer);
+  pthread_mutex_unlock(&share->mutex);
 
   DBUG_RETURN(rc); 
 }
@@ -1461,7 +1508,6 @@ int ha_archive::info(uint flag)
   stats.records= share->rows_recorded;
   pthread_mutex_unlock(&share->mutex);
 
-  scan_rows= stats.records;
   stats.deleted= 0;
 
   DBUG_PRINT("ha_archive", ("Stats rows is %d\n", (int)stats.records));
@@ -1472,11 +1518,12 @@ int ha_archive::info(uint flag)
 
     VOID(my_stat(share->data_file_name, &file_stat, MYF(MY_WME)));
 
-    stats.mean_rec_length= table->s->reclength + buffer.alloced_length();
     stats.data_file_length= file_stat.st_size;
     stats.create_time= (ulong) file_stat.st_ctime;
     stats.update_time= (ulong) file_stat.st_mtime;
-    stats.max_data_file_length= share->rows_recorded * stats.mean_rec_length;
+    stats.mean_rec_length= stats.records ?
+      ulong(stats.data_file_length / stats.records) : table->s->reclength;
+    stats.max_data_file_length= MAX_FILE_SIZE;
   }
   stats.delete_length= 0;
   stats.index_file_length=0;
@@ -1549,35 +1596,52 @@ int ha_archive::check(THD* thd, HA_CHECK_OPT* check_opt)
 {
   int rc= 0;
   const char *old_proc_info;
-  ha_rows count= share->rows_recorded;
+  ha_rows count;
   DBUG_ENTER("ha_archive::check");
 
   old_proc_info= thd_proc_info(thd, "Checking table");
-  /* Flush any waiting data */
   pthread_mutex_lock(&share->mutex);
-  azflush(&(share->archive_write), Z_SYNC_FLUSH);
+  count= share->rows_recorded;
+  /* Flush any waiting data */
+  if (share->archive_write_open)
+    azflush(&(share->archive_write), Z_SYNC_FLUSH);
   pthread_mutex_unlock(&share->mutex);
 
+  if (init_archive_reader())
+    DBUG_RETURN(HA_ADMIN_CORRUPT);
   /*
     Now we will rewind the archive file so that we are positioned at the 
     start of the file.
   */
-  init_archive_reader();
   read_data_header(&archive);
+  for (ha_rows cur_count= count; cur_count; cur_count--)
+  {
+    if ((rc= get_row(&archive, table->record[0])))
+      goto error;
+  }
+  /*
+    Now read records that may have been inserted concurrently.
+    Acquire share->mutex so tail of the table is not modified by
+    concurrent writers.
+  */
+  pthread_mutex_lock(&share->mutex);
+  count= share->rows_recorded - count;
+  if (share->archive_write_open)
+    azflush(&(share->archive_write), Z_SYNC_FLUSH);
   while (!(rc= get_row(&archive, table->record[0])))
     count--;
-
-  thd_proc_info(thd, old_proc_info);
+  pthread_mutex_unlock(&share->mutex);
 
   if ((rc && rc != HA_ERR_END_OF_FILE) || count)  
-  {
-    share->crashed= FALSE;
-    DBUG_RETURN(HA_ADMIN_CORRUPT);
-  }
-  else
-  {
-    DBUG_RETURN(HA_ADMIN_OK);
-  }
+    goto error;
+
+  thd_proc_info(thd, old_proc_info);
+  DBUG_RETURN(HA_ADMIN_OK);
+
+error:
+  thd_proc_info(thd, old_proc_info);
+  share->crashed= FALSE;
+  DBUG_RETURN(HA_ADMIN_CORRUPT);
 }
 
 /*

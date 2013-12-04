@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Resolve numeric stack dump produced by mysqld 3.23.30 and later
    versions into symbolic names. By Sasha Pachev <sasha@mysql.com>
@@ -53,10 +55,10 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"symbols-file", 's', "Use specified symbols file.", (uchar**) &sym_fname,
-   (uchar**) &sym_fname, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"symbols-file", 's', "Use specified symbols file.", &sym_fname,
+   &sym_fname, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"numeric-dump-file", 'n', "Read the dump from specified file.",
-   (uchar**) &dump_fname, (uchar**) &dump_fname, 0, GET_STR, REQUIRED_ARG,
+   &dump_fname, &dump_fname, 0, GET_STR, REQUIRED_ARG,
    0, 0, 0, 0, 0, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };

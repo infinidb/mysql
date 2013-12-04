@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/* Copyright (c) 2003-2007 MySQL AB, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef NdbEventOperationImpl_H
 #define NdbEventOperationImpl_H
@@ -361,10 +362,10 @@ public:
   NdbBlob *getBlobHandle(const NdbColumnImpl *, int n);
   int readBlobParts(char* buf, NdbBlob* blob, Uint32 part, Uint32 count);
   int receive_event();
-  const bool tableNameChanged() const;
-  const bool tableFrmChanged() const;
-  const bool tableFragmentationChanged() const;
-  const bool tableRangeListChanged() const;
+  bool tableNameChanged() const;
+  bool tableFrmChanged() const;
+  bool tableFragmentationChanged() const;
+  bool tableRangeListChanged() const;
   Uint64 getGCI();
   Uint32 getAnyValue() const;
   Uint64 getLatestGCI();

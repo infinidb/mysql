@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -29,18 +29,6 @@ Created 11/5/1995 Heikki Tuuri
 #include "univ.i"
 #include "ut0byte.h"
 #include "buf0types.h"
-
-/** The return type of buf_LRU_free_block() */
-enum buf_lru_free_block_status {
-	/** freed */
-	BUF_LRU_FREED = 0,
-	/** not freed because the caller asked to remove the
-	uncompressed frame but the control block cannot be
-	relocated */
-	BUF_LRU_CANNOT_RELOCATE,
-	/** not freed because of some other reason */
-	BUF_LRU_NOT_FREED
-};
 
 /******************************************************************//**
 Tries to remove LRU flushed blocks from the end of the LRU list and put them
@@ -69,7 +57,7 @@ These are low-level functions
 #########################################################################*/
 
 /** Minimum LRU list length for which the LRU_old pointer is defined */
-#define BUF_LRU_OLD_MIN_LEN	80
+#define BUF_LRU_OLD_MIN_LEN	512	/* 8 megabytes of 16k pages */
 
 /** Maximum LRU list search length in buf_flush_LRU_recommendation() */
 #define BUF_LRU_FREE_SEARCH_LEN		(5 + 2 * BUF_READ_AHEAD_AREA)
@@ -84,15 +72,7 @@ void
 buf_LRU_invalidate_tablespace(
 /*==========================*/
 	ulint	id);	/*!< in: space id */
-/******************************************************************//**
-Gets the minimum LRU_position field for the blocks in an initial segment
-(determined by BUF_LRU_INITIAL_RATIO) of the LRU list. The limit is not
-guaranteed to be precise, because the ulint_clock may wrap around.
-@return	the limit; zero if could not determine it */
-UNIV_INTERN
-ulint
-buf_LRU_get_recent_limit(void);
-/*==========================*/
+#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /********************************************************************//**
 Insert a compressed block into buf_pool->zip_clean in the LRU order. */
 UNIV_INTERN
@@ -100,31 +80,28 @@ void
 buf_LRU_insert_zip_clean(
 /*=====================*/
 	buf_page_t*	bpage);	/*!< in: pointer to the block in question */
+#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 /******************************************************************//**
 Try to free a block.  If bpage is a descriptor of a compressed-only
 page, the descriptor object will be freed as well.
 
-NOTE: If this function returns BUF_LRU_FREED, it will not temporarily
+NOTE: If this function returns TRUE, it will temporarily
 release buf_pool_mutex.  Furthermore, the page frame will no longer be
 accessible via bpage.
 
 The caller must hold buf_pool_mutex and buf_page_get_mutex(bpage) and
 release these two mutexes after the call.  No other
 buf_page_get_mutex() may be held when calling this function.
-@return BUF_LRU_FREED if freed, BUF_LRU_CANNOT_RELOCATE or
-BUF_LRU_NOT_FREED otherwise. */
+@return TRUE if freed, FALSE otherwise. */
 UNIV_INTERN
-enum buf_lru_free_block_status
+ibool
 buf_LRU_free_block(
 /*===============*/
 	buf_page_t*	bpage,	/*!< in: block to be freed */
-	ibool		zip,	/*!< in: TRUE if should remove also the
+	ibool		zip)	/*!< in: TRUE if should remove also the
 				compressed page of an uncompressed page */
-	ibool*		buf_pool_mutex_released);
-				/*!< in: pointer to a variable that will
-				be assigned TRUE if buf_pool_mutex
-				was temporarily released, or NULL */
+	__attribute__((nonnull));
 /******************************************************************//**
 Try to free a replaceable block.
 @return	TRUE if found and freed */
@@ -155,10 +132,9 @@ LRU list to the free list.
 @return	the free control block, in state BUF_BLOCK_READY_FOR_USE */
 UNIV_INTERN
 buf_block_t*
-buf_LRU_get_free_block(
-/*===================*/
-	ulint	zip_size);	/*!< in: compressed page size in bytes,
-				or 0 if uncompressed tablespace */
+buf_LRU_get_free_block(void)
+/*========================*/
+	__attribute__((warn_unused_result));
 
 /******************************************************************//**
 Puts a block back to the free list. */
@@ -201,6 +177,18 @@ void
 buf_LRU_make_block_old(
 /*===================*/
 	buf_page_t*	bpage);	/*!< in: control block */
+/**********************************************************************//**
+Updates buf_LRU_old_ratio.
+@return	updated old_pct */
+UNIV_INTERN
+uint
+buf_LRU_old_ratio_update(
+/*=====================*/
+	uint	old_pct,/*!< in: Reserve this percentage of
+			the buffer pool for "old" blocks. */
+	ibool	adjust);/*!< in: TRUE=adjust the LRU list;
+			FALSE=just assign buf_LRU_old_ratio
+			during the initialization of InnoDB */
 /********************************************************************//**
 Update the historical stats that we are collecting for LRU eviction
 policy at the end of each interval. */
@@ -226,6 +214,35 @@ void
 buf_LRU_print(void);
 /*===============*/
 #endif /* UNIV_DEBUG_PRINT || UNIV_DEBUG || UNIV_BUF_DEBUG */
+
+/** @name Heuristics for detecting index scan @{ */
+/** Reserve this much/BUF_LRU_OLD_RATIO_DIV of the buffer pool for
+"old" blocks.  Protected by buf_pool_mutex. */
+extern uint	buf_LRU_old_ratio;
+/** The denominator of buf_LRU_old_ratio. */
+#define BUF_LRU_OLD_RATIO_DIV	1024
+/** Maximum value of buf_LRU_old_ratio.
+@see buf_LRU_old_adjust_len
+@see buf_LRU_old_ratio_update */
+#define BUF_LRU_OLD_RATIO_MAX	BUF_LRU_OLD_RATIO_DIV
+/** Minimum value of buf_LRU_old_ratio.
+@see buf_LRU_old_adjust_len
+@see buf_LRU_old_ratio_update
+The minimum must exceed
+(BUF_LRU_OLD_TOLERANCE + 5) * BUF_LRU_OLD_RATIO_DIV / BUF_LRU_OLD_MIN_LEN. */
+#define BUF_LRU_OLD_RATIO_MIN	51
+
+#if BUF_LRU_OLD_RATIO_MIN >= BUF_LRU_OLD_RATIO_MAX
+# error "BUF_LRU_OLD_RATIO_MIN >= BUF_LRU_OLD_RATIO_MAX"
+#endif
+#if BUF_LRU_OLD_RATIO_MAX > BUF_LRU_OLD_RATIO_DIV
+# error "BUF_LRU_OLD_RATIO_MAX > BUF_LRU_OLD_RATIO_DIV"
+#endif
+
+/** Move blocks to "new" LRU list only if the first access was at
+least this many milliseconds ago.  Not protected by any mutex or latch. */
+extern uint	buf_LRU_old_threshold_ms;
+/* @} */
 
 /** @brief Statistics for selecting the LRU list for eviction.
 

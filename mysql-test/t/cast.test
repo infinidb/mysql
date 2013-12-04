@@ -282,5 +282,44 @@ SELECT 1 FROM
 ) AS s LIMIT 1;
 DROP TABLE t1;
 
+--echo #
+--echo # Bug #11765023: 57934: DOS POSSIBLE SINCE BINARY CASTING 
+--echo #   DOESN'T ADHERE TO MAX_ALLOWED_PACKET
+
+SET @@GLOBAL.max_allowed_packet=2048;
+# reconnect to make the new max packet size take effect
+--connect (newconn, localhost, root,,)
+
+SELECT CONVERT('a', BINARY(2049));  
+SELECT CONVERT('a', CHAR(2049));  
+
+connection default;
+disconnect newconn;
+SET @@GLOBAL.max_allowed_packet=default;
+
+--echo #
+--echo # Bug#13519724 63793: CRASH IN DTCOLLATION::SET(DTCOLLATION &SET)
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(50));
+
+SELECT a FROM t1 
+WHERE CAST(a as BINARY)=x'62736D697468' 
+  AND CAST(a AS BINARY)=x'65736D697468';
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#13581962 HIGH MEMORY USAGE ATTEMPT, THEN CRASH WITH 
+--echo # LONGTEXT, UNION, USER VARIABLE
+--echo # Bug#14096619 UNABLE TO RESTORE DATABASE DUMP
+--echo #
+
+CREATE TABLE t1 AS SELECT CONCAT(CAST(REPEAT('9', 1000) AS SIGNED)),
+                          CONCAT(CAST(REPEAT('9', 1000) AS UNSIGNED));
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # End of test for Bug#13581962, Bug#14096619
 
 --echo End of 5.1 tests

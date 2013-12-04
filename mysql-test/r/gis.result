@@ -707,10 +707,7 @@ numgeometries(b) IS NULL, numinteriorrings(b) IS NULL, numpoints(b) IS NULL,
 area(b) IS NULL, glength(b) IS NULL, srid(b) IS NULL, x(b) IS NULL, 
 y(b) IS NULL
 from t1;
-geometryfromtext(b) IS NULL	geometryfromwkb(b) IS NULL	astext(b) IS NULL	aswkb(b) IS NULL	geometrytype(b) IS NULL	centroid(b) IS NULL	envelope(b) IS NULL	startpoint(b) IS NULL	endpoint(b) IS NULL	exteriorring(b) IS NULL	pointn(b, 1) IS NULL	geometryn(b, 1) IS NULL	interiorringn(b, 1) IS NULL	multipoint(b) IS NULL	isempty(b) IS NULL	issimple(b) IS NULL	isclosed(b) IS NULL	dimension(b) IS NULL	numgeometries(b) IS NULL	numinteriorrings(b) IS NULL	numpoints(b) IS NULL	area(b) IS NULL	glength(b) IS NULL	srid(b) IS NULL	x(b) IS NULL	y(b) IS NULL
-1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
-1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
-1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+ERROR 22007: Illegal non geometric '`test`.`t1`.`b`' value found during parsing
 select 
 within(b, b) IS NULL, contains(b, b) IS NULL, overlaps(b, b) IS NULL, 
 equals(b, b) IS NULL, disjoint(b, b) IS NULL, touches(b, b) IS NULL, 
@@ -725,10 +722,7 @@ point(b, b) IS NULL, linestring(b) IS NULL, polygon(b) IS NULL, multipoint(b) IS
 multilinestring(b) IS NULL, multipolygon(b) IS NULL, 
 geometrycollection(b) IS NULL
 from t1;
-point(b, b) IS NULL	linestring(b) IS NULL	polygon(b) IS NULL	multipoint(b) IS NULL	multilinestring(b) IS NULL	multipolygon(b) IS NULL	geometrycollection(b) IS NULL
-0	1	1	1	1	1	1
-1	1	1	1	1	1	1
-0	1	1	1	1	1	1
+ERROR 22007: Illegal non geometric '`test`.`t1`.`b`' value found during parsing
 drop table t1;
 CREATE TABLE t1(a POINT) ENGINE=MyISAM;
 INSERT INTO t1 VALUES (NULL);
@@ -966,12 +960,49 @@ COUNT(*)
 2
 DROP TABLE t1, t2;
 End of 5.0 tests
+#
+# Test for bug #58650 "Failing assertion: primary_key_no == -1 ||
+#                      primary_key_no == 0".
+#
+drop table if exists t1;
+# The minimal test case.
+create table t1 (a int not null, b linestring not null, unique key b (b(12)), unique key a (a));
+drop table t1;
+# The original test case.
+create table t1 (a int not null, b linestring not null, unique key b (b(12)));
+create unique index a on t1(a);
+drop table t1;
 create table `t1` (`col002` point)engine=myisam;
 insert into t1 values (),(),();
 select min(`col002`) from t1 union select `col002` from t1;
 min(`col002`)
 NULL
 drop table t1;
+#
+# Bug #47780: crash when comparing GIS items from subquery
+#
+CREATE TABLE t1(a INT, b MULTIPOLYGON);
+INSERT INTO t1 VALUES 
+(0,
+GEOMFROMTEXT(
+'multipolygon(((1 2,3 4,5 6,7 8,9 8),(7 6,5 4,3 2,1 2,3 4)))'));
+# must not crash
+SELECT 1 FROM t1 WHERE a <> (SELECT GEOMETRYCOLLECTIONFROMWKB(b) FROM t1);
+1
+DROP TABLE t1;
+#
+# Bug #49250 : spatial btree index corruption and crash
+# Part one : spatial syntax check
+#
+CREATE TABLE t1(col1 MULTIPOLYGON NOT NULL,
+SPATIAL INDEX USING BTREE (col1));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING BTREE (col1))' at line 2
+CREATE TABLE t2(col1 MULTIPOLYGON NOT NULL);
+CREATE SPATIAL INDEX USING BTREE ON t2(col);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING BTREE ON t2(col)' at line 1
+ALTER TABLE t2 ADD SPATIAL INDEX USING BTREE (col1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING BTREE (col1)' at line 1
+DROP TABLE t2;
 End of 5.0 tests
 create table t1 (f1 tinyint(1), f2 char(1), f3 varchar(1), f4 geometry, f5 datetime);
 create view v1 as select * from t1;
@@ -985,51 +1016,75 @@ f5	datetime	YES		NULL
 drop view v1;
 drop table t1;
 SELECT MultiPoint(12345,'');
-MultiPoint(12345,'')
+ERROR 22007: Illegal non geometric '12345' value found during parsing
+SELECT 1 FROM (SELECT GREATEST(1,GEOMETRYCOLLECTION('00000','00000')) b FROM DUAL) AS d WHERE (LINESTRING(d.b));
+ERROR 22007: Illegal non geometric ''00000'' value found during parsing
+#
+# BUG#51875: crash when loading data into geometry function polyfromwkb
+#
+SET @a=0x00000000030000000100000000000000000000000000144000000000000014400000000000001840000000000000184000000000000014400000000000001440;
+SET @a=POLYFROMWKB(@a);
+SET @a=0x00000000030000000000000000000000000000000000144000000000000014400000000000001840000000000000184000000000000014400000000000001440;
+SET @a=POLYFROMWKB(@a);
+create table t1(a polygon NOT NULL)engine=myisam;
+insert into t1 values (geomfromtext("point(0 1)"));
+insert into t1 values (geomfromtext("point(1 0)"));
+select * from (select polygon(t1.a) as p from t1 order by t1.a) d;
+p
 NULL
-SELECT MultiPoint(123451,'');
-MultiPoint(123451,'')
 NULL
-SELECT MultiPoint(1234512,'');
-MultiPoint(1234512,'')
+drop table t1;
+#
+# Test for bug #59888 "debug assertion when attempt to create spatial index
+#                      on char > 31 bytes".
+#
+create table t1(a char(32) not null) engine=myisam;
+create spatial index i on t1 (a);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+drop table t1;
+CREATE TABLE t0 (a BINARY(32) NOT NULL);
+CREATE SPATIAL INDEX i on t0 (a);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+INSERT INTO t0 VALUES (1);
+CREATE TABLE t1(
+col0 BINARY NOT NULL,
+col2 TIMESTAMP,
+SPATIAL INDEX i1 (col0)
+) ENGINE=MyISAM;
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+CREATE TABLE t1 (
+col0 BINARY NOT NULL,
+col2 TIMESTAMP
+) ENGINE=MyISAM;
+CREATE SPATIAL INDEX idx0 ON t1(col0);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+ALTER TABLE t1 ADD SPATIAL INDEX i1 (col0);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+CREATE TABLE t2 (
+col0 INTEGER NOT NULL,
+col1 POINT,
+col2 POINT
+);
+CREATE SPATIAL INDEX idx0 ON t2 (col1, col2);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+CREATE TABLE t3 (
+col0 INTEGER NOT NULL,
+col1 POINT,
+col2 LINESTRING,
+SPATIAL INDEX i1 (col1, col2)
+);
+ERROR HY000: Incorrect arguments to SPATIAL INDEX
+DROP TABLE t0, t1, t2;
+#
+# BUG#12414917 - ISCLOSED() CRASHES ON 64-BIT BUILDS
+#
+SELECT ISCLOSED(CONVERT(CONCAT('     ', 0x2), BINARY(20)));
+ISCLOSED(CONVERT(CONCAT('     ', 0x2), BINARY(20)))
 NULL
-SELECT MultiPoint(12345123,'');
-MultiPoint(12345123,'')
-NULL
-SELECT MultiLineString(12345,'');
-MultiLineString(12345,'')
-NULL
-SELECT MultiLineString(123451,'');
-MultiLineString(123451,'')
-NULL
-SELECT MultiLineString(1234512,'');
-MultiLineString(1234512,'')
-NULL
-SELECT MultiLineString(12345123,'');
-MultiLineString(12345123,'')
-NULL
-SELECT LineString(12345,'');
-LineString(12345,'')
-NULL
-SELECT LineString(123451,'');
-LineString(123451,'')
-NULL
-SELECT LineString(1234512,'');
-LineString(1234512,'')
-NULL
-SELECT LineString(12345123,'');
-LineString(12345123,'')
-NULL
-SELECT Polygon(12345,'');
-Polygon(12345,'')
-NULL
-SELECT Polygon(123451,'');
-Polygon(123451,'')
-NULL
-SELECT Polygon(1234512,'');
-Polygon(1234512,'')
-NULL
-SELECT Polygon(12345123,'');
-Polygon(12345123,'')
-NULL
+#
+# BUG#12537203 - CRASH WHEN SUBSELECTING GLOBAL VARIABLES IN 
+# GEOMETRY FUNCTION ARGUMENTS
+#
+SELECT GEOMETRYCOLLECTION((SELECT @@OLD));
+ERROR 22007: Illegal non geometric '' value found during parsing
 End of 5.1 tests

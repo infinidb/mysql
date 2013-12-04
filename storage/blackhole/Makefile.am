@@ -1,4 +1,4 @@
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,14 +35,14 @@ noinst_HEADERS =	ha_blackhole.h
 EXTRA_LTLIBRARIES =	ha_blackhole.la
 pkgplugin_LTLIBRARIES =	@plugin_blackhole_shared_target@
 ha_blackhole_la_LDFLAGS=-module -rpath $(pkgplugindir)
-ha_blackhole_la_CXXFLAGS=$(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
+ha_blackhole_la_CXXFLAGS=$(AM_CXXFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 ha_blackhole_la_CFLAGS=	$(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 ha_blackhole_la_SOURCES=ha_blackhole.cc
 
 
 EXTRA_LIBRARIES =	libblackhole.a
 noinst_LIBRARIES =	@plugin_blackhole_static_target@
-libblackhole_a_CXXFLAGS=$(AM_CFLAGS)
+libblackhole_a_CXXFLAGS=$(AM_CXXFLAGS)
 libblackhole_a_CFLAGS =	$(AM_CFLAGS)
 libblackhole_a_SOURCES=	ha_blackhole.cc
 

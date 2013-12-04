@@ -878,6 +878,8 @@ ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT 
 CREATE TABLE b15776 (a char(4294967296));
 ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
 CREATE TABLE b15776 (a year(4294967295));
+Warnings:
+Note	1287	'YEAR(4294967295)' is deprecated and will be removed in a future release. Please use YEAR(4) instead
 INSERT INTO b15776 VALUES (42);
 SELECT * FROM b15776;
 a
@@ -886,16 +888,18 @@ DROP TABLE b15776;
 CREATE TABLE b15776 (a year(4294967296));
 ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
 CREATE TABLE b15776 (a year(0));
+Warnings:
+Note	1287	'YEAR(0)' is deprecated and will be removed in a future release. Please use YEAR(4) instead
 DROP TABLE b15776;
 CREATE TABLE b15776 (a year(-2));
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-2))' at line 1
 CREATE TABLE b15776 (a timestamp(4294967294));
 Warnings:
-Warning	1287	The syntax 'TIMESTAMP(4294967294)' is deprecated and will be removed in MySQL 6.0. Please use 'TIMESTAMP' instead
+Warning	1287	'TIMESTAMP(4294967294)' is deprecated and will be removed in a future release. Please use 'TIMESTAMP' instead
 DROP TABLE b15776;
 CREATE TABLE b15776 (a timestamp(4294967295));
 Warnings:
-Warning	1287	The syntax 'TIMESTAMP(4294967295)' is deprecated and will be removed in MySQL 6.0. Please use 'TIMESTAMP' instead
+Warning	1287	'TIMESTAMP(4294967295)' is deprecated and will be removed in a future release. Please use 'TIMESTAMP' instead
 DROP TABLE b15776;
 CREATE TABLE b15776 (a timestamp(4294967296));
 ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
@@ -974,3 +978,14 @@ ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967
 explain select convert(1, binary(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 End of 5.0 tests
+# Bug #52160: crash and inconsistent results when grouping
+#             by a function and column
+CREATE FUNCTION f1() RETURNS TINYBLOB RETURN 1;
+CREATE TABLE t1(a CHAR(1));
+INSERT INTO t1 VALUES ('0'), ('0');
+SELECT COUNT(*) FROM t1 GROUP BY f1(), a;
+COUNT(*)
+2
+DROP FUNCTION f1;
+DROP TABLE t1;
+End of 5.1 tests

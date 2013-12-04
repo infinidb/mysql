@@ -1,4 +1,6 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2001, 2005, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*****************************************************************************
 ** Simulation of posix threads calls for WIN95 and NT
@@ -134,6 +137,38 @@ void pthread_exit(void *a)
 int win_pthread_setspecific(void *a,void *b,uint length)
 {
   memcpy(a,b,length);
+  return 0;
+}
+
+
+/*
+ One time initialization. For simplicity, we assume initializer thread
+ does not exit within init_routine().
+*/
+int my_pthread_once(my_pthread_once_t *once_control, 
+    void (*init_routine)(void))
+{
+  LONG state= InterlockedCompareExchange(once_control, MY_PTHREAD_ONCE_INPROGRESS,
+                                          MY_PTHREAD_ONCE_INIT);
+  switch(state)
+  {
+  case MY_PTHREAD_ONCE_INIT:
+    /* This is initializer thread */
+    (*init_routine)();
+    *once_control= MY_PTHREAD_ONCE_DONE;
+    break;
+
+  case MY_PTHREAD_ONCE_INPROGRESS:
+    /* init_routine in progress. Wait for its completion */
+    while(*once_control == MY_PTHREAD_ONCE_INPROGRESS)
+    {
+      Sleep(1);
+    }
+    break;
+  case MY_PTHREAD_ONCE_DONE:
+    /* Nothing to do */
+    break;
+  }
   return 0;
 }
 

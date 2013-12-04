@@ -1,4 +1,4 @@
-/* Copyright (C) 2006 MySQL AB
+/* Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved. 
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
    Library for providing TAP support for testing C and C++ was written
    by Mats Kindahl <mats@mysql.com>.
@@ -40,7 +40,7 @@
 
    @ingroup MyTAP_Internal
  */
-static TEST_DATA g_test = { 0, 0, 0, "" };
+static TEST_DATA g_test = { NO_PLAN, 0, 0, "" };
 
 /**
    Output stream for test report message.
@@ -74,6 +74,7 @@ vemit_tap(int pass, char const *fmt, va_list ap)
           (fmt && *fmt) ? " - " : "");
   if (fmt && *fmt)
     vfprintf(tapout, fmt, ap);
+  fflush(tapout);
 }
 
 
@@ -96,6 +97,7 @@ static void
 emit_dir(const char *dir, const char *why)
 {
   fprintf(tapout, " # %s %s", dir, why);
+  fflush(tapout);
 }
 
 
@@ -108,6 +110,7 @@ static void
 emit_endl()
 {
   fprintf(tapout, "\n");
+  fflush(tapout);
 }
 
 static void
@@ -183,7 +186,10 @@ plan(int const count)
     break;
   default:
     if (count > 0)
+    {
       fprintf(tapout, "1..%d\n", count);
+      fflush(tapout);
+    }
     break;
   }
 }
@@ -196,6 +202,7 @@ skip_all(char const *reason, ...)
   va_start(ap, reason);
   fprintf(tapout, "1..0 # skip ");
   vfprintf(tapout, reason, ap);
+  fflush(tapout);
   va_end(ap);
   exit(0);
 }
@@ -216,9 +223,26 @@ ok(int const pass, char const *fmt, ...)
   emit_endl();
 }
 
+void
+ok1(int const pass)
+{
+  va_list ap;
+
+  memset(&ap, 0, sizeof(ap));
+
+  if (!pass && *g_test.todo == '\0')
+    ++g_test.failed;
+
+  vemit_tap(pass, NULL, ap);
+
+  if (*g_test.todo != '\0')
+    emit_dir("todo", g_test.todo);
+
+  emit_endl();
+}
 
 void
-skip(int how_many, char const *const fmt, ...)
+skip(int how_many, char const *fmt, ...)
 {
   char reason[80];
   if (fmt && *fmt)

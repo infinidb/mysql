@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
@@ -18,8 +18,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -38,6 +38,7 @@ Created 9/11/1995 Heikki Tuuri
 #include "os0thread.h"
 #include "mem0mem.h"
 #include "srv0srv.h"
+#include "os0sync.h" /* for INNODB_RW_LOCKS_USE_ATOMICS */
 
 /*
 	IMPLEMENTATION OF THE RW_LOCK
@@ -259,6 +260,9 @@ rw_lock_create_func(
 	contains garbage at initialization and cannot be used for
 	recursive x-locking. */
 	lock->recursive = FALSE;
+	/* Silence Valgrind when UNIV_DEBUG_VALGRIND is not enabled. */
+	memset((void*) &lock->writer_thread, 0, sizeof lock->writer_thread);
+	UNIV_MEM_INVALID(&lock->writer_thread, sizeof lock->writer_thread);
 
 #ifdef UNIV_SYNC_DEBUG
 	UT_LIST_INIT(lock->debug_list);
@@ -266,7 +270,7 @@ rw_lock_create_func(
 	lock->level = level;
 #endif /* UNIV_SYNC_DEBUG */
 
-	lock->magic_n = RW_LOCK_MAGIC_N;
+	ut_d(lock->magic_n = RW_LOCK_MAGIC_N);
 
 	lock->cfile_name = cfile_name;
 	lock->cline = (unsigned int) cline;
@@ -281,10 +285,8 @@ rw_lock_create_func(
 
 	mutex_enter(&rw_lock_list_mutex);
 
-	if (UT_LIST_GET_LEN(rw_lock_list) > 0) {
-		ut_a(UT_LIST_GET_FIRST(rw_lock_list)->magic_n
-		     == RW_LOCK_MAGIC_N);
-	}
+	ut_ad(UT_LIST_GET_FIRST(rw_lock_list) == NULL
+	      || UT_LIST_GET_FIRST(rw_lock_list)->magic_n == RW_LOCK_MAGIC_N);
 
 	UT_LIST_ADD_FIRST(list, rw_lock_list, lock);
 
@@ -304,8 +306,6 @@ rw_lock_free(
 	ut_ad(rw_lock_validate(lock));
 	ut_a(lock->lock_word == X_LOCK_DECR);
 
-	lock->magic_n = 0;
-
 #ifndef INNODB_RW_LOCKS_USE_ATOMICS
 	mutex_free(rw_lock_get_mutex(lock));
 #endif /* INNODB_RW_LOCKS_USE_ATOMICS */
@@ -315,16 +315,16 @@ rw_lock_free(
 
 	os_event_free(lock->wait_ex_event);
 
-	if (UT_LIST_GET_PREV(list, lock)) {
-		ut_a(UT_LIST_GET_PREV(list, lock)->magic_n == RW_LOCK_MAGIC_N);
-	}
-	if (UT_LIST_GET_NEXT(list, lock)) {
-		ut_a(UT_LIST_GET_NEXT(list, lock)->magic_n == RW_LOCK_MAGIC_N);
-	}
+	ut_ad(UT_LIST_GET_PREV(list, lock) == NULL
+	      || UT_LIST_GET_PREV(list, lock)->magic_n == RW_LOCK_MAGIC_N);
+	ut_ad(UT_LIST_GET_NEXT(list, lock) == NULL
+	      || UT_LIST_GET_NEXT(list, lock)->magic_n == RW_LOCK_MAGIC_N);
 
 	UT_LIST_REMOVE(list, rw_lock_list, lock);
 
 	mutex_exit(&rw_lock_list_mutex);
+
+	ut_d(lock->magic_n = 0);
 }
 
 #ifdef UNIV_DEBUG
@@ -338,12 +338,15 @@ rw_lock_validate(
 /*=============*/
 	rw_lock_t*	lock)	/*!< in: rw-lock */
 {
+	ulint	waiters;
+	lint	lock_word;
+
 	ut_a(lock);
 
-	ulint waiters = rw_lock_get_waiters(lock);
-	lint lock_word = lock->lock_word;
+	waiters = rw_lock_get_waiters(lock);
+	lock_word = lock->lock_word;
 
-	ut_a(lock->magic_n == RW_LOCK_MAGIC_N);
+	ut_ad(lock->magic_n == RW_LOCK_MAGIC_N);
 	ut_a(waiters == 0 || waiters == 1);
 	ut_a(lock_word > -X_LOCK_DECR ||(-lock_word) % X_LOCK_DECR == 0);
 
@@ -609,6 +612,9 @@ rw_lock_x_lock_func(
 	ibool   spinning = FALSE;
 
 	ut_ad(rw_lock_validate(lock));
+#ifdef UNIV_SYNC_DEBUG
+	ut_ad(!rw_lock_own(lock, RW_LOCK_SHARED));
+#endif /* UNIV_SYNC_DEBUG */
 
 	i = 0;
 
@@ -763,7 +769,9 @@ rw_lock_add_debug_info(
 	rw_lock_debug_mutex_exit();
 
 	if ((pass == 0) && (lock_type != RW_LOCK_WAIT_EX)) {
-		sync_thread_add_level(lock, lock->level);
+		sync_thread_add_level(lock, lock->level,
+				      lock_type == RW_LOCK_EX
+				      && lock->lock_word < 0);
 	}
 }
 
@@ -923,11 +931,13 @@ rw_lock_list_print_info(
 				putc('\n', file);
 			}
 
+			rw_lock_debug_mutex_enter();
 			info = UT_LIST_GET_FIRST(lock->debug_list);
 			while (info != NULL) {
-				rw_lock_debug_print(info);
+				rw_lock_debug_print(file, info);
 				info = UT_LIST_GET_NEXT(list, info);
 			}
+			rw_lock_debug_mutex_exit();
 		}
 #ifndef INNODB_RW_LOCKS_USE_ATOMICS
 		mutex_exit(&(lock->mutex));
@@ -971,11 +981,13 @@ rw_lock_print(
 			putc('\n', stderr);
 		}
 
+		rw_lock_debug_mutex_enter();
 		info = UT_LIST_GET_FIRST(lock->debug_list);
 		while (info != NULL) {
-			rw_lock_debug_print(info);
+			rw_lock_debug_print(stderr, info);
 			info = UT_LIST_GET_NEXT(list, info);
 		}
+		rw_lock_debug_mutex_exit();
 	}
 }
 
@@ -985,28 +997,29 @@ UNIV_INTERN
 void
 rw_lock_debug_print(
 /*================*/
+	FILE*			f,	/*!< in: output stream */
 	rw_lock_debug_t*	info)	/*!< in: debug struct */
 {
 	ulint	rwt;
 
 	rwt	  = info->lock_type;
 
-	fprintf(stderr, "Locked: thread %ld file %s line %ld  ",
+	fprintf(f, "Locked: thread %lu file %s line %lu  ",
 		(ulong) os_thread_pf(info->thread_id), info->file_name,
 		(ulong) info->line);
 	if (rwt == RW_LOCK_SHARED) {
-		fputs("S-LOCK", stderr);
+		fputs("S-LOCK", f);
 	} else if (rwt == RW_LOCK_EX) {
-		fputs("X-LOCK", stderr);
+		fputs("X-LOCK", f);
 	} else if (rwt == RW_LOCK_WAIT_EX) {
-		fputs("WAIT X-LOCK", stderr);
+		fputs("WAIT X-LOCK", f);
 	} else {
 		ut_error;
 	}
 	if (info->pass != 0) {
-		fprintf(stderr, " pass value %lu", (ulong) info->pass);
+		fprintf(f, " pass value %lu", (ulong) info->pass);
 	}
-	putc('\n', stderr);
+	putc('\n', f);
 }
 
 /***************************************************************//**

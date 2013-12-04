@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* Write some debug info */
@@ -168,6 +171,21 @@ TEST_join(JOIN *join)
   uint i,ref;
   DBUG_ENTER("TEST_join");
 
+  /*
+    Assemble results of all the calls to full_name() first,
+    in order not to garble the tabular output below.
+  */
+  String ref_key_parts[MAX_TABLES];
+  for (i= 0; i < join->tables; i++)
+  {
+    JOIN_TAB *tab= join->join_tab + i;
+    for (ref= 0; ref < tab->ref.key_parts; ref++)
+    {
+      ref_key_parts[i].append(tab->ref.items[ref]->full_name());
+      ref_key_parts[i].append("  ");
+    }
+  }
+
   DBUG_LOCK_FILE;
   VOID(fputs("\nInfo about JOIN\n",DBUG_FILE));
   for (i=0 ; i < join->tables ; i++)
@@ -199,13 +217,8 @@ TEST_join(JOIN *join)
     }
     if (tab->ref.key_parts)
     {
-      VOID(fputs("                  refs: ",DBUG_FILE));
-      for (ref=0 ; ref < tab->ref.key_parts ; ref++)
-      {
-	Item *item=tab->ref.items[ref];
-	fprintf(DBUG_FILE,"%s  ", item->full_name());
-      }
-      VOID(fputc('\n',DBUG_FILE));
+      fprintf(DBUG_FILE,
+              "                  refs:  %s\n", ref_key_parts[i].ptr());
     }
   }
   DBUG_UNLOCK_FILE;

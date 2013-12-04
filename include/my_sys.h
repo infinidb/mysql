@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -27,6 +27,19 @@ typedef struct my_aio_result {
 } my_aio_result;
 #endif
 
+#ifdef HAVE_VALGRIND
+# include <valgrind/memcheck.h>
+# define MEM_UNDEFINED(a,len) VALGRIND_MAKE_MEM_UNDEFINED(a,len)
+# define MEM_NOACCESS(a,len) VALGRIND_MAKE_MEM_NOACCESS(a,len)
+# define MEM_CHECK_ADDRESSABLE(a,len) VALGRIND_CHECK_MEM_IS_ADDRESSABLE(a,len)
+# define MEM_CHECK_DEFINED(a,len) VALGRIND_CHECK_MEM_IS_DEFINED(a,len)
+#else /* HAVE_VALGRIND */
+# define MEM_UNDEFINED(a,len) ((void) 0)
+# define MEM_NOACCESS(a,len) ((void) 0)
+# define MEM_CHECK_ADDRESSABLE(a,len) ((void) 0)
+# define MEM_CHECK_DEFINED(a,len) ((void) 0)
+#endif /* HAVE_VALGRIND */
+
 #ifndef THREAD
 extern int NEAR my_errno;		/* Last error in mysys */
 #else
@@ -39,7 +52,7 @@ extern int NEAR my_errno;		/* Last error in mysys */
 
 #define MYSYS_PROGRAM_USES_CURSES()  { error_handler_hook = my_message_curses;	mysys_uses_curses=1; }
 #define MYSYS_PROGRAM_DONT_USE_CURSES()  { error_handler_hook = my_message_no_curses; mysys_uses_curses=0;}
-#define MY_INIT(name);		{ my_progname= name; my_init(); }
+#define MY_INIT(name)   { my_progname= name; my_init(); }
 
 #define MY_FILE_ERROR	((size_t) -1)
 
@@ -69,6 +82,7 @@ extern int NEAR my_errno;		/* Last error in mysys */
 #define MY_HOLD_ON_ERROR 256	/* my_realloc() ; Return old ptr on error */
 #define MY_DONT_OVERWRITE_FILE 1024	/* my_copy: Don't overwrite file */
 #define MY_THREADSAFE 2048      /* my_seek(): lock fd mutex */
+#define MY_SYNC       4096      /* my_copy(): sync dst file */
 
 #define MY_CHECK_ERROR	1	/* Params to my_end; Check open-close */
 #define MY_GIVE_INFO	2	/* Give time info about process*/
@@ -142,7 +156,7 @@ extern int NEAR my_errno;		/* Last error in mysys */
 #define my_memdup(A,B,C) _my_memdup((A),(B), __FILE__,__LINE__,C)
 #define my_strdup(A,C) _my_strdup((A), __FILE__,__LINE__,C)
 #define my_strndup(A,B,C) _my_strndup((A),(B),__FILE__,__LINE__,C)
-#define TRASH(A,B) bfill(A, B, 0x8F)
+#define TRASH(A,B) do { bfill(A, B, 0x8F); MEM_UNDEFINED(A, B); } while (0)
 #define QUICK_SAFEMALLOC sf_malloc_quick=1
 #define NORMAL_SAFEMALLOC sf_malloc_quick=0
 extern uint sf_malloc_prehunc,sf_malloc_endhunc,sf_malloc_quick;
@@ -170,8 +184,18 @@ extern char *my_strndup(const char *from, size_t length,
 #define CALLER_INFO_PROTO   /* nothing */
 #define CALLER_INFO         /* nothing */
 #define ORIG_CALLER_INFO    /* nothing */
-#define TRASH(A,B) /* nothing */
+#define TRASH(A,B) do{MEM_CHECK_ADDRESSABLE(A,B);MEM_UNDEFINED(A,B);} while (0)
 #endif
+
+#if defined(ENABLED_DEBUG_SYNC)
+extern void (*debug_sync_C_callback_ptr)(const char *, size_t);
+#define DEBUG_SYNC_C(_sync_point_name_) do {                            \
+    if (debug_sync_C_callback_ptr != NULL)                              \
+      (*debug_sync_C_callback_ptr)(STRING_WITH_LEN(_sync_point_name_)); } \
+  while(0)
+#else
+#define DEBUG_SYNC_C(_sync_point_name_)
+#endif /* defined(ENABLED_DEBUG_SYNC) */
 
 //@InfiniDB. @bug4585 For InnoDB upgrade.
 #if defined(ENABLED_DEBUG_SYNC)
@@ -224,6 +248,7 @@ extern char *home_dir;			/* Home directory for user */
 extern const char *my_progname;		/* program-name (printed in errors) */
 extern char NEAR curr_dir[];		/* Current directory for user */
 extern int (*error_handler_hook)(uint my_err, const char *str,myf MyFlags);
+extern void(*sql_print_warning_hook)(const char *format,...);
 extern int (*fatal_error_handler_hook)(uint my_err, const char *str,
 				       myf MyFlags);
 extern uint my_file_limit;
@@ -639,6 +664,7 @@ extern File my_sopen(const char *path, int oflag, int shflag, int pmode);
 #endif
 extern int check_if_legal_filename(const char *path);
 extern int check_if_legal_tablename(const char *path);
+extern my_bool is_filename_allowed(const char *name, size_t length);
 
 #if defined(__WIN__) && defined(__NT__)
 extern int nt_share_delete(const char *name,myf MyFlags);
@@ -654,6 +680,7 @@ extern void init_glob_errs(void);
 extern void wait_for_free_space(const char *filename, int errors);
 extern FILE *my_fopen(const char *FileName,int Flags,myf MyFlags);
 extern FILE *my_fdopen(File Filedes,const char *name, int Flags,myf MyFlags);
+extern FILE *my_freopen(const char *path, const char *mode, FILE *stream);
 extern int my_fclose(FILE *fd,myf MyFlags);
 extern int my_chsize(File fd,my_off_t newlength, int filler, myf MyFlags);
 extern int my_sync(File fd, myf my_flags);
@@ -663,6 +690,7 @@ extern int my_error _VARARGS((int nr,myf MyFlags, ...));
 extern int my_printf_error _VARARGS((uint my_err, const char *format,
 				     myf MyFlags, ...))
 				    ATTRIBUTE_FORMAT(printf, 2, 4);
+extern void my_printf_warning _VARARGS((const char * format, ...));
 extern int my_error_register(const char **errmsgs, int first, int last);
 extern const char **my_error_unregister(int first, int last);
 extern int my_message(uint my_err, const char *str,myf MyFlags);
@@ -723,7 +751,6 @@ extern int wild_compare(const char *str,const char *wildstr,
 extern WF_PACK *wf_comp(char * str);
 extern int wf_test(struct wild_file_pack *wf_pack,const char *name);
 extern void wf_end(struct wild_file_pack *buffer);
-extern size_t strip_sp(char * str);
 extern my_bool array_append_string_unique(const char *str,
                                           const char **array, size_t size);
 extern void get_date(char * to,int timeflag,time_t use_time);
@@ -954,7 +981,6 @@ extern my_bool resolve_charset(const char *cs_name,
 extern my_bool resolve_collation(const char *cl_name,
                                  CHARSET_INFO *default_cl,
                                  CHARSET_INFO **cl);
-
 extern void free_charsets(void);
 extern char *get_charsets_dir(char *buf);
 extern my_bool my_charset_same(CHARSET_INFO *cs1, CHARSET_INFO *cs2);

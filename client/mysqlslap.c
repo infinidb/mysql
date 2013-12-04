@@ -1,4 +1,5 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
    original idea: Brian Aker via playing with ab for too many years
    coded by: Patrick Galbraith
@@ -94,6 +95,7 @@ TODO:
 #include <sys/wait.h>
 #endif
 #include <ctype.h>
+#include <welcome_copyright_notice.h>   /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 #ifdef __WIN__
 #define srandom  srand
@@ -131,7 +133,7 @@ const char *delimiter= "\n";
 
 const char *create_schema_string= "mysqlslap";
 
-static my_bool opt_preserve= TRUE;
+static my_bool opt_preserve= TRUE, opt_no_drop= FALSE;
 static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static my_bool opt_only_print= FALSE;
 static my_bool opt_compress= FALSE, tty_password= FALSE,
@@ -142,7 +144,8 @@ static my_bool opt_compress= FALSE, tty_password= FALSE,
 const char *auto_generate_sql_type= "mixed";
 
 static unsigned long connect_flags= CLIENT_MULTI_RESULTS |
-                                    CLIENT_MULTI_STATEMENTS;
+                                    CLIENT_MULTI_STATEMENTS |
+                                    CLIENT_REMEMBER_OPTIONS;
 
 static int verbose, delimiter_length;
 static uint commit_rate;
@@ -423,6 +426,7 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr)
   stats *sptr;
   conclusions conclusion;
   unsigned long long client_limit;
+  int sysret;
 
   head_sptr= (stats *)my_malloc(sizeof(stats) * iterations, 
                                 MYF(MY_ZEROFILL|MY_FAE|MY_WME));
@@ -463,7 +467,9 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr)
       run_query(mysql, "SET AUTOCOMMIT=0", strlen("SET AUTOCOMMIT=0"));
 
     if (pre_system)
-      system(pre_system);
+      if ((sysret= system(pre_system)) != 0)
+        fprintf(stderr, "Warning: Execution of pre_system option returned %d.\n", 
+                sysret);
 
     /* 
       Pre statements are always run after all other logic so they can 
@@ -478,7 +484,9 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr)
       run_statements(mysql, post_statements);
 
     if (post_system)
-      system(post_system);
+      if ((sysret= system(post_system)) != 0)
+        fprintf(stderr, "Warning: Execution of post_system option returned %d.\n", 
+                sysret);
 
     /* We are finished with this run */
     if (auto_generate_sql_autoincrement || auto_generate_sql_guid_primary)
@@ -506,62 +514,62 @@ static struct my_option my_long_options[] =
     0, 0, 0, 0, 0, 0},
   {"auto-generate-sql", 'a',
     "Generate SQL where not supplied by file or command line.",
-    (uchar**) &auto_generate_sql, (uchar**) &auto_generate_sql,
+    &auto_generate_sql, &auto_generate_sql,
     0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-add-autoincrement", OPT_SLAP_AUTO_GENERATE_ADD_AUTO,
     "Add an AUTO_INCREMENT column to auto-generated tables.",
-    (uchar**) &auto_generate_sql_autoincrement, 
-    (uchar**) &auto_generate_sql_autoincrement,
+    &auto_generate_sql_autoincrement,
+    &auto_generate_sql_autoincrement,
     0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-execute-number", OPT_SLAP_AUTO_GENERATE_EXECUTE_QUERIES,
     "Set this number to generate a set number of queries to run.",
-    (uchar**) &auto_actual_queries, (uchar**) &auto_actual_queries,
+    &auto_actual_queries, &auto_actual_queries,
     0, GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-guid-primary", OPT_SLAP_AUTO_GENERATE_GUID_PRIMARY,
     "Add GUID based primary keys to auto-generated tables.",
-    (uchar**) &auto_generate_sql_guid_primary, 
-    (uchar**) &auto_generate_sql_guid_primary,
+    &auto_generate_sql_guid_primary,
+    &auto_generate_sql_guid_primary,
     0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-load-type", OPT_SLAP_AUTO_GENERATE_SQL_LOAD_TYPE,
     "Specify test load type: mixed, update, write, key, or read; default is mixed.",
-    (uchar**) &auto_generate_sql_type, (uchar**) &auto_generate_sql_type,
+    &auto_generate_sql_type, &auto_generate_sql_type,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-secondary-indexes", 
     OPT_SLAP_AUTO_GENERATE_SECONDARY_INDEXES, 
     "Number of secondary indexes to add to auto-generated tables.",
-    (uchar**) &auto_generate_sql_secondary_indexes, 
-    (uchar**) &auto_generate_sql_secondary_indexes, 0,
+    &auto_generate_sql_secondary_indexes,
+    &auto_generate_sql_secondary_indexes, 0,
     GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"auto-generate-sql-unique-query-number", 
     OPT_SLAP_AUTO_GENERATE_UNIQUE_QUERY_NUM,
     "Number of unique queries to generate for automatic tests.",
-    (uchar**) &auto_generate_sql_unique_query_number, 
-    (uchar**) &auto_generate_sql_unique_query_number,
+    &auto_generate_sql_unique_query_number,
+    &auto_generate_sql_unique_query_number,
     0, GET_ULL, REQUIRED_ARG, 10, 0, 0, 0, 0, 0},
   {"auto-generate-sql-unique-write-number", 
     OPT_SLAP_AUTO_GENERATE_UNIQUE_WRITE_NUM,
     "Number of unique queries to generate for auto-generate-sql-write-number.",
-    (uchar**) &auto_generate_sql_unique_write_number, 
-    (uchar**) &auto_generate_sql_unique_write_number,
+    &auto_generate_sql_unique_write_number,
+    &auto_generate_sql_unique_write_number,
     0, GET_ULL, REQUIRED_ARG, 10, 0, 0, 0, 0, 0},
   {"auto-generate-sql-write-number", OPT_SLAP_AUTO_GENERATE_WRITE_NUM,
     "Number of row inserts to perform for each thread (default is 100).",
-    (uchar**) &auto_generate_sql_number, (uchar**) &auto_generate_sql_number,
+    &auto_generate_sql_number, &auto_generate_sql_number,
     0, GET_ULL, REQUIRED_ARG, 100, 0, 0, 0, 0, 0},
   {"commit", OPT_SLAP_COMMIT, "Commit records every X number of statements.",
-    (uchar**) &commit_rate, (uchar**) &commit_rate, 0, GET_UINT, REQUIRED_ARG,
+    &commit_rate, &commit_rate, 0, GET_UINT, REQUIRED_ARG,
     0, 0, 0, 0, 0, 0},
   {"compress", 'C', "Use compression in server/client protocol.",
-    (uchar**) &opt_compress, (uchar**) &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+    &opt_compress, &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
     0, 0, 0},
   {"concurrency", 'c', "Number of clients to simulate for query to run.",
-    (uchar**) &concurrency_str, (uchar**) &concurrency_str, 0, GET_STR,
+    &concurrency_str, &concurrency_str, 0, GET_STR,
     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"create", OPT_SLAP_CREATE_STRING, "File or string to use create tables.",
-    (uchar**) &create_string, (uchar**) &create_string, 0, GET_STR, REQUIRED_ARG,
+    &create_string, &create_string, 0, GET_STR, REQUIRED_ARG,
     0, 0, 0, 0, 0, 0},
   {"create-schema", OPT_CREATE_SLAP_SCHEMA, "Schema to run tests in.",
-    (uchar**) &create_schema_string, (uchar**) &create_schema_string, 0, GET_STR, 
+    &create_schema_string, &create_schema_string, 0, GET_STR, 
     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"csv", OPT_SLAP_CSV,
 	"Generate CSV output to named file or to stdout if no file is named.",
@@ -571,45 +579,47 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
   {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.",
-    (uchar**) &default_dbug_option, (uchar**) &default_dbug_option, 0, GET_STR,
+    &default_dbug_option, &default_dbug_option, 0, GET_STR,
     OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"debug-check", OPT_DEBUG_CHECK, "Check memory and open file usage at exit.",
-   (uchar**) &debug_check_flag, (uchar**) &debug_check_flag, 0,
+   &debug_check_flag, &debug_check_flag, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"debug-info", 'T', "Print some debug info at exit.", (uchar**) &debug_info_flag,
-   (uchar**) &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug-info", 'T', "Print some debug info at exit.", &debug_info_flag,
+   &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"delimiter", 'F',
     "Delimiter to use in SQL statements supplied in file or command line.",
-    (uchar**) &delimiter, (uchar**) &delimiter, 0, GET_STR, REQUIRED_ARG,
+    &delimiter, &delimiter, 0, GET_STR, REQUIRED_ARG,
     0, 0, 0, 0, 0, 0},
   {"detach", OPT_SLAP_DETACH,
     "Detach (close and reopen) connections after X number of requests.",
-    (uchar**) &detach_rate, (uchar**) &detach_rate, 0, GET_UINT, REQUIRED_ARG, 
+    &detach_rate, &detach_rate, 0, GET_UINT, REQUIRED_ARG, 
     0, 0, 0, 0, 0, 0},
   {"engine", 'e', "Storage engine to use for creating the table.",
-    (uchar**) &default_engine, (uchar**) &default_engine, 0,
+    &default_engine, &default_engine, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"host", 'h', "Connect to host.", (uchar**) &host, (uchar**) &host, 0, GET_STR,
+  {"host", 'h', "Connect to host.", &host, &host, 0, GET_STR,
     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"iterations", 'i', "Number of times to run the tests.", (uchar**) &iterations,
-    (uchar**) &iterations, 0, GET_UINT, REQUIRED_ARG, 1, 0, 0, 0, 0, 0},
+  {"iterations", 'i', "Number of times to run the tests.", &iterations,
+    &iterations, 0, GET_UINT, REQUIRED_ARG, 1, 0, 0, 0, 0, 0},
+  {"no-drop", OPT_SLAP_NO_DROP, "Do not drop the schema after the test.",
+   &opt_no_drop, &opt_no_drop, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"number-char-cols", 'x', 
     "Number of VARCHAR columns to create in table if specifying --auto-generate-sql.",
-    (uchar**) &num_char_cols_opt, (uchar**) &num_char_cols_opt, 0, GET_STR, REQUIRED_ARG,
+    &num_char_cols_opt, &num_char_cols_opt, 0, GET_STR, REQUIRED_ARG,
     0, 0, 0, 0, 0, 0},
   {"number-int-cols", 'y', 
     "Number of INT columns to create in table if specifying --auto-generate-sql.",
-    (uchar**) &num_int_cols_opt, (uchar**) &num_int_cols_opt, 0, GET_STR, REQUIRED_ARG, 
+    &num_int_cols_opt, &num_int_cols_opt, 0, GET_STR, REQUIRED_ARG, 
     0, 0, 0, 0, 0, 0},
   {"number-of-queries", OPT_MYSQL_NUMBER_OF_QUERY, 
     "Limit each client to this number of queries (this is not exact).",
-    (uchar**) &num_of_query, (uchar**) &num_of_query, 0,
+    &num_of_query, &num_of_query, 0,
     GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"only-print", OPT_MYSQL_ONLY_PRINT,
-    "This causes mysqlslap to not connect to the databases, but instead print "
-      "out what it would have done instead.",
-    (uchar**) &opt_only_print, (uchar**) &opt_only_print, 0, GET_BOOL,  NO_ARG,
+    "Do not connect to the databases, but instead print out what would have "
+     "been done.",
+    &opt_only_print, &opt_only_print, 0, GET_BOOL,  NO_ARG,
     0, 0, 0, 0, 0, 0},
   {"password", 'p',
     "Password to use when connecting to server. If password is not given it's "
@@ -618,58 +628,54 @@ static struct my_option my_long_options[] =
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
     NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"port", 'P', "Port number to use for connection.", (uchar**) &opt_mysql_port,
-    (uchar**) &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, MYSQL_PORT, 0, 0, 0, 0,
+  {"port", 'P', "Port number to use for connection.", &opt_mysql_port,
+    &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, MYSQL_PORT, 0, 0, 0, 0,
     0},
   {"post-query", OPT_SLAP_POST_QUERY,
     "Query to run or file containing query to execute after tests have completed.",
-    (uchar**) &user_supplied_post_statements, 
-    (uchar**) &user_supplied_post_statements,
+    &user_supplied_post_statements, &user_supplied_post_statements,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"post-system", OPT_SLAP_POST_SYSTEM,
     "system() string to execute after tests have completed.",
-    (uchar**) &post_system, 
-    (uchar**) &post_system,
+    &post_system, &post_system,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"pre-query", OPT_SLAP_PRE_QUERY, 
     "Query to run or file containing query to execute before running tests.",
-    (uchar**) &user_supplied_pre_statements, 
-    (uchar**) &user_supplied_pre_statements,
+    &user_supplied_pre_statements, &user_supplied_pre_statements,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"pre-system", OPT_SLAP_PRE_SYSTEM, 
     "system() string to execute before running tests.",
-    (uchar**) &pre_system, 
-    (uchar**) &pre_system,
+    &pre_system, &pre_system,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"protocol", OPT_MYSQL_PROTOCOL,
-    "The protocol of connection (tcp,socket,pipe,memory).",
+    "The protocol to use for connection (tcp, socket, pipe, memory).",
     0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"query", 'q', "Query to run or file containing query to run.",
-    (uchar**) &user_supplied_query, (uchar**) &user_supplied_query,
+    &user_supplied_query, &user_supplied_query,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
-    "Base name of shared memory.", (uchar**) &shared_memory_base_name,
-    (uchar**) &shared_memory_base_name, 0, GET_STR_ALLOC, REQUIRED_ARG,
+    "Base name of shared memory.", &shared_memory_base_name,
+    &shared_memory_base_name, 0, GET_STR_ALLOC, REQUIRED_ARG,
     0, 0, 0, 0, 0, 0},
 #endif
   {"silent", 's', "Run program in silent mode - no output.",
-    (uchar**) &opt_silent, (uchar**) &opt_silent, 0, GET_BOOL,  NO_ARG,
+    &opt_silent, &opt_silent, 0, GET_BOOL,  NO_ARG,
     0, 0, 0, 0, 0, 0},
-  {"socket", 'S', "Socket file to use for connection.",
-    (uchar**) &opt_mysql_unix_port, (uchar**) &opt_mysql_unix_port, 0, GET_STR,
+  {"socket", 'S', "The socket file to use for connection.",
+    &opt_mysql_unix_port, &opt_mysql_unix_port, 0, GET_STR,
     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #include <sslopt-longopts.h>
 #ifndef DONT_ALLOW_USER_CHANGE
-  {"user", 'u', "User for login if not current user.", (uchar**) &user,
-    (uchar**) &user, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"user", 'u', "User for login if not current user.", &user,
+    &user, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"verbose", 'v',
-    "More verbose output; you can use this multiple times to get even more "
-      "verbose output.", (uchar**) &verbose, (uchar**) &verbose, 0, 
-      GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
-    NO_ARG, 0, 0, 0, 0, 0, 0},
+   "More verbose output; you can use this multiple times to get even more "
+   "verbose output.", &verbose, &verbose, 0, GET_NO_ARG, NO_ARG,
+   0, 0, 0, 0, 0, 0},
+  {"version", 'V', "Output version information and exit.", 0, 0, 0,
+   GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -686,9 +692,8 @@ static void print_version(void)
 static void usage(void)
 {
   print_version();
-  puts("Copyright (C) 2005 MySQL AB");
-  puts("This software comes with ABSOLUTELY NO WARRANTY. This is free software,\nand you are welcome to modify and redistribute it under the GPL license\n");
-  puts("Run a query multiple times against the server\n");
+  puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2005"));
+  puts("Run a query multiple times against the server.\n");
   printf("Usage: %s [OPTIONS]\n",my_progname);
   print_defaults("my",load_default_groups);
   my_print_help(my_long_options);
@@ -1146,8 +1151,11 @@ get_options(int *argc,char ***argv)
   if (!user)
     user= (char *)"root";
 
-  /* If something is created we clean it up, otherwise we leave schemas alone */
-  if (create_string || auto_generate_sql)
+  /*
+    If something is created and --no-drop is not specified, we drop the
+    schema.
+  */
+  if (!opt_no_drop && (create_string || auto_generate_sql))
     opt_preserve= FALSE;
 
   if (auto_generate_sql && (create_string || user_supplied_query))
@@ -1518,7 +1526,12 @@ generate_primary_key_list(MYSQL *mysql, option_string *engine_stmt)
       exit(1);
     }
 
-    result= mysql_store_result(mysql);
+    if (!(result= mysql_store_result(mysql)))
+    {
+      fprintf(stderr, "%s: Error when storing result: %d %s\n",
+              my_progname, mysql_errno(mysql), mysql_error(mysql));
+      exit(1);
+    }
     primary_keys_number_of= mysql_num_rows(result);
 
     /* So why check this? Blackhole :) */
@@ -1890,10 +1903,15 @@ limit_not_met:
       {
         if (mysql_field_count(mysql))
         {
-          result= mysql_store_result(mysql);
-          while ((row = mysql_fetch_row(result)))
-            counter++;
-          mysql_free_result(result);
+          if (!(result= mysql_store_result(mysql)))
+            fprintf(stderr, "%s: Error when storing result: %d %s\n",
+                    my_progname, mysql_errno(mysql), mysql_error(mysql));
+          else
+          {
+            while ((row= mysql_fetch_row(result)))
+              counter++;
+            mysql_free_result(result);
+          }
         }
       } while(mysql_next_result(mysql) == 0);
       queries++;
@@ -1918,7 +1936,7 @@ end:
   if (!opt_only_print) 
     mysql_close(mysql);
 
-  my_thread_end();
+  mysql_thread_end();
 
   pthread_mutex_lock(&counter_mutex);
   thread_counter--;

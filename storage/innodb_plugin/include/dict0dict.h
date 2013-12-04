@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -318,7 +318,8 @@ void
 dict_table_replace_index_in_foreign_list(
 /*=====================================*/
 	dict_table_t*	table,  /*!< in/out: table */
-	dict_index_t*	index);	/*!< in: index to be replaced */
+	dict_index_t*	index,	/*!< in: index to be replaced */
+	const trx_t*	trx);	/*!< in: transaction handle */
 /*********************************************************************//**
 Checks if a index is defined for a foreign key constraint. Index is a part
 of a foreign key constraint if the index is referenced by foreign key
@@ -352,6 +353,7 @@ dict_create_foreign_constraints(
 					name before it: test.table2; the
 					default database id the database of
 					parameter name */
+	size_t		sql_length,	/*!< in: length of sql_string */
 	const char*	name,		/*!< in: table full name in the
 					normalized form
 					database_name/table_name */
@@ -679,6 +681,22 @@ ulint
 dict_table_zip_size(
 /*================*/
 	const dict_table_t*	table);	/*!< in: table */
+/*********************************************************************//**
+Obtain exclusive locks on all index trees of the table. This is to prevent
+accessing index trees while InnoDB is updating internal metadata for
+operations such as truncate tables. */
+UNIV_INLINE
+void
+dict_table_x_lock_indexes(
+/*======================*/
+	dict_table_t*	table);	/*!< in: table */
+/*********************************************************************//**
+Release the exclusive locks on all index tree. */
+UNIV_INLINE
+void
+dict_table_x_unlock_indexes(
+/*========================*/
+	dict_table_t*	table);	/*!< in: table */
 /********************************************************************//**
 Checks if a column is in the ordering columns of the clustered index of a
 table. Column prefixes are treated like whole columns.
@@ -712,7 +730,7 @@ dict_index_find_on_id_low(
 	dulint	id);	/*!< in: index id */
 /**********************************************************************//**
 Adds an index to the dictionary cache.
-@return	DB_SUCCESS or error code */
+@return	DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
 UNIV_INTERN
 ulint
 dict_index_add_to_cache(
@@ -821,6 +839,18 @@ dict_index_get_nth_col_pos(
 	const dict_index_t*	index,	/*!< in: index */
 	ulint			n);	/*!< in: column number */
 /********************************************************************//**
+Looks for column n in an index.
+@return position in internal representation of the index;
+ULINT_UNDEFINED if not contained */
+UNIV_INTERN
+ulint
+dict_index_get_nth_col_or_prefix_pos(
+/*=================================*/
+	const dict_index_t*	index,		/*!< in: index */
+	ulint			n,		/*!< in: column number */
+	ibool			inc_prefix);	/*!< in: TRUE=consider
+						column prefixes too */
+/********************************************************************//**
 Returns TRUE if the index contains a column or a prefix of that column.
 @return	TRUE if contains the column or its prefix */
 UNIV_INTERN
@@ -928,9 +958,10 @@ UNIV_INTERN
 void
 dict_table_check_for_dup_indexes(
 /*=============================*/
-	const dict_table_t*	table);	/*!< in: Check for dup indexes
+	const dict_table_t*	table,	/*!< in: Check for dup indexes
 					in this table */
-
+	ibool			tmp_ok);/*!< in: TRUE=allow temporary
+					index names */
 #endif /* UNIV_DEBUG */
 /**********************************************************************//**
 Builds a node pointer out of a physical record and a page number.
@@ -999,14 +1030,6 @@ dict_index_get_page(
 /*================*/
 	const dict_index_t*	tree);	/*!< in: index */
 /*********************************************************************//**
-Sets the page number of the root of index tree. */
-UNIV_INLINE
-void
-dict_index_set_page(
-/*================*/
-	dict_index_t*	index,	/*!< in/out: index */
-	ulint		page);	/*!< in: page number */
-/*********************************************************************//**
 Gets the read-write lock of the index tree.
 @return	read-write lock */
 UNIV_INLINE
@@ -1035,19 +1058,13 @@ Calculates new estimates for table and index statistics. The statistics
 are used in query optimization. */
 UNIV_INTERN
 void
-dict_update_statistics_low(
-/*=======================*/
-	dict_table_t*	table,		/*!< in/out: table */
-	ibool		has_dict_mutex);/*!< in: TRUE if the caller has the
-					dictionary mutex */
-/*********************************************************************//**
-Calculates new estimates for table and index statistics. The statistics
-are used in query optimization. */
-UNIV_INTERN
-void
 dict_update_statistics(
 /*===================*/
-	dict_table_t*	table);	/*!< in/out: table */
+	dict_table_t*	table,		/*!< in/out: table */
+	ibool		only_calc_if_missing_stats);/*!< in: only
+					update/recalc the stats if they have
+					not been initialized yet, otherwise
+					do nothing */
 /********************************************************************//**
 Reserves the dictionary system mutex for MySQL. */
 UNIV_INTERN
@@ -1060,6 +1077,26 @@ UNIV_INTERN
 void
 dict_mutex_exit_for_mysql(void);
 /*===========================*/
+/**********************************************************************//**
+Lock the appropriate latch to protect a given table's statistics.
+table->id is used to pick the corresponding latch from a global array of
+latches. */
+UNIV_INTERN
+void
+dict_table_stats_lock(
+/*==================*/
+	const dict_table_t*	table,		/*!< in: table */
+	ulint			latch_mode);	/*!< in: RW_S_LATCH or
+						RW_X_LATCH */
+/**********************************************************************//**
+Unlock the latch that has been locked by dict_table_stats_lock() */
+UNIV_INTERN
+void
+dict_table_stats_unlock(
+/*====================*/
+	const dict_table_t*	table,		/*!< in: table */
+	ulint			latch_mode);	/*!< in: RW_S_LATCH or
+						RW_X_LATCH */
 /********************************************************************//**
 Checks if the database name in two table names is the same.
 @return	TRUE if same db name */
@@ -1150,6 +1187,13 @@ UNIV_INTERN
 void
 dict_ind_init(void);
 /*===============*/
+
+/**********************************************************************//**
+Closes the data dictionary module. */
+UNIV_INTERN
+void
+dict_close(void);
+/*============*/
 
 #ifndef UNIV_NONINL
 #include "dict0dict.ic"

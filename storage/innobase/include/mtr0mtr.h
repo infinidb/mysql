@@ -134,6 +134,12 @@ flag value must give the length also! */
 #define MLOG_BIGGEST_TYPE	((byte)46)	/* biggest value (used in
 						asserts) */
 
+/* Flags for MLOG_FILE operations (stored in the page number
+parameter, called log_flags in the functions).  The page number
+parameter was initially written as 0. */
+#define MLOG_FILE_FLAG_TEMP	1	/* identifies TEMPORARY TABLE in
+					MLOG_FILE_CREATE */
+
 /*******************************************************************
 Starts a mini-transaction and creates a mini-transaction handle
 and buffer in the memory buffer given by the caller. */
@@ -169,16 +175,6 @@ mtr_set_savepoint(
 /*==============*/
 			/* out: savepoint */
 	mtr_t*	mtr);	/* in: mtr */
-/**************************************************************
-Releases the latches stored in an mtr memo down to a savepoint.
-NOTE! The mtr must not have made changes to buffer pages after the
-savepoint, as these can be handled only by mtr_commit. */
-
-void
-mtr_rollback_to_savepoint(
-/*======================*/
-	mtr_t*	mtr,		/* in: mtr */
-	ulint	savepoint);	/* in: savepoint */
 /**************************************************************
 Releases the (index tree) s-latch stored in an mtr memo after a
 savepoint. */

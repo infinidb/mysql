@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -45,7 +45,7 @@ Created 2/2/1994 Heikki Tuuri
 			==============
 
 The index page consists of a page header which contains the page's
-id and other information. On top of it are the the index records
+id and other information. On top of it are the index records
 in a heap linked into a one way linear list according to alphabetic order.
 
 Just below page end is an array of pointers which we call page directory,
@@ -215,12 +215,6 @@ page_set_max_trx_id(
 {
 	page_t*		page		= buf_block_get_frame(block);
 #ifndef UNIV_HOTBACKUP
-	const ibool	is_hashed	= block->is_hashed;
-
-	if (is_hashed) {
-		rw_lock_x_lock(&btr_search_latch);
-	}
-
 	ut_ad(!mtr || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 #endif /* !UNIV_HOTBACKUP */
 
@@ -241,12 +235,6 @@ page_set_max_trx_id(
 	} else {
 		mach_write_to_8(page + (PAGE_HEADER + PAGE_MAX_TRX_ID), trx_id);
 	}
-
-#ifndef UNIV_HOTBACKUP
-	if (is_hashed) {
-		rw_lock_x_unlock(&btr_search_latch);
-	}
-#endif /* !UNIV_HOTBACKUP */
 }
 
 /************************************************************//**
@@ -637,7 +625,7 @@ page_copy_rec_list_end(
 		Furthermore, btr_compress() may set FIL_PAGE_PREV to
 		FIL_NULL on new_page while leaving it intact on
 		new_page_zip.  So, we cannot validate new_page_zip. */
-		ut_a(page_zip_validate_low(page_zip, page, TRUE));
+		ut_a(page_zip_validate_low(page_zip, page, index, TRUE));
 	}
 #endif /* UNIV_ZIP_DEBUG */
 	ut_ad(buf_block_get_frame(block) == page);
@@ -656,6 +644,14 @@ page_copy_rec_list_end(
 	} else {
 		page_copy_rec_list_end_no_locks(new_block, block, rec,
 						index, mtr);
+	}
+
+	/* Update PAGE_MAX_TRX_ID on the uncompressed page.
+	Modifications will be redo logged and copied to the compressed
+	page in page_zip_compress() or page_zip_reorganize() below. */
+	if (dict_index_is_sec_or_ibuf(index) && page_is_leaf(page)) {
+		page_update_max_trx_id(new_block, NULL,
+				       page_get_max_trx_id(page), mtr);
 	}
 
 	if (UNIV_LIKELY_NULL(new_page_zip)) {
@@ -677,12 +673,16 @@ page_copy_rec_list_end(
 			if (UNIV_UNLIKELY
 			    (!page_zip_reorganize(new_block, index, mtr))) {
 
+				btr_blob_dbg_remove(new_page, index,
+						    "copy_end_reorg_fail");
 				if (UNIV_UNLIKELY
 				    (!page_zip_decompress(new_page_zip,
-							  new_page))) {
+							  new_page, FALSE))) {
 					ut_error;
 				}
 				ut_ad(page_validate(new_page, index));
+				btr_blob_dbg_add(new_page, index,
+						 "copy_end_reorg_fail");
 				return(NULL);
 			} else {
 				/* The page was reorganized:
@@ -696,14 +696,9 @@ page_copy_rec_list_end(
 		}
 	}
 
-	/* Update the lock table, MAX_TRX_ID, and possible hash index */
+	/* Update the lock table and possible hash index */
 
 	lock_move_rec_list_end(new_block, block, rec);
-
-	if (dict_index_is_sec_or_ibuf(index) && page_is_leaf(page)) {
-		page_update_max_trx_id(new_block, new_page_zip,
-				       page_get_max_trx_id(page), mtr);
-	}
 
 	btr_search_move_or_delete_hash_entries(new_block, block, index);
 
@@ -772,51 +767,59 @@ page_copy_rec_list_start(
 		mem_heap_free(heap);
 	}
 
+	/* Update PAGE_MAX_TRX_ID on the uncompressed page.
+	Modifications will be redo logged and copied to the compressed
+	page in page_zip_compress() or page_zip_reorganize() below. */
+	if (dict_index_is_sec_or_ibuf(index)
+	    && page_is_leaf(page_align(rec))) {
+		page_update_max_trx_id(new_block, NULL,
+				       page_get_max_trx_id(page_align(rec)),
+				       mtr);
+	}
+
 	if (UNIV_LIKELY_NULL(new_page_zip)) {
 		mtr_set_log_mode(mtr, log_mode);
 
+		DBUG_EXECUTE_IF("page_copy_rec_list_start_compress_fail",
+				goto zip_reorganize;);
+
 		if (UNIV_UNLIKELY
 		    (!page_zip_compress(new_page_zip, new_page, index, mtr))) {
+			ulint	ret_pos;
+#ifndef DBUG_OFF
+zip_reorganize:
+#endif /* DBUG_OFF */
 			/* Before trying to reorganize the page,
 			store the number of preceding records on the page. */
-			ulint	ret_pos
-				= page_rec_get_n_recs_before(ret);
+			ret_pos = page_rec_get_n_recs_before(ret);
 			/* Before copying, "ret" was the predecessor
 			of the predefined supremum record.  If it was
 			the predefined infimum record, then it would
-			still be the infimum.  Thus, the assertion
-			ut_a(ret_pos > 0) would fail here. */
+			still be the infimum, and we would have
+			ret_pos == 0. */
 
 			if (UNIV_UNLIKELY
 			    (!page_zip_reorganize(new_block, index, mtr))) {
 
+				btr_blob_dbg_remove(new_page, index,
+						    "copy_start_reorg_fail");
 				if (UNIV_UNLIKELY
 				    (!page_zip_decompress(new_page_zip,
-							  new_page))) {
+							  new_page, FALSE))) {
 					ut_error;
 				}
 				ut_ad(page_validate(new_page, index));
+				btr_blob_dbg_add(new_page, index,
+						 "copy_start_reorg_fail");
 				return(NULL);
-			} else {
-				/* The page was reorganized:
-				Seek to ret_pos. */
-				ret = new_page + PAGE_NEW_INFIMUM;
-
-				do {
-					ret = rec_get_next_ptr(ret, TRUE);
-				} while (--ret_pos);
 			}
+
+			/* The page was reorganized: Seek to ret_pos. */
+			ret = page_rec_get_nth(new_page, ret_pos);
 		}
 	}
 
-	/* Update MAX_TRX_ID, the lock table, and possible hash index */
-
-	if (dict_index_is_sec_or_ibuf(index)
-	    && page_is_leaf(page_align(rec))) {
-		page_update_max_trx_id(new_block, new_page_zip,
-				       page_get_max_trx_id(page_align(rec)),
-				       mtr);
-	}
+	/* Update the lock table and possible hash index */
 
 	lock_move_rec_list_start(new_block, block, rec, ret);
 
@@ -942,7 +945,7 @@ page_delete_rec_list_end(
 	ut_ad(size == ULINT_UNDEFINED || size < UNIV_PAGE_SIZE);
 	ut_ad(!page_zip || page_rec_is_comp(rec));
 #ifdef UNIV_ZIP_DEBUG
-	ut_a(!page_zip || page_zip_validate(page_zip, page));
+	ut_a(!page_zip || page_zip_validate(page_zip, page, index));
 #endif /* UNIV_ZIP_DEBUG */
 
 	if (page_rec_is_infimum(rec)) {
@@ -984,7 +987,7 @@ page_delete_rec_list_end(
 						  ULINT_UNDEFINED, &heap);
 			rec = rec_get_next_ptr(rec, TRUE);
 #ifdef UNIV_ZIP_DEBUG
-			ut_a(page_zip_validate(page_zip, page));
+			ut_a(page_zip_validate(page_zip, page, index));
 #endif /* UNIV_ZIP_DEBUG */
 			page_cur_delete_rec(&cur, index, offsets, mtr);
 		} while (page_offset(rec) != PAGE_NEW_SUPREMUM);
@@ -1048,6 +1051,7 @@ page_delete_rec_list_end(
 
 		n_owned = rec_get_n_owned_new(rec2) - count;
 		slot_index = page_dir_find_owner_slot(rec2);
+		ut_ad(slot_index > 0);
 		slot = page_dir_get_nth_slot(page, slot_index);
 	} else {
 		rec_t*	rec2	= rec;
@@ -1063,6 +1067,7 @@ page_delete_rec_list_end(
 
 		n_owned = rec_get_n_owned_old(rec2) - count;
 		slot_index = page_dir_find_owner_slot(rec2);
+		ut_ad(slot_index > 0);
 		slot = page_dir_get_nth_slot(page, slot_index);
 	}
 
@@ -1073,6 +1078,9 @@ page_delete_rec_list_end(
 
 	/* Remove the record chain segment from the record chain */
 	page_rec_set_next(prev_rec, page_get_supremum_rec(page));
+
+	btr_blob_dbg_op(page, rec, index, "delete_end",
+			btr_blob_dbg_remove_rec);
 
 	/* Catenate the deleted chain segment to the page free list */
 
@@ -1119,7 +1127,8 @@ page_delete_rec_list_start(
 		between btr_attach_half_pages() and insert_page = ...
 		when btr_page_get_split_rec_to_left() holds
 		(direction == FSP_DOWN). */
-		ut_a(!page_zip || page_zip_validate_low(page_zip, page, TRUE));
+		ut_a(!page_zip
+		     || page_zip_validate_low(page_zip, page, index, TRUE));
 	}
 #endif /* UNIV_ZIP_DEBUG */
 
@@ -1190,9 +1199,10 @@ page_move_rec_list_end(
 			= buf_block_get_page_zip(block);
 		ut_a(!new_page_zip == !page_zip);
 		ut_a(!new_page_zip
-		     || page_zip_validate(new_page_zip, new_page));
+		     || page_zip_validate(new_page_zip, new_page, index));
 		ut_a(!page_zip
-		     || page_zip_validate(page_zip, page_align(split_rec)));
+		     || page_zip_validate(page_zip, page_align(split_rec),
+					  index));
 	}
 #endif /* UNIV_ZIP_DEBUG */
 
@@ -1470,55 +1480,58 @@ page_dir_balance_slot(
 	}
 }
 
-#ifndef UNIV_HOTBACKUP
 /************************************************************//**
-Returns the middle record of the record list. If there are an even number
-of records in the list, returns the first record of the upper half-list.
-@return	middle record */
+Returns the nth record of the record list.
+This is the inverse function of page_rec_get_n_recs_before().
+@return	nth record */
 UNIV_INTERN
-rec_t*
-page_get_middle_rec(
-/*================*/
-	page_t*	page)	/*!< in: page */
+const rec_t*
+page_rec_get_nth_const(
+/*===================*/
+	const page_t*	page,	/*!< in: page */
+	ulint		nth)	/*!< in: nth record */
 {
-	page_dir_slot_t*	slot;
-	ulint			middle;
+	const page_dir_slot_t*	slot;
 	ulint			i;
 	ulint			n_owned;
-	ulint			count;
-	rec_t*			rec;
+	const rec_t*		rec;
 
-	/* This many records we must leave behind */
-	middle = (page_get_n_recs(page) + PAGE_HEAP_NO_USER_LOW) / 2;
+	if (nth == 0) {
+		return(page_get_infimum_rec(page));
+	}
 
-	count = 0;
+	ut_ad(nth < UNIV_PAGE_SIZE / (REC_N_NEW_EXTRA_BYTES + 1));
 
 	for (i = 0;; i++) {
 
 		slot = page_dir_get_nth_slot(page, i);
 		n_owned = page_dir_slot_get_n_owned(slot);
 
-		if (count + n_owned > middle) {
+		if (n_owned > nth) {
 			break;
 		} else {
-			count += n_owned;
+			nth -= n_owned;
 		}
 	}
 
 	ut_ad(i > 0);
 	slot = page_dir_get_nth_slot(page, i - 1);
-	rec = (rec_t*) page_dir_slot_get_rec(slot);
-	rec = page_rec_get_next(rec);
+	rec = page_dir_slot_get_rec(slot);
 
-	/* There are now count records behind rec */
-
-	for (i = 0; i < middle - count; i++) {
-		rec = page_rec_get_next(rec);
+	if (page_is_comp(page)) {
+		do {
+			rec = page_rec_get_next_low(rec, TRUE);
+			ut_ad(rec);
+		} while (nth--);
+	} else {
+		do {
+			rec = page_rec_get_next_low(rec, FALSE);
+			ut_ad(rec);
+		} while (nth--);
 	}
 
 	return(rec);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /***************************************************************//**
 Returns the number of records before the given record in chain.
@@ -1580,6 +1593,7 @@ page_rec_get_n_recs_before(
 	n--;
 
 	ut_ad(n >= 0);
+	ut_ad(n < UNIV_PAGE_SIZE / (REC_N_NEW_EXTRA_BYTES + 1));
 
 	return((ulint) n);
 }
@@ -1608,13 +1622,14 @@ page_rec_print(
 			" n_owned: %lu; heap_no: %lu; next rec: %lu\n",
 			(ulong) rec_get_n_owned_old(rec),
 			(ulong) rec_get_heap_no_old(rec),
-			(ulong) rec_get_next_offs(rec, TRUE));
+			(ulong) rec_get_next_offs(rec, FALSE));
 	}
 
 	page_rec_check(rec);
 	rec_validate(rec, offsets);
 }
 
+# ifdef UNIV_BTR_PRINT
 /***************************************************************//**
 This is used to print the contents of the directory for
 debugging purposes. */
@@ -1775,6 +1790,7 @@ page_print(
 	page_dir_print(page, dn);
 	page_print_list(block, index, rn);
 }
+# endif /* UNIV_BTR_PRINT */
 #endif /* !UNIV_HOTBACKUP */
 
 /***************************************************************//**
@@ -2408,8 +2424,13 @@ page_validate(
 		}
 
 		offs = page_offset(rec_get_start(rec, offsets));
+		i = rec_offs_size(offsets);
+		if (UNIV_UNLIKELY(offs + i >= UNIV_PAGE_SIZE)) {
+			fputs("InnoDB: record offset out of bounds\n", stderr);
+			goto func_exit;
+		}
 
-		for (i = rec_offs_size(offsets); i--; ) {
+		while (i--) {
 			if (UNIV_UNLIKELY(buf[offs + i])) {
 				/* No other record may overlap this */
 
@@ -2517,8 +2538,13 @@ n_owned_zero:
 
 		count++;
 		offs = page_offset(rec_get_start(rec, offsets));
+		i = rec_offs_size(offsets);
+		if (UNIV_UNLIKELY(offs + i >= UNIV_PAGE_SIZE)) {
+			fputs("InnoDB: record offset out of bounds\n", stderr);
+			goto func_exit;
+		}
 
-		for (i = rec_offs_size(offsets); i--; ) {
+		while (i--) {
 
 			if (UNIV_UNLIKELY(buf[offs + i])) {
 				fputs("InnoDB: Record overlaps another"

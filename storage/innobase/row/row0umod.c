@@ -1,7 +1,7 @@
 /******************************************************
 Undo modify of a row
 
-(c) 1997 Innobase Oy
+Copyright (c) 1997, 2013, Oracle and/or its affiliates. All Rights Reserved.
 
 Created 2/27/1997 Heikki Tuuri
 *******************************************************/
@@ -42,37 +42,6 @@ some of its fields were changed. Now, it is possible that the delete marked
 version has become obsolete at the time the undo is started. */
 
 /***************************************************************
-Checks if also the previous version of the clustered index record was
-modified or inserted by the same transaction, and its undo number is such
-that it should be undone in the same rollback. */
-UNIV_INLINE
-ibool
-row_undo_mod_undo_also_prev_vers(
-/*=============================*/
-				/* out: TRUE if also previous modify or
-				insert of this row should be undone */
-	undo_node_t*	node,	/* in: row undo node */
-	dulint*		undo_no)/* out: the undo number */
-{
-	trx_undo_rec_t*	undo_rec;
-	trx_t*		trx;
-
-	trx = node->trx;
-
-	if (0 != ut_dulint_cmp(node->new_trx_id, trx->id)) {
-
-		*undo_no = ut_dulint_zero;
-		return(FALSE);
-	}
-
-	undo_rec = trx_undo_get_undo_rec_low(node->new_roll_ptr, node->heap);
-
-	*undo_no = trx_undo_rec_get_undo_no(undo_rec);
-
-	return(ut_dulint_cmp(trx->roll_limit, *undo_no) <= 0);
-}
-
-/***************************************************************
 Undoes a modify in a clustered index record. */
 static
 ulint
@@ -89,12 +58,17 @@ row_undo_mod_clust_low(
 	btr_pcur_t*	pcur;
 	btr_cur_t*	btr_cur;
 	ulint		err;
+#ifdef UNIV_DEBUG
 	ibool		success;
+#endif /* UNIV_DEBUG */
 
 	pcur = &(node->pcur);
 	btr_cur = btr_pcur_get_btr_cur(pcur);
 
-	success = btr_pcur_restore_position(mode, pcur, mtr);
+#ifdef UNIV_DEBUG
+	success =
+#endif /* UNIV_DEBUG */
+	btr_pcur_restore_position(mode, pcur, mtr);
 
 	ut_ad(success);
 
@@ -120,7 +94,10 @@ row_undo_mod_clust_low(
 }
 
 /***************************************************************
-Removes a clustered index record after undo if possible. */
+Purges a clustered index record after undo if possible.
+This is attempted when the record was inserted by updating a
+delete-marked record and there no longer exist transactions
+that would see the delete-marked record. */
 static
 ulint
 row_undo_mod_remove_clust_low(
@@ -129,13 +106,16 @@ row_undo_mod_remove_clust_low(
 				we may run out of file space */
 	undo_node_t*	node,	/* in: row undo node */
 	que_thr_t*	thr __attribute__((unused)), /* in: query thread */
-	mtr_t*		mtr,	/* in: mtr */
+	mtr_t*		mtr,	/* in/out: mini-transaction */
 	ulint		mode)	/* in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
 {
 	btr_pcur_t*	pcur;
 	btr_cur_t*	btr_cur;
 	ulint		err;
 	ibool		success;
+	byte*		db_trx_id;
+
+	ut_ad(node->rec_type == TRX_UNDO_UPD_DEL_REC);
 
 	pcur = &(node->pcur);
 	btr_cur = btr_pcur_get_btr_cur(pcur);
@@ -149,11 +129,37 @@ row_undo_mod_remove_clust_low(
 
 	/* Find out if we can remove the whole clustered index record */
 
-	if (node->rec_type == TRX_UNDO_UPD_DEL_REC
-	    && !row_vers_must_preserve_del_marked(node->new_trx_id, mtr)) {
+	if (row_vers_must_preserve_del_marked(node->new_trx_id, mtr)) {
+		return(DB_SUCCESS);
+	}
 
-		/* Ok, we can remove */
+	if (!btr_cur_get_index(btr_cur)->trx_id_offset) {
+		mem_heap_t*	heap	= NULL;
+		ulint		trx_id_col;
+		ulint*		offsets;
+		ulint		len;
+
+		trx_id_col = dict_index_get_sys_col_pos(
+			btr_cur_get_index(btr_cur), DATA_TRX_ID);
+		ut_ad(trx_id_col > 0);
+		ut_ad(trx_id_col != ULINT_UNDEFINED);
+
+		offsets = rec_get_offsets(
+			btr_cur_get_rec(btr_cur), btr_cur_get_index(btr_cur),
+			NULL, trx_id_col + 1, &heap);
+
+		db_trx_id = rec_get_nth_field(btr_cur_get_rec(btr_cur),
+					      offsets, trx_id_col, &len);
+		ut_ad(len == DATA_TRX_ID_LEN);
+		mem_heap_free(heap);
 	} else {
+		db_trx_id = btr_cur_get_rec(btr_cur)
+			+ btr_cur_get_index(btr_cur)->trx_id_offset;
+	}
+
+	if (ut_dulint_cmp(trx_read_trx_id(db_trx_id), node->new_trx_id)) {
+		/* The record must have been purged and then replaced
+		with a different one. */
 		return(DB_SUCCESS);
 	}
 
@@ -197,16 +203,8 @@ row_undo_mod_clust(
 	btr_pcur_t*	pcur;
 	mtr_t		mtr;
 	ulint		err;
-	ibool		success;
-	ibool		more_vers;
-	dulint		new_undo_no;
 
 	ut_ad(node && thr);
-
-	/* Check if also the previous version of the clustered index record
-	should be undone in this same rollback operation */
-
-	more_vers = row_undo_mod_undo_also_prev_vers(node, &new_undo_no);
 
 	pcur = &(node->pcur);
 
@@ -254,20 +252,6 @@ row_undo_mod_clust(
 	node->state = UNDO_NODE_FETCH_NEXT;
 
 	trx_undo_rec_release(node->trx, node->undo_no);
-
-	if (more_vers && err == DB_SUCCESS) {
-
-		/* Reserve the undo log record to the prior version after
-		committing &mtr: this is necessary to comply with the latching
-		order, as &mtr may contain the fsp latch which is lower in
-		the latch hierarchy than trx->undo_mutex. */
-
-		success = trx_undo_rec_reserve(node->trx, new_undo_no);
-
-		if (success) {
-			node->state = UNDO_NODE_PREV_VERS;
-		}
-	}
 
 	return(err);
 }
@@ -697,7 +681,6 @@ row_undo_mod_parse_undo_rec(
 	trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id,
 				       roll_ptr, info_bits, trx,
 				       node->heap, &(node->update));
-	node->new_roll_ptr = roll_ptr;
 	node->new_trx_id = trx_id;
 	node->cmpl_info = cmpl_info;
 }

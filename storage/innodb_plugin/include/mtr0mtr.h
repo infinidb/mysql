@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -50,7 +50,9 @@ first 3 values must be RW_S_LATCH, RW_X_LATCH, RW_NO_LATCH */
 #define	MTR_MEMO_PAGE_S_FIX	RW_S_LATCH
 #define	MTR_MEMO_PAGE_X_FIX	RW_X_LATCH
 #define	MTR_MEMO_BUF_FIX	RW_NO_LATCH
-#define MTR_MEMO_MODIFY		54
+#ifdef UNIV_DEBUG
+# define MTR_MEMO_MODIFY	54
+#endif /* UNIV_DEBUG */
 #define	MTR_MEMO_S_LOCK		55
 #define	MTR_MEMO_X_LOCK		56
 
@@ -106,6 +108,9 @@ For 1 - 8 bytes, the flag value must give the length also! @{ */
 #define MLOG_IBUF_BITMAP_INIT	((byte)27)	/*!< initialize an
 						ibuf bitmap page */
 /*#define	MLOG_FULL_PAGE	((byte)28)	full contents of a page */
+#ifdef UNIV_LOG_LSN_DEBUG
+# define MLOG_LSN		((byte)28)	/* current LSN */
+#endif
 #define MLOG_INIT_FILE_PAGE	((byte)29)	/*!< this means that a
 						file page is taken
 						into use and the prior
@@ -118,7 +123,7 @@ For 1 - 8 bytes, the flag value must give the length also! @{ */
 #define MLOG_WRITE_STRING	((byte)30)	/*!< write a string to
 						a page */
 #define	MLOG_MULTI_REC_END	((byte)31)	/*!< if a single mtr writes
-						log records for several pages,
+						several log records,
 						this log record ends the
 						sequence of these records */
 #define MLOG_DUMMY_RECORD	((byte)32)	/*!< dummy log record used to
@@ -210,16 +215,6 @@ ulint
 mtr_set_savepoint(
 /*==============*/
 	mtr_t*	mtr);	/*!< in: mtr */
-/**********************************************************//**
-Releases the latches stored in an mtr memo down to a savepoint.
-NOTE! The mtr must not have made changes to buffer pages after the
-savepoint, as these can be handled only by mtr_commit. */
-UNIV_INTERN
-void
-mtr_rollback_to_savepoint(
-/*======================*/
-	mtr_t*	mtr,		/*!< in: mtr */
-	ulint	savepoint);	/*!< in: savepoint */
 #ifndef UNIV_HOTBACKUP
 /**********************************************************//**
 Releases the (index tree) s-latch stored in an mtr memo after a
@@ -385,11 +380,14 @@ struct mtr_struct{
 	dyn_array_t	memo;	/*!< memo stack for locks etc. */
 	dyn_array_t	log;	/*!< mini-transaction log */
 	ibool		modifications;
-				/* TRUE if the mtr made modifications to
-				buffer pool pages */
+				/*!< TRUE if the mini-transaction
+				modified buffer pool pages */
 	ulint		n_log_recs;
 				/* count of how many page initial log records
 				have been written to the mtr log */
+	ulint		n_freed_pages;
+				/* number of pages that have been freed in
+				this mini-transaction */
 	ulint		log_mode; /* specifies which operations should be
 				logged; default value MTR_LOG_ALL */
 	ib_uint64_t	start_lsn;/* start lsn of the possible log entry for

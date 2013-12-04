@@ -18,19 +18,14 @@
 -- source include/have_binlog_format_mixed_or_statement.inc
 
 connect (master,localhost,root,,test,$MASTER_MYPORT,$MASTER_MYSOCK);
---disable_warnings
-drop table if exists t1, t2, t3, t4;
---enable_warnings
 connect (slave,localhost,root,,test,$SLAVE_MYPORT,$SLAVE_MYSOCK);
+
 # Create empty file
 let $MYSQLD_SLAVE_DATADIR= `select @@datadir`;
 write_file $MYSQLD_SLAVE_DATADIR/master.info;
 EOF
 chmod 0000 $MYSQLD_SLAVE_DATADIR/master.info;
 connection slave;
---disable_warnings
-drop table if exists t1, t2, t3, t4;
---enable_warnings
 
 # START SLAVE will fail because it can't read the file (mode 000)
 # (system error 13)
@@ -66,7 +61,9 @@ insert into temp_table values ("testing temporary tables");
 create table t1 (s text);
 insert into t1 values('Could not break slave'),('Tried hard');
 sync_slave_with_master;
-source include/show_slave_status2.inc;
+let $status_items= Master_Log_File, Relay_Master_Log_File;
+source include/show_slave_status.inc;
+source include/check_slave_is_running.inc;
 select * from t1;
 connection master;
 flush logs;
@@ -95,11 +92,10 @@ connection master;
 set insert_id=1234;
 insert into t2 values(NULL);
 connection slave;
---source include/wait_for_slave_sql_to_stop.inc
-
-#restart slave skipping one event
-set global sql_slave_skip_counter=1;
-start slave;
+# 1062 = ER_DUP_ENTRY
+call mtr.add_suppression("Slave SQL.*Error .Duplicate entry .1234. for key .PRIMARY.. on query.* Error_code: 1062");
+--let $slave_sql_errno= 1062
+--source include/wait_for_slave_sql_error_and_skip.inc
 
 connection master;
 
@@ -136,7 +132,8 @@ purge master logs before (@time_for_purge);
 source include/show_binary_logs.inc;
 insert into t2 values (65);
 sync_slave_with_master;
-source include/show_slave_status2.inc;
+source include/show_slave_status.inc;
+source include/check_slave_is_running.inc;
 select * from t2;
 
 #
@@ -166,7 +163,8 @@ connection slave;
 sync_with_master;
 select * from t4;
 
-source include/show_slave_status2.inc;
+source include/show_slave_status.inc;
+source include/check_slave_is_running.inc;
 # because of concurrent insert, the table may not be up to date
 # if we do not lock
 lock tables t3 read;
@@ -190,3 +188,5 @@ show binlog events in '';
 purge master logs before now();
 
 --echo End of 5.0 tests
+--source include/stop_slave.inc
+CHANGE MASTER TO MASTER_HOST = '';

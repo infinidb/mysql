@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*  Extra functions used by unireg library */
@@ -129,8 +131,8 @@
 #define SPECIAL_LOG_QUERIES_NOT_USING_INDEXES 4096 /* Obsolete */
 
 	/* Extern defines */
-#define store_record(A,B) bmove_align((A)->B,(A)->record[0],(size_t) (A)->s->reclength)
-#define restore_record(A,B) bmove_align((A)->record[0],(A)->B,(size_t) (A)->s->reclength)
+#define store_record(A,B) memcpy((A)->B,(A)->record[0],(size_t) (A)->s->reclength)
+#define restore_record(A,B) memcpy((A)->record[0],(A)->B,(size_t) (A)->s->reclength)
 #define cmp_record(A,B) memcmp((A)->record[0],(A)->B,(size_t) (A)->s->reclength)
 #define empty_record(A) { \
                           restore_record((A),s->default_values); \
@@ -208,7 +210,6 @@
 */
 
 #define BIN_LOG_HEADER_SIZE    4 
-#define FLOATING_POINT_BUFFER 331
 
 #define DEFAULT_KEY_CACHE_NAME "default"
 

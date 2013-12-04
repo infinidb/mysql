@@ -729,4 +729,196 @@ SELECT * FROM t1 JOIN t2 ON b=c ORDER BY a;
 SELECT * FROM t1 JOIN t2 ON a=c ORDER BY a;
 
 DROP TABLE IF EXISTS t1,t2;
+
+
+--echo #
+--echo # Bug #42116: Mysql crash on specific query
+--echo #
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (a INT);
+CREATE TABLE t3 (a INT, INDEX (a));
+CREATE TABLE t4 (a INT);
+CREATE TABLE t5 (a INT);
+CREATE TABLE t6 (a INT);
+
+INSERT INTO t1 VALUES (1), (1), (1);
+
+INSERT INTO t2 VALUES
+(2), (2), (2), (2), (2), (2), (2), (2), (2), (2);
+
+INSERT INTO t3 VALUES
+(3), (3), (3), (3), (3), (3), (3), (3), (3), (3);
+
+EXPLAIN
+SELECT * 
+FROM 
+  t1 JOIN t2 ON t1.a = t2.a 
+  LEFT JOIN 
+  (
+   (
+    t3 LEFT JOIN t4 ON t3.a = t4.a
+   ) 
+   LEFT JOIN 
+   (
+     t5 LEFT JOIN t6 ON t5.a = t6.a
+   ) 
+   ON t4.a = t5.a
+  ) 
+  ON t1.a = t3.a;
+
+SELECT * 
+FROM 
+  t1 JOIN t2 ON t1.a = t2.a 
+  LEFT JOIN 
+  (
+   (
+    t3 LEFT JOIN t4 ON t3.a = t4.a
+   ) 
+   LEFT JOIN 
+   (
+     t5 LEFT JOIN t6 ON t5.a = t6.a
+   ) 
+   ON t4.a = t5.a
+  ) 
+  ON t1.a = t3.a;
+
+DROP TABLE t1,t2,t3,t4,t5,t6;
+
+--echo #
+--echo # Bug#48483: crash in get_best_combination()
+--echo #
+
+CREATE TABLE t1(f1 INT);
+INSERT INTO t1 VALUES (1),(2);
+CREATE VIEW v1 AS SELECT 1 FROM t1 LEFT JOIN t1 AS t2 on 1=1;
+EXPLAIN EXTENDED
+SELECT 1 FROM v1 right join v1 AS v2 ON RAND();
+DROP VIEW v1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#52177 crash with explain, row comparison, join, text field
+--echo #
+CREATE TABLE t1 (a TINYINT, b TEXT, KEY (a));
+INSERT INTO t1 VALUES (0,''),(0,'');
+FLUSH TABLES;
+EXPLAIN SELECT 1 FROM t1 LEFT JOIN t1 a ON 1
+WHERE ROW(t1.a, 1111.11) = ROW(1111.11, 1111.11) AND
+ROW(t1.b, 1111.11) <=> ROW('','');
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #50335: Assertion `!(order->used & map)' in eq_ref_table
+--echo # 
+
+CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, PRIMARY KEY (a,b));
+INSERT INTO t1 VALUES (0,0), (1,1);
+
+SELECT * FROM t1 STRAIGHT_JOIN t1 t2 ON t1.a=t2.a AND t1.a=t2.b ORDER BY t2.a, t1.a;
+
+DROP TABLE t1;
+
 --echo End of 5.0 tests.
+
+
+#
+# Bug#47150 Assertion in Field_long::val_int() on MERGE + TRIGGER + multi-table UPDATE
+#
+CREATE TABLE t1 (f1 int);
+
+CREATE TABLE t2 (f1 int);
+INSERT INTO t2  VALUES (1);
+CREATE VIEW v1 AS SELECT * FROM t2;
+
+PREPARE stmt FROM 'UPDATE t2 AS A NATURAL JOIN v1 B SET B.f1 = 1';
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+
+DROP VIEW v1;
+DROP TABLE t1, t2;
+
+#
+# Bug#45195 valgrind warnings about uninitialized values in store_record_in_cache()
+#
+CREATE TABLE t1(a CHAR(9),b INT,KEY(b),KEY(a)) ENGINE=MYISAM;
+CREATE TABLE t2(a CHAR(9),b INT,KEY(b),KEY(a)) ENGINE=MYISAM;
+INSERT INTO t1 VALUES ('1',null),(null,null);
+INSERT INTO t2 VALUES ('1',null),(null,null);
+CREATE TABLE mm1(a CHAR(9),b INT,KEY(b),KEY(a))
+ENGINE=MERGE  UNION=(t1,t2);
+SELECT t1.a FROM mm1,t1;
+DROP TABLE t1, t2, mm1;
+
+#--echo #
+#--echo # Bug #55568: user variable assignments crash server when used within
+#--echo #             query
+#--echo #
+#
+#
+# This test case is invalidated because of fix of bug 55531
+# The reason is that {1} is not a valid geometric collection.
+#
+#CREATE TABLE t1 (a INT);
+
+#INSERT INTO t1 VALUES (0), (1);
+
+#let $i=2;
+#while ($i)
+#{
+#  SELECT MULTIPOINT(
+#    1,
+#    (
+#      SELECT MULTIPOINT(
+#        MULTIPOINT(
+#          1,
+#          (SELECT COUNT(*) FROM (SELECT 1 FROM t1 GROUP BY a,a) d)
+#        )
+#      ) FROM t1
+#    )
+#  ) != COUNT(*) q FROM t1 GROUP BY a;
+#  dec $i;
+#}
+#
+#DROP TABLE t1;
+
+--echo #
+--echo # Bug #54468: crash after item's print() function when ordering/grouping 
+--echo #             by subquery
+--echo #
+
+CREATE TABLE t1(a INT, b INT);
+INSERT INTO t1 VALUES (), ();
+
+SELECT 1 FROM t1
+GROUP BY
+GREATEST(t1.a,
+         (SELECT 1 FROM
+          (SELECT t1.b FROM t1,t1 t2
+           ORDER BY t1.a, t1.a LIMIT 1) AS d)
+        );
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #53544: Server hangs during JOIN query in stored procedure called
+--echo #             twice in a row
+--echo #
+
+CREATE TABLE t1(c INT);
+
+INSERT INTO t1 VALUES (1), (2);
+
+PREPARE stmt FROM "SELECT t2.c AS f1 FROM t1 LEFT JOIN
+                                        t1 t2 ON t1.c=t2.c RIGHT JOIN
+                                        t1 t3 ON t1.c=t3.c 
+                   GROUP BY f1;";
+
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+--echo End of 5.1 tests

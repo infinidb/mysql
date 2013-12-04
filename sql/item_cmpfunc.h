@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -34,7 +34,7 @@ class Arg_comparator: public Sql_alloc
 {
   Item **a, **b;
   arg_cmp_func func;
-  Item_bool_func2 *owner;
+  Item_result_field *owner;
   Arg_comparator *comparators;   // used only for compare_row()
   double precision;
   /* Fields used in DATE/DATETIME comparison. */
@@ -42,30 +42,40 @@ class Arg_comparator: public Sql_alloc
   enum_field_types a_type, b_type; // Types of a and b items
   Item *a_cache, *b_cache;         // Cached values of a and b items
   bool is_nulls_eq;                // TRUE <=> compare for the EQUAL_FUNC
+  bool set_null;                   // TRUE <=> set owner->null_value
+                                   //   when one of arguments is NULL.
   enum enum_date_cmp_type { CMP_DATE_DFLT= 0, CMP_DATE_WITH_DATE,
                             CMP_DATE_WITH_STR, CMP_STR_WITH_DATE };
-  longlong (*get_value_func)(THD *thd, Item ***item_arg, Item **cache_arg,
-                             Item *warn_item, bool *is_null);
+  longlong (*get_value_a_func)(THD *thd, Item ***item_arg, Item **cache_arg,
+                               Item *warn_item, bool *is_null);
+  longlong (*get_value_b_func)(THD *thd, Item ***item_arg, Item **cache_arg,
+                               Item *warn_item, bool *is_null);
+  bool try_year_cmp_func(Item_result type);
 public:
   DTCollation cmp_collation;
+  /* Allow owner function to use string buffers. */
+  String value1, value2;
 
-  Arg_comparator(): thd(0), a_cache(0), b_cache(0) {};
-  Arg_comparator(Item **a1, Item **a2): a(a1), b(a2), thd(0),
-    a_cache(0), b_cache(0) {};
+  Arg_comparator(): comparators(0), thd(0), a_cache(0), b_cache(0), set_null(TRUE),
+    get_value_a_func(0), get_value_b_func(0) {};
+  Arg_comparator(Item **a1, Item **a2): a(a1), b(a2), comparators(0), thd(0),
+    a_cache(0), b_cache(0), set_null(TRUE),
+    get_value_a_func(0), get_value_b_func(0) {};
 
-  int set_compare_func(Item_bool_func2 *owner, Item_result type);
-  inline int set_compare_func(Item_bool_func2 *owner_arg)
+  int set_compare_func(Item_result_field *owner, Item_result type);
+  inline int set_compare_func(Item_result_field *owner_arg)
   {
     return set_compare_func(owner_arg, item_cmp_type((*a)->result_type(),
                                                      (*b)->result_type()));
   }
-  int set_cmp_func(Item_bool_func2 *owner_arg,
+  int set_cmp_func(Item_result_field *owner_arg,
 			  Item **a1, Item **a2,
 			  Item_result type);
 
-  inline int set_cmp_func(Item_bool_func2 *owner_arg,
-			  Item **a1, Item **a2)
+  inline int set_cmp_func(Item_result_field *owner_arg,
+			  Item **a1, Item **a2, bool set_null_arg)
   {
+    set_null= set_null_arg;
     return set_cmp_func(owner_arg, a1, a2,
                         item_cmp_type((*a1)->result_type(),
                                       (*a2)->result_type()));
@@ -95,8 +105,20 @@ public:
   static enum enum_date_cmp_type can_compare_as_dates(Item *a, Item *b,
                                                       ulonglong *const_val_arg);
 
-  void set_datetime_cmp_func(Item **a1, Item **b1);
+  Item** cache_converted_constant(THD *thd, Item **value, Item **cache,
+                                  Item_result type);
+  void set_datetime_cmp_func(Item_result_field *owner_arg, Item **a1, Item **b1);
   static arg_cmp_func comparator_matrix [5][2];
+  inline bool is_owner_equal_func()
+  {
+    return (owner->type() == Item::FUNC_ITEM &&
+           ((Item_func*)owner)->functype() == Item_func::EQUAL_FUNC);
+  }
+  void cleanup()
+  {
+    delete [] comparators;
+    comparators= 0;
+  }
 
   friend class Item_func;
 };
@@ -234,7 +256,7 @@ public:
   Item_in_optimizer(Item *a, Item_in_subselect *b):
     Item_bool_func(a, my_reinterpret_cast(Item *)(b)), cache(0),
     save_cache(0), result_for_null_param(UNKNOWN)
-  {}
+  { with_subselect= true; }
   bool fix_fields(THD *, Item **);
   bool fix_left(THD *thd, Item **ref);
   bool is_null();
@@ -326,7 +348,6 @@ class Item_bool_func2 :public Item_int_func
 {						/* Bool with 2 string args */
 protected:
   Arg_comparator cmp;
-  String tmp_value1,tmp_value2;
   bool abort_on_null;
 
 public:
@@ -335,7 +356,7 @@ public:
   void fix_length_and_dec();
   void set_cmp_func()
   {
-    cmp.set_cmp_func(this, tmp_arg, tmp_arg+1);
+    cmp.set_cmp_func(this, tmp_arg, tmp_arg+1, TRUE);
   }
   optimize_type select_optimize() const { return OPTIMIZE_OP; }
   virtual enum Functype rev_functype() const { return UNKNOWN_FUNC; }
@@ -351,6 +372,11 @@ public:
   CHARSET_INFO *compare_collation() { return cmp.cmp_collation.collation; }
   uint decimal_precision() const { return 1; }
   void top_level_item() { abort_on_null= TRUE; }
+  void cleanup()
+  {
+    Item_int_func::cleanup();
+    cmp.cleanup();
+  }
 
   friend class  Arg_comparator;
 };
@@ -1291,8 +1317,8 @@ public:
     else
     {
       args[0]->update_used_tables();
-      if ((const_item_cache= !(used_tables_cache= args[0]->used_tables())) &&
-          !with_subselect)
+      if ((const_item_cache= !(used_tables_cache= args[0]->used_tables()) &&
+          !with_subselect))
       {
 	/* Remember if the value is always NULL or never NULL */
 	cached_value= (longlong) args[0]->is_null();
@@ -1462,9 +1488,21 @@ public:
   Item_cond(THD *thd, Item_cond *item);
   Item_cond(List<Item> &nlist)
     :Item_bool_func(), list(nlist), abort_on_null(0) {}
-  bool add(Item *item) { return list.push_back(item); }
-  bool add_at_head(Item *item) { return list.push_front(item); }
-  void add_at_head(List<Item> *nlist) { list.prepand(nlist); }
+  bool add(Item *item)
+  {
+    DBUG_ASSERT(item);
+    return list.push_back(item);
+  }
+  bool add_at_head(Item *item)
+  {
+    DBUG_ASSERT(item);
+    return list.push_front(item);
+  }
+  void add_at_head(List<Item> *nlist)
+  {
+    DBUG_ASSERT(nlist->elements);
+    list.prepand(nlist);
+  }
   bool fix_fields(THD *, Item **ref);
 
   enum Type type() const { return COND_ITEM; }
@@ -1568,7 +1606,9 @@ class Item_equal: public Item_bool_func
   List<Item_field> fields; /* list of equal field items                    */
   Item *const_item;        /* optional constant item equal to fields items */
   cmp_item *eval_item;
+  Arg_comparator cmp;
   bool cond_false;
+  bool compare_as_dates;
 public:
   inline Item_equal()
     : Item_bool_func(), const_item(0), eval_item(0), cond_false(0)
@@ -1577,6 +1617,8 @@ public:
   Item_equal(Item *c, Item_field *f);
   Item_equal(Item_equal *item_equal);
   inline Item* get_const() { return const_item; }
+  void compare_const(Item *c);
+  void add(Item *c, Item_field *f);
   void add(Item *c);
   void add(Item_field *f);
   uint members();
@@ -1588,7 +1630,7 @@ public:
   longlong val_int(); 
   const char *func_name() const { return "multiple equal"; }
   optimize_type select_optimize() const { return OPTIMIZE_EQUAL; }
-  void sort(Item_field_cmpfunc cmp, void *arg);
+  void sort(Item_field_cmpfunc compare, void *arg);
   friend class Item_equal_iterator;
   void fix_length_and_dec();
   bool fix_fields(THD *thd, Item **ref);
@@ -1725,3 +1767,6 @@ inline Item *and_conds(Item *a, Item *b)
 }
 
 Item *and_expressions(Item *a, Item *b, Item **org_item);
+
+bool get_mysql_time_from_str(THD *thd, String *str, timestamp_type warn_type, 
+                             const char *warn_name, MYSQL_TIME *l_time);

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Describe, check and repair of MyISAM tables */
 
@@ -85,6 +87,7 @@ static SORT_KEY_BLOCKS	*alloc_key_blocks(MI_CHECK *param, uint blocks,
 					  uint buffer_length);
 static ha_checksum mi_byte_checksum(const uchar *buf, uint length);
 static void set_data_file_type(SORT_INFO *sort_info, MYISAM_SHARE *share);
+static HA_KEYSEG *ha_find_null(HA_KEYSEG *keyseg, uchar *a);
 
 void myisamchk_init(MI_CHECK *param)
 {
@@ -104,6 +107,9 @@ void myisamchk_init(MI_CHECK *param)
   param->max_record_length= LONGLONG_MAX;
   param->key_cache_block_size= KEY_CACHE_BLOCK_SIZE;
   param->stats_method= MI_STATS_METHOD_NULLS_NOT_EQUAL;
+#ifdef THREAD
+  param->need_print_msg_lock= 0;
+#endif
 }
 
 	/* Check the status flags for the table */
@@ -801,7 +807,7 @@ static int chk_index(MI_CHECK *param, MI_INFO *info, MI_KEYDEF *keyinfo,
     {
       DBUG_DUMP("old",(uchar*) info->lastkey, info->lastkey_length);
       DBUG_DUMP("new",(uchar*) key, key_length);
-      DBUG_DUMP("new_in_page",(char*) old_keypos,(uint) (keypos-old_keypos));
+      DBUG_DUMP("new_in_page",(uchar*) old_keypos,(uint) (keypos-old_keypos));
 
       if (comp_flag & SEARCH_FIND && flag == 0)
 	mi_check_print_error(param,"Found duplicated key at page %s",llstr(page,llbuff));
@@ -871,7 +877,7 @@ static int chk_index(MI_CHECK *param, MI_INFO *info, MI_KEYDEF *keyinfo,
 			 llstr(page,llbuff),llstr(record,llbuff2),
 			 llstr(info->state->data_file_length,llbuff3)));
       DBUG_DUMP("key",(uchar*) key,key_length);
-      DBUG_DUMP("new_in_page",(char*) old_keypos,(uint) (keypos-old_keypos));
+      DBUG_DUMP("new_in_page",(uchar*) old_keypos,(uint) (keypos-old_keypos));
       goto err;
     }
     param->record_checksum+=(ha_checksum) record;
@@ -1545,6 +1551,8 @@ int mi_repair(MI_CHECK *param, register MI_INFO *info,
   if (info->s->options & (HA_OPTION_CHECKSUM | HA_OPTION_COMPRESS_RECORD))
     param->testflag|=T_CALC_CHECKSUM;
 
+  DBUG_ASSERT(param->use_buffers < SIZE_T_MAX);
+
   if (!param->using_global_keycache)
     VOID(init_key_cache(dflt_key_cache, param->key_cache_block_size,
                         (size_t) param->use_buffers, 0, 0));
@@ -1736,6 +1744,8 @@ err:
 			     MYF(MY_REDEL_MAKE_BACKUP): MYF(0))) ||
 	  mi_open_datafile(info,share,name,-1))
 	got_error=1;
+
+      param->retry_repair= 0;
     }
   }
   if (got_error)
@@ -2391,10 +2401,8 @@ int mi_repair_by_sort(MI_CHECK *param, register MI_INFO *info,
       /*
         fulltext indexes may have much more entries than the
         number of rows in the table. We estimate the number here.
-
-        Note, built-in parser is always nr. 0 - see ftparser_call_initializer()
       */
-      if (sort_param.keyinfo->ftkey_nr == 0)
+      if (sort_param.keyinfo->parser == &ft_default_parser)
       {
         /*
           for built-in parser the number of generated index entries
@@ -2411,8 +2419,9 @@ int mi_repair_by_sort(MI_CHECK *param, register MI_INFO *info,
           so, we'll use all the sort memory and start from ~10 buffpeks.
           (see _create_index_by_sort)
         */
-        sort_info.max_records=
-          10*param->sort_buffer_length/sort_param.key_length;
+        sort_info.max_records= 10 *
+                               max(param->sort_buffer_length, MIN_SORT_BUFFER) /
+                               sort_param.key_length;
       }
 
       sort_param.key_read=sort_ft_key_read;
@@ -2559,8 +2568,9 @@ err:
       VOID(my_close(new_file,MYF(0)));
       VOID(my_raid_delete(param->temp_filename,share->base.raid_chunks,
 			  MYF(MY_WME)));
-      if (info->dfile == new_file)
-	info->dfile= -1;
+      if (info->dfile == new_file) /* Retry with key cache */
+        if (unlikely(mi_open_datafile(info, share, name, -1)))
+          param->retry_repair= 0; /* Safety */
     }
     mi_mark_crashed_on_repair(info);
   }
@@ -2700,6 +2710,8 @@ int mi_repair_parallel(MI_CHECK *param, register MI_INFO *info,
   /* Initialize pthread structures before goto err. */
   pthread_mutex_init(&sort_info.mutex, MY_MUTEX_INIT_FAST);
   pthread_cond_init(&sort_info.cond, 0);
+  pthread_mutex_init(&param->print_msg_mutex, MY_MUTEX_INIT_FAST);
+  param->need_print_msg_lock= 1;
 
   if (!(sort_info.key_block=
 	alloc_key_blocks(param, (uint) param->sort_key_blocks,
@@ -3093,8 +3105,9 @@ err:
       VOID(my_close(new_file,MYF(0)));
       VOID(my_raid_delete(param->temp_filename,share->base.raid_chunks,
 			  MYF(MY_WME)));
-      if (info->dfile == new_file)
-	info->dfile= -1;
+      if (info->dfile == new_file) /* Retry with key cache */
+        if (unlikely(mi_open_datafile(info, share, name, -1)))
+          param->retry_repair= 0; /* Safety */
     }
     mi_mark_crashed_on_repair(info);
   }
@@ -3104,6 +3117,8 @@ err:
 
   pthread_cond_destroy (&sort_info.cond);
   pthread_mutex_destroy(&sort_info.mutex);
+  pthread_mutex_destroy(&param->print_msg_mutex);
+  param->need_print_msg_lock= 0;
 
   my_free((uchar*) sort_info.ft_buf, MYF(MY_ALLOW_ZERO_PTR));
   my_free((uchar*) sort_info.key_block,MYF(MY_ALLOW_ZERO_PTR));
@@ -3898,7 +3913,7 @@ static int sort_ft_key_write(MI_SORT_PARAM *sort_param, const void *a)
   SORT_FT_BUF *ft_buf=sort_info->ft_buf;
   SORT_KEY_BLOCKS *key_block=sort_info->key_block;
 
-  val_len=HA_FT_WLEN+sort_info->info->s->base.rec_reflength;
+  val_len= HA_FT_WLEN + sort_info->info->s->rec_reflength;
   get_key_full_length_rdonly(a_len, (uchar *)a);
 
   if (!ft_buf)
@@ -3908,7 +3923,7 @@ static int sort_ft_key_write(MI_SORT_PARAM *sort_param, const void *a)
       and row format is NOT static - for _mi_dpointer not to garble offsets
      */
     if ((sort_info->info->s->base.key_reflength <=
-         sort_info->info->s->base.rec_reflength) &&
+         sort_info->info->s->rec_reflength) &&
         (sort_info->info->s->options &
           (HA_OPTION_PACK_RECORD | HA_OPTION_COMPRESS_RECORD)))
       ft_buf=(SORT_FT_BUF *)my_malloc(sort_param->keyinfo->block_length +
@@ -4299,13 +4314,6 @@ int recreate_table(MI_CHECK *param, MI_INFO **org_info, char *filename)
     u_ptr->seg=keyseg;
     keyseg+=u_ptr->keysegs+1;
   }
-  if (share.options & HA_OPTION_COMPRESS_RECORD)
-    share.base.records=max_records=info.state->records;
-  else if (share.base.min_pack_length)
-    max_records=(ha_rows) (my_seek(info.dfile,0L,MY_SEEK_END,MYF(0)) /
-			   (ulong) share.base.min_pack_length);
-  else
-    max_records=0;
   unpack= (share.options & HA_OPTION_COMPRESS_RECORD) &&
     (param->testflag & T_UNPACK);
   share.options&= ~HA_OPTION_TEMP_COMPRESS_RECORD;
@@ -4315,10 +4323,17 @@ int recreate_table(MI_CHECK *param, MI_INFO **org_info, char *filename)
   set_if_bigger(file_length,param->max_data_file_length);
   set_if_bigger(file_length,tmp_length);
   set_if_bigger(file_length,(ulonglong) share.base.max_data_file_length);
+ 
+  if (share.options & HA_OPTION_COMPRESS_RECORD)
+    share.base.records= max_records= info.state->records;
+  else if (!(share.options & HA_OPTION_PACK_RECORD))
+    max_records= (ha_rows) (file_length / share.base.pack_reclength);
+  else
+    max_records= 0;
 
   VOID(mi_close(*org_info));
   bzero((char*) &create_info,sizeof(create_info));
-  create_info.max_rows=max(max_records,share.base.records);
+  create_info.max_rows= max_records;
   create_info.reloc_rows=share.base.reloc;
   create_info.old_options=(share.options |
 			   (unpack ? HA_OPTION_TEMP_COMPRESS_RECORD : 0));
@@ -4726,4 +4741,90 @@ set_data_file_type(SORT_INFO *sort_info, MYISAM_SHARE *share)
     mi_setup_functions(&tmp);
     share->delete_record=tmp.delete_record;
   }
+}
+
+/*
+  Find the first NULL value in index-suffix values tuple
+
+  SYNOPSIS
+    ha_find_null()
+      keyseg     Array of keyparts for key suffix
+      a          Key suffix value tuple
+
+  DESCRIPTION
+    Find the first NULL value in index-suffix values tuple.
+    TODO Consider optimizing this fuction or its use so we don't search for
+         NULL values in completely NOT NULL index suffixes.
+
+  RETURN
+    First key part that has NULL as value in values tuple, or the last key part 
+    (with keyseg->type==HA_TYPE_END) if values tuple doesn't contain NULLs.
+*/
+
+static HA_KEYSEG *ha_find_null(HA_KEYSEG *keyseg, uchar *a)
+{
+  for (; (enum ha_base_keytype) keyseg->type != HA_KEYTYPE_END; keyseg++)
+  {
+    uchar *end;
+    if (keyseg->null_bit)
+    {
+      if (!*a++)
+        return keyseg;
+    }
+    end= a+ keyseg->length;
+
+   switch ((enum ha_base_keytype) keyseg->type) {
+    case HA_KEYTYPE_TEXT:
+    case HA_KEYTYPE_BINARY:
+    case HA_KEYTYPE_BIT:
+      if (keyseg->flag & HA_SPACE_PACK)
+      {
+        int a_length;
+        get_key_length(a_length, a);
+        a += a_length;
+        break;
+      }
+      else
+        a= end;
+      break;
+    case HA_KEYTYPE_VARTEXT1:
+    case HA_KEYTYPE_VARTEXT2:
+    case HA_KEYTYPE_VARBINARY1:
+    case HA_KEYTYPE_VARBINARY2:
+      {
+        int a_length;
+        get_key_length(a_length, a);
+        a+= a_length;
+        break;
+      }
+    case HA_KEYTYPE_NUM:
+      if (keyseg->flag & HA_SPACE_PACK)
+      {
+        int alength= *a++;
+        end= a+alength;
+      }
+      a= end;
+      break;
+    case HA_KEYTYPE_INT8:
+    case HA_KEYTYPE_SHORT_INT:
+    case HA_KEYTYPE_USHORT_INT:
+    case HA_KEYTYPE_LONG_INT:
+    case HA_KEYTYPE_ULONG_INT:
+    case HA_KEYTYPE_INT24:
+    case HA_KEYTYPE_UINT24:
+#ifdef HAVE_LONG_LONG
+    case HA_KEYTYPE_LONGLONG:
+    case HA_KEYTYPE_ULONGLONG:
+#endif
+    case HA_KEYTYPE_FLOAT:
+    case HA_KEYTYPE_DOUBLE:
+      a= end;
+      break;
+    case HA_KEYTYPE_END:                        /* purecov: inspected */
+      /* keep compiler happy */
+      DBUG_ASSERT(0);
+      break;
+    }
+  }
+  return keyseg;
 }

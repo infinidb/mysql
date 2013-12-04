@@ -41,13 +41,10 @@ while ($1)
 --enable_query_log
 commit;
 drop table t1;
---replace_column 2 # 5 #
---replace_regex /table_id: [0-9]+/table_id: #/ /\/\* xid=.* \*\//\/* xid= *\//
-show binlog events in 'master-bin.000001' from 106;
---replace_column 2 # 5 #
---replace_regex /table_id: [0-9]+/table_id: #/ /\/\* xid=.* \*\//\/* xid= *\//
-show binlog events in 'master-bin.000002' from 106;
-
+--source include/show_binlog_events.inc
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+--source include/show_binlog_events.inc
+--let $binlog_file=
 
 #
 # Bug#22540 - Incorrect value in column End_log_pos of
@@ -77,8 +74,7 @@ insert into t1 values (2);
 insert into t1 values (3);
 commit;
 drop table t1;
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/ /Server ver: [^,]*,/Server version,/
-show binlog events from 0;
+--source include/show_binlog_events.inc
 
 # now show that nothing breaks if we need to read from the cache more
 # than once, resulting in split event-headers
@@ -100,8 +96,7 @@ while ($1)
 commit;
 enable_query_log;
 
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/ /Server ver: [^,]*,/Server version,/
-show binlog events from 0;
+--source include/show_binlog_events.inc
 
 drop table t1;
 
@@ -122,8 +117,7 @@ set @b= 14632475938453979136;
 execute stmt using @a, @b;
 deallocate prepare stmt;
 drop table t1;
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/ /Server ver: [^,]*,/Server version,/
-show binlog events from 0;
+--source include/show_binlog_events.inc
 
 
 #
@@ -249,14 +243,15 @@ reset master;
 drop table if exists t3;
 --enable_warnings
 create table t3 (a int(11) NOT NULL AUTO_INCREMENT, b text, PRIMARY KEY (a) ) engine=innodb;
-show master status;
+source include/show_master_status.inc;
 let $it=4;
 while ($it)
 {
 insert into t3(b) values ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 dec $it;
 }
-show master status /* must show new binlog index after rotating */;
+# must show new binlog index after rotating;
+source include/show_master_status.inc;
 drop table t3;
 
 --echo #
@@ -270,3 +265,96 @@ INSERT INTO test.t1 VALUES (1), (2);
 CREATE TABLE test.t2 SELECT * FROM test.t1;
 USE test;
 DROP TABLES t1, t2;
+
+#
+# Bug#46640
+# This test verifies if the server_id stored in the "format 
+# description BINLOG statement" will override the server_id 
+# of the server executing the statements.
+#
+
+connect (fresh,localhost,root,,test);
+connection fresh;
+
+RESET MASTER;
+CREATE TABLE t1 (a INT PRIMARY KEY);
+
+# Format description event, with server_id = 10;
+BINLOG '
+3u9kSA8KAAAAZgAAAGoAAAABAAQANS4xLjM1LW1hcmlhLWJldGExLWRlYnVnLWxvZwAAAAAAAAAA
+AAAAAAAAAAAAAAAAAADe72RIEzgNAAgAEgAEBAQEEgAAUwAEGggAAAAICAgC
+';
+
+# What server_id is logged for a statement? Should be our own, not the
+# one from the format description event.
+INSERT INTO t1 VALUES (1);
+
+# INSERT INTO t1 VALUES (2), with server_id=20. Check that this is logged
+# with our own server id, not the 20 from the BINLOG statement.
+BINLOG '
+3u9kSBMUAAAAKQAAAJEBAAAAABoAAAAAAAAABHRlc3QAAnQxAAEDAAA=
+3u9kSBcUAAAAIgAAALMBAAAQABoAAAAAAAEAAf/+AgAAAA==
+';
+
+# Show binlog events to check that server ids are correct.
+--replace_column 1 # 2 # 5 #
+--replace_regex /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/
+SHOW BINLOG EVENTS;
+
+DROP TABLE t1;
+
+--echo
+--echo # BUG#54903 BINLOG statement toggles session variables
+--echo # ----------------------------------------------------------------------
+--echo # This test verify that BINLOG statement doesn't change current session's
+--echo # variables foreign_key_checks and unique_checks.
+--echo
+CREATE TABLE t1 (c1 INT KEY);
+
+SET @@SESSION.foreign_key_checks= ON;
+SET @@SESSION.unique_checks= ON;
+
+--echo # INSERT INTO t1 VALUES (1)
+--echo # foreign_key_checks=0 and unique_checks=0
+BINLOG '
+dfLtTBMBAAAAKQAAANcAAAAAABcAAAAAAAEABHRlc3QAAnQxAAEDAAE=
+dfLtTBcBAAAAIgAAAPkAAAAAABcAAAAAAAcAAf/+AQAAAA==
+';
+
+SELECT * FROM t1;
+--echo # Their values should be ON
+SHOW SESSION VARIABLES LIKE "%_checks";
+
+--echo
+SET @@SESSION.foreign_key_checks= OFF;
+SET @@SESSION.unique_checks= OFF;
+
+--echo # INSERT INTO t1 VALUES(2)
+--echo # foreign_key_checks=1 and unique_checks=1
+BINLOG '
+dfLtTBMBAAAAKQAAAKsBAAAAABcAAAAAAAEABHRlc3QAAnQxAAEDAAE=
+dfLtTBcBAAAAIgAAAM0BAAAAABcAAAAAAAEAAf/+AgAAAA==
+';
+
+SELECT * FROM t1;
+--echo # Their values should be OFF
+SHOW SESSION VARIABLES LIKE "%_checks";
+
+--echo # INSERT INTO t1 VALUES(2)
+--echo # foreign_key_checks=1 and unique_checks=1
+--echo # It should not change current session's variables, even error happens
+call mtr.add_suppression("Slave SQL.*Could not execute Write_rows event on table test.t1; Duplicate entry .2. for key .PRIMARY., Error_code: 1062");
+--error 1062
+BINLOG '
+dfLtTBMBAAAAKQAAAKsBAAAAABcAAAAAAAEABHRlc3QAAnQxAAEDAAE=
+dfLtTBcBAAAAIgAAAM0BAAAAABcAAAAAAAEAAf/+AgAAAA==
+';
+
+SELECT * FROM t1;
+--echo # Their values should be OFF
+SHOW SESSION VARIABLES LIKE "%_checks";
+
+DROP TABLE t1;
+
+disconnect fresh;
+

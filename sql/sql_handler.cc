@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2004 MySQL AB
+/*
+   Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; version 2 of the License.
@@ -10,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* HANDLER ... commands - direct access to ISAM */
@@ -422,15 +424,12 @@ bool mysql_ha_read(THD *thd, TABLE_LIST *tables,
   String	buffer(buff, sizeof(buff), system_charset_info);
   int           error, keyno= -1;
   uint          num_rows;
-  uchar		*key;
-  uint		key_len;
+  uchar		*UNINIT_VAR(key);
+  uint		UNINIT_VAR(key_len);
   bool          need_reopen;
   DBUG_ENTER("mysql_ha_read");
   DBUG_PRINT("enter",("'%s'.'%s' as '%s'",
                       tables->db, tables->table_name, tables->alias));
-
-  LINT_INIT(key);
-  LINT_INIT(key_len);
 
   thd->lex->select_lex.context.resolve_in_table_list_only(tables);
   list.push_front(new Item_field(&thd->lex->select_lex.context,
@@ -542,6 +541,14 @@ retry:
       my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), keyname, tables->alias);
       goto err;
     }
+    /* Check if the same index involved. */
+    if ((uint) keyno != table->file->get_index())
+    {
+      if (mode == RNEXT)
+        mode= RFIRST;
+      else if (mode == RPREV)
+        mode= RLAST;
+    }
   }
 
   if (insert_fields(thd, &thd->lex->select_lex.context,
@@ -564,9 +571,16 @@ retry:
     case RNEXT:
       if (table->file->inited != handler::NONE)
       {
-        error=keyname ?
-	  table->file->index_next(table->record[0]) :
-	  table->file->rnd_next(table->record[0]);
+        if (keyname)
+        {
+          /* Check if we read from the same index. */
+          DBUG_ASSERT((uint) keyno == table->file->get_index());
+          error= table->file->index_next(table->record[0]);
+        }
+        else
+        {
+          error= table->file->rnd_next(table->record[0]);
+        }
         break;
       }
       /* else fall through */
@@ -587,6 +601,8 @@ retry:
       break;
     case RPREV:
       DBUG_ASSERT(keyname != 0);
+      /* Check if we read from the same index. */
+      DBUG_ASSERT((uint) keyno == table->file->get_index());
       if (table->file->inited != handler::NONE)
       {
         error=table->file->index_prev(table->record[0]);

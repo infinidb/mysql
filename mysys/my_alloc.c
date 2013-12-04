@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Routines to handle mallocing of results which will be freed the same time */
 
@@ -154,6 +156,14 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
 
   DBUG_ASSERT(alloc_root_inited(mem_root));
 
+  DBUG_EXECUTE_IF("simulate_out_of_memory",
+                  {
+                    if (mem_root->error_handler)
+                      (*mem_root->error_handler)();
+                    DBUG_SET("-d,simulate_out_of_memory");
+                    DBUG_RETURN((void*) 0); /* purecov: inspected */
+                  });
+
   length+=ALIGN_SIZE(sizeof(USED_MEM));
   if (!(next = (USED_MEM*) my_malloc(length,MYF(MY_WME))))
   {
@@ -176,6 +186,14 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
   DBUG_PRINT("enter",("root: 0x%lx", (long) mem_root));
   DBUG_ASSERT(alloc_root_inited(mem_root));
 
+  DBUG_EXECUTE_IF("simulate_out_of_memory",
+                  {
+                    /* Avoid reusing an already allocated block */
+                    if (mem_root->error_handler)
+                      (*mem_root->error_handler)();
+                    DBUG_SET("-d,simulate_out_of_memory");
+                    DBUG_RETURN((void*) 0); /* purecov: inspected */
+                  });
   length= ALIGN_SIZE(length);
   if ((*(prev= &mem_root->free)) != NULL)
   {

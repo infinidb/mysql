@@ -1991,6 +1991,45 @@ select @arg;
 execute stmt using @arg;
 deallocate prepare stmt;
 
+--echo #
+--echo # Bug#48508: Crash on prepared statement re-execution.
+--echo #
+create table t1(b int);
+insert into t1 values (0);
+create view v1 AS select 1 as a from t1 where b;
+prepare stmt from "select * from v1 where a";
+execute stmt;
+execute stmt;
+deallocate prepare stmt;
+drop table t1;
+drop view v1;
+
+create table t1(a bigint);
+create table t2(b tinyint);
+insert into t2 values (null);
+prepare stmt from "select 1 from t1 join  t2 on a xor b where b > 1  and a =1";
+execute stmt;
+execute stmt;
+deallocate prepare stmt;
+drop table t1,t2;
+--echo #
+
+
+--echo #
+--echo # Bug #49570: Assertion failed: !(order->used & map)
+--echo # on re-execution of prepared statement
+--echo #
+CREATE TABLE t1(a INT PRIMARY KEY);
+INSERT INTO t1 VALUES(0), (1);
+PREPARE stmt FROM 
+  "SELECT 1 FROM t1 JOIN t1 t2 USING(a) GROUP BY t2.a, t1.a";
+EXECUTE stmt;
+EXECUTE stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+
 --echo End of 5.0 tests.
 
 #
@@ -3009,5 +3048,147 @@ execute stmt;
 drop table t1;
 deallocate prepare stmt;
 
+--echo #
+--echo # Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
+--echo #
+
+prepare encode from "select encode(?, ?) into @ciphertext";
+prepare decode from "select decode(?, ?) into @plaintext";
+set @str="abc", @key="cba";
+execute encode using @str, @key;
+execute decode using @ciphertext, @key;
+select @plaintext;
+set @str="bcd", @key="dcb";
+execute encode using @str, @key;
+execute decode using @ciphertext, @key;
+select @plaintext;
+deallocate prepare encode;
+deallocate prepare decode;
+
+--echo #
+--echo # Bug#52124 memory leaks like a sieve in datetime, timestamp, time, date fields + warnings
+--echo #
+CREATE TABLE t1 (a DATETIME NOT NULL, b TINYINT);
+INSERT INTO t1 VALUES (0, 0),(0, 0);
+PREPARE stmt FROM "SELECT 1 FROM t1 WHERE
+ROW(a, b) >= ROW('1', (SELECT 1 FROM t1 WHERE a > 1234))";
+--disable_warnings
+EXECUTE stmt;
+EXECUTE stmt;
+--enable_warnings
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#54494 crash with explain extended and prepared statements
+--echo #
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES (1),(2);
+PREPARE stmt FROM 'EXPLAIN EXTENDED SELECT 1 FROM t1 RIGHT JOIN t1 t2 ON 1';
+EXECUTE stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#54488 crash when using explain and prepared statements with subqueries
+--echo #
+CREATE TABLE t1(f1 INT);
+INSERT INTO t1 VALUES (1),(1);
+PREPARE stmt FROM 'EXPLAIN SELECT 1 FROM t1 WHERE (SELECT (SELECT 1 FROM t1 GROUP BY f1))';
+EXECUTE stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
 
 --echo End of 5.1 tests.
+
+--echo
+--echo # Bug#13805127: Stored program cache produces wrong result in same THD
+--echo
+
+PREPARE s1 FROM 
+"
+SELECT c1, t2.c2, count(c3)
+FROM
+  (
+  SELECT 3 as c2 FROM dual WHERE @x = 1
+  UNION
+  SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+  ) AS t1,
+  (
+  SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+  UNION
+  SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+  UNION
+  SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+  ) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2
+";
+
+--echo
+SET @x = 1;
+SELECT c1, t2.c2, count(c3)
+FROM
+  (
+  SELECT 3 as c2 FROM dual WHERE @x = 1
+  UNION
+  SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+  ) AS t1,
+  (
+  SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+  UNION
+  SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+  UNION
+  SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+  ) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+--echo
+EXECUTE s1;
+
+--echo
+SET @x = 2;
+SELECT c1, t2.c2, count(c3)
+FROM
+  (
+  SELECT 3 as c2 FROM dual WHERE @x = 1
+  UNION
+  SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+  ) AS t1,
+  (
+  SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+  UNION
+  SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+  UNION
+  SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+  ) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+--echo
+EXECUTE s1;
+
+--echo
+SET @x = 1;
+SELECT c1, t2.c2, count(c3)
+FROM
+  (
+  SELECT 3 as c2 FROM dual WHERE @x = 1
+  UNION
+  SELECT 2       FROM dual WHERE @x = 1 OR @x = 2
+  ) AS t1,
+  (
+  SELECT '2012-03-01 01:00:00' AS c1, 3 as c2, 1 as c3 FROM dual
+  UNION
+  SELECT '2012-03-01 02:00:00',       3,       2       FROM dual
+  UNION
+  SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
+  ) AS t2
+WHERE t2.c2 = t1.c2
+GROUP BY c1, c2;
+--echo
+EXECUTE s1;
+
+DEALLOCATE PREPARE s1;
+

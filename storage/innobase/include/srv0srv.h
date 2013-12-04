@@ -91,6 +91,11 @@ extern ulint	srv_lock_table_size;
 
 extern ulint	srv_n_file_io_threads;
 
+/* The "innodb_stats_method" setting, decides how InnoDB is going
+to treat NULL value when collecting statistics. It is not defined
+as enum type because the configure option takes unsigned integer type. */
+extern ulong	srv_innodb_stats_method;
+
 #ifdef UNIV_LOG_ARCHIVE
 extern ibool	srv_log_archive_on;
 extern ibool	srv_archive_recovery;
@@ -146,7 +151,8 @@ extern ibool	srv_print_innodb_tablespace_monitor;
 extern ibool	srv_print_verbose_log;
 extern ibool	srv_print_innodb_table_monitor;
 
-extern ibool	srv_lock_timeout_and_monitor_active;
+extern ibool	srv_lock_timeout_active;
+extern ibool	srv_monitor_active;
 extern ibool	srv_error_monitor_active;
 
 extern ulong	srv_n_spin_wait_rounds;
@@ -167,7 +173,12 @@ extern	ibool	srv_print_latch_waits;
 
 extern ulint	srv_activity_count;
 extern ulint	srv_fatal_semaphore_wait_threshold;
+#define SRV_SEMAPHORE_WAIT_EXTENSION	7200
 extern ulint	srv_dml_needed_delay;
+
+#ifdef UNIV_DEBUG
+extern my_bool	srv_purge_view_update_only_debug;
+#endif /* UNIV_DEBUG */
 
 extern mutex_t*	kernel_mutex_temp;/* mutex protecting the server, trx structs,
 				query threads, and lock table: we allocate
@@ -284,6 +295,19 @@ of lower numbers are included. */
 					as committed */
 #define SRV_FORCE_NO_LOG_REDO	6	/* do not do the log roll-forward
 					in connection with recovery */
+
+/* Alternatives for srv_innodb_stats_method, which could be changed by
+setting innodb_stats_method */
+enum srv_stats_method_name_enum {
+	SRV_STATS_NULLS_EQUAL,		/* All NULL values are treated as
+					equal. This is the default setting
+					for innodb_stats_method */
+	SRV_STATS_NULLS_UNEQUAL,	/* All NULL values are treated as
+					NOT equal. */
+	SRV_STATS_NULLS_IGNORED		/* NULL values are ignored */
+};
+
+typedef enum srv_stats_method_name_enum		srv_stats_method_name_t;
 
 /*************************************************************************
 Boots Innobase server. */
@@ -427,12 +451,21 @@ srv_release_mysql_thread_if_suspended(
 	que_thr_t*	thr);	/* in: query thread associated with the
 				MySQL OS thread	 */
 /*************************************************************************
-A thread which wakes up threads whose lock wait may have lasted too long.
-This also prints the info output by various InnoDB monitors. */
+A thread which wakes up threads whose lock wait may have lasted too
+long. */
 
 os_thread_ret_t
-srv_lock_timeout_and_monitor_thread(
-/*================================*/
+srv_lock_timeout_thread(
+/*====================*/
+			/* out: a dummy parameter */
+	void*	arg);	/* in: a dummy parameter required by
+			os_thread_create */
+/*************************************************************************
+A thread which prints the info output by various InnoDB monitors. */
+
+os_thread_ret_t
+srv_monitor_thread(
+/*===============*/
 			/* out: a dummy parameter */
 	void*	arg);	/* in: a dummy parameter required by
 			os_thread_create */
@@ -449,10 +482,14 @@ srv_error_monitor_thread(
 /**********************************************************************
 Outputs to a file the output of the InnoDB Monitor. */
 
-void
+ibool
 srv_printf_innodb_monitor(
 /*======================*/
+				/* out: FALSE if not all information printed
+				due to failure to obtain necessary mutex */
 	FILE*	file,		/* in: output stream */
+	ibool	nowait,		/* in: whether to wait for kernel
+				mutex. */
 	ulint*	trx_start,	/* out: file position of the start of
 				the list of active transactions */
 	ulint*	trx_end);	/* out: file position of the end of
@@ -536,6 +573,10 @@ struct export_var_struct{
 	ulint innodb_rows_inserted;
 	ulint innodb_rows_updated;
 	ulint innodb_rows_deleted;
+#ifdef UNIV_DEBUG
+	ulint innodb_purge_trx_id_age;
+	ulint innodb_purge_view_trx_id_age;
+#endif /* UNIV_DEBUG */
 };
 
 /* The server system struct */
