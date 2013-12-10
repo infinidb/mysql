@@ -471,7 +471,7 @@ public:
 
 	// InfiniDB adds accessor
 	sp_pcontext* context() { return m_pcont; }
-	const uint sp_elements() {return m_instr.elements;}
+	uint sp_elements() {return m_instr.elements;}
 
 private:
 

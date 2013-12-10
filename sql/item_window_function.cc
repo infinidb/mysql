@@ -28,7 +28,7 @@
 Boundary::Boundary() : item (NULL) 
 {}
 
-Boundary::Boundary(BOUND b): bound(b), item(NULL)
+Boundary::Boundary(BOUND b): item(NULL), bound(b)
 {}
 
 bool Boundary::fix_fields(THD* thd, Item** ref)

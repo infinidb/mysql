@@ -808,10 +808,12 @@ int mysql_update(THD *thd,
  // @Infinidb bug2540. @bug4790. change only for InfiniDB table.
  // @bug5117. Add isInfiniDBDML to make sure it's InfiniDB dml stmt.
   if (thd->infinidb_vtable.isInfiniDBDML)
+  {
     if (killed_status != THD::NOT_KILLED || thd->is_error())
       error= 1;
-  else
-    error= (killed_status == THD::NOT_KILLED)?  error : 1;
+    else
+      error= (killed_status == THD::NOT_KILLED)?  error : 1;
+  }
 	
   if (error &&
       will_batch &&

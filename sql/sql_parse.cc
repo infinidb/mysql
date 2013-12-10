@@ -165,11 +165,6 @@ static bool xa_trans_rollback(THD *thd)
   return status;
 }
 
-// Calpont vtable error message
-//const char* infinidb_err_msg = "\nThe query includes syntax that is not supported by InfiniDB. \
-//													 Use 'show warnings;' to get more infomation. \
-//													 Restructure the query with supported syntax.";
-
 static void unlock_locked_tables(THD *thd)
 {
   if (thd->locked_tables)
@@ -8239,12 +8234,11 @@ int idb_vtable_process(THD* thd, Statement* statement)
 		mysql_reset_thd_for_next_command(thd);
 		if (query_cache_send_result_to_client(thd, thd->query(), thd->query_length()) <= 0)
 		{
-			LEX *lex= thd->lex;
 			sp_cache_flush_obsolete(&thd->sp_proc_cache);
 			sp_cache_flush_obsolete(&thd->sp_func_cache);
 			Parser_state parser_state;
 			parser_state.init(thd, thd->query(), thd->query_length());
-			bool err= parse_sql(thd, &parser_state, NULL);
+			parse_sql(thd, &parser_state, NULL);
 		}
 
 		if (thd->query() &&
@@ -8309,14 +8303,13 @@ int idb_vtable_process(THD* thd, Statement* statement)
 					{
 						if ( stmt->param_count == lex->prepared_stmt_params.elements )
 						{
-							bool result_code = stmt->set_parameters(&expanded_query, NULL, NULL);
+							stmt->set_parameters(&expanded_query, NULL, NULL);
 						}
 						// replace ? with values
 						std::string tmp_query = std::string (stmt->query());
 						std::string::size_type p1 = tmp_query.find("?");
 						std::string replaceStr;
 						Item_param **begin= stmt->param_array;
-						Item_param **end= begin + stmt->param_count;
 						while (p1 != std::string::npos)
 						{
 							Item_param *param= *begin;
@@ -8346,7 +8339,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 	
 						Parser_state parser_state;
 						parser_state.init(thd, thd->query(), thd->query_length());
-						bool err= parse_sql(thd, &parser_state, NULL);
+						parse_sql(thd, &parser_state, NULL);
 	
 						if (thd->lex->sql_command != SQLCOM_SELECT)
 						{
@@ -8405,7 +8398,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 
 						std::string tmp_query = std::string (sel_query->m_query.str);
 		#ifdef SAFE_MUTEX
-						printf("query: %s length: %d\n", tmp_query.c_str(), tmp_query.length());
+						printf("query: %s length: %lu\n", tmp_query.c_str(), tmp_query.length());
 		#endif
 						if (args->elements > 0)
 						{
@@ -8433,11 +8426,12 @@ int idb_vtable_process(THD* thd, Statement* statement)
 								std::string::size_type p1 = tmp_query.find(arg_name);
 								while (p1 != std::string::npos)
 								{
-									// prelimnary check for found arg_name string. Make sure it's not part of an identifier
-									if ((tmp_query.c_str()[p1-1] >= 'a' && tmp_query.c_str()[p1-1] <= 'z' ||
-										   tmp_query.c_str()[p1-1] >= 'A' && tmp_query.c_str()[p1-1] <= 'Z') ||
-										   (tmp_query.c_str()[p1+len] >= 'a' && tmp_query.c_str()[p1+len] <= 'z' ||
-										   tmp_query.c_str()[p1+len] >= 'A' && tmp_query.c_str()[p1+len] <= 'Z'))
+									// preliminary check for found arg_name string.
+									// Make sure it's not part of an identifier
+									if ( (tmp_query.c_str()[p1-1] >= 'a' && tmp_query.c_str()[p1-1] <= 'z') ||
+										   (tmp_query.c_str()[p1-1] >= 'A' && tmp_query.c_str()[p1-1] <= 'Z') ||
+										   (tmp_query.c_str()[p1+len] >= 'a' && tmp_query.c_str()[p1+len] <= 'z') ||
+										   (tmp_query.c_str()[p1+len] >= 'A' && tmp_query.c_str()[p1+len] <= 'Z') )
 									{
 										printf ("debug: %c\n", tmp_query.c_str()[p1-1]);
 										printf ("debug: %c\n", tmp_query.c_str()[p1+1]);
@@ -8456,12 +8450,11 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						mysql_reset_thd_for_next_command(thd);
 						if (query_cache_send_result_to_client(thd, thd->query(), thd->query_length()) <= 0)
 						{
-							LEX *lex= thd->lex;
 							sp_cache_flush_obsolete(&thd->sp_proc_cache);
 							sp_cache_flush_obsolete(&thd->sp_func_cache);
 							Parser_state parser_state;
 							parser_state.init(thd, thd->query(), thd->query_length());
-							bool err= parse_sql(thd, &parser_state, NULL);
+							parse_sql(thd, &parser_state, NULL);
 						}
 
 						if (thd->lex->sql_command != SQLCOM_SELECT /*&&  thd->lex->sql_command != SQLCOM_END*/)

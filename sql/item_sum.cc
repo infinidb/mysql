@@ -2969,13 +2969,13 @@ Item_func_group_concat(Name_resolution_context *context_arg,
                        String *separator_arg)
   :tmp_table_param(0), warning(0),
    separator(separator_arg), tree(0), unique_filter(NULL), table(0),
-   order(0), context(context_arg),
    arg_count_order(order_list.elements),
    arg_count_field(select_list->elements),
    count_cut_values(0),
    distinct(distinct_arg),
    warning_for_row(FALSE),
-   force_copy_fields(0), original(0)
+   force_copy_fields(0), original(0),
+   order(0), context(context_arg)
 {
   Item *item_select;
   Item **arg_ptr;
@@ -3032,7 +3032,6 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   tree(item->tree),
   unique_filter(item->unique_filter),
   table(item->table),
-  context(item->context),
   arg_count_order(item->arg_count_order),
   arg_count_field(item->arg_count_field),
   count_cut_values(item->count_cut_values),
@@ -3040,7 +3039,8 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   warning_for_row(item->warning_for_row),
   always_null(item->always_null),
   force_copy_fields(item->force_copy_fields),
-  original(item)
+  original(item),
+  context(item->context)
 {
   quick_group= item->quick_group;
   result.set_charset(collation.collation);

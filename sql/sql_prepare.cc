@@ -3584,14 +3584,14 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
     else if (global_list->table &&
              global_list->table->s &&
 	     global_list->table->s->db_plugin &&
-	     strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
-	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+	     (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
+	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
 #else
     else if (global_list->table &&
              global_list->table->s &&
              global_list->table->s->db_plugin &&
-             strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
-	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+             (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
+	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
 #endif				
     {
       continue;

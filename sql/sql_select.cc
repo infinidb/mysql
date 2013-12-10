@@ -1886,17 +1886,17 @@ JOIN::exec()
 				continue;
 			}
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
-			else if (global_list->table &&
+			else if ( global_list->table &&
 				       global_list->table->s &&
 				       global_list->table->s->db_plugin &&
-				       strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
-				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+				       (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
 #else
 			else if (global_list->table &&
 				       global_list->table->s &&
 				       global_list->table->s->db_plugin &&
-				       strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
-				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+				       (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
 #endif				
 			{
 				continue;

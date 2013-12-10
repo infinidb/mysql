@@ -637,6 +637,11 @@ static bool add_create_index (LEX *lex, Key::Keytype type, const char *name,
   return FALSE;
 }
 
+static char idb_on_clause_err_str[] = "ON clause";
+static char idb_where_clause_err_str[] = "WHERE clause";
+static char idb_having_clause_err_str[] = "HAVING clause";
+static char idb_group_by_clause_err_str[] = "GROUP BY clause";
+
 %}
 %union {
   int  num;
@@ -8332,22 +8337,22 @@ window_clause:
           {
             if (Select->parsing_place == IN_ON)
             {
-              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, "ON clause");
+              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, idb_on_clause_err_str);
               MYSQL_YYABORT;
             }
             if (Select->parsing_place == IN_WHERE)
             {
-              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, "WHERE clause");
+              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, idb_where_clause_err_str);
               MYSQL_YYABORT;
             }
             if (Select->parsing_place == IN_HAVING)
             {
-              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, "HAVING clause");
+              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, idb_having_clause_err_str);
               MYSQL_YYABORT;
             }
             if (Select->parsing_place == IN_GROUP_BY)
             {
-              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, "GROUP BY clause");
+              IDB_set_error(YYTHD, logging::ERR_WF_NOT_ALLOWED, idb_group_by_clause_err_str);
               MYSQL_YYABORT;
             }
             $$ = new Window_context();
