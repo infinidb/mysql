@@ -8695,7 +8695,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 				// Phase 1.
 				alloc_query(thd, thd->infinidb_vtable.create_vtable_query.c_ptr(), thd->infinidb_vtable.create_vtable_query.length());
 #ifdef SAFE_MUTEX
-				printf("<<< V-TABLE Phase 1: %s\n", thd->query);
+				printf("<<< V-TABLE Phase 1: %s\n", thd->query());
 #endif
 				thd->infinidb_vtable.vtable_state = THD::INFINIDB_CREATE_VTABLE;
 				mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
@@ -8729,7 +8729,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 							thd->infinidb_vtable.create_vtable_query.length());
 						thd->infinidb_vtable.isUnion = false; // make state change to create_vtable in sql_select
 #ifdef SAFE_MUTEX
-						printf("<<< V-TABLE Redo Phase 1: %s\n", thd->query);
+						printf("<<< V-TABLE Redo Phase 1: %s\n", thd->query());
 #endif
 						mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
 						close_thread_tables(thd);
@@ -8782,7 +8782,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 				{
 					alloc_query(thd, thd->infinidb_vtable.alter_vtable_query.c_ptr(), thd->infinidb_vtable.alter_vtable_query.length());
 #ifdef SAFE_MUTEX
-					printf("<<< V-TABLE Phase 2: %s\n", thd->query);
+					printf("<<< V-TABLE Phase 2: %s\n", thd->query());
 #endif
 					thd->infinidb_vtable.vtable_state = THD::INFINIDB_ALTER_VTABLE;
 					mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
@@ -8800,7 +8800,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						alloc_query(thd, thd->infinidb_vtable.insert_vtable_query.c_ptr(), thd->infinidb_vtable.insert_vtable_query.length());
 						thd->infinidb_vtable.vtable_state = THD::INFINIDB_SELECT_VTABLE;
 #ifdef SAFE_MUTEX
-						printf("<<< V-TABLE Phase 3: %s\n", thd->query);
+						printf("<<< V-TABLE Phase 3: %s\n", thd->query());
 #endif
 					}
 					else
@@ -8808,7 +8808,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						alloc_query(thd, thd->infinidb_vtable.select_vtable_query.c_ptr(), thd->infinidb_vtable.select_vtable_query.length());
 						thd->infinidb_vtable.vtable_state = THD::INFINIDB_SELECT_VTABLE;
 		#ifdef SAFE_MUTEX
-						printf("<<< V-TABLE Phase 3: %s\n", thd->query);
+						printf("<<< V-TABLE Phase 3: %s\n", thd->query());
 		#endif
 					}
 					mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
