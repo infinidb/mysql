@@ -3946,7 +3946,6 @@ com_rehash(String *buffer __attribute__((unused)),
 }
 
 
-#ifdef USE_POPEN
 static int
 com_shell(String *buffer __attribute__((unused)),
           char *line __attribute__((unused)))
@@ -3972,7 +3971,6 @@ com_shell(String *buffer __attribute__((unused)),
   }
   return 0;
 }
-#endif
 
 
 static int
