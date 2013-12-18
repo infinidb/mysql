@@ -35,6 +35,7 @@
 #include <my_dir.h>
 #include <stdarg.h>
 #include <m_ctype.h>				// For test_if_number
+#include <ctype.h>
 
 #ifdef __NT__
 #include "message.h"
@@ -64,6 +65,41 @@ static int binlog_savepoint_rollback(handlerton *hton, THD *thd, void *sv);
 static int binlog_commit(handlerton *hton, THD *thd, bool all);
 static int binlog_rollback(handlerton *hton, THD *thd, bool all);
 static int binlog_prepare(handlerton *hton, THD *thd, bool all);
+
+static bool idb_okay_to_log(THD* thd)
+{
+	char* qzl = (char*)alloca(thd->query_length()+1);
+	unsigned i;
+
+	//Make an all-lowercase version of the string
+	memset(qzl, 0, thd->query_length()+1);
+	memcpy(qzl, thd->query(), thd->query_length());
+	//FIXME: use MySQL's i18n versions
+	for (i = 0; i < thd->query_length(); i++)
+		if (isupper(qzl[i]))
+			qzl[i] = tolower(qzl[i]);
+
+	if (strncmp(qzl, "truncate ", 9) == 0)
+		return FALSE;
+
+	if (strncmp(qzl,     "insert ",   7) == 0 ||
+		strncmp(qzl, "update ",   7) == 0 ||
+		strncmp(qzl, "delete ",   7) == 0 ||
+		strncmp(qzl, "truncate ", 9) == 0 ||
+		strncmp(qzl, "load data infile ", 17) == 0)
+		; //nop
+	else
+		return TRUE;
+
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+	if (strcmp((*thd->lex->query_tables->table->s->db_plugin)->name.str, "InfiniDB") == 0)
+#else
+	if (strcmp(thd->lex->query_tables->table->s->db_plugin->name.str, "InfiniDB") == 0)
+#endif
+		return FALSE;
+
+	return TRUE;
+}
 
 /**
   Silence all errors and warnings reported when performing a write
@@ -4419,6 +4455,12 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info)
 	(thd->lex->sql_command != SQLCOM_ROLLBACK_TO_SAVEPOINT &&
          thd->lex->sql_command != SQLCOM_SAVEPOINT &&
          !binlog_filter->db_ok(local_db)))
+    {
+      VOID(pthread_mutex_unlock(&LOCK_log));
+      DBUG_RETURN(0);
+    }
+
+    if (!idb_okay_to_log(thd))
     {
       VOID(pthread_mutex_unlock(&LOCK_log));
       DBUG_RETURN(0);

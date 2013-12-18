@@ -637,9 +637,12 @@ static inline char* idb_strcat_new(const char* s, const char* a)
 	uint32 al = strlen(a);
 	//FIXME: use MySQL's allocator
 	n = (char*)malloc(sl+al+1);
-	memset(n, 0, sl+al+1);
-	memcpy(n, s, sl);
-	memcpy(n+sl, a, al);
+	if (n)
+	{
+		memset(n, 0, sl+al+1);
+		memcpy(n, s, sl);
+		memcpy(n+sl, a, al);
+	}
 	return n;
 }
 
@@ -649,20 +652,22 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 	char* qz = (char*)alloca(q_len+1);
 	char* ptr = 0;
 	char *newq = 0;
-	uint32 newq_len = 0;
 	char* qzl = (char*)alloca(q_len+1);
-	int i;
+	unsigned i;
 
 	*newq_out = (char*)query;
 	*newq_len_out = q_len;
 
-	if (thd->db_length >= 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
+	if (thd->db_length == 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
 		return FALSE;
 
+	//the incoming string query is not guaranteed to be null-terminated (but it appears to always be so)
+	//Make an ASCIIZ copy
 	memset(qz, 0, q_len+1);
 	memcpy(qz, query, q_len);
 	fprintf(stderr,"idb_okay_to_repl: /%s/ %s\n", thd->db_length>0?thd->db:"", qz);
 
+	//Make an all-lowercase version of the string
 	memset(qzl, 0, q_len+1);
 	memcpy(qzl, query, q_len);
 	//FIXME: use MySQL's i18n versions
@@ -670,20 +675,23 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 		if (isupper(qzl[i]))
 			qzl[i] = tolower(qzl[i]);
 
-	//drop table infinidb_vtable.$vtable_nnn restrict
-	ptr = strstr(qzl, "drop table infinidb_vtable.");
+	//drop table infinidb_vtable.$vtable_nnn ...
+	ptr = strstr(qzl, "drop table infinidb_vtable.$vtable_");
 	if (ptr == qzl)
 	{
-		ptr += 27;
-		ptr = strstr(ptr, " restrict");
-		if (ptr)
-		{
-			fprintf(stderr,"idb_okay_to_repl: rejected!\n");
-			return FALSE;
-		}
+		fprintf(stderr,"idb_okay_to_repl: rejected!\n");
+		return FALSE;
 	}
 
-	//create table rf_my_t8 (col1 int) engine=infinidb
+	//alter table infinidb_vtable.$vtable_nnn ...
+	ptr = strstr(qzl, "alter table infinidb_vtable.$vtable_");
+	if (ptr == qzl)
+	{
+		fprintf(stderr,"idb_okay_to_repl: rejected!\n");
+		return FALSE;
+	}
+
+	//create table tbname (col1 int) engine=infinidb
 	ptr = strstr(qzl, "create table ");
 	if (ptr == qzl)
 	{
@@ -702,7 +710,7 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 		}
 	}
 
-	//drop table rf_my_t8
+	//drop table tbname
 	ptr = strstr(qzl, "drop table ");
 	if (ptr == qzl)
 	{
