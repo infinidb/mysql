@@ -40,6 +40,7 @@
 
 #include <base64.h>
 #include <my_bitmap.h>
+#include <ctype.h>
 
 #define log_cs	&my_charset_latin1
 
@@ -628,6 +629,102 @@ append_query_string(THD *thd, CHARSET_INFO *csinfo,
   to->length(orig_len + ptr - beg);
   return 0;
 }
+
+static inline char* idb_strcat_new(const char* s, const char* a)
+{
+	char* n = 0;
+	uint32 sl = strlen(s);
+	uint32 al = strlen(a);
+	//FIXME: use MySQL's allocator
+	n = (char*)malloc(sl+al+1);
+	memset(n, 0, sl+al+1);
+	memcpy(n, s, sl);
+	memcpy(n+sl, a, al);
+	return n;
+}
+
+//FIXME: the string pattern matching here is far to limiting!
+static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** newq_out, uint32* newq_len_out)
+{
+	char* qz = (char*)alloca(q_len+1);
+	char* ptr = 0;
+	char *newq = 0;
+	uint32 newq_len = 0;
+	char* qzl = (char*)alloca(q_len+1);
+	int i;
+
+	*newq_out = (char*)query;
+	*newq_len_out = q_len;
+
+	if (thd->db_length >= 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
+		return FALSE;
+
+	memset(qz, 0, q_len+1);
+	memcpy(qz, query, q_len);
+	fprintf(stderr,"idb_okay_to_repl: /%s/ %s\n", thd->db_length>0?thd->db:"", qz);
+
+	memset(qzl, 0, q_len+1);
+	memcpy(qzl, query, q_len);
+	//FIXME: use MySQL's i18n versions
+	for (i = 0; i < q_len; i++)
+		if (isupper(qzl[i]))
+			qzl[i] = tolower(qzl[i]);
+
+	//drop table infinidb_vtable.$vtable_nnn restrict
+	ptr = strstr(qzl, "drop table infinidb_vtable.");
+	if (ptr == qzl)
+	{
+		ptr += 27;
+		ptr = strstr(ptr, " restrict");
+		if (ptr)
+		{
+			fprintf(stderr,"idb_okay_to_repl: rejected!\n");
+			return FALSE;
+		}
+	}
+
+	//create table rf_my_t8 (col1 int) engine=infinidb
+	ptr = strstr(qzl, "create table ");
+	if (ptr == qzl)
+	{
+		ptr += 13;
+		//FIXME: handle spaces around '='
+		ptr = strstr(ptr, "engine=infinidb");
+		if (ptr)
+		{
+			fprintf(stderr,"idb_okay_to_repl: SCHEMA SYNC!\n");
+			//append "COMMENT='SCHEMA SYNC ONLY'" to create table stmt
+			newq = idb_strcat_new(qz, " COMMENT='SCHEMA SYNC ONLY'");
+			*newq_out = newq;
+			*newq_len_out = strlen(newq);
+			fprintf(stderr,"idb_okay_to_repl: %s\n", *newq_out);
+			return TRUE;
+		}
+	}
+
+	//drop table rf_my_t8
+	ptr = strstr(qzl, "drop table ");
+	if (ptr == qzl)
+	{
+		ptr +=  11;
+		ptr = strstr(ptr, " restrict");
+		if (!ptr)
+		{
+			fprintf(stderr,"idb_okay_to_repl: SCHEMA SYNC!\n");
+			//append "restrict" to drop table stmt
+			//Note we append this to all drop tables stmts that get this far since
+			//MyISAM and InnoDB currently ignore it, but it's special to IDB
+			newq = idb_strcat_new(qz, " restrict");
+			*newq_out = newq;
+			*newq_len_out = strlen(newq);
+			fprintf(stderr,"idb_okay_to_repl: %s\n", *newq_out);
+			return TRUE;
+		}
+	}
+
+	return TRUE;
+}
+
 #endif
 
 
@@ -3268,10 +3365,20 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
             ::do_apply_event(), then the companion SET also have so
             we don't need to reset_one_shot_variables().
   */
-  if (is_trans_keyword() || rpl_filter->db_ok(thd->db))
+  bool idb_okay = true;
+  char* newq = 0;
+  uint32 newq_len = 0;
+  idb_okay = idb_okay_to_repl(thd, query_arg, q_len_arg, &newq, &newq_len);
+  if (idb_okay && (is_trans_keyword() || rpl_filter->db_ok(thd->db)) )
   {
     thd->set_time((time_t)when);
-    thd->set_query((char*)query_arg, q_len_arg);
+    thd->set_query(newq, newq_len);
+    if (newq && (newq != query_arg))
+    {
+      //FIXME: who manages this memory?
+      //free(newq);
+      //newq = 0;
+    }
     VOID(pthread_mutex_lock(&LOCK_thread_count));
     thd->query_id = next_query_id();
     VOID(pthread_mutex_unlock(&LOCK_thread_count));

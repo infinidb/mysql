@@ -274,7 +274,8 @@ protected:
   bool transformed;
 public:
   // @InfiniDB. make this accessible to the connector code.
-  Item_in_optimizer* getOptimizer() { return optimizer; }
+  const Item_in_optimizer* getOptimizer() const { return optimizer; }
+
   /* Used to trigger on/off conditions that were pushed down to subselect */
   bool *pushed_cond_guards;
 
