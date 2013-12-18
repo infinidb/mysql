@@ -512,7 +512,7 @@ static sys_var_thd_ulong	sys_infinidb_vtable_mode(&vars, "infinidb_vtable_mode",
 					       &SV::infinidb_vtable_mode);
 static sys_var_thd_ulong	sys_infinidb_decimal_scale(&vars, "infinidb_decimal_scale",
 					       &SV::infinidb_decimal_scale);
-static sys_var_thd_bool sys_infinidb_use_decimal_scale(&vars, "infinidb_use_decimal_scale",
+static sys_var_thd_bool	sys_infinidb_use_decimal_scale(&vars, "infinidb_use_decimal_scale",
 					       &SV::infinidb_use_decimal_scale);
 static sys_var_thd_bool sys_infinidb_ordered_only(&vars, "infinidb_ordered_only",
 					       &SV::infinidb_ordered_only);
@@ -525,6 +525,9 @@ static sys_var_thd_ulong	sys_stringtable_threshold(&vars, "infinidb_stringtable_
 					       &SV::infinidb_stringtable_threshold);
 static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_always_hex",
 					       &SV::infinidb_varbin_always_hex);
+static sys_var_thd_bool sys_infinidb_double_for_decimal_math(&vars,
+							"infinidb_double_for_decimal_math",
+					       &SV::infinidb_double_for_decimal_math);
 /* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
                                               &SV::div_precincrement);
