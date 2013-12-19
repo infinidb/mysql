@@ -66,37 +66,108 @@ static int binlog_commit(handlerton *hton, THD *thd, bool all);
 static int binlog_rollback(handlerton *hton, THD *thd, bool all);
 static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 
-static bool idb_okay_to_log(THD* thd)
+static inline char* idb_strcat_new(const char* s, const char* a)
 {
-	char* qzl = (char*)alloca(thd->query_length()+1);
-	unsigned i;
+	char* n = 0;
+	uint32 sl = strlen(s);
+	uint32 al = strlen(a);
+	//FIXME: use MySQL's allocator
+	n = (char*)malloc(sl+al+1);
+	if (n)
+	{
+		memset(n, 0, sl+al+1);
+		memcpy(n, s, sl);
+		memcpy(n+sl, a, al);
+	}
+	return n;
+}
 
-	//Make an all-lowercase version of the string
-	memset(qzl, 0, thd->query_length()+1);
-	memcpy(qzl, thd->query(), thd->query_length());
-	//FIXME: use MySQL's i18n versions
-	for (i = 0; i < thd->query_length(); i++)
-		if (isupper(qzl[i]))
-			qzl[i] = tolower(qzl[i]);
+static bool idb_okay_to_log(Log_event *event_info)
+{
+	THD* thd = event_info->thd;
+	char* newq = 0;
 
-	if (strncmp(qzl, "truncate ", 9) == 0)
+	//never log infinidb_vtable schema
+	if (thd->db_length == 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
 		return FALSE;
 
-	if (strncmp(qzl,     "insert ",   7) == 0 ||
-		strncmp(qzl, "update ",   7) == 0 ||
-		strncmp(qzl, "delete ",   7) == 0 ||
-		strncmp(qzl, "truncate ", 9) == 0 ||
-		strncmp(qzl, "load data infile ", 17) == 0)
-		; //nop
-	else
-		return TRUE;
-
+	//if the table is not an InfiniDB table, let it go through
+	st_plugin_int* db_plugin = 0;
+	if (thd->lex->query_tables)
+		if (thd->lex->query_tables->table->s)
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
-	if (strcmp((*thd->lex->query_tables->table->s->db_plugin)->name.str, "InfiniDB") == 0)
+			if (thd->lex->query_tables->table->s->db_plugin)
+				db_plugin = *thd->lex->query_tables->table->s->db_plugin;
 #else
-	if (strcmp(thd->lex->query_tables->table->s->db_plugin->name.str, "InfiniDB") == 0)
+			db_plugin = thd->lex->query_tables->table->s->db_plugin;
 #endif
+	if (db_plugin)
+	{
+		if (strcmp(db_plugin->name.str, "InfiniDB") != 0)
+			return TRUE;
+	}
+	else
+	{
+		if (thd->lex->sql_command == SQLCOM_CREATE_TABLE ||
+			thd->lex->sql_command == SQLCOM_DROP_TABLE ||
+			thd->lex->sql_command == SQLCOM_TRUNCATE)
+		{
+			if (strcmp(ha_resolve_storage_engine_name(thd->lex->create_info.db_type), "InfiniDB") != 0)
+				return TRUE;
+		}
+		else if (thd->lex->sql_command == SQLCOM_ALTER_TABLE)
+		{
+			//alter is buggered up, so we let it go through and fix it in the slave connector. sigh.
+			return TRUE;
+		}
+		else
+		{
+			//FIXME:
+			//we've got to try to find the engine for this table...
+			return FALSE;
+		}
+	}
+
+	//FIXME: Is this always true?
+	Query_log_event* qevent = (Query_log_event*)event_info;
+
+	//if the sql is create, add SSO
+	if (thd->lex->sql_command == SQLCOM_CREATE_TABLE)
+	{
+		newq = idb_strcat_new(thd->query(), " COMMENT='SCHEMA SYNC ONLY'");
+		//FIXME: who does the free?
+		qevent->query = newq;
+		qevent->q_len = strlen(newq);
+		return TRUE;
+	}
+
+	//if the sql is alter, let it go thru, fix it in the slave
+	if (thd->lex->sql_command == SQLCOM_ALTER_TABLE)
+	{
+		return TRUE;
+	}
+
+	//if the sql is drop add restrict
+	if (thd->lex->sql_command == SQLCOM_DROP_TABLE)
+	{
+		newq = idb_strcat_new(thd->query(), " restrict");
+		//FIXME: who does the free?
+		qevent->query = newq;
+		qevent->q_len = strlen(newq);
+		return TRUE;
+	}
+
+	//if the sql is insert, update, delete, truncate, LDI skip it
+	if (thd->lex->sql_command == SQLCOM_INSERT ||
+		thd->lex->sql_command == SQLCOM_UPDATE ||
+		thd->lex->sql_command == SQLCOM_DELETE ||
+		thd->lex->sql_command == SQLCOM_TRUNCATE ||
+		thd->lex->sql_command == SQLCOM_LOAD)
+	{
 		return FALSE;
+	}
+
+	//if the sql is rename table: TBD
 
 	return TRUE;
 }
@@ -4460,7 +4531,7 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info)
       DBUG_RETURN(0);
     }
 
-    if (!idb_okay_to_log(thd))
+    if (!idb_okay_to_log(event_info))
     {
       VOID(pthread_mutex_unlock(&LOCK_log));
       DBUG_RETURN(0);

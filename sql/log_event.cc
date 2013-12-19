@@ -630,22 +630,6 @@ append_query_string(THD *thd, CHARSET_INFO *csinfo,
   return 0;
 }
 
-static inline char* idb_strcat_new(const char* s, const char* a)
-{
-	char* n = 0;
-	uint32 sl = strlen(s);
-	uint32 al = strlen(a);
-	//FIXME: use MySQL's allocator
-	n = (char*)malloc(sl+al+1);
-	if (n)
-	{
-		memset(n, 0, sl+al+1);
-		memcpy(n, s, sl);
-		memcpy(n+sl, a, al);
-	}
-	return n;
-}
-
 //FIXME: the string pattern matching here is far to limiting!
 static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** newq_out, uint32* newq_len_out)
 {
@@ -665,7 +649,6 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 	//Make an ASCIIZ copy
 	memset(qz, 0, q_len+1);
 	memcpy(qz, query, q_len);
-	fprintf(stderr,"idb_okay_to_repl: /%s/ %s\n", thd->db_length>0?thd->db:"", qz);
 
 	//Make an all-lowercase version of the string
 	memset(qzl, 0, q_len+1);
@@ -689,45 +672,6 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 	{
 		fprintf(stderr,"idb_okay_to_repl: rejected!\n");
 		return FALSE;
-	}
-
-	//create table tbname (col1 int) engine=infinidb
-	ptr = strstr(qzl, "create table ");
-	if (ptr == qzl)
-	{
-		ptr += 13;
-		//FIXME: handle spaces around '='
-		ptr = strstr(ptr, "engine=infinidb");
-		if (ptr)
-		{
-			fprintf(stderr,"idb_okay_to_repl: SCHEMA SYNC!\n");
-			//append "COMMENT='SCHEMA SYNC ONLY'" to create table stmt
-			newq = idb_strcat_new(qz, " COMMENT='SCHEMA SYNC ONLY'");
-			*newq_out = newq;
-			*newq_len_out = strlen(newq);
-			fprintf(stderr,"idb_okay_to_repl: %s\n", *newq_out);
-			return TRUE;
-		}
-	}
-
-	//drop table tbname
-	ptr = strstr(qzl, "drop table ");
-	if (ptr == qzl)
-	{
-		ptr +=  11;
-		ptr = strstr(ptr, " restrict");
-		if (!ptr)
-		{
-			fprintf(stderr,"idb_okay_to_repl: SCHEMA SYNC!\n");
-			//append "restrict" to drop table stmt
-			//Note we append this to all drop tables stmts that get this far since
-			//MyISAM and InnoDB currently ignore it, but it's special to IDB
-			newq = idb_strcat_new(qz, " restrict");
-			*newq_out = newq;
-			*newq_len_out = strlen(newq);
-			fprintf(stderr,"idb_okay_to_repl: %s\n", *newq_out);
-			return TRUE;
-		}
 	}
 
 	return TRUE;
