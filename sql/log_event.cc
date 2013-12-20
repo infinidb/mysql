@@ -40,7 +40,6 @@
 
 #include <base64.h>
 #include <my_bitmap.h>
-#include <ctype.h>
 
 #define log_cs	&my_charset_latin1
 
@@ -630,46 +629,26 @@ append_query_string(THD *thd, CHARSET_INFO *csinfo,
   return 0;
 }
 
-//FIXME: the string pattern matching here is far to limiting!
-static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** newq_out, uint32* newq_len_out)
+static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len)
 {
-	char* qz = (char*)alloca(q_len+1);
 	char* ptr = 0;
-	char* qzl = (char*)alloca(q_len+1);
-	unsigned i;
-
-	*newq_out = (char*)query;
-	*newq_len_out = q_len;
 
 	if (thd->db_length == 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
 		return FALSE;
 
-	//the incoming string query is not guaranteed to be null-terminated (but it appears to always be so)
-	//Make an ASCIIZ copy
-	memset(qz, 0, q_len+1);
-	memcpy(qz, query, q_len);
-
-	//Make an all-lowercase version of the string
-	memset(qzl, 0, q_len+1);
-	memcpy(qzl, query, q_len);
-	//FIXME: use MySQL's i18n versions
-	for (i = 0; i < q_len; i++)
-		if (isupper(qzl[i]))
-			qzl[i] = tolower(qzl[i]);
+	//we only care about a few patterns, and they're always the same because we write them
 
 	//drop table infinidb_vtable.$vtable_nnn ...
-	ptr = strstr(qzl, "drop table infinidb_vtable.$vtable_");
-	if (ptr == qzl)
+	ptr = strstr((char*)query, "drop table infinidb_vtable.$vtable_");
+	if (ptr)
 	{
-		fprintf(stderr,"idb_okay_to_repl: rejected!\n");
 		return FALSE;
 	}
 
 	//alter table infinidb_vtable.$vtable_nnn ...
-	ptr = strstr(qzl, "alter table infinidb_vtable.$vtable_");
-	if (ptr == qzl)
+	ptr = strstr((char*)query, "alter table infinidb_vtable.$vtable_");
+	if (ptr)
 	{
-		fprintf(stderr,"idb_okay_to_repl: rejected!\n");
 		return FALSE;
 	}
 
@@ -3317,19 +3296,11 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
             we don't need to reset_one_shot_variables().
   */
   bool idb_okay = true;
-  char* newq = 0;
-  uint32 newq_len = 0;
-  idb_okay = idb_okay_to_repl(thd, query_arg, q_len_arg, &newq, &newq_len);
+  idb_okay = idb_okay_to_repl(thd, query_arg, q_len_arg);
   if (idb_okay && (is_trans_keyword() || rpl_filter->db_ok(thd->db)) )
   {
     thd->set_time((time_t)when);
-    thd->set_query(newq, newq_len);
-    if (newq && (newq != query_arg))
-    {
-      //FIXME: who manages this memory?
-      //free(newq);
-      //newq = 0;
-    }
+    thd->set_query((char*)query_arg, q_len_arg);
     VOID(pthread_mutex_lock(&LOCK_thread_count));
     thd->query_id = next_query_id();
     VOID(pthread_mutex_unlock(&LOCK_thread_count));

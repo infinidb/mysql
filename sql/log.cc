@@ -35,7 +35,6 @@
 #include <my_dir.h>
 #include <stdarg.h>
 #include <m_ctype.h>				// For test_if_number
-#include <ctype.h>
 
 #ifdef __NT__
 #include "message.h"
@@ -66,26 +65,9 @@ static int binlog_commit(handlerton *hton, THD *thd, bool all);
 static int binlog_rollback(handlerton *hton, THD *thd, bool all);
 static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 
-static inline char* idb_strcat_new(const char* s, const char* a)
-{
-	char* n = 0;
-	uint32 sl = strlen(s);
-	uint32 al = strlen(a);
-	//FIXME: use MySQL's allocator
-	n = (char*)malloc(sl+al+1);
-	if (n)
-	{
-		memset(n, 0, sl+al+1);
-		memcpy(n, s, sl);
-		memcpy(n+sl, a, al);
-	}
-	return n;
-}
-
 static bool idb_okay_to_log(Log_event *event_info)
 {
 	THD* thd = event_info->thd;
-	char* newq = 0;
 
 	//never log infinidb_vtable schema
 	if (thd->db_length == 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
@@ -124,36 +106,18 @@ static bool idb_okay_to_log(Log_event *event_info)
 		{
 			//FIXME:
 			//we've got to try to find the engine for this table...
+			fprintf(stderr, "idb_repl: don't know what to do with sql_command %d, not replicating\n",
+				thd->lex->sql_command);
 			return FALSE;
 		}
 	}
 
-	//FIXME: Is this always true?
-	Query_log_event* qevent = (Query_log_event*)event_info;
-
-	//if the sql is create, add SSO
-	if (thd->lex->sql_command == SQLCOM_CREATE_TABLE)
+	//if the sql is DDL, send it down and have the slave mark it as SSO
+	if (thd->lex->sql_command == SQLCOM_CREATE_TABLE ||
+		thd->lex->sql_command == SQLCOM_ALTER_TABLE ||
+		thd->lex->sql_command == SQLCOM_DROP_TABLE ||
+		thd->lex->sql_command == SQLCOM_RENAME_TABLE)
 	{
-		newq = idb_strcat_new(thd->query(), " COMMENT='SCHEMA SYNC ONLY'");
-		//FIXME: who does the free?
-		qevent->query = newq;
-		qevent->q_len = strlen(newq);
-		return TRUE;
-	}
-
-	//if the sql is alter, let it go thru, fix it in the slave
-	if (thd->lex->sql_command == SQLCOM_ALTER_TABLE)
-	{
-		return TRUE;
-	}
-
-	//if the sql is drop add restrict
-	if (thd->lex->sql_command == SQLCOM_DROP_TABLE)
-	{
-		newq = idb_strcat_new(thd->query(), " restrict");
-		//FIXME: who does the free?
-		qevent->query = newq;
-		qevent->q_len = strlen(newq);
 		return TRUE;
 	}
 
@@ -164,11 +128,11 @@ static bool idb_okay_to_log(Log_event *event_info)
 		thd->lex->sql_command == SQLCOM_TRUNCATE ||
 		thd->lex->sql_command == SQLCOM_LOAD)
 	{
+		//I think the only way to get here is for DML on InfiniDB table...
 		return FALSE;
 	}
 
-	//if the sql is rename table: TBD
-
+	//Maybe we should punt this event as well, like we do above?
 	return TRUE;
 }
 
