@@ -635,7 +635,6 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len, char** n
 {
 	char* qz = (char*)alloca(q_len+1);
 	char* ptr = 0;
-	char *newq = 0;
 	char* qzl = (char*)alloca(q_len+1);
 	unsigned i;
 
