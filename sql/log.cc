@@ -70,6 +70,13 @@ static bool idb_okay_to_log(Log_event *event_info)
 	THD* thd = event_info->thd;
 
 	//never log infinidb_vtable schema
+	if (thd->lex->query_tables)
+		if (thd->lex->query_tables->table->pos_in_table_list)
+			if (thd->lex->query_tables->table->pos_in_table_list->db_length == 15 &&
+				strncmp(thd->lex->query_tables->table->pos_in_table_list->db,
+					"infinidb_vtable", 15) == 0)
+		return FALSE;
+
 	if (thd->db_length == 15 && strncmp(thd->db, "infinidb_vtable", 15) == 0)
 		return FALSE;
 
