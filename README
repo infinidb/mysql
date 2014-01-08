@@ -1,4 +1,4 @@
-This is a fork of MySQL 5.1.72. Some files have been
+This is a fork of MySQL 5.1.73. Some files have been
 modified and some files have been added by Calpont Corp for
 the InfiniDB data warehouse database project. All files modified
 by Calpont Corp retain the original copyright as well as an
@@ -7,7 +7,7 @@ files written by Calpont Corp are licensed under the GPL (see
 the individual files for more details).
 
 Following are the original contents of the README file from the
-MySQL 5.1.72 distribution. Note that there never was a LICENSE.mysql
+MySQL 5.1.73 distribution. Note that there never was a LICENSE.mysql
 file in this distribution and commercial licenses are not available
 at this time:
 

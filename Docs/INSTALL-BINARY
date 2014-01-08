@@ -17,7 +17,7 @@
 
    MySQL compressed tar file binary distributions have names of the
    form mysql-VERSION-OS.tar.gz, where VERSION is a number (for
-   example, 5.1.73), and OS indicates the type of operating system
+   example, 5.1.74), and OS indicates the type of operating system
    for which the distribution is intended (for example, pc-linux-i686
    or winx64).
 
@@ -396,7 +396,7 @@ Perform Postinstallation Setup
    below for reference:
 
      * Windows Essentials: This package has a file name similar to
-       mysql-essential-5.1.73-win32.msi and is supplied as a
+       mysql-essential-5.1.74-win32.msi and is supplied as a
        Microsoft Installer (MSI) package. The package includes the
        minimum set of files needed to install MySQL on Windows,
        including the MySQL Server Instance Config Wizard. This
@@ -407,7 +407,7 @@ Perform Postinstallation Setup
        MySQL on Microsoft Windows Using an MSI Package."
 
      * Windows MSI Installer (Complete): This package has a file name
-       similar to mysql-5.1.73-win32.msi and contains all files
+       similar to mysql-5.1.74-win32.msi and contains all files
        needed for a complete Windows installation, including the
        MySQL Server Instance Config Wizard. This package includes
        optional components such as the embedded server and benchmark
@@ -416,7 +416,7 @@ Perform Postinstallation Setup
        MySQL on Microsoft Windows Using an MSI Package."
 
      * Without installer: This package has a file name similar to
-       mysql-noinstall-5.1.73-win32.zip and contains all the files
+       mysql-noinstall-5.1.74-win32.zip and contains all the files
        found in the Complete install package, with the exception of
        the MySQL Server Instance Config Wizard. This package does not
        include an automated installer, and must be manually installed
@@ -671,7 +671,7 @@ Perform Postinstallation Setup
    directory. In a default installation it contains C:\Program
    Files\MySQL\MySQL Server 5.1\. The Version string contains the
    release number. For example, for an installation of MySQL Server
-   5.1.73, the key contains a value of 5.1.73.
+   5.1.74, the key contains a value of 5.1.74.
 
    These registry keys are used to help external tools identify the
    installed location of the MySQL server, preventing a complete scan
@@ -797,7 +797,7 @@ MSI Package
    the command line (or within a script), you need to use the
    msiexec.exe tool. For example, to perform a quiet installation
    (which shows no dialog boxes or progress):
-shell> msiexec /i mysql-5.1.73.msi /quiet
+shell> msiexec /i mysql-5.1.74.msi /quiet
 
    The /i indicates that you want to perform an installation. The
    /quiet option indicates that you want no interactive elements.
@@ -805,7 +805,7 @@ shell> msiexec /i mysql-5.1.73.msi /quiet
    To provide a dialog box showing the progress during installation,
    and the dialog boxes providing information on the installation and
    registration of MySQL, use /passive mode instead of /quiet:
-shell> msiexec /i mysql-5.1.73.msi /passive
+shell> msiexec /i mysql-5.1.74.msi /passive
 
    Regardless of the mode of the installation, installing the package
    in this manner performs a 'Typical' installation, and installs the
@@ -813,7 +813,7 @@ shell> msiexec /i mysql-5.1.73.msi /passive
 
    You can also use this method to uninstall MySQL by using the
    /uninstall or /x options:
-shell> msiexec /x mysql-5.1.73.msi /uninstall
+shell> msiexec /x mysql-5.1.74.msi /uninstall
 
    To install MySQL and configure a MySQL instance from the command
    line, see Section 2.3.5.13, "MySQL Server Instance Config Wizard:
@@ -1870,7 +1870,7 @@ from the Command Line
    service name MySQL51 and setting the root password to 1234.
 shell> MySQLInstanceConfig.exe -i -q "-lC:\mysql_install_log.txt" »
    "-nMySQL Server 5.1" "-pC:\Program Files\MySQL\MySQL Server 5.1" -
-v5.1.73 »
+v5.1.74 »
    "-tmy-template.ini" "-cC:\mytest.ini" ServerType=DEVELOPMENT Datab
 aseType=MIXED »
    ConnectionUsage=DSS Port=3311 ServiceName=MySQL51 RootPassword=123
@@ -1886,7 +1886,7 @@ Date: 2009-10-27 17:07:21
 Installing service ...
 
 Product Name:         MySQL Server 5.1
-Version:              5.1.73
+Version:              5.1.74
 Installation Path:    C:\Program Files\MySQL\MySQL Server 5.1\
 
 Creating configuration file C:\mytest.ini using template my-template.
@@ -2170,7 +2170,7 @@ InnoDB: foreign key constraint system tables created
    something like this, which indicates that the server is ready to
    service client connections:
 mysqld: ready for connections
-Version: '5.1.73'  socket: ''  port: 3306
+Version: '5.1.74'  socket: ''  port: 3306
 
    The server continues to write to the console any further
    diagnostic output it produces. You can open a new console window

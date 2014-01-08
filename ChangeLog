@@ -1,427 +1,242 @@
 ------------------------------------------------------------
-revno: 4044
-committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
-branch nick: mysql-5.1.72-release
-timestamp: Mon 2013-09-09 20:07:12 +0200
-message:
-   Reverted the changes to spec file to ignore mysqld_safe.pid file, updated the logic to get the correct count of PID files
-------------------------------------------------------------
-revno: 4043
-committer: Hery Ramilison <hery.ramilison@oracle.com>
-branch nick: mysql-5.1.72-release
-timestamp: Mon 2013-09-09 18:58:08 +0200
-message:
-  Committing patch from venkata.sidagam@oracle.com for Bug#16776528 
-------------------------------------------------------------
-revno: 4042
-committer: Hery Ramilison <hery.ramilison@oracle.com>
-branch nick: mysql-5.1.72-release
-timestamp: Tue 2013-09-03 18:37:46 +0200
-message:
-  Fixing sles11 build that /usr/lib/mysql/plugin is not owned by a package
-------------------------------------------------------------
-revno: 4041
-committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
-branch nick: mysql-5.1.72-release
-timestamp: Fri 2013-08-30 17:14:46 +0200
-message:
-  Fix to ignore mysqld_safe.pid
-------------------------------------------------------------
-revno: 4040
-committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
-branch nick: mysql-5.1.72-release
-timestamp: Thu 2013-08-29 14:42:55 +0200
-message:
-  Fix for Bug#17377159, ignore mysqld_safe.pid file created by mysqld_safe script
-------------------------------------------------------------
-revno: 4039
-tags: clone-5.1.72-build
-committer: Neeraj Bisht <neeraj.x.bisht@oracle.com>
+revno: 4061
+tags: clone-5.1.73-build
+committer: Tor Didriksen <tor.didriksen@oracle.com>
 branch nick: 5.1
-timestamp: Fri 2013-08-23 16:54:25 +0530
+timestamp: Fri 2013-11-01 16:39:19 +0100
 message:
-  Bug#17029399 - CRASH IN ITEM_REF::FIX_FIELDS WITH TRIGGER ERRORS
+  Bug#17617945 BUFFER OVERFLOW IN GET_MERGE_MANY_BUFFS_COST WITH SMALL SORT_BUFFER_SIZE
   
-  Problem:-
-  In a Procedure, when we are comparing value of select query 
-  with IN clause and they both have different collation, cause 
-  error on first time execution and assert second time.
-  procedure will have query like
-  set @x = ((select a from t1) in (select d from t2));<---proc1
-                sel1                   sel2
-  
-  Analysis:-
-  When we execute this proc1(first time)
-  While resolving the fields of user variable, we will call 
-  Item_in_subselect::fix_fields while will resolve sel2. There 
-  in Item_in_subselect::select_transformer, we evaluate the 
-  left expression(sel1) and store it in Item_cache_* object 
-  (to avoid re-evaluating it many times during subquery execution) 
-  by making Item_in_optimizer class.
-  While evaluating left expression we will prepare sel1.
-  After that, we will put a new condition in sel2  
-  in Item_in_subselect::select_transformer() which will compare 
-  t2.d and sel1(which is cached in Item_in_optimizer).
-  
-  Later while checking the collation in agg_item_collations() 
-  we get error and we cleanup the item. While cleaning up we cleaned 
-  the cached value in Item_in_optimizer object.
-  
-  When we execute the procedure second time, we have condition for 
-  sel2 and while setup_cond(), we can't able to find reference item 
-  as it is cleanup while item cleanup.So it assert.
-  
-  
-  Solution:-
-  We should not cleanup the cached value for Item_in_optimizer object, 
-  if we have put the condition to subselect.
+  get_cost_calc_buff_size() could return wrong value for the size of imerge_cost_buff.
 ------------------------------------------------------------
-revno: 4038 [merge]
-committer: Marko M?kel? <marko.makela@oracle.com>
-branch nick: mysql-5.1-current
-timestamp: Wed 2013-08-21 11:54:09 +0300
-message:
-  Merge working copy to mysql-5.1.
-    ------------------------------------------------------------
-    revno: 4036.1.2 [merge]
-    committer: Marko M?kel? <marko.makela@oracle.com>
-    branch nick: mysql-5.1
-    timestamp: Wed 2013-08-21 10:03:31 +0300
-    message:
-      Merge mysql-5.1 to working copy.
-    ------------------------------------------------------------
-    revno: 4036.1.1
-    committer: Marko M?kel? <marko.makela@oracle.com>
-    branch nick: mysql-5.1
-    timestamp: Wed 2013-08-21 08:22:05 +0300
-    message:
-      Bug#12560151 61132: infinite loop in buf_page_get_gen() when handling
-      compressed pages
-      
-      After loading a compressed-only page in buf_page_get_gen() we allocate a new
-      block for decompression. The problem is that the compressed page is neither
-      buffer-fixed nor I/O-fixed by the time we call buf_LRU_get_free_block(),
-      so it may end up being evicted and returned back as a new block.
-      
-      buf_page_get_gen(): Temporarily buffer-fix the compressed-only block
-      while allocating memory for an uncompressed page frame.
-      This should prevent this form of the infinite loop, which is more likely
-      with a small innodb_buffer_pool_size.
-      
-      rb#2511 approved by Jimmy Yang, Sunny Bains
-------------------------------------------------------------
-revno: 4037
-committer: Praveenkumar Hulakund <praveenkumar.hulakund@oracle.com>
-branch nick: mysql_5_1
-timestamp: Wed 2013-08-21 10:39:40 +0530
-message:
-  Bug#11765252 - READ OF FREED MEMORY WHEN "USE DB" AND
-                 "SHOW PROCESSLIST"
-  
-  Analysis:
-  ----------
-  The problem here is, if one connection changes its
-  default db and at the same time another connection executes
-  "SHOW PROCESSLIST", when it wants to read db of the another
-  connection then there is a chance of accessing the invalid
-  memory. 
-  
-  The db name stored in THD is not guarded while changing user
-  DB and while reading the user DB in "SHOW PROCESSLIST".
-  So, if THD.db is freed by thd "owner" thread and if another
-  thread executing "SHOW PROCESSLIST" statement tries to read
-  and copy THD.db at the same time then we may endup in the issue
-  reported here.
-  
-  Fix:
-  ----------
-  Used mutex "LOCK_thd_data" to guard THD.db while freeing it
-  and while copying it to processlist.
-------------------------------------------------------------
-revno: 4036
-committer: Marko M?kel? <marko.makela@oracle.com>
+revno: 4060
+committer: Nuno Carvalho <nuno.carvalho@oracle.com>
 branch nick: mysql-5.1
-timestamp: Fri 2013-08-16 15:45:41 +0300
+timestamp: Thu 2013-10-31 22:53:56 +0000
 message:
-  Bug#17312846 CHECK TABLE ASSERTION FAILURE
-  DICT_TABLE_GET_FORMAT(CLUST_INDEX->TABLE) >= 1
+  BUG#17662398: REMOVE DUPLICATE TEST CASES
   
-  The function row_sel_sec_rec_is_for_clust_rec() was incorrectly
-  preparing to compare a NULL column prefix in a secondary index with a
-  non-NULL column in a clustered index.
-  
-  This can trigger an assertion failure in 5.1 plugin and later. In the
-  built-in InnoDB of MySQL 5.1 and earlier, we would apparently only do
-  some extra work, by trimming the clustered index field for the
-  comparison.
-  
-  The code might actually have worked properly apart from this debug
-  assertion failure. It is merely doing some extra work in fetching a
-  BLOB column, and then comparing it to NULL (which would return the
-  same result, no matter what the BLOB contents is).
-  
-  While the test case involves CHECK TABLE, this could theoretically
-  occur during any read that uses a secondary index on a column prefix
-  of a column that can be NULL.
-  
-  rb#3101 approved by Mattias Jonsson
+  Remove duplicate test cases.
 ------------------------------------------------------------
-revno: 4035
-committer: Marko M?kel? <marko.makela@oracle.com>
-branch nick: mysql-5.1
-timestamp: Thu 2013-08-15 15:23:23 +0300
+revno: 4059
+committer: Venkata Sidagam <venkata.sidagam@oracle.com>
+branch nick: 5.1
+timestamp: Thu 2013-10-31 23:02:44 +0530
 message:
-  Bug#17302896 DOUBLE PURGE ON ROLLBACK OF UPDATING A DELETE-MARKED RECORD
-  
-  There was a race condition in the rollback of TRX_UNDO_UPD_DEL_REC.
-  
-  Once row_undo_mod_clust() has rolled back the changes by the rolling-back
-  transaction, it attempts to purge the delete-marked record, if possible, in a
-  separate mini-transaction.
-  
-  However, row_undo_mod_remove_clust_low() fails to check if the DB_TRX_ID of
-  the record that it found after repositioning the cursor, is still the same.
-  If it is not, it means that the record was purged and another record was
-  inserted in its place.
-  
-  So, the rollback would have performed an incorrect purge, breaking the
-  locking rules and causing corruption.
-  
-  The problem was found by creating a table that contains a unique
-  secondary index and a primary key, and two threads running REPLACE
-  with only one value for the unique column, so that the uniqueness
-  constraint would be violated all the time, leading to statement
-  rollback.
-  
-  This bug exists in all InnoDB versions (I checked MySQL 3.23.53).
-  It has become easier to repeat in 5.5 and 5.6 thanks to scalability
-  improvements and a dedicated purge thread.
-  
-  rb#3085 approved by Jimmy Yang
-------------------------------------------------------------
-revno: 4034
-committer: Marko M?kel? <marko.makela@oracle.com>
-branch nick: mysql-5.1
-timestamp: Wed 2013-08-14 09:43:21 +0300
-message:
-  Bug#16971045 ASSERTION FAILURES ON ROLLBACK OF AN INSERT AFTER A
-  FAILED BLOB WRITE
-  
-  btr_store_big_rec_extern_fields(): Relax a debug assertion so that
-  some BLOB pointers may remain zero if an error occurs.
-  
-  btr_free_externally_stored_field(), row_undo_ins(): Allow the BLOB
-  pointer to be zero on any rollback.
-  
-  rb#3059 approved by Jimmy Yang, Kevin Lewis
-------------------------------------------------------------
-revno: 4033
-committer: Anirudh Mangipudi <anirudh.mangipudi@oracle.com>
-branch nick: final-5.1
-timestamp: Mon 2013-08-12 21:54:50 +0530
-message:
-  Bug #16776528 RACE CONDITION CAN CAUSE MYSQLD TO REMOVE SOCKET FILE ERRANTLY
-  Problem Description:
-  A mysqld_safe instance is started. An InnoDB crash recovery begins which takes
-  few seconds to complete. During this crash recovery process happening, another
-  mysqld_safe instance is started with the same server startup parameters. Since
-  the mysqld's pid file is absent during the crash recovery process the second
-  instance assumes there is no other process and tries to acquire a lock on the
-  ibdata files in the datadir.  But this step fails and the 2nd instance keeps 
-  retrying 100 times each with a delay of 1 second. Now after the 100 attempts, 
-  the server goes down, but while going down it hits the mysqld_safe script's 
-  cleanup section and without any check it blindly deletes the socket and pid 
-  files. Since no lock is placed on the socket file, it gets deleted.
-  
-  Solution:
-  We create a mysqld_safe.pid file in the datadir, which protects the presence 
-  server instance resources by storing the mysqld_safe's process id in it. We
-  place a check if the mysqld_safe.pid file is existing in the datadir. If yes
-  then we check if the pid it contains is an active pid or not. If yes again,
-  then the scripts logs an error saying "A mysqld_safe instance is already 
-  running". Otherwise it will log the present mysqld_safe's pid into the 
-  mysqld_safe.pid file.
-------------------------------------------------------------
-revno: 4032
-committer: Joao Gramacho <joao.gramacho@oracle.com>
-branch nick: mysql-5.1
-timestamp: Wed 2013-07-31 17:54:40 +0100
-message:
-  Bug#16997513 MY_STRTOLL10 ACCEPTING OVERFLOWED UNSIGNED LONG LONG VALUES AS NORMAL ONES
-  
-  Problem:
-  =======
-  It was detected an incorrect behavior of my_strtoll10 function when 
-  converting strings with numbers in the following format:
-  "184467440XXXXXXXXXYY"
-  
-  Where XXXXXXXXX > 737095516 and YY <= 15
-  
-  Samples of problematic numbers:
-  "18446744073709551915"
-  "18446744073709552001"
-  
-  Instead of returning the larger unsigned long long value and setting overflow
-  in the returned error code, my_strtoll10 function returns the lower 64-bits 
-  of the evaluated number and did not set overflow in the returned error code.
-  
-  Analysis:
-  ========
-  Once trying to fix bug 16820156, I've found this bug in the overflow check of
-  my_strtoll10 function.
-  
-  This function, once receiving a string with an integer number larger than
-  18446744073709551615 (the larger unsigned long long number) should return the
-  larger unsigned long long number and set overflow in the returned error code.
-  
-  Because of a wrong overflow evaluation, the function didn't catch the
-  overflow cases where (i == cutoff) && (j > cutoff2) && (k <= cutoff3). When
-  the overflow evaluation fails, the function return the lower 64-bits of the
-  evaluated number and do not set overflow in the returned error code.
-  
-  Fix:
-  ===
-  Corrected the overflow evaluation in my_strtoll10.
-------------------------------------------------------------
-revno: 4031
-committer: prabakaran thirumalai <prabakaran.thirumalai@oracle.com>
-branch nick: mysql-5.1-try
-timestamp: Tue 2013-07-30 09:44:11 +0530
-message:
-  Bug#17083851    BACKPORT BUG#11765744 TO 5.1, 5.5 AND 5.6 
+  Bug #12917164 DROP USER CAN'T DROP USERS WITH LEGACY 
+      UPPER CASE HOST NAME ANYMORE
   
   Description:
-  Original fix Bug#11765744 changed mutex to read write lock
-  to avoid multiple recursive lock acquire operation on 
-  LOCK_status mutex.  
-  On Windows, locking read-write lock recursively is not safe. 
-  Slim read-write locks, which MySQL uses if they are supported by
-  Windows version, do not support recursion according to their 
-  documentation. For our own implementation of read-write lock, 
-  which is used in cases when Windows version doesn't support SRW,
-  recursive locking of read-write lock can easily lead to deadlock
-  if there are concurrent lock requests.
+  It is not possible to drop users with host names with upper case
+  letters in them. i.e DROP USER 'root'@'Tmp_Host_Name'; is failing
+  with error.
   
-  Fix:  
-  This patch reverts the previous fix for bug#11765744 that used
-  read-write locks. Instead problem of recursive locking for
-  LOCK_status mutex is solved by tracking recursion level using 
-  counter in THD object and acquiring lock only once when we enter 
-  fill_status() function first time. 
+  Analysis: Since the fix 11748570 we came up with lower case hostnames
+  as standard. But in the current bug the hostname is created by
+  mysql_install_db script is still having upper case hostnames. 
+  So, if we have the hostname with upper case letters like(Tmp_Host_Name)
+  then we will have as it is stored in the mysql.user table. 
+  In this case if use "'DROP USER 'root'@'Tmp_Host_Name';" it gives 
+  error because we do compare with the lower case of hostname since the 
+  11748570 fix.
+  
+  Fix: We need to convert the hostname to lower case before storing into 
+  the mysql.user table when we run the mysql_install_db script.
 ------------------------------------------------------------
-revno: 4030
+revno: 4058
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.1
+timestamp: Wed 2013-10-30 04:07:07 +0100
+message:
+  Removed non gpl file docs/mysql.info from community packages
+------------------------------------------------------------
+revno: 4057
+committer: Tor Didriksen <tor.didriksen@oracle.com>
+branch nick: 5.1
+timestamp: Tue 2013-10-29 17:26:20 +0100
+message:
+  Bug#17326567 MYSQL SERVER FILESORT IMPLEMENTATION HAS A VERY SERIOUS BUG
+  
+  The filesort implementation needs space for at least 15 records
+  (plus some internal overhead) in its main sort buffer.
+------------------------------------------------------------
+revno: 4056
 committer: Aditya A <aditya.a@oracle.com>
 branch nick: mysql-5.1
-timestamp: Mon 2013-07-29 14:45:06 +0530
+timestamp: Fri 2013-10-18 12:26:28 +0530
 message:
-  Bug#13417564 SKIP SLEEP IN SRV_MASTER_THREAD WHEN 
-               SHUTDOWN IS IN PROGRESS 
+  Bug#17559867 AFTER REBUILDING,A MYISAM PARTITION ENDS UP 
+               AS A INNODB PARTITTION.
   
   PROBLEM
   -------
-   In the background thread srv_master_thread() we have a 
-   a one second delay loop which will continuously monitor
-   server activity .If the server is inactive (with out any
-   user activity) or in a shutdown state we do some background
-   activity like flushing the changes.In the current code
-   we are not checking if server is in shutdown state before
-   sleeping for one second.
+  The correct engine_type was not being set during 
+  rebuild of the partition due to which the handler
+  was always created with the default engine,
+  which is innodb for 5.5+ ,therefore even if the
+  table was myisam, after rebuilding the partitions
+  ended up as innodb partitions.
   
   FIX
   ---
-  If server is in shutdown state ,then dont go to one second
-  sleep. 
+  Set the correct engine type during rebuild.  
+  
+  [Approved by mattiasj #rb3599]
 ------------------------------------------------------------
-revno: 4029
-committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+revno: 4055
+committer: Venkatesh Duggirala<venkatesh.duggirala@oracle.com>
 branch nick: mysql-5.1
-timestamp: Thu 2013-07-25 14:53:23 +0530
+timestamp: Wed 2013-10-16 22:12:23 +0530
 message:
-  Bug #17076737 DUPLICATE CONSTRAINTS DISPLAYED WHEN NAME INCLUDES "_IBFK_"
+  Bug#17234370 LAST_INSERT_ID IS REPLICATED INCORRECTLY IF
+  REPLICATION FILTERS ARE USED.
   
   Problem:
+  When Filtered-slave applies Int_var_log_event and when it
+  tries to write the event to its own binlog, LAST_INSERT_ID
+  value is written wrongly.
   
-  When the user specified foreign key name contains "_ibfk_", InnoDB wrongly
-  tries to rename it. 
+  Analysis:
+  THD::stmt_depends_on_first_successful_insert_id_in_prev_stmt
+  is a variable which is set when LAST_INSERT_ID() is used by
+  a statement. If it is set, first_successful_insert_id_in_
+  prev_stmt_for_binlog will be stored in the statement-based
+  binlog. This variable is CUMULATIVE along the execution of
+  a stored function or trigger: if one substatement sets it
+  to 1 it will stay 1 until the function/trigger ends,
+  thus making sure that first_successful_insert_id_in_
+  prev_stmt_for_binlog does not change anymore and is
+  propagated to the caller for binlogging. This is achieved
+  using the following code
+  if(!stmt_depends_on_first_successful_insert_id_in_prev_stmt)               
+  {                                                                           
+    /* It's the first time we read it */                                      
+    first_successful_insert_id_in_prev_stmt_for_binlog=                       
+    first_successful_insert_id_in_prev_stmt;                                
+    stmt_depends_on_first_successful_insert_id_in_prev_stmt= 1;               
+  }
   
-  Solution:
+  Slave server, after receiving Int_var_log_event event from
+  master, it is setting
+  stmt_depends_on_first_successful_insert_id_in_prev_stmt
+  to true(*which is wrong*) and not setting
+  first_successful_insert_id_in_prev_stmt_for_binlog. Because
+  of this problem, when the actual DML statement with
+  LAST_INSERT_ID() is parsed by slave SQL thread,
+  first_successful_insert_id_in_prev_stmt_for_binlog is not
+  set. Hence the value zero (default value) is written to
+  slave's binlog.
   
-  When a table is renamed, all its associated foreign keys will also be renamed,
-  only if the foreign key names are automatically generated.  If the foreign key
-  names are given by the user, even if it has _ibfk_ in it, it must not be
-  renamed.
+  Why only *Filtered slave* is effected when the code is
+  in common place:
+  -------------------------------------------------------
+  In Query_log_event::do_apply_event,
+  THD::stmt_depends_on_first_successful_insert_id_in_prev_stmt
+  is reset to zero at the end of the function. In case of
+  normal slave (No Filters), this variable will be reset. 
+  In Filtered slave, Slave SQL thread defers all IRU events's
+  execution until IRU's Query_log event is received. Once it
+  receives Query_log_event it executes all pending IRU events
+  and then it executes Query_log_event. Hence the variable is
+  not getting reset to 0, causing this bug.
   
-  rb#2935 approved by Jimmy, Krunal and Satya
+  Fix: As described above, the root cause was setting 
+  THD::stmt_depends_on_first_successful_insert_id_in_prev_stmt
+  when Int_var_log_event was executed by a SQL thread. Hence
+  removing the problematic line from the code.
 ------------------------------------------------------------
-revno: 4028
-committer: Astha Pareek <astha.pareek@oracle.com>
-branch nick: mysql-5.1-b12535301
-timestamp: Tue 2013-07-23 18:13:43 +0530
-message:
-  BUG#16295518 - SYS_VARS.RPL_INIT_SLAVE_FUNC IS FAILING ON MYSQL-5.1 
-  BUG#12535301- SYS_VARS.RPL_INIT_SLAVE_FUNC MISMATCHES IN DAILY-5.5 
-  
-  Problem:
-  sys_vars.rpl_init_slave_func test was not recorded after
-  the last edit. It was disabled on 5.1 after seeing failures
-  due to the above reason.
-  No old failures as this suite never ran with pb2 on 5.1
-  
-  Fix:
-  Added assert condition after wait for checks.
-  Recorded test and enabled it.
-------------------------------------------------------------
-revno: 4027
-committer: Nisha Gopalakrishnan <nisha.gopalakrishnan@oracle.com>
-branch nick: mysql-5.1-5844882
-timestamp: Thu 2013-07-18 11:40:08 +0530
-message:
-  BUG#15844882: MYSQLDUMP FROM 5.5 FAILS WITH AN ERROR WHEN TRYING
-                TO DUMP DATA FROM MYSQL-5.6
-  
-  Analysis
-  --------
-  Dumping mysql-5.6 data using mysql-5.1/mysql-5.5 'myqldump'
-  utility fails with a syntax error.
-  
-  Server system variable 'sql_quote_show_create' which quotes the
-  identifiers is set in the mysqldump utility. The mysldump utility
-  of mysql-5.1/mysql-5.5 uses deprecated syntax 'SET OPTION' to set
-  the 'sql_quote_show_create' option. The support for the syntax is
-  removed in mysql-5.6. Hence syntax error is reported while taking
-  the dump.
-  
-  Fix:
-  ---
-  Changed the 'mysqldump' code to use the syntax
-  'SET SQL_QUOTE_SHOW_CREATE' to set the 'sql_quote_show_create'
-  option. That syntax is supported on mysql-5.1, mysql-5.5 and
-  mysql-5.6.
-  
-  NOTE: I have not added an mtr test case since it is difficult
-  to simulate the condition. Also the syntax may not be further
-  simplified in the future.
-------------------------------------------------------------
-revno: 4026
-committer: sayantan dutta <sayantan.dutta@oracle.com>
-branch nick: mysql-5.1
-timestamp: Wed 2013-07-17 14:24:02 +0530
-message:
-  Bug #17035577 - MTR V1 FAILS TO START SERVER MTR_VERSION=1 PERL MYSQL-TEST-RUN.PL 1ST
-------------------------------------------------------------
-revno: 4025
-author: murthy.narkedimilli@oracle.com
-committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
-branch nick: mysql-5.1
-timestamp: Tue 2013-07-09 13:19:53 +0200
-message:
-  Raise version number after cloning 5.1.71
-------------------------------------------------------------
-revno: 4024
-tags: clone-5.1.71-build, mysql-5.1.71
-committer: Tor Didriksen <tor.didriksen@oracle.com>
+revno: 4054
+committer: Venkata Sidagam <venkata.sidagam@oracle.com>
 branch nick: 5.1
-timestamp: Mon 2013-07-01 15:30:55 +0200
+timestamp: Wed 2013-10-16 14:14:44 +0530
 message:
-  Bug#58165: "my_empty_string" gets modified and causes LOAD DATA to fail and
-  Cleanup test case (left outfile in data dir)
+  Bug#16900358 FIX FOR CVE-2012-5611 IS INCOMPLETE
+  
+  Description: Fix for bug CVE-2012-5611 (bug 67685) is 
+  incomplete. The ACL_KEY_LENGTH-sized buffers in acl_get() and 
+  check_grant_db() can be overflown by up to two bytes. That's 
+  probably not enough to do anything more serious than crashing 
+  mysqld.
+  Analysis: In acl_get() when "copy_length" is calculated it 
+  just adding the variable lengths. But when we are using them 
+  with strmov() we are adding +1 to each. This will lead to a 
+  three byte buffer overflow (i.e two +1's at strmov() and one 
+  byte for the null added by strmov() function). Similarly it 
+  happens for check_grant_db() function as well.
+  Fix: We need to add "+2" to "copy_length" in acl_get() 
+  and "+1" to "copy_length" in check_grant_db(). 
+------------------------------------------------------------
+revno: 4053
+committer: Nuno Carvalho <nuno.carvalho@oracle.com>
+branch nick: mysql-5.1
+timestamp: Mon 2013-10-14 15:45:12 +0100
+message:
+  WL#7266: Dump-thread additional concurrency tests                                                                                                                           
+  
+  This worklog aims at testing the two following scenarios:
+  
+  1) Whenever the mysql_binlog_send method (dump thread)
+  reaches the end of file when reading events from the binlog, before
+  checking if it should wait for more events, there was a test to
+  check if the file being read was still active, i.e, it was the last
+  known binlog. However, it was possible that something was written to
+  the binary log and then a rotation would happen, after EOF was
+  detected and before the check for active was performed. In this
+  case, the end of the binary log would not be read by the dump
+  thread, and this would cause the slave to lose updates.
+  This test verifies that the problem has been fixed. It waits during
+  this window while forcing a rotation in the binlog.
+  
+  2) Verify dump thread can send events in active file, correctly after
+  encountering an IO error.
+------------------------------------------------------------
+revno: 4052 [merge]
+committer: Kent Boortz <kent.boortz@oracle.com>
+branch nick: mysql-5.1
+timestamp: Mon 2013-10-07 12:44:38 +0200
+message:
+  Corrections of copyright headers (RE-request 45781)
+    ------------------------------------------------------------
+    revno: 4050.1.1
+    committer: Kent Boortz <kent.boortz@oracle.com>
+    branch nick: mysql-5.1
+    timestamp: Fri 2013-10-04 13:51:13 +0200
+    message:
+      Corretions of copyright headers (RE-request 45781)
+------------------------------------------------------------
+revno: 4051
+committer: Yasufumi Kinoshita <yasufumi.kinoshita@oracle.com>
+branch nick: mysql-5.1
+timestamp: Mon 2013-10-07 15:16:31 +0900
+message:
+  Bug#17431533 : FAILING ASSERTION: INDEX->PAGE != 0XFFFFFFFF AFTER DISCARDING TABLESPACE
+  
+  ha_innobase::records_in_range() should return HA_POS_ERROR for the table during discarded without requesting pages.
+  The later other handler method should treat the error correctly.
+  
+  Approved by Sunny in rb#3433
+------------------------------------------------------------
+revno: 4050
+committer: Satya Bodapati <satya.bodapati@oracle.com>
+branch nick: mysql-5.1
+timestamp: Fri 2013-09-27 18:30:46 +0530
+message:
+  BUG#17446090 - TESTCASE INNODB_BUG16752251.TEST FAILS RANDOMLY ON PB2
+  
+  Enable disabled testcases.
+------------------------------------------------------------
+revno: 4049 [merge]
+author: hery.ramilison@oracle.com
+committer: Hery Ramilison <hery.ramilison@oracle.com>
+branch nick: mysql-5.1
+timestamp: Fri 2013-09-20 21:08:08 +0200
+message:
+  Merge from mysql-5.1.72-release
+    ------------------------------------------------------------
+    revno: 4039.1.5
+    tags: mysql-5.1.72
+    committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+    branch nick: mysql-5.1.72-release
+    timestamp: Mon 2013-09-09 20:07:12 +0200
+    message:
+       Reverted the changes to spec file to ignore mysqld_safe.pid file, updated the logic to get the correct count of PID files

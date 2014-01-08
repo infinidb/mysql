@@ -532,11 +532,11 @@ Production Releases
    Windows examples will assume the name md5.exe.
 
    Linux and Microsoft Windows examples:
-shell> md5sum mysql-standard-5.1.73-linux-i686.tar.gz
-aaab65abbec64d5e907dcd41b8699945  mysql-standard-5.1.73-linux-i686.ta
+shell> md5sum mysql-standard-5.1.74-linux-i686.tar.gz
+aaab65abbec64d5e907dcd41b8699945  mysql-standard-5.1.74-linux-i686.ta
 r.gz
-shell> md5.exe mysql-installer-community-5.1.73.msi
-aaab65abbec64d5e907dcd41b8699945  mysql-installer-community-5.1.73.ms
+shell> md5.exe mysql-installer-community-5.1.74.msi
+aaab65abbec64d5e907dcd41b8699945  mysql-installer-community-5.1.74.ms
 i
 
    You should verify that the resulting checksum (the string of
@@ -646,8 +646,8 @@ shell> rpm --import mysql_pubkey.asc
 
    Table 2.1. MySQL Package and Signature Files for Source files
        File Type                      File Name
-   Distribution file mysql-standard-5.1.73-linux-i686.tar.gz
-   Signature file    mysql-standard-5.1.73-linux-i686.tar.gz.asc
+   Distribution file mysql-standard-5.1.74-linux-i686.tar.gz
+   Signature file    mysql-standard-5.1.74-linux-i686.tar.gz.asc
 
    Make sure that both files are stored in the same directory and
    then run the following command to verify the signature for the
@@ -656,7 +656,7 @@ shell> gpg --verify package_name.asc
 
    If the downloaded package is valid, you will see a "Good
    signature" similar to:
-shell> gpg --verify mysql-standard-5.1.73-linux-i686.tar.gz.asc
+shell> gpg --verify mysql-standard-5.1.74-linux-i686.tar.gz.asc
 gpg: Signature made Tue 01 Feb 2011 02:38:30 AM CST using DSA key ID
 5072E1F5
 gpg: Good signature from "MySQL Release Engineering <mysql-build@oss.
@@ -665,7 +665,7 @@ oracle.com>"
    The Good signature message indicates that the file signature is
    valid, when compared to the signature listed on our site. But you
    might also see warnings, like so:
-shell> gpg --verify mysql-standard-5.1.73-linux-i686.tar.gz.asc
+shell> gpg --verify mysql-standard-5.1.74-linux-i686.tar.gz.asc
 gpg: Signature made Wed 23 Jan 2013 02:25:45 AM PST using DSA key ID
 5072E1F5
 gpg: checking the trustdb
@@ -747,8 +747,8 @@ Primary key fingerprint: A4A9 4068 76FC BD3C 4567  70C8 8C71 8D3B 507
    Table 2.2. MySQL Package and Signature Files for MySQL Installer
    for Microsoft Windows
        File Type                    File Name
-   Distribution file mysql-installer-community-5.1.73.msi
-   Signature file    mysql-installer-community-5.1.73.msi.asc
+   Distribution file mysql-installer-community-5.1.74.msi
+   Signature file    mysql-installer-community-5.1.74.msi.asc
 
    Make sure that both files are stored in the same directory and
    then run the following command to verify the signature for the
@@ -784,8 +784,8 @@ Primary key fingerprint: A4A9 4068 76FC BD3C 4567  70C8 8C71 8D3B 507
 shell> rpm --checksig package_name.rpm
 
    Example:
-shell> rpm --checksig MySQL-server-5.1.73-0.glibc23.i386.rpm
-MySQL-server-5.1.73-0.glibc23.i386.rpm: md5 gpg OK
+shell> rpm --checksig MySQL-server-5.1.74-0.glibc23.i386.rpm
+MySQL-server-5.1.74-0.glibc23.i386.rpm: md5 gpg OK
 
    Note
 
@@ -866,7 +866,7 @@ pg-signature.html
 
    MySQL compressed tar file binary distributions have names of the
    form mysql-VERSION-OS.tar.gz, where VERSION is a number (for
-   example, 5.1.73), and OS indicates the type of operating system
+   example, 5.1.74), and OS indicates the type of operating system
    for which the distribution is intended (for example, pc-linux-i686
    or winx64).
 
@@ -1242,7 +1242,7 @@ Perform Postinstallation Setup
    below for reference:
 
      * Windows Essentials: This package has a file name similar to
-       mysql-essential-5.1.73-win32.msi and is supplied as a
+       mysql-essential-5.1.74-win32.msi and is supplied as a
        Microsoft Installer (MSI) package. The package includes the
        minimum set of files needed to install MySQL on Windows,
        including the MySQL Server Instance Config Wizard. This
@@ -1253,7 +1253,7 @@ Perform Postinstallation Setup
        MySQL on Microsoft Windows Using an MSI Package."
 
      * Windows MSI Installer (Complete): This package has a file name
-       similar to mysql-5.1.73-win32.msi and contains all files
+       similar to mysql-5.1.74-win32.msi and contains all files
        needed for a complete Windows installation, including the
        MySQL Server Instance Config Wizard. This package includes
        optional components such as the embedded server and benchmark
@@ -1262,7 +1262,7 @@ Perform Postinstallation Setup
        MySQL on Microsoft Windows Using an MSI Package."
 
      * Without installer: This package has a file name similar to
-       mysql-noinstall-5.1.73-win32.zip and contains all the files
+       mysql-noinstall-5.1.74-win32.zip and contains all the files
        found in the Complete install package, with the exception of
        the MySQL Server Instance Config Wizard. This package does not
        include an automated installer, and must be manually installed
@@ -1517,7 +1517,7 @@ Perform Postinstallation Setup
    directory. In a default installation it contains C:\Program
    Files\MySQL\MySQL Server 5.1\. The Version string contains the
    release number. For example, for an installation of MySQL Server
-   5.1.73, the key contains a value of 5.1.73.
+   5.1.74, the key contains a value of 5.1.74.
 
    These registry keys are used to help external tools identify the
    installed location of the MySQL server, preventing a complete scan
@@ -1643,7 +1643,7 @@ MSI Package
    the command line (or within a script), you need to use the
    msiexec.exe tool. For example, to perform a quiet installation
    (which shows no dialog boxes or progress):
-shell> msiexec /i mysql-5.1.73.msi /quiet
+shell> msiexec /i mysql-5.1.74.msi /quiet
 
    The /i indicates that you want to perform an installation. The
    /quiet option indicates that you want no interactive elements.
@@ -1651,7 +1651,7 @@ shell> msiexec /i mysql-5.1.73.msi /quiet
    To provide a dialog box showing the progress during installation,
    and the dialog boxes providing information on the installation and
    registration of MySQL, use /passive mode instead of /quiet:
-shell> msiexec /i mysql-5.1.73.msi /passive
+shell> msiexec /i mysql-5.1.74.msi /passive
 
    Regardless of the mode of the installation, installing the package
    in this manner performs a 'Typical' installation, and installs the
@@ -1659,7 +1659,7 @@ shell> msiexec /i mysql-5.1.73.msi /passive
 
    You can also use this method to uninstall MySQL by using the
    /uninstall or /x options:
-shell> msiexec /x mysql-5.1.73.msi /uninstall
+shell> msiexec /x mysql-5.1.74.msi /uninstall
 
    To install MySQL and configure a MySQL instance from the command
    line, see Section 2.3.5.13, "MySQL Server Instance Config Wizard:
@@ -2716,7 +2716,7 @@ from the Command Line
    service name MySQL51 and setting the root password to 1234.
 shell> MySQLInstanceConfig.exe -i -q "-lC:\mysql_install_log.txt" »
    "-nMySQL Server 5.1" "-pC:\Program Files\MySQL\MySQL Server 5.1" -
-v5.1.73 »
+v5.1.74 »
    "-tmy-template.ini" "-cC:\mytest.ini" ServerType=DEVELOPMENT Datab
 aseType=MIXED »
    ConnectionUsage=DSS Port=3311 ServiceName=MySQL51 RootPassword=123
@@ -2732,7 +2732,7 @@ Date: 2009-10-27 17:07:21
 Installing service ...
 
 Product Name:         MySQL Server 5.1
-Version:              5.1.73
+Version:              5.1.74
 Installation Path:    C:\Program Files\MySQL\MySQL Server 5.1\
 
 Creating configuration file C:\mytest.ini using template my-template.
@@ -3016,7 +3016,7 @@ InnoDB: foreign key constraint system tables created
    something like this, which indicates that the server is ready to
    service client connections:
 mysqld: ready for connections
-Version: '5.1.73'  socket: ''  port: 3306
+Version: '5.1.74'  socket: ''  port: 3306
 
    The server continues to write to the console any further
    diagnostic output it produces. You can open a new console window
@@ -4023,7 +4023,7 @@ Additional Resources
 
    As an alternative, you can use the native package manager within
    your Linux distribution to automatically download and install
-   MySQL for you. Native package installations can take of the
+   MySQL for you. Native package installations can take care of the
    download and dependencies required to run MySQL, but the MySQL
    version will often be some versions behind the currently available
    release. You will also normally be unable to install development
@@ -4632,15 +4632,15 @@ Error in accept: Protocol error
    To use this package, download the corresponding
    mysql-VERSION-solaris10-PLATFORM.pkg.gz file, then uncompress it.
    For example:
-shell> gunzip mysql-5.1.73-solaris10-x86_64.pkg.gz
+shell> gunzip mysql-5.1.74-solaris10-x86_64.pkg.gz
 
    To install a new package, use pkgadd and follow the onscreen
    prompts. You must have root privileges to perform this operation:
-shell> pkgadd -d mysql-5.1.73-solaris10-x86_64.pkg
+shell> pkgadd -d mysql-5.1.74-solaris10-x86_64.pkg
 
 The following packages are available:
   1  mysql     MySQL Community Server (GPL)
-               (i86pc) 5.1.73
+               (i86pc) 5.1.74
 
 Select package(s) you wish to process (or 'all' to process
 all packages). (default: all) [?,??,q]:
@@ -4678,7 +4678,7 @@ shell> ln /etc/init.d/mysql /etc/rc0.d/K02mysql
    The typical upgrade sequence is therefore:
 shell> mysqladmin shutdown
 shell> pkgrm mysql
-shell> pkgadd -d mysql-5.1.73-solaris10-x86_64.pkg
+shell> pkgadd -d mysql-5.1.74-solaris10-x86_64.pkg
 shell> mysqld_safe &
 shell> mysql_upgrade
 
@@ -4982,8 +4982,8 @@ root-shell> mysqld_safe --user=mysql &
 CRTSAVF FILE(QGPL/MYSQLINST) TESXT('MySQL Save file')
 
     2. Download the MySQL installation save file in 32-bit
-       (mysql-5.1.73-i5os-power-32bit.savf) or 64-bit
-       (mysql-5.1.73-i5os-power-64bit.savf) from MySQL Downloads
+       (mysql-5.1.74-i5os-power-32bit.savf) or 64-bit
+       (mysql-5.1.74-i5os-power-64bit.savf) from MySQL Downloads
        (http://dev.mysql.com/downloads/).
 
     3. You need to FTP the downloaded .savf file directly into the
@@ -4992,7 +4992,7 @@ CRTSAVF FILE(QGPL/MYSQLINST) TESXT('MySQL Save file')
        System i machine:
 ftp> bin
 ftp> cd qgpl
-ftp> put mysql-5.1.73-i5os-power.savf mysqlinst
+ftp> put mysql-5.1.74-i5os-power.savf mysqlinst
 
     4. Log into the System i server using a user in the *SECOFR
        class, such as the QSECOFR user ID.
@@ -5072,8 +5072,8 @@ DLTLIB LIB(MYSQLINST)
        not already exist. This is the directory that the MySQL server
        will be installed into, inside a directory with a name
        matching the version and release. For example, if installing
-       MySQL 5.1.73 with the DIR set to /QOpenSys/usr/local/ would
-       result in /QOpenSys/usr/local/mysql-5.1.73-i5os-power64 and a
+       MySQL 5.1.74 with the DIR set to /QOpenSys/usr/local/ would
+       result in /QOpenSys/usr/local/mysql-5.1.74-i5os-power64 and a
        symbolic link to this directory will be created in
        /QOpenSys/usr/local/mysql.
 
@@ -5099,7 +5099,7 @@ DLTLIB LIB(MYSQLINST)
      * CURINST('path to previous install'): The full path to the
        installation that is being upgraded. For example an
        installation in /QOpenSys/usr/local/ will be
-       /QOpenSys/usr/local/mysql-5.1.73-i5os-power64. Failure to
+       /QOpenSys/usr/local/mysql-5.1.74-i5os-power64. Failure to
        specify this option may result in corruption of your existing
        data files.
 
@@ -5107,7 +5107,7 @@ DLTLIB LIB(MYSQLINST)
 MYSQLINST/UPGMYSQL DIR('/QOpenSys/usr/local/') DATADIR('/QOpenSys/mys
 ql/data') »
      USERPRF(MYSQL) MYSQLUSR('root') PASSWORD('root') CURINST('/QOpen
-Sys/usr/local/mysql-5.1.73-i5os-power64')
+Sys/usr/local/mysql-5.1.74-i5os-power64')
 
    You should receive a Program Message indicating UPGRADE
    SUCCESSFUL! upon completion or an error message if there is a
@@ -5200,7 +5200,7 @@ CHLAND.IBM.COM.pid
    compressed tar files, Zip archives, or RPM packages. Distribution
    files have names of the form mysql-VERSION.tar.gz,
    mysql-VERSION.zip, or mysql-VERSION.rpm, where VERSION is a number
-   like 5.1.73.
+   like 5.1.74.
 
    To perform a MySQL installation using the source code:
 
@@ -6386,8 +6386,8 @@ export CXX="gcc"
    Note
 
    To compile from the source code on Windows you must use the
-   standard source distribution (for example, mysql-5.1.73.zip) or
-   mysql-5.1.73.tar.gz). You build from the same distribution as used
+   standard source distribution (for example, mysql-5.1.74.zip) or
+   mysql-5.1.74.tar.gz). You build from the same distribution as used
    to build MySQL on Unix, Linux and other platforms. Do not use the
    Windows Source distributions as they do not contain the necessary
    configuration script and other files.
@@ -6985,10 +6985,10 @@ shell> bin/mysqladmin variables
        on your platform and version of MySQL, but should be similar
        to that shown here:
 shell> bin/mysqladmin version
-mysqladmin  Ver 14.12 Distrib 5.1.73, for pc-linux-gnu on i686
+mysqladmin  Ver 14.12 Distrib 5.1.74, for pc-linux-gnu on i686
 ...
 
-Server version          5.1.73
+Server version          5.1.74
 Protocol version        10
 Connection              Localhost via UNIX socket
 UNIX socket             /var/lib/mysql/mysql.sock
