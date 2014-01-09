@@ -1169,13 +1169,13 @@
 #define PACKAGE_NAME "MySQL Server"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "MySQL Server 5.1.72"
+#define PACKAGE_STRING "MySQL Server 5.1.73"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "mysql"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "5.1.72"
+#define PACKAGE_VERSION "5.1.73"
 
 /* mysql client protocol version */
 #define PROTOCOL_VERSION 10
@@ -1291,7 +1291,7 @@
 #define USE_NEW_READLINE_INTERFACE 1
 
 /* Version number of package */
-#define VERSION "5.1.72"
+#define VERSION "5.1.73"
 
 /* sighandler type is void (*signal ()) (); */
 #define VOID_SIGHANDLER 1
