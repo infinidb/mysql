@@ -1,9 +1,6 @@
 /* include/config.h.  Generated from config.h.in by configure.  */
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
-/* Define if building universal (internal helper macro) */
-/* #undef AC_APPLE_UNIVERSAL_BUILD */
-
 /* Support big tables */
 /* #undef BIG_TABLES */
 
@@ -1189,34 +1186,34 @@
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
 
-/* The size of `char', as computed by sizeof. */
+/* The size of a `char', as computed by sizeof. */
 #define SIZEOF_CHAR 1
 
-/* The size of `char*', as computed by sizeof. */
+/* The size of a `char*', as computed by sizeof. */
 #define SIZEOF_CHARP 8
 
-/* The size of `int', as computed by sizeof. */
+/* The size of a `int', as computed by sizeof. */
 #define SIZEOF_INT 4
 
-/* The size of `long', as computed by sizeof. */
+/* The size of a `long', as computed by sizeof. */
 #define SIZEOF_LONG 8
 
-/* The size of `long long', as computed by sizeof. */
+/* The size of a `long long', as computed by sizeof. */
 #define SIZEOF_LONG_LONG 8
 
-/* The size of `off_t', as computed by sizeof. */
+/* The size of a `off_t', as computed by sizeof. */
 #define SIZEOF_OFF_T 8
 
-/* The size of `pthread_t', as computed by sizeof. */
+/* The size of a `pthread_t', as computed by sizeof. */
 #define SIZEOF_PTHREAD_T 8
 
-/* The size of `short', as computed by sizeof. */
+/* The size of a `short', as computed by sizeof. */
 #define SIZEOF_SHORT 2
 
-/* The size of `time_t', as computed by sizeof. */
+/* The size of a `time_t', as computed by sizeof. */
 #define SIZEOF_TIME_T 8
 
-/* The size of `void*', as computed by sizeof. */
+/* The size of a `void*', as computed by sizeof. */
 #define SIZEOF_VOIDP 8
 
 /* The base type of the last arg to accept */
@@ -1227,7 +1224,7 @@
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be
-   automatically deduced at runtime.
+   automatically deduced at run-time.
 	STACK_DIRECTION > 0 => grows toward higher addresses
 	STACK_DIRECTION < 0 => grows toward lower addresses
 	STACK_DIRECTION = 0 => direction of growth unknown */
@@ -1314,6 +1311,9 @@
 /* Include Volatile memory based tables into mysqld */
 #define WITH_HEAP_STORAGE_ENGINE 1
 
+/* Include IBM DB2 for i Storage Engine into mysqld */
+/* #undef WITH_IBMDB2I_STORAGE_ENGINE */
+
 /* Include Transactional Tables using InnoDB into mysqld */
 /* #undef WITH_INNOBASE_STORAGE_ENGINE */
 
@@ -1335,17 +1335,9 @@
 /* Include MySQL Partitioning Support into mysqld */
 #define WITH_PARTITION_STORAGE_ENGINE 1
 
-/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
-   significant byte first (like Motorola and SPARC, unlike Intel). */
-#if defined AC_APPLE_UNIVERSAL_BUILD
-# if defined __BIG_ENDIAN__
-#  define WORDS_BIGENDIAN 1
-# endif
-#else
-# ifndef WORDS_BIGENDIAN
-/* #  undef WORDS_BIGENDIAN */
-# endif
-#endif
+/* Define to 1 if your processor stores words with the most significant byte
+   first (like Motorola and SPARC, unlike Intel and VAX). */
+/* #undef WORDS_BIGENDIAN */
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 /* #undef _FILE_OFFSET_BITS */
@@ -1365,8 +1357,8 @@
 /* #undef inline */
 #endif
 
-/* Define to `long int' if <sys/types.h> does not define. */
+/* Define to `long' if <sys/types.h> does not define. */
 /* #undef off_t */
 
-/* Define to `unsigned int' if <sys/types.h> does not define. */
+/* Define to `unsigned' if <sys/types.h> does not define. */
 /* #undef size_t */

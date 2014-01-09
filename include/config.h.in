@@ -1310,9 +1310,6 @@
 /* Include Volatile memory based tables into mysqld */
 #undef WITH_HEAP_STORAGE_ENGINE
 
-/* Include IBM DB2 for i Storage Engine into mysqld */
-#undef WITH_IBMDB2I_STORAGE_ENGINE
-
 /* Include Transactional Tables using InnoDB into mysqld */
 #undef WITH_INNOBASE_STORAGE_ENGINE
 
