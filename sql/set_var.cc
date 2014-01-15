@@ -528,6 +528,9 @@ static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_a
 static sys_var_thd_bool sys_infinidb_double_for_decimal_math(&vars,
 							"infinidb_double_for_decimal_math",
 					       &SV::infinidb_double_for_decimal_math);
+static sys_var_thd_bool sys_infinidb_local_query(&vars,
+							"infinidb_local_query",
+					       &SV::infinidb_local_query);
 /* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
                                               &SV::div_precincrement);

@@ -345,6 +345,7 @@ struct system_variables
   ulong infinidb_stringtable_threshold;
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
+  my_bool infinidb_local_query;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
