@@ -6992,7 +6992,7 @@ The minimum value for this variable is 4096.",
    (uchar**)&global_system_variables.infinidb_double_for_decimal_math,
    (uchar**)&max_system_variables.infinidb_double_for_decimal_math, 0,
    GET_BOOL, NO_ARG,
-	1, /* Default value */
+	0, /* Default value */
 	0, /* Min allowed value */
 	1, /* Max allowed value */
 	0, /* Subtract this overhead from given value before setting var */
