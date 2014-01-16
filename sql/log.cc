@@ -113,9 +113,8 @@ static bool idb_okay_to_log(Log_event *event_info)
 		{
 			//FIXME:
 			//we've got to try to find the engine for this table...
-			fprintf(stderr, "idb_repl: don't know what to do with sql_command %d, not replicating\n",
-				thd->lex->sql_command);
-			return FALSE;
+			//fprintf(stderr, "idb_repl: don't know what to do with sql_command %d, not replicating\n", thd->lex->sql_command);
+			return TRUE;
 		}
 	}
 
@@ -130,8 +129,11 @@ static bool idb_okay_to_log(Log_event *event_info)
 
 	//if the sql is insert, update, delete, truncate, LDI skip it
 	if (thd->lex->sql_command == SQLCOM_INSERT ||
+		thd->lex->sql_command == SQLCOM_INSERT_SELECT ||
 		thd->lex->sql_command == SQLCOM_UPDATE ||
+		thd->lex->sql_command == SQLCOM_UPDATE_MULTI ||
 		thd->lex->sql_command == SQLCOM_DELETE ||
+		thd->lex->sql_command == SQLCOM_DELETE_MULTI ||
 		thd->lex->sql_command == SQLCOM_TRUNCATE ||
 		thd->lex->sql_command == SQLCOM_LOAD)
 	{
