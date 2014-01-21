@@ -1392,7 +1392,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 
 %type <item_list>
         expr_list opt_udf_expr_list udf_expr_list when_list
-        ident_list ident_list_arg opt_expr_list opt_window_partition_by_clause
+        ident_list ident_list_arg opt_expr_list opt_window_partition_by_clause in_sum_expr_list
 
 %type <var_type>
         option_type opt_var_type opt_var_ident_type
@@ -8184,7 +8184,7 @@ function_call_window:
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
           }
-        | COUNT_SYM '(' DISTINCT expr_list ')' window_clause
+        | COUNT_SYM '(' DISTINCT in_sum_expr_list ')' window_clause
           {
             Item* item = NULL;
             LEX_STRING funcname= { C_STRING_WITH_LEN("COUNT_DISTINCT") };
@@ -8739,12 +8739,13 @@ sum_expr:
               MYSQL_YYABORT;
           }
         */
-        | COUNT_SYM '(' DISTINCT expr_list ')'
+        | COUNT_SYM '(' DISTINCT in_sum_expr_list ')'
           {
             $$= new (YYTHD->mem_root) Item_sum_count_distinct(* $4);
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
+          
         | MIN_SYM '(' in_sum_expr ')'
           {
             $$= new (YYTHD->mem_root) Item_sum_min($3);
@@ -8827,6 +8828,7 @@ sum_expr:
             sel->gorder_list.empty();
           }
         ;
+
 
 variable:
           '@'
@@ -8976,6 +8978,23 @@ expr_list:
           {
             $1->push_back($3);
             $$= $1;
+          }
+        ;
+
+in_sum_expr_list:
+          opt_all
+          {
+            LEX *lex= Lex;
+            if (lex->current_select->inc_in_sum_expr())
+            {
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
+            }
+          }
+          expr_list
+          {
+            Select->in_sum_expr--;
+            $$= $3;
           }
         ;
 
