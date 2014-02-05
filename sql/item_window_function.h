@@ -75,33 +75,33 @@ struct Window_context
 
 };
 
-class Item_func_window :public Item_func
+class Item_func_window : public Item_func
 {
 public:
-	Item_func_window(LEX_STRING name, 
-	                 Window_context* ctx = NULL, 
+	Item_func_window(LEX_STRING name,
+	                 Window_context* ctx = NULL,
 	                 bool dist = false);
-	Item_func_window(LEX_STRING name, 
-	                 Item *arg, 
-	                 Window_context* ctx = NULL, 
+	Item_func_window(LEX_STRING name,
+	                 Item *arg,
+	                 Window_context* ctx = NULL,
 	                 bool dist = false);
-	Item_func_window(LEX_STRING name, 
-	                 Item *arg1, 
-	                 Item *arg2, 
-	                 Window_context* ctx = NULL, 
+	Item_func_window(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Window_context* ctx = NULL,
 	                 bool dist = false);
-	Item_func_window(LEX_STRING name, 
-	                 Item *arg1, 
-	                 Item *arg2, 
-	                 Item* arg3, 
-	                 Window_context* ctx = NULL, 
+	Item_func_window(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Item* arg3,
+	                 Window_context* ctx = NULL,
 	                 bool dist = false);
-	Item_func_window(LEX_STRING name, 
-	                 Item *arg1, 
-	                 Item *arg2, 
-	                 Item* arg3, 
+	Item_func_window(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Item* arg3,
 	                 Item* arg4,
-	                 Window_context* ctx = NULL, 
+	                 Window_context* ctx = NULL,
 	                 bool dist = false);
 	virtual ~Item_func_window();
 	const char *func_name() const { return funcname; }
@@ -124,7 +124,10 @@ public:
 	virtual enum Item_result result_type () const;
 	void isDistinct(bool dist) { distinct = dist; }
 	bool isDistinct() const { return distinct; }
-  bool respectNulls; // for some window functions
+	bool respectNulls; // for some window functions
+
+	// @bug5777, to distinguish two types of real result type.
+	virtual enum_field_types field_type() { return MYSQL_TYPE_DOUBLE; }
 
 protected:
 	Window_context* window_context;
@@ -133,14 +136,56 @@ protected:
 	char* funcname;
 };
 
+class Item_func_window_hybrid : public Item_func_window
+{
+public:
+	Item_func_window_hybrid(LEX_STRING name,
+	                 Window_context* ctx = NULL,
+	                 bool dist = false) :
+	                 Item_func_window(name, ctx, dist)
+	{}
+	Item_func_window_hybrid(LEX_STRING name,
+	                 Item *arg,
+	                 Window_context* ctx = NULL,
+	                 bool dist = false) :
+	                 Item_func_window(name, arg, ctx, dist)
+	{}
+	Item_func_window_hybrid(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Window_context* ctx = NULL,
+	                 bool dist = false):
+	                 Item_func_window(name, arg1, arg2, ctx, dist)
+	{}
+	Item_func_window_hybrid(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Item* arg3,
+	                 Window_context* ctx = NULL,
+	                 bool dist = false):
+	                 Item_func_window(name, arg1, arg2, arg3, ctx, dist)
+	{}
+	Item_func_window_hybrid(LEX_STRING name,
+	                 Item *arg1,
+	                 Item *arg2,
+	                 Item* arg3,
+	                 Item* arg4,
+	                 Window_context* ctx = NULL,
+	                 bool dist = false) :
+	                 Item_func_window(name, arg1, arg2, arg3, arg4, ctx, dist)
+	{}
+	virtual ~Item_func_window_hybrid() {}
+	virtual enum_field_types field_type();
+};
+
 // avg
 class Item_func_window_avg : public Item_func_window
 {
 public:
-	Item_func_window_avg(LEX_STRING name, 
-	                     Item *arg, 
-	                     Window_context* ctx = NULL, 
-	                     bool dist = false) : 
+	Item_func_window_avg(LEX_STRING name,
+	                     Item *arg,
+	                     Window_context* ctx = NULL,
+	                     bool dist = false) :
 	                     Item_func_window(name, arg, ctx, dist){}
 	void fix_length_and_dec();
 	enum Item_result result_type () const { return hybrid_type; }
@@ -151,10 +196,10 @@ public:
 class Item_func_window_sum : public Item_func_window
 {
 public:
-	Item_func_window_sum(LEX_STRING name, 
-	                     Item *arg, 
-	                     Window_context* ctx = NULL, 
-	                     bool dist = false) : 
+	Item_func_window_sum(LEX_STRING name,
+	                     Item *arg,
+	                     Window_context* ctx = NULL,
+	                     bool dist = false) :
 	                     Item_func_window(name, arg, ctx, dist){}
 	void fix_length_and_dec();
 	enum Item_result result_type () const { return hybrid_type; }
@@ -164,7 +209,7 @@ public:
 class Item_func_window_rank : public Item_func_window
 {
 public:
-	Item_func_window_rank(LEX_STRING name, 
+	Item_func_window_rank(LEX_STRING name,
 		                  Window_context* ctx = NULL,
 	                      bool dist = false) :
 	                      Item_func_window(name, ctx, dist){}
@@ -175,17 +220,17 @@ public:
 };
 
 // nth_value
-class Item_func_window_nth_value : public Item_func_window
+class Item_func_window_nth_value : public Item_func_window_hybrid
 {
 public:
-	Item_func_window_nth_value(LEX_STRING name, 
+	Item_func_window_nth_value(LEX_STRING name,
 	                           Item *arg1,
 	                           Item *arg2,
 	                           Item *arg3,
 	                           Item *arg4,
 	                           Window_context* ctx = NULL,
 	                           bool dist = false) :
-	                           Item_func_window(name, arg1, arg2, arg3, arg4, ctx, dist){}
+	                           Item_func_window_hybrid(name, arg1, arg2, arg3, arg4, ctx, dist){}
 	virtual bool fix_fields(THD* thd, Item** ref);
 };
 
@@ -193,10 +238,10 @@ public:
 class Item_func_window_stats : public Item_func_window
 {
 public:
-	Item_func_window_stats(LEX_STRING name, 
-	                       Item *arg, 
-	                       Window_context* ctx = NULL, 
-	                       bool dist = false) : 
+	Item_func_window_stats(LEX_STRING name,
+	                       Item *arg,
+	                       Window_context* ctx = NULL,
+	                       bool dist = false) :
 	                       Item_func_window(name, arg, ctx, dist){}
 	virtual enum Item_result result_type () const;
 	virtual void fix_length_and_dec();
@@ -207,30 +252,30 @@ public:
 class Item_func_window_int : public Item_func_window
 {
 public:
-	Item_func_window_int(LEX_STRING name, 
+	Item_func_window_int(LEX_STRING name,
 		                 Window_context* ctx = NULL,
 	                     bool dist = false) :
 	                     Item_func_window(name, ctx, dist){}
-	Item_func_window_int(LEX_STRING name, 
-	                     Item *arg, 
-	                     Window_context* ctx = NULL, 
-	                     bool dist = false) : 
+	Item_func_window_int(LEX_STRING name,
+	                     Item *arg,
+	                     Window_context* ctx = NULL,
+	                     bool dist = false) :
 	                     Item_func_window(name, arg, ctx, dist){}
 	virtual enum Item_result result_type () const;
 };
 
 // lead/lag
-class Item_func_window_lead_lag : public Item_func_window
+class Item_func_window_lead_lag : public Item_func_window_hybrid
 {
 public:
-	Item_func_window_lead_lag(LEX_STRING name, 
+	Item_func_window_lead_lag(LEX_STRING name,
 	                          Item *arg1,
 	                          Item *arg2,
 	                          Item *arg3,
 	                          Item *arg4,
-	                          Window_context* ctx = NULL, 
+	                          Window_context* ctx = NULL,
 	                          bool dist = false) :
-	                          Item_func_window(name, arg1, arg2, arg3, arg4, ctx, dist){}
+	                          Item_func_window_hybrid(name, arg1, arg2, arg3, arg4, ctx, dist){}
 	virtual bool fix_fields(THD* thd, Item** ref);
 };
 
@@ -238,9 +283,9 @@ public:
 class Item_func_window_median : public Item_func_window
 {
 public:
-	Item_func_window_median (LEX_STRING name, 
+	Item_func_window_median (LEX_STRING name,
 	                         Item *arg1,
-	                         Window_context* ctx = NULL, 
+	                         Window_context* ctx = NULL,
 	                         bool dist = false) :
 	                         Item_func_window(name, arg1, ctx, dist){}
 	virtual bool fix_fields(THD* thd, Item** ref);
@@ -253,8 +298,8 @@ public:
 class Item_func_window_rownumber : public Item_func_window
 {
 public:
-	Item_func_window_rownumber (LEX_STRING name, 
-	                            Window_context* ctx = NULL, 
+	Item_func_window_rownumber (LEX_STRING name,
+	                            Window_context* ctx = NULL,
 	                            bool dist = false) :
 	                            Item_func_window(name, ctx, dist){}
 	virtual bool fix_fields(THD* thd, Item** ref);
@@ -264,9 +309,9 @@ public:
 class Item_func_window_ntile : public Item_func_window
 {
 public:
-	Item_func_window_ntile (LEX_STRING name, 
+	Item_func_window_ntile (LEX_STRING name,
 	                        Item *arg1,
-	                        Window_context* ctx = NULL, 
+	                        Window_context* ctx = NULL,
 	                        bool dist = false) :
 	                        Item_func_window(name, arg1, ctx, dist){}
 	virtual bool fix_fields(THD* thd, Item** ref);
@@ -276,7 +321,7 @@ public:
 class Item_func_window_percentile : public Item_func_window
 {
 public:
-	Item_func_window_percentile (LEX_STRING name, 
+	Item_func_window_percentile (LEX_STRING name,
 	                             Item *arg1,
 	                             SQL_LIST* order,
 	                             Window_context* ctx = NULL) :

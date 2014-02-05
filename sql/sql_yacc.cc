@@ -1375,7 +1375,7 @@ void my_parse_error(const char *s)
   The parser will abort immediately after invoking this callback.
 
   This function is not for use in semantic actions and is internal to
-  the parser, as it performs some pre-return cleanup. 
+  the parser, as it performs some pre-return cleanup.
   In semantic actions, please use my_parse_error or my_error to
   push an error into the error stack and MYSQL_YYABORT
   to abort from the parser.
@@ -1834,11 +1834,11 @@ static bool add_create_index_prepare (LEX *lex, Table_ident *table)
 }
 
 
-static bool add_create_index (LEX *lex, Key::Keytype type, const char *name, 
+static bool add_create_index (LEX *lex, Key::Keytype type, const char *name,
   KEY_CREATE_INFO *info= NULL, bool generated= 0)
 {
   Key *key;
-  key= new Key(type, name, info ? info : &lex->key_create_info, generated, 
+  key= new Key(type, name, info ? info : &lex->key_create_info, generated,
                lex->col_list);
   if (key == NULL)
     return TRUE;
@@ -16665,7 +16665,7 @@ yyreduce:
   case 85:
 #line 1801 "sql_yacc.yy"
     {
-            Lex->mi.ssl= (yyvsp[(3) - (3)].ulong_num) ? 
+            Lex->mi.ssl= (yyvsp[(3) - (3)].ulong_num) ?
               LEX_MASTER_INFO::SSL_ENABLE : LEX_MASTER_INFO::SSL_DISABLE;
           }
     break;
@@ -16724,10 +16724,10 @@ yyreduce:
 #line 1839 "sql_yacc.yy"
     {
             Lex->mi.pos = (yyvsp[(3) - (3)].ulonglong_number);
-            /* 
+            /*
                If the user specified a value < BIN_LOG_HEADER_SIZE, adjust it
-               instead of causing subsequent errors. 
-               We need to do it in this file, because only there we know that 
+               instead of causing subsequent errors.
+               We need to do it in this file, because only there we know that
                MASTER_LOG_POS has been explicitely specified. On the contrary
                in change_master() (sql_repl.cc) we cannot distinguish between 0
                (MASTER_LOG_POS explicitely specified as 0) and 0 (unspecified),
@@ -16780,7 +16780,7 @@ yyreduce:
 #line 1888 "sql_yacc.yy"
     {
             LEX *lex= YYTHD->lex;
-            lex->current_select= &lex->select_lex; 
+            lex->current_select= &lex->select_lex;
             if ((lex->create_info.used_fields & HA_CREATE_USED_ENGINE) &&
                 !lex->create_info.db_type)
             {
@@ -17023,7 +17023,7 @@ yyreduce:
 #line 2075 "sql_yacc.yy"
     {
             Lex->event_parse_data->status= Event_parse_data::SLAVESIDE_DISABLED;
-            Lex->event_parse_data->status_changed= true; 
+            Lex->event_parse_data->status_changed= true;
             (yyval.num)= 1;
           }
     break;
@@ -17126,7 +17126,7 @@ yyreduce:
               my_error(ER_EVENT_RECURSION_FORBIDDEN, MYF(0));
               MYSQL_YYABORT;
             }
-              
+
             if (!(lex->sphead= new sp_head()))
               MYSQL_YYABORT;
 
@@ -17481,7 +17481,7 @@ yyreduce:
             uint num_vars= pctx->context_var_count();
             enum enum_field_types var_type= (enum enum_field_types) (yyvsp[(4) - (5)].num);
             Item *dflt_value_item= (yyvsp[(5) - (5)].item);
-            
+
             if (!dflt_value_item)
             {
               dflt_value_item= new (thd->mem_root) Item_null();
@@ -17489,27 +17489,27 @@ yyreduce:
                 MYSQL_YYABORT;
               /* QQ Set to the var_type with null_value? */
             }
-            
+
             for (uint i = num_vars-(yyvsp[(2) - (5)].num) ; i < num_vars ; i++)
             {
               uint var_idx= pctx->var_context2runtime(i);
               sp_variable_t *spvar= pctx->find_variable(var_idx);
-            
+
               if (!spvar)
                 MYSQL_YYABORT;
-            
+
               spvar->type= var_type;
               spvar->dflt= dflt_value_item;
-            
+
               if (lex->sphead->fill_field_definition(YYTHD, lex, var_type,
                                                      &spvar->field_def))
               {
                 MYSQL_YYABORT;
               }
-            
+
               spvar->field_def.field_name= spvar->name.str;
               spvar->field_def.pack_flag |= FIELDFLAG_MAYBE_NULL;
-            
+
               /* The last instruction is responsible for freeing LEX. */
 
               sp_instr_set *is= new sp_instr_set(lex->sphead->instructions(),
@@ -18587,15 +18587,15 @@ yyreduce:
 
   case 315:
 #line 3547 "sql_yacc.yy"
-    { 
-            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_ADD_FILE; 
+    {
+            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_ADD_FILE;
           }
     break;
 
   case 316:
 #line 3553 "sql_yacc.yy"
-    { 
-            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_DROP_FILE; 
+    {
+            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_DROP_FILE;
           }
     break;
 
@@ -19092,7 +19092,7 @@ yyreduce:
             char *func_string= (char*) sql_memdup((yyvsp[(2) - (5)].simple_string)+1, expr_len);
             if (func_string == NULL)
               MYSQL_YYABORT;
-            lex->part_info->subpart_func_string= func_string;        
+            lex->part_info->subpart_func_string= func_string;
             lex->part_info->subpart_func_len= expr_len;
           }
     break;
@@ -19104,7 +19104,7 @@ yyreduce:
 
   case 427:
 #line 4122 "sql_yacc.yy"
-    { 
+    {
             uint no_parts= (yyvsp[(2) - (2)].ulong_num);
             LEX *lex= Lex;
             if (no_parts == 0)
@@ -19418,7 +19418,7 @@ yyreduce:
             context->table_list= 0;
             thd->where= "partition function";
 
-            part_elem_value *value_ptr= 
+            part_elem_value *value_ptr=
               (part_elem_value*)sql_alloc(sizeof(part_elem_value));
             if (!value_ptr)
             {
@@ -19459,7 +19459,7 @@ yyreduce:
               my_parse_error(ER(ER_INCONSISTENT_TYPE_OF_FUNCTIONS_ERROR));
               MYSQL_YYABORT;
             }
-            (yyval.p_elem_value)= value_ptr; 
+            (yyval.p_elem_value)= value_ptr;
           }
     break;
 
@@ -19471,7 +19471,7 @@ yyreduce:
             {
               /*
                 We come here when we have defined subpartitions on the first
-                partition but not on all the subsequent partitions. 
+                partition but not on all the subsequent partitions.
               */
               my_parse_error(ER(ER_PARTITION_WRONG_NO_SUBPART_ERROR));
               MYSQL_YYABORT;
@@ -20145,7 +20145,7 @@ yyreduce:
             if (key == NULL)
               MYSQL_YYABORT;
             lex->alter_info.key_list.push_back(key);
-            if (add_create_index (lex, Key::MULTIPLE, key_name, 
+            if (add_create_index (lex, Key::MULTIPLE, key_name,
                                   &default_key_create_info, 1))
               MYSQL_YYABORT;
             /* Only used for ALTER TABLE. Ignored otherwise. */
@@ -20200,7 +20200,7 @@ yyreduce:
             LEX *lex=Lex;
             if (add_field_to_list(lex->thd, &(yyvsp[(1) - (4)].lex_str), (enum enum_field_types) (yyvsp[(3) - (4)].num),
                                   lex->length,lex->dec,lex->type,
-                                  lex->default_value, lex->on_update_value, 
+                                  lex->default_value, lex->on_update_value,
                                   &lex->comment,
                                   lex->change,&lex->interval_list,lex->charset,
                                   lex->uint_geom_type))
@@ -20364,7 +20364,7 @@ yyreduce:
               (yyval.num)=MYSQL_TYPE_DATETIME;
             else
             {
-              /* 
+              /*
                 Unlike other types TIMESTAMP fields are NOT NULL by default.
               */
               Lex->type|= NOT_NULL_FLAG;
@@ -20789,7 +20789,7 @@ yyreduce:
 
   case 662:
 #line 5315 "sql_yacc.yy"
-    { 
+    {
             LEX *lex=Lex;
             lex->type|= AUTO_INCREMENT_FLAG | NOT_NULL_FLAG | UNIQUE_FLAG;
             lex->alter_info.flags|= ALTER_ADD_INDEX;
@@ -20809,7 +20809,7 @@ yyreduce:
 #line 5327 "sql_yacc.yy"
     {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_FLAG; 
+            lex->type|= UNIQUE_FLAG;
             lex->alter_info.flags|= ALTER_ADD_INDEX;
           }
     break;
@@ -20818,8 +20818,8 @@ yyreduce:
 #line 5333 "sql_yacc.yy"
     {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_KEY_FLAG; 
-            lex->alter_info.flags|= ALTER_ADD_INDEX; 
+            lex->type|= UNIQUE_KEY_FLAG;
+            lex->alter_info.flags|= ALTER_ADD_INDEX;
           }
     break;
 
@@ -21371,7 +21371,7 @@ yyreduce:
             lex->name.str= 0;
             lex->name.length= 0;
             lex->sql_command= SQLCOM_ALTER_TABLE;
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
             if (!lex->select_lex.add_table_to_list(thd, (yyvsp[(4) - (4)].table), NULL,
                                                    TL_OPTION_UPDATING))
               MYSQL_YYABORT;
@@ -21518,7 +21518,7 @@ yyreduce:
   case 786:
 #line 5835 "sql_yacc.yy"
     {
-            /* 
+            /*
               It is safe to use Lex->spname because
               ALTER EVENT xxx RENATE TO yyy DO ALTER EVENT RENAME TO
               is not allowed. Lex->spname is used in the case of RENAME TO
@@ -21624,7 +21624,7 @@ yyreduce:
               Use lex's spname to hold the new name.
               The original name is in the Event_parse_data object
             */
-            Lex->spname= (yyvsp[(3) - (3)].spname); 
+            Lex->spname= (yyvsp[(3) - (3)].spname);
             (yyval.num)= 1;
           }
     break;
@@ -22535,7 +22535,7 @@ yyreduce:
   case 945:
 #line 6600 "sql_yacc.yy"
     {
-            if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (2)].table), NULL, 0, TL_READ, 
+            if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (2)].table), NULL, 0, TL_READ,
                                            Select->pop_index_hints()))
               MYSQL_YYABORT;
           }
@@ -22577,9 +22577,9 @@ yyreduce:
 #line 6637 "sql_yacc.yy"
     {
             Lex->select_lex.alloc_index_hints(YYTHD);
-            Select->set_index_hint_type(INDEX_HINT_USE, 
-                                        global_system_variables.old_mode ? 
-                                        INDEX_HINT_MASK_JOIN : 
+            Select->set_index_hint_type(INDEX_HINT_USE,
+                                        global_system_variables.old_mode ?
+                                        INDEX_HINT_MASK_JOIN :
                                         INDEX_HINT_MASK_ALL);
           }
     break;
@@ -22686,7 +22686,7 @@ yyreduce:
 #line 6757 "sql_yacc.yy"
     {
             Select->context.table_list=
-              Select->context.first_name_resolution_table= 
+              Select->context.first_name_resolution_table=
                 (TABLE_LIST *) Select->table_list.first;
           }
     break;
@@ -23161,7 +23161,7 @@ yyreduce:
 
   case 1029:
 #line 7136 "sql_yacc.yy"
-    { 
+    {
             (yyvsp[(6) - (7)].item_list)->push_front((yyvsp[(4) - (7)].item));
             (yyvsp[(6) - (7)].item_list)->push_front((yyvsp[(1) - (7)].item));
             (yyval.item)= new (YYTHD->mem_root) Item_func_in(*(yyvsp[(6) - (7)].item_list));
@@ -23495,7 +23495,7 @@ yyreduce:
 
   case 1087:
 #line 7392 "sql_yacc.yy"
-    { 
+    {
             (yyval.item)= new (YYTHD->mem_root) Item_singlerow_subselect((yyvsp[(2) - (3)].select_lex));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
@@ -24410,7 +24410,7 @@ yyreduce:
             builder= find_native_window_function_builder(thd, (yyvsp[(1) - (5)].lex_str));
             if (builder)
             {
-              ((Create_window_func*)builder)->respectNulls = 1;            
+              ((Create_window_func*)builder)->respectNulls = 1;
               item= builder->create(thd, (yyvsp[(1) - (5)].lex_str), (yyvsp[(3) - (5)].item_list));
               if (!item)
                 MYSQL_YYABORT;
@@ -24576,7 +24576,7 @@ yyreduce:
 #line 8216 "sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MIN") };
-            (yyval.item)= new (YYTHD->mem_root) Item_func_window(funcname, (yyvsp[(3) - (5)].item), (yyvsp[(5) - (5)].Window_context));
+            (yyval.item)= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, (yyvsp[(3) - (5)].item), (yyvsp[(5) - (5)].Window_context));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -24593,7 +24593,7 @@ yyreduce:
               MYSQL_YYABORT;
             }
             LEX_STRING funcname= { C_STRING_WITH_LEN("MIN_DISTINCT") };
-            (yyval.item)= new (YYTHD->mem_root) Item_func_window(funcname, (yyvsp[(4) - (6)].item), (yyvsp[(6) - (6)].Window_context), true);
+            (yyval.item)= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, (yyvsp[(4) - (6)].item), (yyvsp[(6) - (6)].Window_context), true);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -24604,7 +24604,7 @@ yyreduce:
 #line 8238 "sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MAX") };
-            (yyval.item)= new (YYTHD->mem_root) Item_func_window(funcname, (yyvsp[(3) - (5)].item), (yyvsp[(5) - (5)].Window_context));
+            (yyval.item)= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, (yyvsp[(3) - (5)].item), (yyvsp[(5) - (5)].Window_context));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -24621,7 +24621,7 @@ yyreduce:
               MYSQL_YYABORT;
             }
             LEX_STRING funcname= { C_STRING_WITH_LEN("MAX_DISTINCT") };
-            (yyval.item)= new (YYTHD->mem_root) Item_func_window(funcname, (yyvsp[(4) - (6)].item), (yyvsp[(6) - (6)].Window_context), true);
+            (yyval.item)= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, (yyvsp[(4) - (6)].item), (yyvsp[(6) - (6)].Window_context), true);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -24788,38 +24788,38 @@ yyreduce:
 
   case 1210:
 #line 8371 "sql_yacc.yy"
-    { 
+    {
             IDB_set_error(YYTHD, logging::ERR_WF_WINDOW_WITHOUT_ORDER, NULL, 0);
-            MYSQL_YYABORT; 
+            MYSQL_YYABORT;
           }
     break;
 
   case 1211:
 #line 8376 "sql_yacc.yy"
-    { 
+    {
             /*
             If RANGE is specified, order list shall contain a single <sort key> SK.
             The declared type of SK shall be numeric, date, or interval. The declared type of UVS shall be
             numeric if the declared type of SK is numeric -- reference ANSI-SQL 2003
             */
-            if ((yyvsp[(3) - (4)].list) && (yyvsp[(3) - (4)].list)->elements > 1 && (yyvsp[(4) - (4)].frame) && (yyvsp[(4) - (4)].frame)->isRange &&  
-                (((yyvsp[(4) - (4)].frame)->start && (yyvsp[(4) - (4)].frame)->start->bound == PRECEDING) || 
+            if ((yyvsp[(3) - (4)].list) && (yyvsp[(3) - (4)].list)->elements > 1 && (yyvsp[(4) - (4)].frame) && (yyvsp[(4) - (4)].frame)->isRange &&
+                (((yyvsp[(4) - (4)].frame)->start && (yyvsp[(4) - (4)].frame)->start->bound == PRECEDING) ||
                 ((yyvsp[(4) - (4)].frame)->end && (yyvsp[(4) - (4)].frame)->end->bound == FOLLOWING)))
             {
               IDB_set_error(YYTHD, logging::ERR_WF_INVALID_ORDER_KEY, NULL, 0);
               MYSQL_YYABORT;
             }
             (yyval.ordering) = new Ordering();
-            (yyval.ordering)->orders = (yyvsp[(3) - (4)].list); 
+            (yyval.ordering)->orders = (yyvsp[(3) - (4)].list);
             (yyval.ordering)->frame = (yyvsp[(4) - (4)].frame);
           }
     break;
 
   case 1212:
 #line 8397 "sql_yacc.yy"
-    { 
+    {
             if (add_to_list(YYTHD, *(yyvsp[(1) - (5)].list), (yyvsp[(3) - (5)].item),(bool) (yyvsp[(4) - (5)].num), (uint)(yyvsp[(5) - (5)].num)))
-              MYSQL_YYABORT; 
+              MYSQL_YYABORT;
             (yyval.list) = (yyvsp[(1) - (5)].list);
           }
     break;
@@ -24833,8 +24833,8 @@ yyreduce:
             (yyval.list)->next= &((yyval.list)->first);
             if ((yyval.list) == NULL)
               MYSQL_YYABORT;
-            if (add_to_list(YYTHD, *(yyval.list), (yyvsp[(1) - (3)].item), (bool) (yyvsp[(2) - (3)].num), (uint) (yyvsp[(3) - (3)].num))) 
-              MYSQL_YYABORT; 
+            if (add_to_list(YYTHD, *(yyval.list), (yyvsp[(1) - (3)].item), (bool) (yyvsp[(2) - (3)].num), (uint) (yyvsp[(3) - (3)].num)))
+              MYSQL_YYABORT;
           }
     break;
 
@@ -25140,7 +25140,7 @@ yyreduce:
               (yyvsp[(2) - (4)].item)->is_autogenerated_name= FALSE;
               (yyvsp[(2) - (4)].item)->set_name((yyvsp[(4) - (4)].lex_str).str, (yyvsp[(4) - (4)].lex_str).length, system_charset_info);
             }
-            /* 
+            /*
                A field has to have its proper name in order for name
                resolution to work, something we are only guaranteed if we
                parse it out. If we hijack the input stream with
@@ -25779,10 +25779,10 @@ yyreduce:
 
   case 1324:
 #line 9169 "sql_yacc.yy"
-    { 
-            add_join_natural((yyvsp[(1) - (10)].table_list),(yyvsp[(5) - (10)].table_list),(yyvsp[(9) - (10)].string_list),Select); 
-            (yyvsp[(5) - (10)].table_list)->outer_join|=JOIN_TYPE_LEFT; 
-            (yyval.table_list)=(yyvsp[(5) - (10)].table_list); 
+    {
+            add_join_natural((yyvsp[(1) - (10)].table_list),(yyvsp[(5) - (10)].table_list),(yyvsp[(9) - (10)].string_list),Select);
+            (yyvsp[(5) - (10)].table_list)->outer_join|=JOIN_TYPE_LEFT;
+            (yyval.table_list)=(yyvsp[(5) - (10)].table_list);
           }
     break;
 
@@ -26055,8 +26055,8 @@ yyreduce:
   case 1347:
 #line 9400 "sql_yacc.yy"
     {
-            (yyval.num)= global_system_variables.old_mode ? 
-                  INDEX_HINT_MASK_JOIN : INDEX_HINT_MASK_ALL; 
+            (yyval.num)= global_system_variables.old_mode ?
+                  INDEX_HINT_MASK_JOIN : INDEX_HINT_MASK_ALL;
           }
     break;
 
@@ -26223,8 +26223,8 @@ yyreduce:
 
   case 1385:
 #line 9500 "sql_yacc.yy"
-    { 
-                                  (yyval.interval_time_st)=INTERVAL_MICROSECOND; 
+    {
+                                  (yyval.interval_time_st)=INTERVAL_MICROSECOND;
                                   /*
                                     FRAC_SECOND was mistakenly implemented with
                                     a wrong resolution. According to the ODBC
@@ -26470,8 +26470,8 @@ yyreduce:
               */
               SELECT_LEX *first_sl= unit->first_select();
               if (!unit->is_union() &&
-                  (first_sl->order_list.elements || 
-                   first_sl->select_limit) &&            
+                  (first_sl->order_list.elements ||
+                   first_sl->select_limit) &&
                   unit->add_fake_select_lex(lex->thd))
                 MYSQL_YYABORT;
             }
@@ -26775,7 +26775,7 @@ yyreduce:
 #line 9916 "sql_yacc.yy"
     {
             LEX *lex=Lex;
-            if (!lex->describe && 
+            if (!lex->describe &&
                   (!(lex->result= new select_dumpvar(lex->nest_level))))
               MYSQL_YYABORT;
           }
@@ -26795,7 +26795,7 @@ yyreduce:
 #line 9933 "sql_yacc.yy"
     {
             LEX *lex=Lex;
-            if (lex->result) 
+            if (lex->result)
             {
               my_var *var= new my_var((yyvsp[(2) - (2)].lex_str),0,0,(enum_field_types)0);
               if (var == NULL)
@@ -27121,7 +27121,7 @@ yyreduce:
     {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_INSERT;
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
             mysql_init_select(lex);
             /* for subselects */
             lex->lock_option= TL_READ_DEFAULT;
@@ -27384,7 +27384,7 @@ yyreduce:
             mysql_init_select(lex);
             lex->sql_command= SQLCOM_UPDATE;
             lex->lock_option= TL_UNLOCK; /* Will be set later */
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
           }
     break;
 
@@ -27427,7 +27427,7 @@ yyreduce:
 #line 10450 "sql_yacc.yy"
     {
           LEX *lex= Lex;
-          if (lex->update_list.push_back((yyvsp[(1) - (3)].item)) || 
+          if (lex->update_list.push_back((yyvsp[(1) - (3)].item)) ||
               lex->value_list.push_back((yyvsp[(3) - (3)].item)))
               MYSQL_YYABORT;
           }
@@ -27481,7 +27481,7 @@ yyreduce:
 
   case 1583:
 #line 10490 "sql_yacc.yy"
-    { 
+    {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
               MYSQL_YYABORT;
           }
@@ -27494,7 +27494,7 @@ yyreduce:
 
   case 1585:
 #line 10497 "sql_yacc.yy"
-    { 
+    {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
               MYSQL_YYABORT;
           }
@@ -27533,7 +27533,7 @@ yyreduce:
               MYSQL_YYABORT;
             if (!Select->add_table_to_list(YYTHD,
                                            ti,
-                                           (yyvsp[(5) - (5)].lex_str_ptr), 
+                                           (yyvsp[(5) - (5)].lex_str_ptr),
                                            TL_OPTION_UPDATING | TL_OPTION_ALIAS,
                                            Lex->lock_option))
               MYSQL_YYABORT;
@@ -27912,7 +27912,7 @@ yyreduce:
 
   case 1645:
 #line 10798 "sql_yacc.yy"
-    { 
+    {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_SHOW_PROFILE;
             if (prepare_schema_table(YYTHD, lex, NULL, SCH_PROFILES) != 0)
@@ -29482,7 +29482,7 @@ yyreduce:
               if (thd->convert_string(&(yyval.lex_str), thd->variables.collation_connection,
                                   (yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length, thd->charset()))
                 MYSQL_YYABORT;
-            } 
+            }
           }
     break;
 
@@ -29594,8 +29594,8 @@ yyreduce:
     {
             if (!((yyval.lex_user)=(LEX_USER*) YYTHD->alloc(sizeof(st_lex_user))))
               MYSQL_YYABORT;
-            /* 
-              empty LEX_USER means current_user and 
+            /*
+              empty LEX_USER means current_user and
               will be handled in the  get_current_user() function
               later
             */
@@ -31576,7 +31576,7 @@ yyreduce:
               MYSQL_YYABORT;
             }
             if (lex->sphead && lex->sphead->m_type == TYPE_ENUM_TRIGGER &&
-                (!my_strcasecmp(system_charset_info, (yyvsp[(1) - (3)].lex_str).str, "NEW") || 
+                (!my_strcasecmp(system_charset_info, (yyvsp[(1) - (3)].lex_str).str, "NEW") ||
                  !my_strcasecmp(system_charset_info, (yyvsp[(1) - (3)].lex_str).str, "OLD")))
             {
               if ((yyvsp[(1) - (3)].lex_str).str[0]=='O' || (yyvsp[(1) - (3)].lex_str).str[0]=='o')
@@ -32019,8 +32019,8 @@ yyreduce:
 
   case 2244:
 #line 13169 "sql_yacc.yy"
-    { 
-            Lex->all_privileges= 1; 
+    {
+            Lex->all_privileges= 1;
             Lex->grant= GLOBAL_ACLS;
           }
     break;
@@ -32341,7 +32341,7 @@ yyreduce:
             {
               if (YYTHD->variables.old_passwords)
               {
-                char *buff= 
+                char *buff=
                   (char *) YYTHD->alloc(SCRAMBLED_PASSWORD_CHAR_LENGTH_323+1);
                 if (buff == NULL)
                   MYSQL_YYABORT;
@@ -32351,7 +32351,7 @@ yyreduce:
               }
               else
               {
-                char *buff= 
+                char *buff=
                   (char *) YYTHD->alloc(SCRAMBLED_PASSWORD_CHAR_LENGTH+1);
                 if (buff == NULL)
                   MYSQL_YYABORT;
@@ -32562,7 +32562,7 @@ yyreduce:
     {
             LEX *lex=Lex;
             lex->sql_command= SQLCOM_COMMIT;
-            lex->tx_chain= (yyvsp[(3) - (4)].num); 
+            lex->tx_chain= (yyvsp[(3) - (4)].num);
             lex->tx_release= (yyvsp[(4) - (4)].num);
           }
     break;
@@ -32572,7 +32572,7 @@ yyreduce:
     {
             LEX *lex=Lex;
             lex->sql_command= SQLCOM_ROLLBACK;
-            lex->tx_chain= (yyvsp[(3) - (4)].num); 
+            lex->tx_chain= (yyvsp[(3) - (4)].num);
             lex->tx_release= (yyvsp[(4) - (4)].num);
           }
     break;
@@ -32613,11 +32613,11 @@ yyreduce:
 #line 13572 "sql_yacc.yy"
     {
             LEX *lex=Lex;
-            if (lex->result && 
+            if (lex->result &&
                (lex->result->get_nest_level() == -1 ||
                 lex->result->get_nest_level() == lex->nest_level))
               {
-                /* 
+                /*
                    Only the last SELECT can have INTO unless the INTO and UNION
                    are at different nest levels. In version 5.1 and above, INTO
                    will onle be allowed at top level.
@@ -32742,11 +32742,11 @@ yyreduce:
               my_parse_error(ER(ER_SYNTAX_ERROR));
               MYSQL_YYABORT;
             }
-            /* 
+            /*
               we are making a "derived table" for the parenthesis
-              as we need to have a lex level to fit the union 
-              after the parenthesis, e.g. 
-              (SELECT .. ) UNION ...  becomes 
+              as we need to have a lex level to fit the union
+              after the parenthesis, e.g.
+              (SELECT .. ) UNION ...  becomes
               SELECT * FROM ((SELECT ...) UNION ...)
             */
             if (mysql_new_select(Lex, 1))

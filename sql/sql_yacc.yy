@@ -164,7 +164,7 @@ void my_parse_error(const char *s)
   The parser will abort immediately after invoking this callback.
 
   This function is not for use in semantic actions and is internal to
-  the parser, as it performs some pre-return cleanup. 
+  the parser, as it performs some pre-return cleanup.
   In semantic actions, please use my_parse_error or my_error to
   push an error into the error stack and MYSQL_YYABORT
   to abort from the parser.
@@ -623,11 +623,11 @@ static bool add_create_index_prepare (LEX *lex, Table_ident *table)
 }
 
 
-static bool add_create_index (LEX *lex, Key::Keytype type, const char *name, 
+static bool add_create_index (LEX *lex, Key::Keytype type, const char *name,
   KEY_CREATE_INFO *info= NULL, bool generated= 0)
 {
   Key *key;
-  key= new Key(type, name, info ? info : &lex->key_create_info, generated, 
+  key= new Key(type, name, info ? info : &lex->key_create_info, generated,
                lex->col_list);
   if (key == NULL)
     return TRUE;
@@ -1484,7 +1484,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
         single_multi table_wild_list table_wild_one opt_wild
         union_clause union_list
         precision subselect_start opt_and charset
-        subselect_end select_var_list select_var_list_init help 
+        subselect_end select_var_list select_var_list_init help
         field_length opt_field_length
         opt_extended_describe
         prepare prepare_src execute deallocate
@@ -1497,8 +1497,8 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
         view_suid view_tail view_list_opt view_list view_select
         view_check_option trigger_tail sp_tail sf_tail udf_tail event_tail
         install uninstall partition_entry binlog_base64_event
-        init_key_options normal_key_options normal_key_opts all_key_opt 
-        spatial_key_options fulltext_key_options normal_key_opt 
+        init_key_options normal_key_options normal_key_opts all_key_opt
+        spatial_key_options fulltext_key_options normal_key_opt
         fulltext_key_opt spatial_key_opt fulltext_key_opts spatial_key_opts
         key_using_alg
         server_def server_options_list server_option
@@ -1799,7 +1799,7 @@ master_def:
           }
         | MASTER_SSL_SYM EQ ulong_num
           {
-            Lex->mi.ssl= $3 ? 
+            Lex->mi.ssl= $3 ?
               LEX_MASTER_INFO::SSL_ENABLE : LEX_MASTER_INFO::SSL_DISABLE;
           }
         | MASTER_SSL_CA_SYM EQ TEXT_STRING_sys
@@ -1838,10 +1838,10 @@ master_file_def:
         | MASTER_LOG_POS_SYM EQ ulonglong_num
           {
             Lex->mi.pos = $3;
-            /* 
+            /*
                If the user specified a value < BIN_LOG_HEADER_SIZE, adjust it
-               instead of causing subsequent errors. 
-               We need to do it in this file, because only there we know that 
+               instead of causing subsequent errors.
+               We need to do it in this file, because only there we know that
                MASTER_LOG_POS has been explicitely specified. On the contrary
                in change_master() (sql_repl.cc) we cannot distinguish between 0
                (MASTER_LOG_POS explicitely specified as 0) and 0 (unspecified),
@@ -1887,7 +1887,7 @@ create:
           create2
           {
             LEX *lex= YYTHD->lex;
-            lex->current_select= &lex->select_lex; 
+            lex->current_select= &lex->select_lex;
             if ((lex->create_info.used_fields & HA_CREATE_USED_ENGINE) &&
                 !lex->create_info.db_type)
             {
@@ -1955,7 +1955,7 @@ create:
           {
             Lex->sql_command = SQLCOM_CREATE_USER;
           }
-        | CREATE LOGFILE_SYM GROUP_SYM logfile_group_info 
+        | CREATE LOGFILE_SYM GROUP_SYM logfile_group_info
           {
             Lex->alter_tablespace_info->ts_cmd_type= CREATE_LOGFILE_GROUP;
           }
@@ -2074,7 +2074,7 @@ opt_ev_status:
         | DISABLE_SYM ON SLAVE
           {
             Lex->event_parse_data->status= Event_parse_data::SLAVESIDE_DISABLED;
-            Lex->event_parse_data->status_changed= true; 
+            Lex->event_parse_data->status_changed= true;
             $$= 1;
           }
         | DISABLE_SYM
@@ -2164,7 +2164,7 @@ ev_sql_stmt:
               my_error(ER_EVENT_RECURSION_FORBIDDEN, MYF(0));
               MYSQL_YYABORT;
             }
-              
+
             if (!(lex->sphead= new sp_head()))
               MYSQL_YYABORT;
 
@@ -2499,7 +2499,7 @@ sp_decl:
             uint num_vars= pctx->context_var_count();
             enum enum_field_types var_type= (enum enum_field_types) $4;
             Item *dflt_value_item= $5;
-            
+
             if (!dflt_value_item)
             {
               dflt_value_item= new (thd->mem_root) Item_null();
@@ -2507,27 +2507,27 @@ sp_decl:
                 MYSQL_YYABORT;
               /* QQ Set to the var_type with null_value? */
             }
-            
+
             for (uint i = num_vars-$2 ; i < num_vars ; i++)
             {
               uint var_idx= pctx->var_context2runtime(i);
               sp_variable_t *spvar= pctx->find_variable(var_idx);
-            
+
               if (!spvar)
                 MYSQL_YYABORT;
-            
+
               spvar->type= var_type;
               spvar->dflt= dflt_value_item;
-            
+
               if (lex->sphead->fill_field_definition(YYTHD, lex, var_type,
                                                      &spvar->field_def))
               {
                 MYSQL_YYABORT;
               }
-            
+
               spvar->field_def.field_name= spvar->name.str;
               spvar->field_def.pack_flag |= FIELDFLAG_MAYBE_NULL;
-            
+
               /* The last instruction is responsible for freeing LEX. */
 
               sp_instr_set *is= new sp_instr_set(lex->sphead->instructions(),
@@ -2828,7 +2828,7 @@ sp_proc_stmt_if:
           sp_if END IF
           { Lex->sphead->do_cont_backpatch(); }
         ;
-        
+
 sp_proc_stmt_statement:
           {
             THD *thd= YYTHD;
@@ -2886,7 +2886,7 @@ sp_proc_stmt_statement:
         ;
 
 sp_proc_stmt_return:
-          RETURN_SYM 
+          RETURN_SYM
           { Lex->sphead->reset_lex(YYTHD); }
           expr
           {
@@ -3436,7 +3436,7 @@ sp_unlabeled_control:
                 lex->sphead->add_instr(i))
               MYSQL_YYABORT;
 	  }
-        | WHILE_SYM 
+        | WHILE_SYM
           { Lex->sphead->reset_lex(YYTHD); }
           expr DO_SYM
           {
@@ -3465,7 +3465,7 @@ sp_unlabeled_control:
               MYSQL_YYABORT;
             lex->sphead->do_cont_backpatch();
           }
-        | REPEAT_SYM sp_proc_stmts1 UNTIL_SYM 
+        | REPEAT_SYM sp_proc_stmts1 UNTIL_SYM
           { Lex->sphead->reset_lex(YYTHD); }
           expr END REPEAT_SYM
           {
@@ -3544,14 +3544,14 @@ alter_tablespace_info:
           tablespace_name
           ADD ts_datafile
           alter_tablespace_option_list
-          { 
-            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_ADD_FILE; 
+          {
+            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_ADD_FILE;
           }
         | tablespace_name
           DROP ts_datafile
           alter_tablespace_option_list
-          { 
-            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_DROP_FILE; 
+          {
+            Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_DROP_FILE;
           }
         ;
 
@@ -4110,7 +4110,7 @@ sub_part_func:
             char *func_string= (char*) sql_memdup($2+1, expr_len);
             if (func_string == NULL)
               MYSQL_YYABORT;
-            lex->part_info->subpart_func_string= func_string;        
+            lex->part_info->subpart_func_string= func_string;
             lex->part_info->subpart_func_len= expr_len;
           }
         ;
@@ -4119,7 +4119,7 @@ sub_part_func:
 opt_no_parts:
           /* empty */ {}
         | PARTITIONS_SYM real_ulong_num
-          { 
+          {
             uint no_parts= $2;
             LEX *lex= Lex;
             if (no_parts == 0)
@@ -4347,9 +4347,9 @@ max_value_sym:
           MAX_VALUE_SYM
         | '(' MAX_VALUE_SYM ')'
         ;
-        
+
 part_range_func:
-          '(' part_bit_expr ')' 
+          '(' part_bit_expr ')'
           {
             partition_info *part_info= Lex->part_info;
             if (!($2->unsigned_flag))
@@ -4393,7 +4393,7 @@ part_bit_expr:
             context->table_list= 0;
             thd->where= "partition function";
 
-            part_elem_value *value_ptr= 
+            part_elem_value *value_ptr=
               (part_elem_value*)sql_alloc(sizeof(part_elem_value));
             if (!value_ptr)
             {
@@ -4434,7 +4434,7 @@ part_bit_expr:
               my_parse_error(ER(ER_INCONSISTENT_TYPE_OF_FUNCTIONS_ERROR));
               MYSQL_YYABORT;
             }
-            $$= value_ptr; 
+            $$= value_ptr;
           }
         ;
 
@@ -4446,7 +4446,7 @@ opt_sub_partition:
             {
               /*
                 We come here when we have defined subpartitions on the first
-                partition but not on all the subsequent partitions. 
+                partition but not on all the subsequent partitions.
               */
               my_parse_error(ER(ER_PARTITION_WRONG_NO_SUBPART_ERROR));
               MYSQL_YYABORT;
@@ -4918,13 +4918,13 @@ key_def:
             if (add_create_index (Lex, $1, $2))
               MYSQL_YYABORT;
           }
-        | fulltext opt_key_or_index opt_ident init_key_options 
+        | fulltext opt_key_or_index opt_ident init_key_options
             '(' key_list ')' fulltext_key_options
           {
             if (add_create_index (Lex, $1, $3))
               MYSQL_YYABORT;
           }
-        | spatial opt_key_or_index opt_ident init_key_options 
+        | spatial opt_key_or_index opt_ident init_key_options
             '(' key_list ')' spatial_key_options
           {
             if (add_create_index (Lex, $1, $3))
@@ -4950,7 +4950,7 @@ key_def:
             if (key == NULL)
               MYSQL_YYABORT;
             lex->alter_info.key_list.push_back(key);
-            if (add_create_index (lex, Key::MULTIPLE, key_name, 
+            if (add_create_index (lex, Key::MULTIPLE, key_name,
                                   &default_key_create_info, 1))
               MYSQL_YYABORT;
             /* Only used for ALTER TABLE. Ignored otherwise. */
@@ -4999,7 +4999,7 @@ field_spec:
             LEX *lex=Lex;
             if (add_field_to_list(lex->thd, &$1, (enum enum_field_types) $3,
                                   lex->length,lex->dec,lex->type,
-                                  lex->default_value, lex->on_update_value, 
+                                  lex->default_value, lex->on_update_value,
                                   &lex->comment,
                                   lex->change,&lex->interval_list,lex->charset,
                                   lex->uint_geom_type))
@@ -5103,7 +5103,7 @@ type:
               $$=MYSQL_TYPE_DATETIME;
             else
             {
-              /* 
+              /*
                 Unlike other types TIMESTAMP fields are NOT NULL by default.
               */
               Lex->type|= NOT_NULL_FLAG;
@@ -5312,7 +5312,7 @@ attribute:
           }
         | AUTO_INC { Lex->type|= AUTO_INCREMENT_FLAG | NOT_NULL_FLAG; }
         | SERIAL_SYM DEFAULT VALUE_SYM
-          { 
+          {
             LEX *lex=Lex;
             lex->type|= AUTO_INCREMENT_FLAG | NOT_NULL_FLAG | UNIQUE_FLAG;
             lex->alter_info.flags|= ALTER_ADD_INDEX;
@@ -5326,14 +5326,14 @@ attribute:
         | UNIQUE_SYM
           {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_FLAG; 
+            lex->type|= UNIQUE_FLAG;
             lex->alter_info.flags|= ALTER_ADD_INDEX;
           }
         | UNIQUE_SYM KEY_SYM
           {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_KEY_FLAG; 
-            lex->alter_info.flags|= ALTER_ADD_INDEX; 
+            lex->type|= UNIQUE_KEY_FLAG;
+            lex->alter_info.flags|= ALTER_ADD_INDEX;
           }
         | COMMENT_SYM TEXT_STRING_sys { Lex->comment= $2; }
         | COLLATE_SYM collation_name
@@ -5720,7 +5720,7 @@ alter:
             lex->name.str= 0;
             lex->name.length= 0;
             lex->sql_command= SQLCOM_ALTER_TABLE;
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
             if (!lex->select_lex.add_table_to_list(thd, $4, NULL,
                                                    TL_OPTION_UPDATING))
               MYSQL_YYABORT;
@@ -5833,7 +5833,7 @@ alter:
           {}
         | ALTER definer_opt EVENT_SYM sp_name
           {
-            /* 
+            /*
               It is safe to use Lex->spname because
               ALTER EVENT xxx RENATE TO yyy DO ALTER EVENT RENAME TO
               is not allowed. Lex->spname is used in the case of RENAME TO
@@ -5908,7 +5908,7 @@ opt_ev_rename_to:
               Use lex's spname to hold the new name.
               The original name is in the Event_parse_data object
             */
-            Lex->spname= $3; 
+            Lex->spname= $3;
             $$= 1;
           }
         ;
@@ -6598,7 +6598,7 @@ keycache_list:
 assign_to_keycache:
           table_ident cache_keys_spec
           {
-            if (!Select->add_table_to_list(YYTHD, $1, NULL, 0, TL_READ, 
+            if (!Select->add_table_to_list(YYTHD, $1, NULL, 0, TL_READ,
                                            Select->pop_index_hints()))
               MYSQL_YYABORT;
           }
@@ -6636,9 +6636,9 @@ preload_keys:
 cache_keys_spec:
           {
             Lex->select_lex.alloc_index_hints(YYTHD);
-            Select->set_index_hint_type(INDEX_HINT_USE, 
-                                        global_system_variables.old_mode ? 
-                                        INDEX_HINT_MASK_JOIN : 
+            Select->set_index_hint_type(INDEX_HINT_USE,
+                                        global_system_variables.old_mode ?
+                                        INDEX_HINT_MASK_JOIN :
                                         INDEX_HINT_MASK_ALL);
           }
           cache_key_list_or_empty
@@ -6756,7 +6756,7 @@ select_from:
           opt_order_clause opt_limit_clause procedure_clause
           {
             Select->context.table_list=
-              Select->context.first_name_resolution_table= 
+              Select->context.first_name_resolution_table=
                 (TABLE_LIST *) Select->table_list.first;
           }
         | FROM DUAL_SYM where_clause opt_limit_clause
@@ -7071,7 +7071,7 @@ expr:
             $$= new (YYTHD->mem_root) Item_func_isnotnull($1);
             if ($$ == NULL)
               MYSQL_YYABORT;
-          }          
+          }
         | bool_pri
         ;
 
@@ -7133,7 +7133,7 @@ predicate:
               MYSQL_YYABORT;
           }
         | bit_expr IN_SYM '(' expr ',' expr_list ')'
-          { 
+          {
             $6->push_front($4);
             $6->push_front($1);
             $$= new (YYTHD->mem_root) Item_func_in(*$6);
@@ -7389,7 +7389,7 @@ simple_expr:
               MYSQL_YYABORT;
           }
         | '(' subselect ')'
-          { 
+          {
             $$= new (YYTHD->mem_root) Item_singlerow_subselect($2);
             if ($$ == NULL)
               MYSQL_YYABORT;
@@ -8072,7 +8072,7 @@ function_call_window:
             builder= find_native_window_function_builder(thd, $1);
             if (builder)
             {
-              ((Create_window_func*)builder)->respectNulls = 1;            
+              ((Create_window_func*)builder)->respectNulls = 1;
               item= builder->create(thd, $1, $3);
               if (!item)
                 MYSQL_YYABORT;
@@ -8122,7 +8122,7 @@ function_call_window:
             }
           }
 
-          // @infinidb the following window functions have the same name 
+          // @infinidb the following window functions have the same name
           // as aggregate functions, so each of them need specific rules to parse.
         | SUM_SYM '(' in_sum_expr ')' window_clause
           {
@@ -8215,7 +8215,7 @@ function_call_window:
         | MIN_SYM '(' in_sum_expr ')' window_clause
           {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MIN") };
-            $$= new (YYTHD->mem_root) Item_func_window(funcname, $3, $5);
+            $$= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, $3, $5);
             if ($$ == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -8229,7 +8229,7 @@ function_call_window:
               MYSQL_YYABORT;
             }
             LEX_STRING funcname= { C_STRING_WITH_LEN("MIN_DISTINCT") };
-            $$= new (YYTHD->mem_root) Item_func_window(funcname, $4, $6, true);
+            $$= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, $4, $6, true);
             if ($$ == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -8237,7 +8237,7 @@ function_call_window:
         | MAX_SYM '(' in_sum_expr ')' window_clause
           {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MAX") };
-            $$= new (YYTHD->mem_root) Item_func_window(funcname, $3, $5);
+            $$= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, $3, $5);
             if ($$ == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -8251,7 +8251,7 @@ function_call_window:
               MYSQL_YYABORT;
             }
             LEX_STRING funcname= { C_STRING_WITH_LEN("MAX_DISTINCT") };
-            $$= new (YYTHD->mem_root) Item_func_window(funcname, $4, $6, true);
+            $$= new (YYTHD->mem_root) Item_func_window_hybrid(funcname, $4, $6, true);
             if ($$ == NULL)
               MYSQL_YYABORT;
             Select->in_sum_expr--; // not really aggregate
@@ -8301,7 +8301,7 @@ function_call_window:
               MYSQL_YYABORT;
             ((Item_func_window*)$$)->window_ctx($7);
           }
-        | PERCENTILE_CONT_SYM '(' udf_expr ')' WITHIN GROUP_SYM 
+        | PERCENTILE_CONT_SYM '(' udf_expr ')' WITHIN GROUP_SYM
           '(' ORDER_SYM BY window_order_list ')' window_clause
           {
             LEX_STRING funcname= { C_STRING_WITH_LEN("PERCENTILE_CONT") };
@@ -8309,7 +8309,7 @@ function_call_window:
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
-        | PERCENTILE_DISC_SYM '(' udf_expr ')' WITHIN GROUP_SYM 
+        | PERCENTILE_DISC_SYM '(' udf_expr ')' WITHIN GROUP_SYM
           '(' ORDER_SYM BY window_order_list ')' window_clause
           {
             LEX_STRING funcname= { C_STRING_WITH_LEN("PERCENTILE_DISC") };
@@ -8328,7 +8328,7 @@ opt_respect:
           /* empty */           { $$ = 1; }
         | respect               { $$ = $1; }
         ;
-respect:        
+respect:
           RESPECT_SYM NULLS_SYM { $$ = 1; }
         | IGNORE_SYM NULLS_SYM  { $$ = 0; }
 
@@ -8367,36 +8367,36 @@ opt_window_partition_by_clause:
 
 opt_window_order_by_clause:
           /* empty */ { $$ = 0; }
-        | frame 
-          { 
+        | frame
+          {
             IDB_set_error(YYTHD, logging::ERR_WF_WINDOW_WITHOUT_ORDER, NULL, 0);
-            MYSQL_YYABORT; 
+            MYSQL_YYABORT;
           }
         | ORDER_SYM BY window_order_list opt_frame
-          { 
+          {
             /*
             If RANGE is specified, order list shall contain a single <sort key> SK.
             The declared type of SK shall be numeric, date, or interval. The declared type of UVS shall be
             numeric if the declared type of SK is numeric -- reference ANSI-SQL 2003
             */
-            if ($3 && $3->elements > 1 && $4 && $4->isRange &&  
-                (($4->start && $4->start->bound == PRECEDING) || 
+            if ($3 && $3->elements > 1 && $4 && $4->isRange &&
+                (($4->start && $4->start->bound == PRECEDING) ||
                 ($4->end && $4->end->bound == FOLLOWING)))
             {
               IDB_set_error(YYTHD, logging::ERR_WF_INVALID_ORDER_KEY, NULL, 0);
               MYSQL_YYABORT;
             }
             $$ = new Ordering();
-            $$->orders = $3; 
+            $$->orders = $3;
             $$->frame = $4;
           }
         ;
 
 window_order_list:
           window_order_list ',' order_ident order_dir opt_nulls
-          { 
+          {
             if (add_to_list(YYTHD, *$1, $3,(bool) $4, (uint)$5))
-              MYSQL_YYABORT; 
+              MYSQL_YYABORT;
             $$ = $1;
           }
         | order_ident order_dir opt_nulls
@@ -8407,8 +8407,8 @@ window_order_list:
             $$->next= &($$->first);
             if ($$ == NULL)
               MYSQL_YYABORT;
-            if (add_to_list(YYTHD, *$$, $1, (bool) $2, (uint) $3)) 
-              MYSQL_YYABORT; 
+            if (add_to_list(YYTHD, *$$, $1, (bool) $2, (uint) $3))
+              MYSQL_YYABORT;
           }
         ;
 
@@ -8417,7 +8417,7 @@ opt_nulls:
         | NULLS_SYM FIRST_SYM { $$= 1; }
         | NULLS_SYM LAST_SYM  { $$= 0; }
         ;
-        
+
 opt_frame:
           /* empty */ { $$= 0; }
         | frame { $$= $1; }
@@ -8457,12 +8457,12 @@ boundary_unit:
         ;
 
 bounding:
-          UNBOUNDED_SYM preceding_following 
+          UNBOUNDED_SYM preceding_following
           {
             $$ = new Boundary();
             $$->bound = ($2 == PRECEDING? UNBOUNDED_PRECEDING : UNBOUNDED_FOLLOWING);
           }
-        | CURRENT_SYM ROW_SYM 
+        | CURRENT_SYM ROW_SYM
           {
             $$ = new Boundary();
             $$->bound = CURRENT_ROW;
@@ -8495,7 +8495,7 @@ preceding_following:
   All the new functions implemented for new features should fit into
   this category. The place to implement the function itself is
   in sql/item_create.cc
-  
+
   @InfiniDB Note: mid-rule action was converted to end rule action to allow analtyic
   function to parse. Didn't see why mid-rule action is necessary here. Will
   watch for potential conflict.
@@ -8666,7 +8666,7 @@ udf_expr:
               $2->is_autogenerated_name= FALSE;
               $2->set_name($4.str, $4.length, system_charset_info);
             }
-            /* 
+            /*
                A field has to have its proper name in order for name
                resolution to work, something we are only guaranteed if we
                parse it out. If we hijack the input stream with
@@ -8726,8 +8726,8 @@ sum_expr:
           }
         /* @InfiniDB Note: mid-rule action was converted to end rule action to allow analtyic
            function to parse. Didn't see why mid-rule action is necessary here. Will
-           watch for potential conflict. 
-        
+           watch for potential conflict.
+
         | COUNT_SYM '(' DISTINCT
           { Select->in_sum_expr++; }
           expr_list
@@ -8745,7 +8745,7 @@ sum_expr:
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
-          
+
         | MIN_SYM '(' in_sum_expr ')'
           {
             $$= new (YYTHD->mem_root) Item_sum_min($3);
@@ -9166,10 +9166,10 @@ join_table:
             MYSQL_YYABORT_UNLESS($1 && $5);
           }
           USING '(' using_list ')'
-          { 
-            add_join_natural($1,$5,$9,Select); 
-            $5->outer_join|=JOIN_TYPE_LEFT; 
-            $$=$5; 
+          {
+            add_join_natural($1,$5,$9,Select);
+            $5->outer_join|=JOIN_TYPE_LEFT;
+            $$=$5;
           }
         | table_ref NATURAL LEFT opt_outer JOIN_SYM table_factor
           {
@@ -9398,8 +9398,8 @@ opt_outer:
 index_hint_clause:
           /* empty */
           {
-            $$= global_system_variables.old_mode ? 
-                  INDEX_HINT_MASK_JOIN : INDEX_HINT_MASK_ALL; 
+            $$= global_system_variables.old_mode ?
+                  INDEX_HINT_MASK_JOIN : INDEX_HINT_MASK_ALL;
           }
         | FOR_SYM JOIN_SYM      { $$= INDEX_HINT_MASK_JOIN;  }
         | FOR_SYM ORDER_SYM BY  { $$= INDEX_HINT_MASK_ORDER; }
@@ -9408,7 +9408,7 @@ index_hint_clause:
 
 index_hint_type:
           FORCE_SYM  { $$= INDEX_HINT_FORCE; }
-        | IGNORE_SYM { $$= INDEX_HINT_IGNORE; } 
+        | IGNORE_SYM { $$= INDEX_HINT_IGNORE; }
         ;
 
 index_hint_definition:
@@ -9497,8 +9497,8 @@ interval:
 
 interval_time_stamp:
 	interval_time_st	{}
-	| FRAC_SECOND_SYM	{ 
-                                  $$=INTERVAL_MICROSECOND; 
+	| FRAC_SECOND_SYM	{
+                                  $$=INTERVAL_MICROSECOND;
                                   /*
                                     FRAC_SECOND was mistakenly implemented with
                                     a wrong resolution. According to the ODBC
@@ -9588,7 +9588,7 @@ having_clause:
         ;
 
 opt_escape:
-          ESCAPE_SYM simple_expr 
+          ESCAPE_SYM simple_expr
           {
             Lex->escape_used= TRUE;
             $$= $2;
@@ -9611,7 +9611,7 @@ opt_escape:
 
 group_clause:
           /* empty */
-        | GROUP_SYM BY 
+        | GROUP_SYM BY
           {
             Select->parsing_place= IN_GROUP_BY;
           }
@@ -9711,8 +9711,8 @@ order_clause:
               */
               SELECT_LEX *first_sl= unit->first_select();
               if (!unit->is_union() &&
-                  (first_sl->order_list.elements || 
-                   first_sl->select_limit) &&            
+                  (first_sl->order_list.elements ||
+                   first_sl->select_limit) &&
                   unit->add_fake_select_lex(lex->thd))
                 MYSQL_YYABORT;
             }
@@ -9915,7 +9915,7 @@ procedure_item:
 select_var_list_init:
           {
             LEX *lex=Lex;
-            if (!lex->describe && 
+            if (!lex->describe &&
                   (!(lex->result= new select_dumpvar(lex->nest_level))))
               MYSQL_YYABORT;
           }
@@ -9928,11 +9928,11 @@ select_var_list:
         | select_var_ident {}
         ;
 
-select_var_ident:  
+select_var_ident:
           '@' ident_or_text
           {
             LEX *lex=Lex;
-            if (lex->result) 
+            if (lex->result)
             {
               my_var *var= new my_var($2,0,0,(enum_field_types)0);
               if (var == NULL)
@@ -10215,7 +10215,7 @@ insert:
           {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_INSERT;
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
             mysql_init_select(lex);
             /* for subselects */
             lex->lock_option= TL_READ_DEFAULT;
@@ -10402,7 +10402,7 @@ update:
             mysql_init_select(lex);
             lex->sql_command= SQLCOM_UPDATE;
             lex->lock_option= TL_UNLOCK; /* Will be set later */
-            lex->duplicates= DUP_ERROR; 
+            lex->duplicates= DUP_ERROR;
           }
           opt_low_priority opt_ignore join_table_list
           SET update_list
@@ -10449,7 +10449,7 @@ insert_update_elem:
           simple_ident_nospvar equal expr_or_default
           {
           LEX *lex= Lex;
-          if (lex->update_list.push_back($1) || 
+          if (lex->update_list.push_back($1) ||
               lex->value_list.push_back($3))
               MYSQL_YYABORT;
           }
@@ -10487,14 +10487,14 @@ single_multi:
         | table_wild_list
           { mysql_init_multi_delete(Lex); }
           FROM join_table_list where_clause
-          { 
+          {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
               MYSQL_YYABORT;
           }
         | FROM table_alias_ref_list
           { mysql_init_multi_delete(Lex); }
           USING join_table_list where_clause
-          { 
+          {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
               MYSQL_YYABORT;
           }
@@ -10525,7 +10525,7 @@ table_wild_one:
               MYSQL_YYABORT;
             if (!Select->add_table_to_list(YYTHD,
                                            ti,
-                                           $5, 
+                                           $5,
                                            TL_OPTION_UPDATING | TL_OPTION_ALIAS,
                                            Lex->lock_option))
               MYSQL_YYABORT;
@@ -10795,7 +10795,7 @@ show_param:
         | PROFILES_SYM
           { Lex->sql_command = SQLCOM_SHOW_PROFILES; }
         | PROFILE_SYM opt_profile_defs opt_profile_args opt_limit_clause_init
-          { 
+          {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_SHOW_PROFILE;
             if (prepare_schema_table(YYTHD, lex, NULL, SCH_PROFILES) != 0)
@@ -11312,7 +11312,7 @@ field_term_list:
         ;
 
 field_term:
-          TERMINATED BY text_string 
+          TERMINATED BY text_string
           {
             DBUG_ASSERT(Lex->exchange != 0);
             Lex->exchange->field_term= $3;
@@ -12054,7 +12054,7 @@ TEXT_STRING_literal:
               if (thd->convert_string(&$$, thd->variables.collation_connection,
                                   $1.str, $1.length, thd->charset()))
                 MYSQL_YYABORT;
-            } 
+            }
           }
         ;
 
@@ -12143,8 +12143,8 @@ user:
           {
             if (!($$=(LEX_USER*) YYTHD->alloc(sizeof(st_lex_user))))
               MYSQL_YYABORT;
-            /* 
-              empty LEX_USER means current_user and 
+            /*
+              empty LEX_USER means current_user and
               will be handled in the  get_current_user() function
               later
             */
@@ -12408,7 +12408,7 @@ keyword_sp:
         | RETURNS_SYM              {}
         | ROLLUP_SYM               {}
         | ROUTINE_SYM              {}
-        | ROWS_SYM                 {}  
+        | ROWS_SYM                 {}
         | ROW_FORMAT_SYM           {}
         | ROW_SYM                  {}
         | RTREE_SYM                {}
@@ -12826,7 +12826,7 @@ internal_variable_name:
               MYSQL_YYABORT;
             }
             if (lex->sphead && lex->sphead->m_type == TYPE_ENUM_TRIGGER &&
-                (!my_strcasecmp(system_charset_info, $1.str, "NEW") || 
+                (!my_strcasecmp(system_charset_info, $1.str, "NEW") ||
                  !my_strcasecmp(system_charset_info, $1.str, "OLD")))
             {
               if ($1.str[0]=='O' || $1.str[0]=='o')
@@ -13166,8 +13166,8 @@ opt_table:
 grant_privileges:
           object_privilege_list {}
         | ALL opt_privileges
-          { 
-            Lex->all_privileges= 1; 
+          {
+            Lex->all_privileges= 1;
             Lex->grant= GLOBAL_ACLS;
           }
         ;
@@ -13352,7 +13352,7 @@ grant_user:
             {
               if (YYTHD->variables.old_passwords)
               {
-                char *buff= 
+                char *buff=
                   (char *) YYTHD->alloc(SCRAMBLED_PASSWORD_CHAR_LENGTH_323+1);
                 if (buff == NULL)
                   MYSQL_YYABORT;
@@ -13362,7 +13362,7 @@ grant_user:
               }
               else
               {
-                char *buff= 
+                char *buff=
                   (char *) YYTHD->alloc(SCRAMBLED_PASSWORD_CHAR_LENGTH+1);
                 if (buff == NULL)
                   MYSQL_YYABORT;
@@ -13517,7 +13517,7 @@ commit:
           {
             LEX *lex=Lex;
             lex->sql_command= SQLCOM_COMMIT;
-            lex->tx_chain= $3; 
+            lex->tx_chain= $3;
             lex->tx_release= $4;
           }
         ;
@@ -13527,7 +13527,7 @@ rollback:
           {
             LEX *lex=Lex;
             lex->sql_command= SQLCOM_ROLLBACK;
-            lex->tx_chain= $3; 
+            lex->tx_chain= $3;
             lex->tx_release= $4;
           }
         | ROLLBACK_SYM opt_work
@@ -13571,11 +13571,11 @@ union_list:
           UNION_SYM union_option
           {
             LEX *lex=Lex;
-            if (lex->result && 
+            if (lex->result &&
                (lex->result->get_nest_level() == -1 ||
                 lex->result->get_nest_level() == lex->nest_level))
               {
-                /* 
+                /*
                    Only the last SELECT can have INTO unless the INTO and UNION
                    are at different nest levels. In version 5.1 and above, INTO
                    will onle be allowed at top level.
@@ -13655,12 +13655,12 @@ take_first_select: /* empty */
         };
 
 subselect:
-        SELECT_SYM subselect_start select_init2 take_first_select 
+        SELECT_SYM subselect_start select_init2 take_first_select
         subselect_end
         {
           $$= $4;
         }
-        | '(' subselect_start select_paren take_first_select 
+        | '(' subselect_start select_paren take_first_select
         subselect_end ')'
         {
           $$= $4;
@@ -13675,11 +13675,11 @@ subselect_start:
               my_parse_error(ER(ER_SYNTAX_ERROR));
               MYSQL_YYABORT;
             }
-            /* 
+            /*
               we are making a "derived table" for the parenthesis
-              as we need to have a lex level to fit the union 
-              after the parenthesis, e.g. 
-              (SELECT .. ) UNION ...  becomes 
+              as we need to have a lex level to fit the union
+              after the parenthesis, e.g.
+              (SELECT .. ) UNION ...  becomes
               SELECT * FROM ((SELECT ...) UNION ...)
             */
             if (mysql_new_select(Lex, 1))
@@ -13838,7 +13838,7 @@ view_list_opt:
         ;
 
 view_list:
-          ident 
+          ident
             {
               Lex->view_list.push_back((LEX_STRING*)
               sql_memdup(&$1, sizeof(LEX_STRING)));
