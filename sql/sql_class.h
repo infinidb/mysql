@@ -339,6 +339,7 @@ struct system_variables
   ulong infinidb_compression_type;
   ulong infinidb_stringtable_threshold;
   my_bool infinidb_varbin_always_hex;
+  my_bool infinidb_double_for_decimal_math;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;

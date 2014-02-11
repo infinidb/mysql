@@ -22,10 +22,10 @@
 #include "item_window_function.h"
 
 /**
- * Boundary definition 
+ * Boundary definition
  */
- 
-Boundary::Boundary() : item (NULL) 
+
+Boundary::Boundary() : item (NULL)
 {}
 
 Boundary::Boundary(BOUND b): bound(b), item(NULL)
@@ -39,9 +39,9 @@ bool Boundary::fix_fields(THD* thd, Item** ref)
 }
 
 /**
- * Frame definition 
+ * Frame definition
  */
- 
+
 Frame::Frame() : start(NULL), end(NULL), isRange(true)
 {}
 
@@ -61,9 +61,9 @@ bool Frame::fix_fields(THD* thd, Item** ref)
 }
 
 /**
- * Ordering definition 
+ * Ordering definition
  */
- 
+
 Ordering::Ordering() : orders (NULL), frame(NULL)
 {}
 
@@ -95,7 +95,7 @@ bool Ordering::fix_fields(THD* thd, Item** ref)
 }
 
 /**
- * Window_context definition 
+ * Window_context definition
  */
 Window_context::Window_context(): partitions(NULL), partition_count(0), ordering(NULL)
 {}
@@ -114,7 +114,7 @@ bool Window_context::fix_fields(THD* thd, Item** ref)
 		if (partitions[i]->fix_fields(thd, ref))
 			return TRUE;
 	}
-	
+
 	// check order by
 	if (ordering && ordering->fix_fields(thd, ref))
 		return TRUE;
@@ -146,60 +146,60 @@ void Window_context::setPartitions(List<Item>* list)
 }
 
 /**
- * Item_func_window definition 
+ * Item_func_window definition
  */
-Item_func_window::Item_func_window(LEX_STRING name, 
+Item_func_window::Item_func_window(LEX_STRING name,
                    Window_context* ctx,
                    bool dist):
-                   Item_func(), 
+                   Item_func(),
                    window_context(ctx),
                    distinct(dist),
                    funcname(name.str)
 {}
 
-Item_func_window::Item_func_window(LEX_STRING name, 
+Item_func_window::Item_func_window(LEX_STRING name,
                    Item *arg,
-                   Window_context* ctx, 
+                   Window_context* ctx,
                    bool dist):
-                   Item_func(arg), 
-                   window_context(ctx), 
-                   distinct(dist), 
+                   Item_func(arg),
+                   window_context(ctx),
+                   distinct(dist),
                    funcname(name.str)
 {}
 
-Item_func_window::Item_func_window(LEX_STRING name, 
+Item_func_window::Item_func_window(LEX_STRING name,
                    Item *arg1,
                    Item *arg2,
-                   Window_context* ctx, 
+                   Window_context* ctx,
                    bool dist):
-                   Item_func(arg1, arg2), 
-                   window_context(ctx), 
-                   distinct(dist), 
+                   Item_func(arg1, arg2),
+                   window_context(ctx),
+                   distinct(dist),
                    funcname(name.str)
 {}
 
-Item_func_window::Item_func_window(LEX_STRING name, 
+Item_func_window::Item_func_window(LEX_STRING name,
                    Item *arg1,
                    Item *arg2,
                    Item *arg3,
-                   Window_context* ctx, 
+                   Window_context* ctx,
                    bool dist):
-                   Item_func(arg1, arg2, arg3), 
-                   window_context(ctx), 
-                   distinct(dist), 
+                   Item_func(arg1, arg2, arg3),
+                   window_context(ctx),
+                   distinct(dist),
                    funcname(name.str)
 {}
 
-Item_func_window::Item_func_window(LEX_STRING name, 
+Item_func_window::Item_func_window(LEX_STRING name,
                    Item *arg1,
                    Item *arg2,
                    Item *arg3,
                    Item *arg4,
-                   Window_context* ctx, 
+                   Window_context* ctx,
                    bool dist):
-                   Item_func(arg1, arg2, arg3, arg4), 
-                   window_context(ctx), 
-                   distinct(dist), 
+                   Item_func(arg1, arg2, arg3, arg4),
+                   window_context(ctx),
+                   distinct(dist),
                    funcname(name.str)
 {}
 
@@ -219,18 +219,18 @@ bool Item_func_window::fix_fields(THD* thd, Item** ref)
 	// check context
 	if (window_context && window_context->fix_fields(thd, ref))
 		return TRUE;
-	
+
 	const_item_cache = 0;
-	
+
 	return false;
 }
 
-enum Item_result Item_func_window::result_type () const 
+enum Item_result Item_func_window::result_type () const
 {
 	if (args && arg_count >= 1)
 		return args[0]->result_type();
 	else
-		return hybrid_type; 
+		return hybrid_type;
 }
 
 void Item_func_window::fix_length_and_dec()
@@ -297,6 +297,16 @@ String* Item_func_window::val_str(String*)
 	return 0;
 }
 
+enum_field_types Item_func_window_hybrid::field_type()
+{
+	if (args && arg_count < 1)
+	{
+		IDB_set_error(current_thd, logging::ERR_WF_WRONG_ARGS, funcname);
+		return MYSQL_TYPE_DOUBLE;
+	}
+	return args[0]->field_type();
+}
+
 void Item_func_window_avg::fix_length_and_dec ()
 {
 	DBUG_ENTER("Item_func_window_avg::fix_length_and_dec");
@@ -311,7 +321,7 @@ void Item_func_window_avg::fix_length_and_dec ()
 		                                                         decimals,
 		                                                         unsigned_flag);
 	}
-	else 
+	else
 	{
 		decimals= min(args[0]->decimals + prec_increment, NOT_FIXED_DEC);
 		max_length= args[0]->max_length + prec_increment;
@@ -353,33 +363,33 @@ bool Item_func_window_rank::fix_fields(THD* thd, Item** ref)
 {
 	if (Item_func_window::fix_fields(thd, ref))
 		return TRUE;
-	
-	// validate order by clause exists 
+
+	// validate order by clause exists
 	if (!window_context || !window_context->ordering)
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_MISSING, funcname);
 		return TRUE;
 	}
-	
+
 	// validate no window clause exists
 	if (window_context && window_context->ordering->frame)
 	{
 		IDB_set_error(thd, logging::ERR_WF_WINDOW_CLAUSE, funcname);
 		return TRUE;
 	}
-	
+
 	// default window is unbounded preceding and unbounded following
 	Frame *frame = new Frame();
 	frame->start = new Boundary(UNBOUNDED_PRECEDING);
 	frame->end = new Boundary(UNBOUNDED_FOLLOWING);
 	window_context->ordering->frame = frame;
-	
+
 	return FALSE;
 }
 
 enum Item_result Item_func_window_rank::result_type () const
 {
-	if (strcasecmp(funcname, "CUME_DIST") == 0 || 
+	if (strcasecmp(funcname, "CUME_DIST") == 0 ||
 		  strcasecmp(funcname, "PERCENT_RANK") == 0)
 		return REAL_RESULT;
 	else
@@ -389,7 +399,7 @@ enum Item_result Item_func_window_rank::result_type () const
 void Item_func_window_rank::fix_length_and_dec()
 {
 	DBUG_ENTER("Item_func_window_rank::fix_length_and_dec");
-	if (!(strcasecmp(funcname, "CUME_DIST") == 0 || 
+	if (!(strcasecmp(funcname, "CUME_DIST") == 0 ||
 		  strcasecmp(funcname, "PERCENT_RANK") == 0))
 		DBUG_VOID_RETURN;
 	maybe_null= null_value= 1;
@@ -416,8 +426,8 @@ bool Item_func_window_nth_value::fix_fields(THD* thd, Item** ref)
 	}
 
 	// validate the 2nd arg has to be numeric type
-	if (!args[0] || 
-	    !args[1] || 
+	if (!args[0] ||
+	    !args[1] ||
 	    (args[1]->result_type() == STRING_RESULT &&
 	     args[1]->type() != Item::NULL_ITEM))
 	{
@@ -441,7 +451,7 @@ void Item_func_window_stats::fix_length_and_dec()
 
 	/*
 	  According to the SQL2003 standard (Part 2, Foundations; sec 10.9,
-	  aggregate function; paragraph 7h of Syntax Rules), "the declared 
+	  aggregate function; paragraph 7h of Syntax Rules), "the declared
 	  type of the result is an implementation-defined aproximate numeric
 	  type.
 	*/
@@ -481,8 +491,8 @@ bool Item_func_window_lead_lag::fix_fields(THD* thd, Item** ref)
 	if (Item_func_window::fix_fields(thd, ref))
 		return TRUE;
 
-	// validate order by clause exists 
-	if (!window_context || 
+	// validate order by clause exists
+	if (!window_context ||
 		  !window_context->ordering)
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_MISSING, funcname);
@@ -490,13 +500,13 @@ bool Item_func_window_lead_lag::fix_fields(THD* thd, Item** ref)
 	}
 
 	// validate no window clause exists
-	if (window_context && 
+	if (window_context &&
 		  window_context->ordering->frame)
 	{
 		IDB_set_error(thd, logging::ERR_WF_WINDOW_CLAUSE, funcname);
 		return TRUE;
 	}
-	
+
 	// default window is unbounded preceding and unbounded following
 	if (window_context && window_context->ordering)
 	{
@@ -514,7 +524,7 @@ bool Item_func_window_median::fix_fields(THD* thd, Item** ref)
 {
 	if (Item_func_window::fix_fields(thd, ref))
 		return TRUE; // no order by is allowed
-	
+
 	if (arg_count != 1 || !args)
 	{
 		IDB_set_error(thd, logging::ERR_WF_WRONG_ARGS, name);
@@ -526,7 +536,7 @@ bool Item_func_window_median::fix_fields(THD* thd, Item** ref)
 		IDB_set_error(thd, logging::ERR_WF_ORDER_BY, funcname);
 		return TRUE;
 	}
-	
+
 	// add arg to order by list. share the pointer here because it's read only
 	SQL_LIST* orders = new SQL_LIST();
 	orders->elements= 0;
@@ -537,9 +547,9 @@ bool Item_func_window_median::fix_fields(THD* thd, Item** ref)
 		IDB_set_error(thd, logging::ERR_WF_ORDER_BY, funcname);
 		return TRUE;
 	}
-	
+
 	args[0] = new (thd->mem_root) Item_decimal("0.5", 3, thd->charset());
-	
+
 	window_context->ordering = new Ordering();
 	window_context->ordering->orders = orders;
 	window_context->ordering->frame = new Frame();
@@ -575,14 +585,14 @@ bool Item_func_window_rownumber::fix_fields(THD* thd, Item** ref)
 		return TRUE;
 
 	// validate no window clause exists
-	if (window_context && 
-		  window_context->ordering && 
+	if (window_context &&
+		  window_context->ordering &&
 		  window_context->ordering->frame)
 	{
 		IDB_set_error(thd, logging::ERR_WF_WINDOW_CLAUSE, funcname);
 		return TRUE;
 	}
-	
+
 	// default window is unbounded preceding and unbounded following
 	if (window_context && window_context->ordering)
 	{
@@ -600,30 +610,30 @@ bool Item_func_window_ntile::fix_fields(THD* thd, Item** ref)
 	if (Item_func_window::fix_fields(thd, ref))
 		return TRUE;
 
-	// validate order by clause exists 
-	if (!window_context || 
+	// validate order by clause exists
+	if (!window_context ||
 		  !window_context->ordering)
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_MISSING, funcname);
 		return TRUE;
 	}
-	
+
 	// validate no window clause exists
 	if (window_context && window_context->ordering->frame)
 	{
 		IDB_set_error(thd, logging::ERR_WF_WINDOW_CLAUSE, funcname);
 		return TRUE;
 	}
-	
+
 	// validate the arg has to be numeric type
-	if (!args[0] || 
+	if (!args[0] ||
 	    (args[0]->result_type() == STRING_RESULT &&
 	     args[0]->type() != Item::NULL_ITEM))
 	{
 		IDB_set_error(thd, logging::ERR_WF_WRONG_ARGS, funcname);
 		return TRUE;
 	}
-	
+
 	// default window is unbounded preceding and unbounded following
 	if (window_context && window_context->ordering)
 	{
@@ -649,32 +659,32 @@ bool Item_func_window_percentile::fix_fields(THD* thd, Item** ref)
 				return TRUE;
 		}
 	}
-	
+
 	if (Item_func_window::fix_fields(thd, ref))
 		return TRUE;
 
-	// validate order by clause not exists 
+	// validate order by clause not exists
 	if (window_context && window_context->ordering)
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_BY, funcname);
 		return TRUE;
 	}
-	
+
 	if (group_order && group_order->elements >1 )
 	{
 		IDB_set_error(thd, logging::ERR_WF_INVALID_ORDER_KEY_WITHIN, funcname);
 		return TRUE;
 	}
-	
+
 	if (!window_context)
 		window_context = new Window_context();
-	
+
 	if (group_order)
 	{
 		window_context->ordering = new Ordering();
 		window_context->ordering->orders = group_order;
 	}
-	
+
 	// default window is unbounded preceding and unbounded following
 	if (window_context && window_context->ordering)
 	{
@@ -693,7 +703,7 @@ void Item_func_window_percentile::fix_length_and_dec()
 	maybe_null= null_value= 1;
 	prec_increment= current_thd->variables.div_precincrement;
 	hybrid_type= REAL_RESULT;
-	
+
 	if (strcasecmp(funcname, "PERCENTILE_CONT") == 0)
 	{
 		int precision= 10 + prec_increment;
