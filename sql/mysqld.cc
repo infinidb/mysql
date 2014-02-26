@@ -7277,15 +7277,15 @@ thread is in the relay logs.",
 	1, /* Value should be a mult. of this */
 	0},
 
-	// InfiniDB boolean variable
+	// InfiniDB tri state variable
   {"infinidb_local_query", OPT_INFINIDB_LOCAL_QUERY,
    "Enable/disable the Infinidb local PM query only feature.",
    (uchar**)&global_system_variables.infinidb_local_query,
    (uchar**)&max_system_variables.infinidb_local_query, 0,
-   GET_BOOL, NO_ARG,
+   GET_ULONG, NO_ARG,
 	0, /* Default value */
 	0, /* Min allowed value */
-	1, /* Max allowed value */
+	2, /* Max allowed value */
 	0, /* Subtract this overhead from given value before setting var */
 	1, /* Value should be a mult. of this */
 	0},
