@@ -7282,7 +7282,7 @@ thread is in the relay logs.",
    "Enable/disable the Infinidb local PM query only feature.",
    (uchar**)&global_system_variables.infinidb_local_query,
    (uchar**)&max_system_variables.infinidb_local_query, 0,
-   GET_ULONG, NO_ARG,
+   GET_ULONG, REQUIRED_ARG,
 	0, /* Default value */
 	0, /* Min allowed value */
 	2, /* Max allowed value */
