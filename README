@@ -1,9 +1,9 @@
 This is a fork of MySQL 5.1.73. Some files have been
-modified and some files have been added by Calpont Corp for
+modified and some files have been added by InfiniDB, Inc. for
 the InfiniDB data warehouse database project. All files modified
-by Calpont Corp retain the original copyright as well as an
-additional copyright on the changes by Calpont Corp. All new
-files written by Calpont Corp are licensed under the GPL (see
+by InfiniDB, Inc. retain the original copyright as well as an
+additional copyright on the changes by InfiniDB, Inc. All new
+files written by InfiniDB, Inc. are licensed under the GPL (see
 the individual files for more details).
 
 Following are the original contents of the README file from the
