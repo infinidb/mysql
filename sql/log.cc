@@ -68,10 +68,9 @@ static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 static bool idb_okay_to_log(Log_event *event_info)
 {
 	THD* thd = event_info->thd;
-
 	//never log infinidb_vtable schema
 	if (thd->lex->query_tables)
-		if (thd->lex->query_tables->table->pos_in_table_list)
+		if (thd->lex->query_tables->table && thd->lex->query_tables->table->pos_in_table_list)
 			if (thd->lex->query_tables->table->pos_in_table_list->db_length == 15 &&
 				strncmp(thd->lex->query_tables->table->pos_in_table_list->db,
 					"infinidb_vtable", 15) == 0)
@@ -83,7 +82,7 @@ static bool idb_okay_to_log(Log_event *event_info)
 	//if the table is not an InfiniDB table, let it go through
 	st_plugin_int* db_plugin = 0;
 	if (thd->lex->query_tables)
-		if (thd->lex->query_tables->table->s)
+		if (thd->lex->query_tables->table && thd->lex->query_tables->table->s)
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
 			if (thd->lex->query_tables->table->s->db_plugin)
 				db_plugin = *thd->lex->query_tables->table->s->db_plugin;
@@ -101,8 +100,11 @@ static bool idb_okay_to_log(Log_event *event_info)
 			thd->lex->sql_command == SQLCOM_DROP_TABLE ||
 			thd->lex->sql_command == SQLCOM_TRUNCATE)
 		{
-			if (strcmp(ha_resolve_storage_engine_name(thd->lex->create_info.db_type), "InfiniDB") != 0)
+			const char *name = ha_resolve_storage_engine_name(thd->lex->create_info.db_type);
+			if (name && (strncmp(name, "InfiniDB", 8) != 0))
 				return TRUE;
+			else
+				return FALSE;
 		}
 		else if (thd->lex->sql_command == SQLCOM_ALTER_TABLE)
 		{
@@ -4495,6 +4497,7 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info)
       binlog_[wild_]{do|ignore}_table?" (WL#1049)"
     */
     const char *local_db= event_info->get_db();
+
     if ((thd && !(thd->options & OPTION_BIN_LOG)) ||
 	(thd->lex->sql_command != SQLCOM_ROLLBACK_TO_SAVEPOINT &&
          thd->lex->sql_command != SQLCOM_SAVEPOINT &&
@@ -4504,7 +4507,12 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info)
       DBUG_RETURN(0);
     }
 
-    if (!idb_okay_to_log(event_info))
+    // makes replication ignore infinidb_vtable and infinidb_querystats
+    if ((thd->infinidb_vtable.vtable_state == THD::INFINIDB_SELECT_VTABLE ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE ||
+	thd->infinidb_vtable.vtable_state == THD::INFINIDB_ALTER_VTABLE ||
+	thd->infinidb_vtable.vtable_state == THD::INFINIDB_DROP_VTABLE) ||
+	(local_db && strncmp(local_db, "infinidb", 8) == 0))
     {
       VOID(pthread_mutex_unlock(&LOCK_log));
       DBUG_RETURN(0);
