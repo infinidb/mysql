@@ -4429,7 +4429,10 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info)
     if ((thd->infinidb_vtable.vtable_state == THD::INFINIDB_SELECT_VTABLE ||
         thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE ||
 	thd->infinidb_vtable.vtable_state == THD::INFINIDB_ALTER_VTABLE ||
-	thd->infinidb_vtable.vtable_state == THD::INFINIDB_DROP_VTABLE) ||
+	thd->infinidb_vtable.vtable_state == THD::INFINIDB_DROP_VTABLE ||
+	thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_QUERY ||
+	thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1 || 
+	thd->infinidb_vtable.isInfiniDBDML) ||
 	(local_db && strncmp(local_db, "infinidb", 8) == 0))
     {
       VOID(pthread_mutex_unlock(&LOCK_log));
