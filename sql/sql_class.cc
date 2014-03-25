@@ -747,24 +747,25 @@ THD::THD()
   memset(&invoker_user, 0, sizeof(invoker_user));
   memset(&invoker_host, 0, sizeof(invoker_host));
  
-  // ------------------------------ Calpont InfiniDB ------------------------------
+  // ------------------------------ InfiniDB ------------------------------
   infinidb_vtable.vtable_state = INFINIDB_INIT;
   infinidb_vtable.has_order_by = false;
-	infinidb_vtable.mysql_optimizer_off = false;
-	infinidb_vtable.duplicate_field_name = false;
-	infinidb_vtable.autoswitch = false;
+  infinidb_vtable.mysql_optimizer_off = false;
+  infinidb_vtable.duplicate_field_name = false;
+  infinidb_vtable.autoswitch = false;
   if (variables.infinidb_vtable_mode == 0)
-  	infinidb_vtable.vtable_state = INFINIDB_DISABLE_VTABLE;
+    infinidb_vtable.vtable_state = INFINIDB_DISABLE_VTABLE;
   else if (variables.infinidb_vtable_mode == 2)
-		infinidb_vtable.autoswitch = true;  
-	infinidb_vtable.call_sp = false;
-	infinidb_vtable.override_largeside_estimate = false;
-	infinidb_vtable.cal_conn_info = 0;
-	infinidb_vtable.isUnion = false;
-	infinidb_vtable.impossibleWhereOnUnion = false;
-	infinidb_vtable.isUpdateWithDerive = false;
-	infinidb_vtable.isInfiniDBDML = false;
-  // ------------------------------ Calpont InfiniDB ------------------------------
+    infinidb_vtable.autoswitch = true;  
+  infinidb_vtable.call_sp = false;
+  infinidb_vtable.override_largeside_estimate = false;
+  infinidb_vtable.cal_conn_info = 0;
+  infinidb_vtable.isUnion = false;
+  infinidb_vtable.impossibleWhereOnUnion = false;
+  infinidb_vtable.isUpdateWithDerive = false;
+  infinidb_vtable.isInfiniDBDML = false;
+  infinidb_vtable.hasInfiniDBTable = false;
+  // ------------------------------ InfiniDB ------------------------------
 }
 
 

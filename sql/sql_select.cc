@@ -1866,7 +1866,7 @@ JOIN::exec()
 		//@todo special api to send plan
 		TABLE_LIST* tl = tables_list;
 		bool hasCalpont = false;
-		bool hasNonCalpont = false;
+		//bool hasNonCalpont = false;
 		TABLE_LIST* IDBtable = NULL;
 
 		// @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
@@ -1903,7 +1903,7 @@ JOIN::exec()
 			}
 			else
 			{
-				hasNonCalpont = true;
+				//hasNonCalpont = true;
 			}
 		}
 

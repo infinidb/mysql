@@ -1842,7 +1842,7 @@ public:
   	
   enum infinidb_state
   {
-  	INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
+    INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
     INFINIDB_INIT,
     INFINIDB_CREATE_VTABLE,
     INFINIDB_ALTER_VTABLE,
@@ -1877,6 +1877,7 @@ public:
   	bool isInsertSelect;
   	bool isUpdateWithDerive;
 	bool isInfiniDBDML; // default false
+  	bool hasInfiniDBTable; // default false
   };
    
   INFINIDB_VTABLE infinidb_vtable;					// Calpont InfiniDB custom structure

@@ -1323,6 +1323,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
       thd->infinidb_vtable.vtable_state = THD::INFINIDB_DISABLE_VTABLE;
       mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
       thd->infinidb_vtable.isInfiniDBDML = false; //@bug5117
+      thd->infinidb_vtable.hasInfiniDBTable = false;
     }
 
     while (!thd->killed && (end_of_stmt != NULL) && ! thd->is_error())
@@ -8357,6 +8358,8 @@ int idb_vtable_process(THD* thd, Statement* statement)
 					}
 					else
 					{
+						thd->infinidb_vtable.isInfiniDBDML = false;
+						thd->infinidb_vtable.hasInfiniDBTable = false;
 						return -1;
 					}
 				}
@@ -8582,6 +8585,8 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						/* Write only allowed to dir or subdir specified by secure_file_priv */
 						my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--secure-file-priv");
 						thd->lex->result = 0;
+						thd->infinidb_vtable.isInfiniDBDML = false;
+						thd->infinidb_vtable.hasInfiniDBTable = false;
 						return 0;
 					}
 					
@@ -8601,6 +8606,8 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						{
 							my_error(ER_FILE_EXISTS_ERROR, MYF(0), fileName.c_str());
 							thd->lex->result = 0;
+							thd->infinidb_vtable.isInfiniDBDML = false;
+							thd->infinidb_vtable.hasInfiniDBTable = false;
 							return 0;
 						}
 					}
@@ -8608,6 +8615,8 @@ int idb_vtable_process(THD* thd, Statement* statement)
 					{
 						my_error(ER_CANT_CREATE_FILE, MYF(0), fileName.c_str());
 						thd->lex->result = 0;
+						thd->infinidb_vtable.isInfiniDBDML = false;
+						thd->infinidb_vtable.hasInfiniDBTable = false;
 						return 0;
 					}
 				}
@@ -8646,7 +8655,11 @@ int idb_vtable_process(THD* thd, Statement* statement)
 						{
 							p1 = lower_case_query.find(" select(", 0);
 							if (p1 == std::string::npos)
+							{
+								thd->infinidb_vtable.isInfiniDBDML = false;
+								thd->infinidb_vtable.hasInfiniDBTable = false;
 								return -1;
+							}
 						}
 					}
 					insert_query = create_query.substr(0, p1);
@@ -8670,7 +8683,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 				
 				// phase 4. drop vtable
 				thd->infinidb_vtable.drop_vtable_query.free();
-				thd->infinidb_vtable.drop_vtable_query.append(STRING_WITH_LEN("drop table "));
+				thd->infinidb_vtable.drop_vtable_query.append(STRING_WITH_LEN("drop table if exists "));
 				thd->infinidb_vtable.drop_vtable_query.append(vtable_name.c_str(), vtable_name.length());
 				thd->infinidb_vtable.drop_vtable_query.append(STRING_WITH_LEN(" restrict"));
 
@@ -8683,6 +8696,8 @@ int idb_vtable_process(THD* thd, Statement* statement)
 				thd->infinidb_vtable.isUnion = false;
 				thd->infinidb_vtable.mysql_optimizer_off = false;
 				thd->infinidb_vtable.impossibleWhereOnUnion = false;
+				thd->infinidb_vtable.isInfiniDBDML = false;
+				thd->infinidb_vtable.hasInfiniDBTable = false;
 
 				// Execution starts
 				// Phase 1.
@@ -8742,7 +8757,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 					mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
 					thd->infinidb_vtable.vtable_state = THD::INFINIDB_DISABLE_VTABLE;
 					thd->set_query(thd->infinidb_vtable.original_query.c_ptr(),
-						thd->infinidb_vtable.original_query.length());
+					thd->infinidb_vtable.original_query.length());
 					mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
 				}
 
@@ -8810,11 +8825,15 @@ int idb_vtable_process(THD* thd, Statement* statement)
 			}
 			else
 			{
+				thd->infinidb_vtable.isInfiniDBDML = false;
+				thd->infinidb_vtable.hasInfiniDBTable = false;
 				return -1;
 			}
 		}
 		else
 		{
+			thd->infinidb_vtable.isInfiniDBDML = false;
+			thd->infinidb_vtable.hasInfiniDBTable = false;
 			return -1;
 		}
 	}
