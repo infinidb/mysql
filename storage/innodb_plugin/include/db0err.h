@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -28,10 +28,13 @@ Created 5/24/1996 Heikki Tuuri
 
 
 enum db_err {
+	DB_SUCCESS_LOCKED_REC = 9,	/*!< like DB_SUCCESS, but a new
+					explicit record lock was created */
 	DB_SUCCESS = 10,
 
 	/* The following are error codes */
 	DB_ERROR,
+	DB_INTERRUPTED,
 	DB_OUT_OF_MEMORY,
 	DB_OUT_OF_FILE_SPACE,
 	DB_LOCK_WAIT,
@@ -91,6 +94,12 @@ enum db_err {
 
 	DB_PRIMARY_KEY_IS_NULL,		/* a column in the PRIMARY KEY
 					was found to be NULL */
+	DB_FOREIGN_EXCEED_MAX_CASCADE,	/* Foreign key constraint related
+					cascading delete/update exceeds
+					maximum allowed depth */
+	DB_TABLE_IN_FK_CHECK,		/* table is being used in foreign
+					key check */
+	DB_IDENTIFIER_TOO_LONG,		/* Identifier name too long */
 
 	/* The following are partial failure codes */
 	DB_FAIL = 1000,

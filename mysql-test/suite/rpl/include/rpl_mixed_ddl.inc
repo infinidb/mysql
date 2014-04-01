@@ -1,6 +1,4 @@
 #########################################
-# Author: Serge Kozlov skozlov@mysql.com
-# Date: 07/10/2006
 # Purpose: testing the replication in mixed mode
 # Requirements: define binlog format for mysqld as in example below:
 # ./mysql-test-run.pl --mysqld=--binlog-format=mixed
@@ -66,9 +64,7 @@ ALTER TABLE t2 DROP COLUMN d;
 --echo
 --echo
 --echo ******************** SHOW BINLOG EVENTS ********************
---replace_column 2 # 5 #
---replace_regex /Server ver: .+/Server ver: #/ /table_id: [0-9]+/table_id: #/
-show binlog events from 1;
+source include/show_binlog_events.inc;
 sync_slave_with_master;
 # as we're using UUID we don't SELECT but use "diff" like in rpl_row_UUID
 --exec $MYSQL_DUMP --compact --order-by-primary --skip-extended-insert --no-create-info test_rpl > $MYSQLTEST_VARDIR/tmp/rpl_switch_stm_row_mixed_master.sql
@@ -84,3 +80,4 @@ sync_slave_with_master;
 # the files your self to see what is not matching
 
 --diff_files $MYSQLTEST_VARDIR/tmp/rpl_switch_stm_row_mixed_master.sql $MYSQLTEST_VARDIR/tmp/rpl_switch_stm_row_mixed_slave.sql
+--source include/rpl_end.inc

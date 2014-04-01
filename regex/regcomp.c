@@ -31,6 +31,9 @@ struct parse {
 	CHARSET_INFO *charset;	/* for ctype things  */
 };
 
+/* Check if there is enough stack space for recursion. */
+my_regex_stack_check_t my_regex_enough_mem_in_stack= NULL;
+
 #include "regcomp.ih"
 
 static char nuls[10];		/* place to point scanner in event of error */
@@ -117,7 +120,7 @@ CHARSET_INFO *charset;
 #	define	GOODFLAGS(f)	((f)&~REG_DUMP)
 #endif
 
-	my_regex_init(charset);	/* Init cclass if neaded */
+	my_regex_init(charset, NULL);	/* Init cclass if neaded */
 	preg->charset=charset;
 	cflags = GOODFLAGS(cflags);
 	if ((cflags&REG_EXTENDED) && (cflags&REG_NOSPEC))
@@ -222,7 +225,15 @@ int stop;			/* character this ERE should end at */
 		/* do a bunch of concatenated expressions */
 		conc = HERE();
 		while (MORE() && (c = PEEK()) != '|' && c != stop)
-			p_ere_exp(p);
+		{
+		  if (my_regex_enough_mem_in_stack &&
+		      my_regex_enough_mem_in_stack(0))
+		  {
+		    SETERROR(REG_ESPACE);
+		    return;
+		  }
+		  p_ere_exp(p);
+		}
 		if(REQUIRE(HERE() != conc, REG_EMPTY)) {}/* require nonempty */
 
 		if (!EAT('|'))
@@ -690,7 +701,6 @@ register cset *cs;
 	case '-':
 		SETERROR(REG_ERANGE);
 		return;			/* NOTE RETURN */
-		break;
 	default:
 		c = '\0';
 		break;
@@ -1564,13 +1574,13 @@ struct parse *p;
 register struct re_guts *g;
 {
 	register sop *scan;
-	sop *start;
-	register sop *newstart;
+	sop *UNINIT_VAR(start);
+	register sop *UNINIT_VAR(newstart);
 	register sopno newlen;
 	register sop s;
 	register char *cp;
 	register sopno i;
-	LINT_INIT(start); LINT_INIT(newstart);
+
 	/* avoid making error situations worse */
 	if (p->error != 0)
 		return;

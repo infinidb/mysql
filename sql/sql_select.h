@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 
 /**
@@ -58,6 +58,8 @@ class store_key;
 typedef struct st_table_ref
 {
   bool		key_err;
+  /** True if something was read into buffer in join_read_key.  */
+  bool          has_record;
   uint          key_parts;                ///< num of ...
   uint          key_length;               ///< length of key_buff
   int           key;                      ///< key no
@@ -85,8 +87,17 @@ typedef struct st_table_ref
   table_map	depend_map;		  ///< Table depends on these tables.
   /* null byte position in the key_buf. Used for REF_OR_NULL optimization */
   uchar          *null_ref_key;
+  /*
+    The number of times the record associated with this key was used
+    in the join.
+  */
+  ha_rows       use_count;
 } TABLE_REF;
 
+
+
+#define CACHE_BLOB      1        /* blob field  */
+#define CACHE_STRIPPED  2        /* field stripped of trailing spaces */
 
 /**
   CACHE_FIELD and JOIN_CACHE is used on full join to cache records in outer
@@ -96,8 +107,8 @@ typedef struct st_table_ref
 typedef struct st_cache_field {
   uchar *str;
   uint length, blob_length;
-  Field_blob *blob_field;
-  bool strip;
+  Field *field;
+  uint type;    /**< category of the of the copied field (CACHE_BLOB et al.) */
 } CACHE_FIELD;
 
 
@@ -278,7 +289,14 @@ public:
   TABLE    **table,**all_tables,*sort_by_table;
   uint	   tables,const_tables;
   uint	   send_group_parts;
-  bool	   sort_and_group,first_record,full_join,group, no_field_update;
+  /**
+    Indicates that grouping will be performed on the result set during
+    query execution. This field belongs to query execution.
+
+    @see make_group_fields, alloc_group_fields, JOIN::exec
+  */
+  bool     sort_and_group; 
+  bool     first_record,full_join,group, no_field_update;
   bool	   do_send_rows;
   /**
     TRUE when we want to resume nested loop iterations when
@@ -340,7 +358,25 @@ public:
   */
   bool no_const_tables; 
   
-  JOIN *tmp_join; ///< copy of this JOIN to be used with temporary tables
+  /**
+    Copy of this JOIN to be used with temporary tables.
+
+    tmp_join is used when the JOIN needs to be "reusable" (e.g. in a subquery
+    that gets re-executed several times) and we know will use temporary tables
+    for materialization. The materialization to a temporary table overwrites the
+    JOIN structure to point to the temporary table after the materialization is
+    done. This is where tmp_join is used : it's a copy of the JOIN before the
+    materialization and is used in restoring before re-execution by overwriting
+    the current JOIN structure with the saved copy.
+    Because of this we should pay extra care of not freeing up helper structures
+    that are referenced by the original contents of the JOIN. We can check for
+    this by making sure the "current" join is not the temporary copy, e.g.
+    !tmp_join || tmp_join != join
+ 
+    We should free these sub-structures at JOIN::destroy() if the "current" join
+    has a copy is not that copy.
+  */
+  JOIN *tmp_join;
   ROLLUP rollup;				///< Used with rollup
 
   bool select_distinct;				///< Set if SELECT DISTINCT
@@ -357,6 +393,8 @@ public:
     simple_xxxxx is set if ORDER/GROUP BY doesn't include any references
     to other tables than the first non-constant table in the JOIN.
     It's also set if ORDER/GROUP BY is empty.
+    Used for deciding for or against using a temporary table to compute 
+    GROUP/ORDER BY.
   */
   bool simple_order, simple_group;
   /**
@@ -426,6 +464,7 @@ public:
     tables= 0;
     const_tables= 0;
     join_list= 0;
+    implicit_grouping= FALSE;
     sort_and_group= 0;
     first_record= 0;
     do_send_rows= 1;
@@ -502,6 +541,7 @@ public:
   }
 
   bool rollup_init();
+  bool rollup_process_const_fields();
   bool rollup_make_fields(List<Item> &all_fields, List<Item> &fields,
 			  Item_sum ***func);
   int rollup_send_data(uint idx);
@@ -531,7 +571,13 @@ public:
                                         select_lex == unit->fake_select_lex));
   }
 private:
+  /**
+    TRUE if the query contains an aggregate function but has no GROUP
+    BY clause. 
+  */
+  bool implicit_grouping; 
   bool make_simple_join(JOIN *join, TABLE *tmp_table);
+  void cleanup_item_list(List<Item> &items) const;
 };
 
 
@@ -556,7 +602,7 @@ bool setup_copy_fields(THD *thd, TMP_TABLE_PARAM *param,
 		       List<Item> &new_list1, List<Item> &new_list2,
 		       uint elements, List<Item> &fields);
 void copy_fields(TMP_TABLE_PARAM *param);
-void copy_funcs(Item **func_ptr);
+bool copy_funcs(Item **func_ptr, const THD *thd);
 bool create_myisam_from_heap(THD *thd, TABLE *table, TMP_TABLE_PARAM *param,
 			     int error, bool ignore_last_dupp_error);
 uint find_shortest_key(TABLE *table, const key_map *usable_keys);
@@ -566,7 +612,8 @@ Field* create_tmp_field_from_field(THD *thd, Field* org_field,
                                                                       
 /* functions from opt_sum.cc */
 bool simple_pred(Item_func *func_item, Item **args, bool *inv_order);
-int opt_sum_query(TABLE_LIST *tables, List<Item> &all_fields,COND *conds);
+int opt_sum_query(THD* thd,
+                  TABLE_LIST *tables, List<Item> &all_fields, COND *conds);
 
 /* from sql_delete.cc, used by opt_range.cc */
 extern "C" int refpos_order_cmp(void* arg, const void *a,const void *b);
@@ -686,9 +733,16 @@ public:
     my_bitmap_map *old_map= dbug_tmp_use_all_columns(table,
                                                      table->write_set);
     int res= item->save_in_field(to_field, 1);
+    /*
+     Item::save_in_field() may call Item::val_xxx(). And if this is a subquery
+     we need to check for errors executing it and react accordingly
+    */
+    if (!res && table->in_use->is_error())
+      res= 1; /* STORE_KEY_FATAL */
     dbug_tmp_restore_column_map(table->write_set, old_map);
     null_key= to_field->is_null() || item->null_value;
-    return (err != 0 || res > 2 ? STORE_KEY_FATAL : (store_key_result) res); 
+    return ((err != 0 || res < 0 || res > 2) ? STORE_KEY_FATAL : 
+            (store_key_result) res);
   }
 };
 
@@ -717,11 +771,17 @@ protected:
       if ((res= item->save_in_field(to_field, 1)))
       {       
         if (!err)
-          err= res;
+          err= res < 0 ? 1 : res; /* 1=STORE_KEY_FATAL */
       }
+      /*
+        Item::save_in_field() may call Item::val_xxx(). And if this is a subquery
+        we need to check for errors executing it and react accordingly
+        */
+      if (!err && to_field->table->in_use->is_error())
+        err= 1; /* STORE_KEY_FATAL */
     }
     null_key= to_field->is_null() || item->null_value;
-    return (err > 2 ?  STORE_KEY_FATAL : (store_key_result) err);
+    return (err > 2 ? STORE_KEY_FATAL : (store_key_result) err);
   }
 };
 

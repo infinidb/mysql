@@ -277,13 +277,14 @@ btr_cur_del_mark_set_sec_rec(
 	que_thr_t*	thr,	/* in: query thread */
 	mtr_t*		mtr);	/* in: mtr */
 /***************************************************************
-Sets a secondary index record delete mark to FALSE. This function is
-only used by the insert buffer insert merge mechanism. */
+Sets a secondary index record delete mark. This function is only
+used by the insert buffer insert merge mechanism. */
 
 void
-btr_cur_del_unmark_for_ibuf(
-/*========================*/
+btr_cur_set_deleted_flag_for_ibuf(
+/*==============================*/
 	rec_t*		rec,	/* in: record to delete unmark */
+	ibool		val,	/* in: value to set */
 	mtr_t*		mtr);	/* in: mtr */
 /*****************************************************************
 Tries to compress a page of the tree on the leaf level. It is assumed
@@ -404,7 +405,10 @@ btr_estimate_n_rows_in_range(
 /***********************************************************************
 Estimates the number of different key values in a given index, for
 each n-column prefix of the index where n <= dict_index_get_n_unique(index).
-The estimates are stored in the array index->stat_n_diff_key_vals. */
+The estimates are stored in the array index->stat_n_diff_key_vals.
+If innodb_stats_method is nulls_ignored, we also record the number of
+non-null values for each prefix and stored the estimates in
+array index->stat_n_non_null_key_vals. */
 
 void
 btr_estimate_number_of_different_key_vals(
@@ -554,6 +558,19 @@ btr_push_update_extern_fields(
 	const ulint*	offsets,/* in: array returned by rec_get_offsets() */
 	upd_t*		update);/* in: update vector or NULL */
 
+/***************************************************************
+Writes a redo log record of updating a record in-place. */
+
+void
+btr_cur_update_in_place_log(
+/*========================*/
+	ulint		flags,		/* in: flags */
+	rec_t*		rec,		/* in: record */
+	dict_index_t*	index,		/* in: index where cursor positioned */
+	upd_t*		update,		/* in: update vector */
+	trx_t*		trx,		/* in: transaction */
+	dulint		roll_ptr,	/* in: roll ptr */
+	mtr_t*		mtr);		/* in: mtr */
 
 /*######################################################################*/
 
@@ -698,6 +715,11 @@ extern ulint	btr_cur_n_non_sea;
 extern ulint	btr_cur_n_sea;
 extern ulint	btr_cur_n_non_sea_old;
 extern ulint	btr_cur_n_sea_old;
+
+#ifdef UNIV_DEBUG
+/* Flag to limit optimistic insert records */
+extern uint	btr_cur_limit_optimistic_insert_debug;
+#endif /* UNIV_DEBUG */
 
 #ifndef UNIV_NONINL
 #include "btr0cur.ic"

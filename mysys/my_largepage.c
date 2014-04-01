@@ -1,4 +1,6 @@
-/* Copyright (C) 2004 MySQL AB
+/*
+   Copyright (c) 2004, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysys_priv.h"
 
@@ -121,7 +124,7 @@ uchar* my_large_malloc_int(size_t size, myf my_flags)
   DBUG_ENTER("my_large_malloc_int");
 
   /* Align block size to my_large_page_size */
-  size = ((size - 1) & ~(my_large_page_size - 1)) + my_large_page_size;
+  size= MY_ALIGN(size, (size_t) my_large_page_size);
   
   shmid = shmget(IPC_PRIVATE, size, SHM_HUGETLB | SHM_R | SHM_W);
   if (shmid < 0)

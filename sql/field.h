@@ -1,4 +1,4 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,10 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
+
+#include "my_compare.h"   /* for clr_rec_bits */
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -57,7 +60,11 @@ public:
   static void operator delete(void *ptr_arg, size_t size) { TRASH(ptr_arg, size); }
 
   uchar		*ptr;			// Position to field in record
-  uchar		*null_ptr;		// Byte where null_bit is
+  /**
+     Byte where the @c NULL bit is stored inside a record. If this Field is a
+     @c NOT @c NULL field, this member is @c NULL.
+  */
+  uchar		*null_ptr;
   /*
     Note that you can use table->in_use as replacement for current_thd member 
     only inside of val_*() and store() members (e.g. you can't use it in cons)
@@ -167,7 +174,7 @@ public:
   */
   virtual uint32 pack_length_in_rec() const { return pack_length(); }
   virtual int compatible_field_size(uint field_metadata,
-                                    const Relay_log_info *);
+                                    const Relay_log_info *, uint16 mflags);
   virtual uint pack_length_from_metadata(uint field_metadata)
   { return field_metadata; }
   /*
@@ -263,6 +270,9 @@ public:
   inline void set_notnull(my_ptrdiff_t row_offset= 0)
     { if (null_ptr) null_ptr[row_offset]&= (uchar) ~null_bit; }
   inline bool maybe_null(void) { return null_ptr != 0 || table->maybe_null; }
+  /**
+     Signals that this field is NULL-able.
+  */
   inline bool real_maybe_null(void) { return null_ptr != 0; }
 
   enum {
@@ -474,6 +484,13 @@ public:
   /* maximum possible display length */
   virtual uint32 max_display_length()= 0;
 
+  /**
+    Whether a field being created is compatible with a existing one.
+
+    Used by the ALTER TABLE code to evaluate whether the new definition
+    of a table is compatible with the old definition so that it can
+    determine if data needs to be copied over (table data change).
+  */
   virtual uint is_equal(Create_field *new_field);
   /* convert decimal to longlong with overflow check */
   longlong convert_decimal2longlong(const my_decimal *val, bool unsigned_flag,
@@ -605,15 +622,17 @@ protected:
     handle_int64(to, from, low_byte_first_from, table->s->db_low_byte_first);
     return from + sizeof(int64);
   }
+
+  bool field_flags_are_binary()
+  {
+    return (flags & (BINCMP_FLAG | BINARY_FLAG)) != 0;
+  }
+
 };
 
 
 class Field_num :public Field {
 public:
-  /**
-     The scale of the Field's value, i.e. the number of digits to the right
-     of the decimal point.
-  */
   /*const*/ uint8 dec; //@InfiniDB need to adjust this field due to vtable restriction
   bool zerofill,unsigned_flag;	// Purify cannot handle bit fields
   Field_num(uchar *ptr_arg,uint32 len_arg, uchar *null_ptr_arg,
@@ -664,7 +683,6 @@ public:
   friend class Create_field;
   my_decimal *val_decimal(my_decimal *);
   virtual bool str_needs_quotes() { return TRUE; }
-  bool compare_str_field_flags(Create_field *new_field, uint32 flags);
   uint is_equal(Create_field *new_field);
 };
 
@@ -772,11 +790,6 @@ public:
   Field_new_decimal(uint32 len_arg, bool maybe_null_arg,
                     const char *field_name_arg, uint8 dec_arg,
                     bool unsigned_arg);
-  /*
-    Create a field to hold a decimal value from an item.
-    Truncates the precision and/or scale if necessary.
-  */
-  static Field_new_decimal *new_decimal_field(const Item *item);
   enum_field_types type() const { return MYSQL_TYPE_NEWDECIMAL;}
   enum ha_base_keytype key_type() const { return HA_KEYTYPE_BINARY; }
   Item_result result_type () const { return DECIMAL_RESULT; }
@@ -802,10 +815,11 @@ public:
   uint pack_length_from_metadata(uint field_metadata);
   uint row_pack_length() { return pack_length(); }
   int compatible_field_size(uint field_metadata,
-                            const Relay_log_info *rli);
+                            const Relay_log_info *rli, uint16 mflags);
   uint is_equal(Create_field *new_field);
   virtual const uchar *unpack(uchar* to, const uchar *from,
                               uint param_data, bool low_byte_first);
+  static Field *create_from_item (Item *);
 };
 
 
@@ -1279,12 +1293,12 @@ public:
   Field_date(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
 	     enum utype unireg_check_arg, const char *field_name_arg,
 	     CHARSET_INFO *cs)
-    :Field_str(ptr_arg, 10, null_ptr_arg, null_bit_arg,
+    :Field_str(ptr_arg, MAX_DATE_WIDTH, null_ptr_arg, null_bit_arg,
 	       unireg_check_arg, field_name_arg, cs)
     {}
   Field_date(bool maybe_null_arg, const char *field_name_arg,
              CHARSET_INFO *cs)
-    :Field_str((uchar*) 0,10, maybe_null_arg ? (uchar*) "": 0,0,
+    :Field_str((uchar*) 0, MAX_DATE_WIDTH, maybe_null_arg ? (uchar*) "": 0,0,
 	       NONE, field_name_arg, cs) {}
   enum_field_types type() const { return MYSQL_TYPE_DATE;}
   enum ha_base_keytype key_type() const { return HA_KEYTYPE_ULONG_INT; }
@@ -1394,12 +1408,12 @@ public:
   Field_datetime(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
 		 enum utype unireg_check_arg, const char *field_name_arg,
 		 CHARSET_INFO *cs)
-    :Field_str(ptr_arg, 19, null_ptr_arg, null_bit_arg,
+    :Field_str(ptr_arg, MAX_DATETIME_WIDTH, null_ptr_arg, null_bit_arg,
 	       unireg_check_arg, field_name_arg, cs)
     {}
   Field_datetime(bool maybe_null_arg, const char *field_name_arg,
 		 CHARSET_INFO *cs)
-    :Field_str((uchar*) 0,19, maybe_null_arg ? (uchar*) "": 0,0,
+    :Field_str((uchar*) 0, MAX_DATETIME_WIDTH, maybe_null_arg ? (uchar*) "": 0,0,
 	       NONE, field_name_arg, cs) {}
   enum_field_types type() const { return MYSQL_TYPE_DATETIME;}
 #ifdef HAVE_LONG_LONG
@@ -1497,7 +1511,7 @@ public:
     return (((field_metadata >> 4) & 0x300) ^ 0x300) + (field_metadata & 0x00ff);
   }
   int compatible_field_size(uint field_metadata,
-                            const Relay_log_info *rli);
+                            const Relay_log_info *rli, uint16 mflags);
   uint row_pack_length() { return (field_length + 1); }
   int pack_cmp(const uchar *a,const uchar *b,uint key_length,
                my_bool insert_or_update);
@@ -1812,7 +1826,13 @@ public:
   int  store(longlong nr, bool unsigned_val);
   int  store_decimal(const my_decimal *);
   uint size_of() const { return sizeof(*this); }
-  int  reset(void) { return !maybe_null() || Field_blob::reset(); }
+
+  /**
+    Non-nullable GEOMETRY types cannot have defaults,
+    but the underlying blob must still be reset.
+   */
+  int reset(void) { return Field_blob::reset() || !maybe_null(); }
+
   geometry_type get_geometry_type() { return geom_type; };
 };
 #endif /*HAVE_SPATIAL*/
@@ -1864,7 +1884,6 @@ public:
   CHARSET_INFO *sort_charset(void) const { return &my_charset_bin; }
 private:
   int do_save_field_metadata(uchar *first_byte);
-  bool compare_enum_values(TYPELIB *values);
   uint is_equal(Create_field *new_field);
 };
 
@@ -1925,7 +1944,12 @@ public:
   uint32 max_display_length() { return field_length; }
   uint size_of() const { return sizeof(*this); }
   Item_result result_type () const { return INT_RESULT; }
-  int reset(void) { bzero(ptr, bytes_in_rec); return 0; }
+  int reset(void) { 
+    bzero(ptr, bytes_in_rec); 
+    if (bit_ptr && (bit_len > 0))  // reset odd bits among null bits
+      clr_rec_bits(bit_ptr, bit_ofs, bit_len);
+    return 0; 
+  }
   int store(const char *to, uint length, CHARSET_INFO *charset);
   int store(double nr);
   int store(longlong nr, bool unsigned_val);
@@ -1962,7 +1986,7 @@ public:
   uint row_pack_length()
   { return (bytes_in_rec + ((bit_len > 0) ? 1 : 0)); }
   int compatible_field_size(uint field_metadata,
-                            const Relay_log_info *rli);
+                            const Relay_log_info *rli, uint16 mflags);
   void sql_type(String &str) const;
   virtual uchar *pack(uchar *to, const uchar *from,
                       uint max_length, bool low_byte_first);
@@ -2072,6 +2096,11 @@ public:
             Item *on_update_value, LEX_STRING *comment, char *change,
             List<String> *interval_list, CHARSET_INFO *cs,
             uint uint_geom_type);
+
+  bool field_flags_are_binary()
+  {
+    return (flags & (BINCMP_FLAG | BINARY_FLAG)) != 0;
+  }
 };
 
 
@@ -2107,6 +2136,23 @@ public:
   uchar *from_null_ptr,*to_null_ptr;
   my_bool *null_row;
   uint	from_bit,to_bit;
+  /**
+    Number of bytes in the fields pointed to by 'from_ptr' and
+    'to_ptr'. Usually this is the number of bytes that are copied from
+    'from_ptr' to 'to_ptr'.
+
+    For variable-length fields (VARCHAR), the first byte(s) describe
+    the actual length of the text. For VARCHARs with length 
+       < 256 there is 1 length byte 
+       >= 256 there is 2 length bytes
+    Thus, if from_field is VARCHAR(10), from_length (and in most cases
+    to_length) is 11. For VARCHAR(1024), the length is 1026. @see
+    Field_varstring::length_bytes
+
+    Note that for VARCHARs, do_copy() will be do_varstring*() which
+    only copies the length-bytes (1 or 2) + the actual length of the
+    text instead of from/to_length bytes. @see get_copy_func()
+  */
   uint from_length,to_length;
   Field *from_field,*to_field;
   String tmp;					// For items

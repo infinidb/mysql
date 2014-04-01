@@ -245,13 +245,13 @@ fseg_n_reserved_pages_low(
 /************************************************************************
 Marks a page used. The page must reside within the extents of the given
 segment. */
-static
+static __attribute__((nonnull))
 void
 fseg_mark_page_used(
 /*================*/
 	fseg_inode_t*	seg_inode,/* in: segment inode */
-	ulint		space,	/* in: space id */
 	ulint		page,	/* in: page offset */
+	xdes_t*		descr,	/* in: extent descriptor */
 	mtr_t*		mtr);	/* in: mtr */
 /**************************************************************************
 Returns the first extent descriptor for a segment. We think of the extent
@@ -293,14 +293,14 @@ fseg_alloc_free_page_low(
 				/* out: the allocated page number, FIL_NULL
 				if no page could be allocated */
 	ulint		space,	/* in: space */
-	fseg_inode_t*	seg_inode, /* in: segment inode */
+	fseg_inode_t*	seg_inode, /* in/out: segment inode */
 	ulint		hint,	/* in: hint of which page would be desirable */
 	byte		direction, /* in: if the new page is needed because
 				of an index page split, and records are
 				inserted there in order, into which
 				direction they go alphabetically: FSP_DOWN,
 				FSP_UP, FSP_NO_DIR */
-	mtr_t*		mtr);	/* in: mtr handle */
+	mtr_t*		mtr);	/* in/out: mini-transaction */
 
 
 /**************************************************************************
@@ -635,10 +635,8 @@ xdes_calc_descriptor_index(
 
 /************************************************************************
 Gets pointer to a the extent descriptor of a page. The page where the extent
-descriptor resides is x-locked. If the page offset is equal to the free limit
-of the space, adds new extents from above the free limit to the space free
-list, if not free limit == space size. This adding is necessary to make the
-descriptor defined, as they are uninitialized above the free limit. */
+descriptor resides is x-locked. This function no longer extends the data
+file. */
 UNIV_INLINE
 xdes_t*
 xdes_get_descriptor_with_space_hdr(
@@ -666,17 +664,8 @@ xdes_get_descriptor_with_space_hdr(
 	limit = mtr_read_ulint(sp_header + FSP_FREE_LIMIT, MLOG_4BYTES, mtr);
 	size  = mtr_read_ulint(sp_header + FSP_SIZE, MLOG_4BYTES, mtr);
 
-	/* If offset is >= size or > limit, return NULL */
-
-	if ((offset >= size) || (offset > limit)) {
-
+	if ((offset >= size) || (offset >= limit)) {
 		return(NULL);
-	}
-
-	/* If offset is == limit, fill free list of the space. */
-
-	if (offset == limit) {
-		fsp_fill_free_list(FALSE, space, sp_header, mtr);
 	}
 
 	descr_page_no = xdes_calc_descriptor_page(offset);
@@ -802,12 +791,7 @@ fsp_init_file_page_low(
 
 	buf_block_align(page)->check_index_page_at_flush = FALSE;
 
-#ifdef UNIV_BASIC_LOG_DEBUG
-	memset(page, 0xff, UNIV_PAGE_SIZE);
-#endif
-	mach_write_to_8(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
-			ut_dulint_zero);
-	mach_write_to_8(page + FIL_PAGE_LSN, ut_dulint_zero);
+	memset(page, 0, UNIV_PAGE_SIZE);
 }
 
 /***************************************************************
@@ -1386,7 +1370,7 @@ fsp_alloc_free_page(
 			be allocated */
 	ulint	space,	/* in: space id */
 	ulint	hint,	/* in: hint of which page would be desirable */
-	mtr_t*	mtr)	/* in: mtr handle */
+	mtr_t*	mtr)	/* in/out: mini-transaction */
 {
 	fsp_header_t*	header;
 	fil_addr_t	first;
@@ -1446,6 +1430,7 @@ fsp_alloc_free_page(
 	if (free == ULINT_UNDEFINED) {
 
 		ut_print_buf(stderr, ((byte*)descr) - 500, 1000);
+		putc('\n', stderr);
 
 		ut_error;
 	}
@@ -2336,14 +2321,14 @@ fseg_alloc_free_page_low(
 				/* out: the allocated page number, FIL_NULL
 				if no page could be allocated */
 	ulint		space,	/* in: space */
-	fseg_inode_t*	seg_inode, /* in: segment inode */
+	fseg_inode_t*	seg_inode, /* in/out: segment inode */
 	ulint		hint,	/* in: hint of which page would be desirable */
 	byte		direction, /* in: if the new page is needed because
 				of an index page split, and records are
 				inserted there in order, into which
 				direction they go alphabetically: FSP_DOWN,
 				FSP_UP, FSP_NO_DIR */
-	mtr_t*		mtr)	/* in: mtr handle */
+	mtr_t*		mtr)	/* in/out: mini-transaction */
 {
 	fsp_header_t*	space_header;
 	ulint		space_size;
@@ -2556,10 +2541,8 @@ fseg_alloc_free_page_low(
 		ut_ad(xdes_get_bit(ret_descr, XDES_FREE_BIT,
 				   ret_page % FSP_EXTENT_SIZE, mtr) == TRUE);
 
-		fseg_mark_page_used(seg_inode, space, ret_page, mtr);
+		fseg_mark_page_used(seg_inode, ret_page, ret_descr, mtr);
 	}
-
-	buf_reset_check_index_page_at_flush(space, ret_page);
 
 	return(ret_page);
 }
@@ -2574,7 +2557,7 @@ fseg_alloc_free_page_general(
 /*=========================*/
 				/* out: allocated page offset, FIL_NULL if no
 				page could be allocated */
-	fseg_header_t*	seg_header,/* in: segment header */
+	fseg_header_t*	seg_header,/* in/out: segment header */
 	ulint		hint,	/* in: hint of which page would be desirable */
 	byte		direction,/* in: if the new page is needed because
 				of an index page split, and records are
@@ -2586,7 +2569,7 @@ fseg_alloc_free_page_general(
 				with fsp_reserve_free_extents, then there
 				is no need to do the check for this individual
 				page */
-	mtr_t*		mtr)	/* in: mtr handle */
+	mtr_t*		mtr)	/* in/out: mini-transaction */
 {
 	fseg_inode_t*	inode;
 	ulint		space;
@@ -2847,11 +2830,60 @@ fsp_get_available_space_in_free_extents(
 
 	ut_ad(!mutex_own(&kernel_mutex));
 
+	/* The convoluted mutex acquire is to overcome latching order
+	issues: The problem is that the fil_mutex is at a lower level
+	than the tablespace latch and the buffer pool mutex. We have to
+	first prevent any operations on the file system by acquiring the
+	dictionary mutex. Then acquire the tablespace latch to obey the
+	latching order and then release the dictionary mutex. That way we
+	ensure that the tablespace instance can't be freed while we are
+	examining its contents (see fil_space_free()).
+
+	However, there is one further complication, we release the fil_mutex
+	when we need to invalidate the the pages in the buffer pool and we
+	reacquire the fil_mutex when deleting and freeing the tablespace
+	instance in fil0fil.c. Here we need to account for that situation
+	too. */
+
+	dict_mutex_enter_for_mysql();
+
+	/* At this stage there is no guarantee that the tablespace even
+	exists in the cache. */
+
+	if (fil_tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
+
+		dict_mutex_exit_for_mysql();
+
+		return(ULLINT_UNDEFINED);
+	}
+
 	mtr_start(&mtr);
 
 	latch = fil_space_get_latch(space);
 
+	/* This should ensure that the tablespace instance can't be freed
+	by another thread. However, the tablespace pages can still be freed
+	from the buffer pool. We need to check for that again. */
+
 	mtr_x_lock(latch, &mtr);
+
+	dict_mutex_exit_for_mysql();
+
+	/* At this point it is possible for the tablespace to be deleted and
+	its pages removed from the buffer pool. We need to check for that
+	situation. However, the tablespace instance can't be deleted because
+	our latching above should ensure that. */
+
+	if (fil_tablespace_is_being_deleted(space)) {
+
+		mtr_commit(&mtr);
+
+		return(ULLINT_UNDEFINED);
+	}
+
+	/* From here on even if the user has dropped the tablespace, the
+	pages _must_ still exist in the buffer pool and the tablespace
+	instance _must be in the file system hash table. */
 
 	space_header = fsp_get_space_header(space, &mtr);
 
@@ -2903,21 +2935,16 @@ fsp_get_available_space_in_free_extents(
 /************************************************************************
 Marks a page used. The page must reside within the extents of the given
 segment. */
-static
+static __attribute__((nonnull))
 void
 fseg_mark_page_used(
 /*================*/
 	fseg_inode_t*	seg_inode,/* in: segment inode */
-	ulint		space,	/* in: space id */
 	ulint		page,	/* in: page offset */
+	xdes_t*		descr,  /* in: extent descriptor */
 	mtr_t*		mtr)	/* in: mtr */
 {
-	xdes_t*	descr;
 	ulint	not_full_n_used;
-
-	ut_ad(seg_inode && mtr);
-
-	descr = xdes_get_descriptor(space, page, mtr);
 
 	ut_ad(mtr_read_ulint(seg_inode + FSEG_ID, MLOG_4BYTES, mtr)
 	      == mtr_read_ulint(descr + XDES_ID, MLOG_4BYTES, mtr));
@@ -3002,7 +3029,7 @@ fseg_free_page_low(
 crash:
 		fputs("InnoDB: Please refer to\n"
 		      "InnoDB: http://dev.mysql.com/doc/refman/5.1/en/"
-		      "forcing-recovery.html\n"
+		      "forcing-innodb-recovery.html\n"
 		      "InnoDB: about forcing recovery.\n", stderr);
 		ut_error;
 	}

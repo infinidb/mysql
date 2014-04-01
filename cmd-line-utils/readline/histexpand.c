@@ -18,7 +18,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #define READLINE_LIBRARY
 
@@ -693,7 +693,7 @@ history_expand_internal (string, start, end_index_ptr, ret_string, current_line)
 	case 's':
 	  {
 	    char *new_event;
-	    int delimiter, failed, si, l_temp, ws, we;
+	    int delimiter, failed, si, l_temp, we;
 
 	    if (c == 's')
 	      {
@@ -792,7 +792,6 @@ history_expand_internal (string, start, end_index_ptr, ret_string, current_line)
 		  {
 		    for (; temp[si] && whitespace (temp[si]); si++)
 		      ;
-		    ws = si;
 		    we = history_tokenize_word (temp, si);
 		  }
 

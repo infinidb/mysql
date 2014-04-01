@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* This file is originally from the mysql distribution. Coded by monty */
 
@@ -58,11 +60,33 @@ bool String::real_alloc(uint32 arg_length)
 }
 
 
-/*
-** Check that string is big enough. Set string[alloc_length] to 0
-** (for C functions)
-*/
+/**
+   Allocates a new buffer on the heap for this String.
 
+   - If the String's internal buffer is privately owned and heap allocated,
+     one of the following is performed.
+
+     - If the requested length is greater than what fits in the buffer, a new
+       buffer is allocated, data moved and the old buffer freed.
+
+     - If the requested length is less or equal to what fits in the buffer, a
+       null character is inserted at the appropriate position.
+
+   - If the String does not keep a private buffer on the heap, such a buffer
+     will be allocated and the string copied accoring to its length, as found
+     in String::length().
+ 
+   For C compatibility, the new string buffer is null terminated.
+
+   @param alloc_length The requested string size in characters, excluding any
+   null terminator.
+
+   @retval false Either the copy operation is complete or, if the size of the
+   new buffer is smaller than the currently allocated buffer (if one exists),
+   no allocation occured.
+
+   @retval true An error occured when attempting to allocate memory.
+*/
 bool String::realloc(uint32 alloc_length)
 {
   uint32 len=ALIGN_SIZE(alloc_length+1);
@@ -106,13 +130,14 @@ bool String::set_int(longlong num, bool unsigned_flag, CHARSET_INFO *cs)
 
 bool String::set_real(double num,uint decimals, CHARSET_INFO *cs)
 {
-  char buff[331];
+  char buff[FLOATING_POINT_BUFFER];
   uint dummy_errors;
 
   str_charset=cs;
   if (decimals >= NOT_FIXED_DEC)
   {
-    uint32 len= my_sprintf(buff,(buff, "%.15g",num));// Enough for a DATETIME
+    // Enough for a DATETIME
+    uint32 len= sprintf(buff, "%.15g", num);
     return copy(buff, len, &my_charset_latin1, cs, &dummy_errors);
   }
 #ifdef HAVE_FCONVERT
@@ -175,7 +200,10 @@ end:
 #else
 #ifdef HAVE_SNPRINTF
   buff[sizeof(buff)-1]=0;			// Safety
-  snprintf(buff,sizeof(buff)-1, "%.*f",(int) decimals,num);
+  IF_DBUG(int num_chars= )
+    snprintf(buff, sizeof(buff)-1, "%.*f",(int) decimals, num);
+  DBUG_ASSERT(num_chars > 0);
+  DBUG_ASSERT(num_chars < (int) sizeof(buff));
 #else
   sprintf(buff,"%.*f",(int) decimals,num);
 #endif
@@ -195,6 +223,17 @@ bool String::copy()
   return FALSE;
 }
 
+/**
+   Copies the internal buffer from str. If this String has a private heap
+   allocated buffer where new data does not fit, a new buffer is allocated
+   before copying and the old buffer freed. Character set information is also
+   copied.
+   
+   @param str The string whose internal buffer is to be copied.
+   
+   @retval false Success.
+   @retval true Memory allocation failed.
+*/
 bool String::copy(const String &str)
 {
   if (alloc(str.str_length))
@@ -676,7 +715,7 @@ void String::qs_append(const char *str, uint32 len)
 void String::qs_append(double d)
 {
   char *buff = Ptr + str_length;
-  str_length+= my_sprintf(buff, (buff, "%.15g", d));
+  str_length+= sprintf(buff, "%.15g", d);
 }
 
 void String::qs_append(double *d)
@@ -757,7 +796,7 @@ String *copy_if_not_alloced(String *to,String *from,uint32 from_length)
 {
   if (from->Alloced_length >= from_length)
     return from;
-  if (from->alloced || !to || from == to)
+  if ((from->alloced && (from->Alloced_length != 0)) || !to || from == to)
   {
     (void) from->realloc(from_length);
     return from;

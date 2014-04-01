@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -362,24 +362,6 @@ rec_get_offsets_func(
 	rec_get_offsets_func(rec,index,offsets,n,heap,__FILE__,__LINE__)
 
 /******************************************************//**
-Determine the offset to each field in a leaf-page record
-in ROW_FORMAT=COMPACT.  This is a special case of
-rec_init_offsets() and rec_get_offsets_func(). */
-UNIV_INTERN
-void
-rec_init_offsets_comp_ordinary(
-/*===========================*/
-	const rec_t*		rec,	/*!< in: physical record in
-					ROW_FORMAT=COMPACT */
-	ulint			extra,	/*!< in: number of bytes to reserve
-					between the record header and
-					the data payload
-					(usually REC_N_NEW_EXTRA_BYTES) */
-	const dict_index_t*	index,	/*!< in: record descriptor */
-	ulint*			offsets);/*!< in/out: array of offsets;
-					in: n=rec_offs_n_fields(offsets) */
-
-/******************************************************//**
 The following function determines the offsets to each field
 in the record.  It can reuse a previously allocated array. */
 UNIV_INTERN
@@ -480,6 +462,18 @@ ulint
 rec_offs_any_extern(
 /*================*/
 	const ulint*	offsets);/*!< in: array returned by rec_get_offsets() */
+#if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
+/******************************************************//**
+Determine if the offsets are for a record containing null BLOB pointers.
+@return	first field containing a null BLOB pointer, or NULL if none found */
+UNIV_INLINE
+const byte*
+rec_offs_any_null_extern(
+/*=====================*/
+	const rec_t*	rec,		/*!< in: record */
+	const ulint*	offsets)	/*!< in: rec_get_offsets(rec) */
+	__attribute__((nonnull, warn_unused_result));
+#endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 /******************************************************//**
 Returns nonzero if the extern bit is set in nth field of rec.
 @return	nonzero if externally stored */
@@ -627,8 +621,48 @@ rec_copy(
 /*=====*/
 	void*		buf,	/*!< in: buffer */
 	const rec_t*	rec,	/*!< in: physical record */
-	const ulint*	offsets);/*!< in: array returned by rec_get_offsets() */
+	const ulint*	offsets)/*!< in: array returned by rec_get_offsets() */
+	__attribute__((nonnull));
 #ifndef UNIV_HOTBACKUP
+/**********************************************************//**
+Determines the size of a data tuple prefix in a temporary file.
+@return	total size */
+UNIV_INTERN
+ulint
+rec_get_converted_size_temp(
+/*========================*/
+	const dict_index_t*	index,	/*!< in: record descriptor */
+	const dfield_t*		fields,	/*!< in: array of data fields */
+	ulint			n_fields,/*!< in: number of data fields */
+	ulint*			extra)	/*!< out: extra size */
+	__attribute__((warn_unused_result, nonnull));
+
+/******************************************************//**
+Determine the offset to each field in temporary file.
+@see rec_convert_dtuple_to_temp() */
+UNIV_INTERN
+void
+rec_init_offsets_temp(
+/*==================*/
+	const rec_t*		rec,	/*!< in: temporary file record */
+	const dict_index_t*	index,	/*!< in: record descriptor */
+	ulint*			offsets)/*!< in/out: array of offsets;
+					in: n=rec_offs_n_fields(offsets) */
+	__attribute__((nonnull));
+
+/*********************************************************//**
+Builds a temporary file record out of a data tuple.
+@see rec_init_offsets_temp() */
+UNIV_INTERN
+void
+rec_convert_dtuple_to_temp(
+/*=======================*/
+	rec_t*			rec,		/*!< out: record */
+	const dict_index_t*	index,		/*!< in: record descriptor */
+	const dfield_t*		fields,		/*!< in: array of data fields */
+	ulint			n_fields)	/*!< in: number of fields */
+	__attribute__((nonnull));
+
 /**************************************************************//**
 Copies the first n fields of a physical record to a new physical record in
 a buffer.
@@ -663,21 +697,6 @@ rec_fold(
 	__attribute__((pure));
 #endif /* !UNIV_HOTBACKUP */
 /*********************************************************//**
-Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
-UNIV_INTERN
-void
-rec_convert_dtuple_to_rec_comp(
-/*===========================*/
-	rec_t*			rec,	/*!< in: origin of record */
-	ulint			extra,	/*!< in: number of bytes to
-					reserve between the record
-					header and the data payload
-					(normally REC_N_NEW_EXTRA_BYTES) */
-	const dict_index_t*	index,	/*!< in: record descriptor */
-	ulint			status,	/*!< in: status bits of the record */
-	const dfield_t*		fields,	/*!< in: array of data fields */
-	ulint			n_fields);/*!< in: number of data fields */
-/*********************************************************//**
 Builds a physical record out of a data tuple and
 stores it into the given buffer.
 @return	pointer to the origin of physical record */
@@ -710,10 +729,7 @@ UNIV_INTERN
 ulint
 rec_get_converted_size_comp_prefix(
 /*===============================*/
-	const dict_index_t*	index,	/*!< in: record descriptor;
-					dict_table_is_comp() is
-					assumed to hold, even if
-					it does not */
+	const dict_index_t*	index,	/*!< in: record descriptor */
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
 	ulint*			extra);	/*!< out: extra size */

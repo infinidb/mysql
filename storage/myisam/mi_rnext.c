@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2004 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "myisamdef.h"
 
@@ -28,6 +30,7 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
 {
   int error,changed;
   uint flag;
+  uint update_mask= HA_STATE_NEXT_FOUND;
   DBUG_ENTER("mi_rnext");
 
   if ((inx = _mi_check_index(info,inx)) < 0)
@@ -55,6 +58,20 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
 			   info->s->state.key_root[inx]);
       break;
     }
+    /*
+      "search first" failed. This means we have no pivot for
+      "search next", or in other words MI_INFO::lastkey is
+      likely uninitialized.
+
+      Normally SQL layer would never request "search next" if
+      "search first" failed. But HANDLER may do anything.
+
+      As mi_rnext() without preceeding mi_rkey()/mi_rfirst()
+      equals to mi_rfirst(), we must restore original state
+      as if failing mi_rfirst() was not called.
+    */
+    if (error)
+      update_mask|= HA_STATE_PREV_FOUND;
   }
   else
   {
@@ -100,7 +117,7 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
   }
 	/* Don't clear if database-changed */
   info->update&= (HA_STATE_CHANGED | HA_STATE_ROW_CHANGED);
-  info->update|= HA_STATE_NEXT_FOUND;
+  info->update|= update_mask;
 
   if (error)
   {

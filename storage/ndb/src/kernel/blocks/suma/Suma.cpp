@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/* Copyright (c) 2003-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_config.h>
 #include "Suma.hpp"
@@ -274,7 +275,7 @@ Suma::execSTTOR(Signal* signal) {
       jam();
       
       send_start_me_req(signal);
-      return;
+      DBUG_VOID_RETURN;
     }
   }
   
@@ -322,7 +323,7 @@ Suma::execSTTOR(Signal* signal) {
     if (ERROR_INSERTED(13030))
     {
       ndbout_c("Dont start handover");
-      return;
+      DBUG_VOID_RETURN;
     }
   }//if
   
@@ -332,7 +333,7 @@ Suma::execSTTOR(Signal* signal) {
      * Allow API's to connect
      */
     sendSTTORRY(signal);
-    return;
+    DBUG_VOID_RETURN;
   }
 
   if(startphase == 101)
@@ -345,7 +346,7 @@ Suma::execSTTOR(Signal* signal) {
        */
       c_startup.m_wait_handover= true;
       check_start_handover(signal);
-      return;
+      DBUG_VOID_RETURN;
     }
   }
   sendSTTORRY(signal);
@@ -575,19 +576,19 @@ void Suma::execAPI_FAILREQ(Signal* signal)
     jam();
     sendSignalWithDelay(reference(), GSN_API_FAILREQ, signal,
                         200, signal->getLength());
-    return;
+    DBUG_VOID_RETURN;
   }
 
   if (c_failedApiNodes.get(failedApiNode))
   {
     jam();
-    return;
+    DBUG_VOID_RETURN;
   }
 
   if (!c_subscriber_nodes.get(failedApiNode))
   {
     jam();
-    return;
+    DBUG_VOID_RETURN;
   }
 
   c_failedApiNodes.set(failedApiNode);
@@ -2453,7 +2454,7 @@ Suma::execSUB_START_REQ(Signal* signal){
     jam();
     c_subscriberPool.release(subbPtr);
     sendSubStartRef(signal, SubStartRef::PartiallyConnected);
-    return;
+    DBUG_VOID_RETURN;
   }
   
   DBUG_PRINT("info",("c_subscriberPool  size: %d free: %d",
@@ -4289,7 +4290,7 @@ Suma::Restart::runSUMA_START_ME_REQ(Signal* signal, Uint32 sumaRef)
     ref->errorCode = SumaStartMeRef::Busy;
     suma.sendSignal(sumaRef, GSN_SUMA_START_ME_REF, signal,
 		    SumaStartMeRef::SignalLength, JBB);
-    return;
+    DBUG_VOID_RETURN;
   }
 
   nodeId = refToNode(sumaRef);

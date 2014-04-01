@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,8 +11,7 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
   @file
@@ -1293,10 +1292,12 @@ int ha_ndbcluster::open_indexes(Ndb *ndb, TABLE *tab, bool ignore_error)
   for (i= 0; i < tab->s->keys; i++, key_info++, key_name++)
   {
     if ((error= add_index_handle(thd, dict, key_info, *key_name, i)))
+    {
       if (ignore_error)
         m_index[i].index= m_index[i].unique_index= NULL;
       else
         break;
+    }
     m_index[i].null_in_unique_index= FALSE;
     if (check_index_fields_not_null(key_info))
       m_index[i].null_in_unique_index= TRUE;
@@ -5525,7 +5526,7 @@ int ha_ndbcluster::create(const char *name,
       if (share && !do_event_op)
         share->flags|= NSF_NO_BINLOG;
       ndbcluster_log_schema_op(thd, share,
-                               thd->query, thd->query_length,
+                               thd->query(), thd->query_length(),
                                share->db, share->table_name,
                                m_table->getObjectId(),
                                m_table->getObjectVersion(),
@@ -5967,7 +5968,8 @@ int ha_ndbcluster::rename_table(const char *from, const char *to)
     */
     if (!is_old_table_tmpfile)
       ndbcluster_log_schema_op(current_thd, share,
-                               current_thd->query, current_thd->query_length,
+                               current_thd->query(),
+                               current_thd->query_length(),
                                old_dbname, m_tabname,
                                ndb_table_id, ndb_table_version,
                                SOT_RENAME_TABLE,
@@ -6162,7 +6164,7 @@ retry_temporary_error1:
       current_thd->lex->sql_command != SQLCOM_TRUNCATE)
   {
     ndbcluster_log_schema_op(thd, share,
-                             thd->query, thd->query_length,
+                             thd->query(), thd->query_length(),
                              share->db, share->table_name,
                              ndb_table_id, ndb_table_version,
                              SOT_DROP_TABLE, 0, 0, 1);
@@ -6264,8 +6266,8 @@ void ha_ndbcluster::get_auto_increment(ulonglong offset, ulonglong increment,
   for (;;)
   {
     Ndb_tuple_id_range_guard g(m_share);
-    if (m_skip_auto_increment &&
-        ndb->readAutoIncrementValue(m_table, g.range, auto_value) ||
+    if ((m_skip_auto_increment &&
+        ndb->readAutoIncrementValue(m_table, g.range, auto_value)) ||
         ndb->getAutoIncrementValue(m_table, g.range, auto_value, cache_size, increment, offset))
     {
       if (--retries &&
@@ -6884,7 +6886,7 @@ static void ndbcluster_drop_database(handlerton *hton, char *path)
   THD *thd= current_thd;
   ha_ndbcluster::set_dbname(path, db);
   ndbcluster_log_schema_op(thd, 0,
-                           thd->query, thd->query_length,
+                           thd->query(), thd->query_length(),
                            db, "", 0, 0, SOT_DROP_DB, 0, 0, 0);
 #endif
   DBUG_VOID_RETURN;
@@ -7315,13 +7317,6 @@ static int ndbcluster_init(void *p)
   if (ndbcluster_inited)
     DBUG_RETURN(FALSE);
 
-  /*
-    Below we create new THD's. They'll need LOCK_plugin, but it's taken now by
-    plugin initialization code. Release it to avoid deadlocks.  It's safe, as
-    there're no threads that may concurrently access plugin control structures.
-  */
-  pthread_mutex_unlock(&LOCK_plugin);
-
   pthread_mutex_init(&ndbcluster_mutex,MY_MUTEX_INIT_FAST);
   pthread_mutex_init(&LOCK_ndb_util_thread, MY_MUTEX_INIT_FAST);
   pthread_cond_init(&COND_ndb_util_thread, NULL);
@@ -7462,8 +7457,6 @@ static int ndbcluster_init(void *p)
     goto ndbcluster_init_error;
   }
 
-  pthread_mutex_lock(&LOCK_plugin);
-
   ndbcluster_inited= 1;
   DBUG_RETURN(FALSE);
 
@@ -7475,8 +7468,6 @@ ndbcluster_init_error:
     delete g_ndb_cluster_connection;
   g_ndb_cluster_connection= NULL;
   ndbcluster_hton->state= SHOW_OPTION_DISABLED;               // If we couldn't use handler
-
-  pthread_mutex_lock(&LOCK_plugin);
 
   DBUG_RETURN(TRUE);
 }
@@ -8419,7 +8410,7 @@ NDB_SHARE *ndbcluster_get_share(const char *key, TABLE *table,
       DBUG_PRINT("error", ("get_share: failed to alloc share"));
       if (!have_lock)
         pthread_mutex_unlock(&ndbcluster_mutex);
-      my_error(ER_OUTOFMEMORY, MYF(0), sizeof(*share));
+      my_error(ER_OUTOFMEMORY, MYF(0), static_cast<int>(sizeof(*share)));
       DBUG_RETURN(0);
     }
   }
@@ -9426,9 +9417,11 @@ ndb_util_thread_fail:
   pthread_cond_signal(&COND_ndb_util_ready);
   pthread_mutex_unlock(&LOCK_ndb_util_thread);
   DBUG_PRINT("exit", ("ndb_util_thread"));
+
+  DBUG_LEAVE;                               // Must match DBUG_ENTER()
   my_thread_end();
   pthread_exit(0);
-  DBUG_RETURN(NULL);
+  return NULL;                              // Avoid compiler warnings
 }
 
 /*
@@ -9924,8 +9917,8 @@ bool ha_ndbcluster::check_if_incompatible_data(HA_CREATE_INFO *create_info,
   {
     Field *field= table->field[i];
     const NDBCOL *col= tab->getColumn(i);
-    if (col->getStorageType() == NDB_STORAGETYPE_MEMORY && create_info->storage_media != HA_SM_MEMORY ||
-        col->getStorageType() == NDB_STORAGETYPE_DISK && create_info->storage_media != HA_SM_DISK)
+    if ((col->getStorageType() == NDB_STORAGETYPE_MEMORY && create_info->storage_media != HA_SM_MEMORY) ||
+        (col->getStorageType() == NDB_STORAGETYPE_DISK && create_info->storage_media != HA_SM_DISK))
     {
       DBUG_PRINT("info", ("Column storage media is changed"));
       DBUG_RETURN(COMPATIBLE_DATA_NO);
@@ -10249,13 +10242,13 @@ int ndbcluster_alter_tablespace(handlerton *hton,
 #ifdef HAVE_NDB_BINLOG
   if (is_tablespace)
     ndbcluster_log_schema_op(thd, 0,
-                             thd->query, thd->query_length,
+                             thd->query(), thd->query_length(),
                              "", alter_info->tablespace_name,
                              0, 0,
                              SOT_TABLESPACE, 0, 0, 0);
   else
     ndbcluster_log_schema_op(thd, 0,
-                             thd->query, thd->query_length,
+                             thd->query(), thd->query_length(),
                              "", alter_info->logfile_group_name,
                              0, 0,
                              SOT_LOGFILE_GROUP, 0, 0, 0);

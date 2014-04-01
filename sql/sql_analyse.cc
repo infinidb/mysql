@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* Analyse database */
@@ -242,7 +244,7 @@ bool test_if_number(NUM_INFO *info, const char *str, uint str_len)
       if (str == end)
       {
 	info->is_float = 1;             // we can't use variable decimals here
-	return 1;
+	DBUG_RETURN(1);
       }
       DBUG_RETURN(0);
     }
@@ -408,7 +410,7 @@ void field_real::add()
 
   if ((decs = decimals()) == NOT_FIXED_DEC)
   {
-    length= my_sprintf(buff, (buff, "%g", num));
+    length= sprintf(buff, "%g", num);
     if (rint(num) != num)
       max_notzero_dec_len = 1;
   }
@@ -419,7 +421,7 @@ void field_real::add()
     snprintf(buff, sizeof(buff)-1, "%-.*f", (int) decs, num);
     length = (uint) strlen(buff);
 #else
-    length= my_sprintf(buff, (buff, "%-.*f", (int) decs, num));
+    length= sprintf(buff, "%-.*f", (int) decs, num);
 #endif
 
     // We never need to check further than this
@@ -521,9 +523,6 @@ void field_decimal::add()
   {
     found = 1;
     min_arg = max_arg = sum[0] = *dec;
-    min_arg.fix_buffer_pointer();
-    max_arg.fix_buffer_pointer();
-    sum[0].fix_buffer_pointer();
     my_decimal_mul(E_DEC_FATAL_ERROR, sum_sqr, dec, dec);
     cur_sum= 0;
     min_length = max_length = length;
@@ -545,12 +544,10 @@ void field_decimal::add()
     if (my_decimal_cmp(dec, &min_arg) < 0)
     {
       min_arg= *dec;
-      min_arg.fix_buffer_pointer();
     }
     if (my_decimal_cmp(dec, &max_arg) > 0)
     {
       max_arg= *dec;
-      max_arg.fix_buffer_pointer();
     }
   }
 }
@@ -1006,9 +1003,9 @@ void field_decimal::get_opt_type(String *answer,
   my_decimal_set_zero(&zero);
   my_bool is_unsigned= (my_decimal_cmp(&zero, &min_arg) >= 0);
 
-  length= my_sprintf(buff, (buff, "DECIMAL(%d, %d)",
-                            (int) (max_length - (item->decimals ? 1 : 0)),
-                            item->decimals));
+  length= my_snprintf(buff, sizeof(buff), "DECIMAL(%d, %d)",
+                      (int) (max_length - (item->decimals ? 1 : 0)),
+                      item->decimals);
   if (is_unsigned)
     length= (uint) (strmov(buff+length, " UNSIGNED")- buff);
   answer->append(buff, length);

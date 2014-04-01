@@ -1,4 +1,5 @@
-/* Copyright (C) 2002 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
 ** example file of UDF (user definable functions) that are dynamicly loaded
@@ -139,9 +141,11 @@ typedef long long longlong;
 #include <mysql.h>
 #include <ctype.h>
 
-static pthread_mutex_t LOCK_hostname;
-
 #ifdef HAVE_DLOPEN
+
+#if !defined(HAVE_GETHOSTBYADDR_R) || !defined(HAVE_SOLARIS_STYLE_GETHOST)
+static pthread_mutex_t LOCK_hostname;
+#endif
 
 /* These must be right or mysqld will not find the symbol! */
 
@@ -1065,7 +1069,7 @@ char *myfunc_argument_name(UDF_INIT *initid __attribute__((unused)),
 {
   if (!args->attributes[0])
   {
-    null_value= 0;
+    *null_value= 1;
     return 0;
   }
   (*length)--; /* space for ending \0 (for debugging purposes) */

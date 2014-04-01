@@ -14,7 +14,7 @@
 
 @SET_MAKE@
 
-# Copyright (C) 2000-2006 MySQL AB
+# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,7 +27,9 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+# Copyright (C) 2013 Calpont Corp.
 
 # Copyright (C) 2013 Calpont Corp.
 
@@ -66,7 +68,8 @@ DIST_COMMON = $(noinst_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(srcdir)/sql_builtin.cc.in sql_yacc.cc \
 	sql_yacc.h
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -136,11 +139,12 @@ am_mysqld_OBJECTS = sql_lex.$(OBJEXT) sql_handler.$(OBJEXT) \
 	rpl_record_old.$(OBJEXT) discover.$(OBJEXT) time.$(OBJEXT) \
 	opt_range.$(OBJEXT) opt_sum.$(OBJEXT) records.$(OBJEXT) \
 	filesort.$(OBJEXT) handler.$(OBJEXT) ha_partition.$(OBJEXT) \
-	sql_db.$(OBJEXT) sql_table.$(OBJEXT) sql_rename.$(OBJEXT) \
-	sql_crypt.$(OBJEXT) sql_load.$(OBJEXT) mf_iocache.$(OBJEXT) \
-	field_conv.$(OBJEXT) sql_show.$(OBJEXT) sql_udf.$(OBJEXT) \
-	sql_analyse.$(OBJEXT) sql_cache.$(OBJEXT) slave.$(OBJEXT) \
-	sql_repl.$(OBJEXT) rpl_filter.$(OBJEXT) rpl_tblmap.$(OBJEXT) \
+	debug_sync.$(OBJEXT) signal_handler.$(OBJEXT) sql_db.$(OBJEXT) \
+	sql_table.$(OBJEXT) sql_rename.$(OBJEXT) sql_crypt.$(OBJEXT) \
+	sql_load.$(OBJEXT) mf_iocache.$(OBJEXT) field_conv.$(OBJEXT) \
+	sql_show.$(OBJEXT) sql_udf.$(OBJEXT) sql_analyse.$(OBJEXT) \
+	sql_cache.$(OBJEXT) slave.$(OBJEXT) sql_repl.$(OBJEXT) \
+	rpl_filter.$(OBJEXT) rpl_tblmap.$(OBJEXT) \
 	rpl_utility.$(OBJEXT) rpl_injector.$(OBJEXT) rpl_rli.$(OBJEXT) \
 	rpl_mi.$(OBJEXT) rpl_reporting.$(OBJEXT) sql_union.$(OBJEXT) \
 	sql_derived.$(OBJEXT) sql_client.$(OBJEXT) \
@@ -206,6 +210,8 @@ ALLOCA = @ALLOCA@
 AMDEP_FALSE = @AMDEP_FALSE@
 AMDEP_TRUE = @AMDEP_TRUE@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -318,6 +324,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -335,6 +342,8 @@ NDB_VERSION_BUILD = @NDB_VERSION_BUILD@
 NDB_VERSION_MAJOR = @NDB_VERSION_MAJOR@
 NDB_VERSION_MINOR = @NDB_VERSION_MINOR@
 NDB_VERSION_STATUS = @NDB_VERSION_STATUS@
+NEED_THREAD_FALSE = @NEED_THREAD_FALSE@
+NEED_THREAD_TRUE = @NEED_THREAD_TRUE@
 NM = @NM@
 NOINST_LDFLAGS = @NOINST_LDFLAGS@
 NON_THREADED_LIBS = @NON_THREADED_LIBS@
@@ -379,6 +388,7 @@ THREAD_SAFE_CLIENT_TRUE = @THREAD_SAFE_CLIENT_TRUE@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -465,8 +475,6 @@ plugin_federated_shared_target = @plugin_federated_shared_target@
 plugin_federated_static_target = @plugin_federated_static_target@
 plugin_heap_shared_target = @plugin_heap_shared_target@
 plugin_heap_static_target = @plugin_heap_static_target@
-plugin_ibmdb2i_shared_target = @plugin_ibmdb2i_shared_target@
-plugin_ibmdb2i_static_target = @plugin_ibmdb2i_static_target@
 plugin_innobase_shared_target = @plugin_innobase_shared_target@
 plugin_innobase_static_target = @plugin_innobase_static_target@
 plugin_innodb_plugin_shared_target = @plugin_innodb_plugin_shared_target@
@@ -481,8 +489,6 @@ plugin_partition_shared_target = @plugin_partition_shared_target@
 plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -507,6 +513,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 MYSQLDATAdir = $(localstatedir)
 MYSQLSHAREdir = $(pkgdatadir)
@@ -531,7 +538,6 @@ mysqld_DEPENDENCIES = @mysql_plugin_libs@ $(SUPPORTING_LIBS) libndb.la
 LDADD = $(SUPPORTING_LIBS) @ZLIB_LIBS@ @NDB_SCI_LIBS@
 mysqld_LDADD = libndb.la \
 			@MYSQLD_EXTRA_LDFLAGS@ \
-			@pstack_libs@ \
 			@mysql_plugin_libs@ \
 			$(LDADD)  $(CXXLDFLAGS) $(WRAPLIBS) @LIBDL@ \
 			$(yassl_libs) $(openssl_libs) @MYSQLD_EXTRA_LIBS@
@@ -548,6 +554,7 @@ noinst_HEADERS = item.h item_func.h item_sum.h item_cmpfunc.h \
 			ha_ndbcluster.h ha_ndbcluster_cond.h \
 			ha_ndbcluster_binlog.h ha_ndbcluster_tables.h \
 			ha_partition.h rpl_constants.h \
+			debug_sync.h \
 			opt_range.h protocol.h rpl_tblmap.h rpl_utility.h \
 			rpl_reporting.h \
 			log.h sql_show.h rpl_rli.h rpl_mi.h \
@@ -561,6 +568,7 @@ noinst_HEADERS = item.h item_func.h item_sum.h item_cmpfunc.h \
 			tztime.h my_decimal.h\
 			sp_head.h sp_pcontext.h sp_rcontext.h sp.h sp_cache.h \
 			parse_file.h sql_view.h	sql_trigger.h \
+			mem_root_array.h \
 			sql_array.h sql_cursor.h events.h scheduler.h \
                         event_db_repository.h event_queue.h \
 			sql_plugin.h authors.h event_parse_data.h \
@@ -594,6 +602,8 @@ mysqld_SOURCES = sql_lex.cc sql_handler.cc sql_partition.cc \
 			discover.cc time.cc opt_range.cc opt_sum.cc \
 		   	records.cc filesort.cc handler.cc \
 		        ha_partition.cc \
+			debug_sync.cc \
+			signal_handler.cc \
 			sql_db.cc sql_table.cc sql_rename.cc sql_crypt.cc \
 			sql_load.cc mf_iocache.cc field_conv.cc sql_show.cc \
 			sql_udf.cc sql_analyse.cc sql_analyse.h sql_cache.cc \
@@ -624,7 +634,7 @@ gen_lex_hash_SOURCES = gen_lex_hash.cc
 gen_lex_hash_LDFLAGS = @NOINST_LDFLAGS@
 mysql_tzinfo_to_sql_SOURCES = tztime.cc
 mysql_tzinfo_to_sql_CXXFLAGS = -DTZINFO2SQL
-BUILT_MAINT_SRC = sql_yacc.cc sql_yacc.h
+BUILT_MAINT_SRC = sql_yacc.cc sql_yacc.$(YACC_HEXT)
 BUILT_SOURCES = $(BUILT_MAINT_SRC) lex_hash.h link_sources
 EXTRA_DIST = udf_example.c udf_example.def $(BUILT_MAINT_SRC) \
 			nt_servc.cc nt_servc.h \
@@ -766,6 +776,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/client.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/debug_sync.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/derror.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/des_key_file.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/discover.Po@am__quote@
@@ -837,6 +848,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpl_utility.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/scheduler.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/set_var.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/signal_handler.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slave.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sp_cache.Po@am__quote@

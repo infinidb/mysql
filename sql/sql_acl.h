@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "slave.h" // for tables_ok(), rpl_filter
 
@@ -159,8 +162,7 @@ enum mysql_db_table_field
   MYSQL_DB_FIELD_COUNT
 };
 
-extern TABLE_FIELD_W_TYPE mysql_db_table_fields[];
-extern time_t mysql_db_table_last_check;
+extern const TABLE_FIELD_DEF mysql_db_table_def;
 
 /* Classes */
 

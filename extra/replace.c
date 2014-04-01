@@ -1,17 +1,20 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; version 2 of
+   the License.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Replace strings in textfile
@@ -648,7 +651,7 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
     for (i=1 ; i <= found_sets ; i++)
     {
       pos=from[found_set[i-1].table_offset];
-      rep_str[i].found= (my_bool) (!bcmp(pos,"\\^",3) ? 2 : 1);
+      rep_str[i].found= (my_bool) (!memcmp(pos,"\\^",3) ? 2 : 1);
       rep_str[i].replace_string=to_array[found_set[i-1].table_offset];
       rep_str[i].to_offset=found_set[i-1].found_offset-start_at_word(pos);
       rep_str[i].from_offset=found_set[i-1].found_offset-replace_len(pos)+
@@ -776,8 +779,8 @@ static void copy_bits(REP_SET *to,REP_SET *from)
 
 static int cmp_bits(REP_SET *set1,REP_SET *set2)
 {
-  return bcmp((uchar*) set1->bits,(uchar*) set2->bits,
-	      sizeof(uint) * set1->size_of_bits);
+  return memcmp(set1->bits, set2->bits,
+                sizeof(uint) * set1->size_of_bits);
 }
 
 
@@ -819,7 +822,7 @@ static short find_set(REP_SETS *sets,REP_SET *find)
       return (short) i;
     }
   }
-  return (short) i;			/* return new postion */
+  return (short) i;			/* return new position */
 }
 
 
@@ -842,21 +845,21 @@ static short find_found(FOUND_SET *found_set,uint table_offset,
   found_set[i].table_offset=table_offset;
   found_set[i].found_offset=found_offset;
   found_sets++;
-  return (short) (-i-2);			/* return new postion */
+  return (short) (-i-2);			/* return new position */
 }
 
 	/* Return 1 if regexp starts with \b or ends with \b*/
 
 static uint start_at_word(char * pos)
 {
-  return (((!bcmp(pos,"\\b",2) && pos[2]) || !bcmp(pos,"\\^",2)) ? 1 : 0);
+  return (((!memcmp(pos,"\\b",2) && pos[2]) || !memcmp(pos,"\\^",2)) ? 1 : 0);
 }
 
 static uint end_of_word(char * pos)
 {
   char * end=strend(pos);
-  return ((end > pos+2 && !bcmp(end-2,"\\b",2)) ||
-	  (end >= pos+2 && !bcmp(end-2,"\\$",2))) ?
+  return ((end > pos+2 && !memcmp(end-2,"\\b",2)) ||
+	  (end >= pos+2 && !memcmp(end-2,"\\$",2))) ?
 	    1 : 0;
 }
 

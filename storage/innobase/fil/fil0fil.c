@@ -772,11 +772,6 @@ retry:
 		return;
 	}
 
-	if (system->n_open < system->max_n_open) {
-
-		return;
-	}
-
 	HASH_SEARCH(hash, system->spaces, space_id, space,
 		    space->id == space_id);
 	if (space != NULL && space->stop_ios) {
@@ -793,11 +788,28 @@ retry:
 
 		mutex_exit(&(system->mutex));
 
+#ifndef UNIV_HOTBACKUP
+		/* Wake the i/o-handler threads to make sure pending
+		i/o's are performed */
+		os_aio_simulated_wake_handler_threads();
+
+		os_thread_sleep(20000);
+#endif /* UNIV_HOTBACKUP */
+
+		/* Flush tablespaces so that we can close modified
+		files in the LRU list */
+		fil_flush_file_spaces(FIL_TABLESPACE);
+
 		os_thread_sleep(20000);
 
 		count2++;
 
 		goto retry;
+	}
+
+	if (system->n_open < system->max_n_open) {
+
+		return;
 	}
 
 	/* If the file is already open, no need to do anything; if the space
@@ -966,6 +978,8 @@ try_again:
 	HASH_SEARCH(name_hash, system->name_hash, ut_fold_string(name), space,
 		    0 == strcmp(name, space->name));
 	if (space != NULL) {
+		ibool	success;
+
 		ut_print_timestamp(stderr);
 		fprintf(stderr,
 			"  InnoDB: Warning: trying to init to the"
@@ -1002,9 +1016,10 @@ try_again:
 
 		namesake_id = space->id;
 
-		mutex_exit(&(system->mutex));
+		success = fil_space_free(namesake_id, FALSE);
+		ut_a(success);
 
-		fil_space_free(namesake_id);
+		mutex_exit(&(system->mutex));
 
 		goto try_again;
 	}
@@ -1128,6 +1143,33 @@ fil_assign_new_space_id(void)
 }
 
 /***********************************************************************
+Check if the space id exists in the cache, complain to stderr if the
+space id cannot be found. */
+static
+fil_space_t*
+fil_space_search(
+/*=============*/
+			/* out: file space instance*/
+	ulint	id)	/* in: space id */
+{
+	fil_space_t*	space;
+
+	ut_ad(mutex_own(&fil_system->mutex));
+
+	HASH_SEARCH(hash, fil_system->spaces, id, space, space->id == id);
+
+	if (space == NULL) {
+		ut_print_timestamp(stderr);
+		fprintf(stderr,
+			"  InnoDB: Error: trying to remove tablespace %lu"
+			" from the cache but\n"
+			"InnoDB: it is not there.\n", (ulong) id);
+	}
+
+	return(space);
+}
+
+/***********************************************************************
 Frees a space object from the tablespace memory cache. Closes the files in
 the chain but does not delete them. There must not be any pending i/o's or
 flushes on the files. */
@@ -1135,27 +1177,21 @@ flushes on the files. */
 ibool
 fil_space_free(
 /*===========*/
-			/* out: TRUE if success */
-	ulint	id)	/* in: space id */
+				/* out: TRUE if success */
+	ulint	id,		/* in: space id */
+	ibool	x_latched)	/* in: TRUE if caller has space->latch
+				in X mode */
 {
 	fil_system_t*	system = fil_system;
 	fil_space_t*	space;
 	fil_space_t*	namespace;
 	fil_node_t*	fil_node;
 
-	mutex_enter(&(system->mutex));
+	ut_ad(mutex_own(&fil_system->mutex));
 
-	HASH_SEARCH(hash, system->spaces, id, space, space->id == id);
+	space = fil_space_search(id);
 
-	if (!space) {
-		ut_print_timestamp(stderr);
-		fprintf(stderr,
-			"  InnoDB: Error: trying to remove tablespace %lu"
-			" from the cache but\n"
-			"InnoDB: it is not there.\n", (ulong) id);
-
-		mutex_exit(&(system->mutex));
-
+	if (space == NULL) {
 		return(FALSE);
 	}
 
@@ -1191,7 +1227,9 @@ fil_space_free(
 
 	ut_a(0 == UT_LIST_GET_LEN(space->chain));
 
-	mutex_exit(&(system->mutex));
+	if (x_latched) {
+		rw_lock_x_unlock(&space->latch);
+	}
 
 	rw_lock_free(&(space->latch));
 
@@ -1740,6 +1778,8 @@ fil_op_write_log(
 					MLOG_FILE_DELETE, or
 					MLOG_FILE_RENAME */
 	ulint		space_id,	/* in: space id */
+	ulint		log_flags,	/* in: redo log flags (stored
+					in the page number field) */
 	const char*	name,		/* in: table name in the familiar
 					'databasename/tablename' format, or
 					the file path in the case of
@@ -1760,8 +1800,8 @@ fil_op_write_log(
 		return;
 	}
 
-	log_ptr = mlog_write_initial_log_record_for_file_op(type, space_id, 0,
-							    log_ptr, mtr);
+	log_ptr = mlog_write_initial_log_record_for_file_op(
+		type, space_id, log_flags, log_ptr, mtr);
 	/* Let us store the strings as null-terminated for easier readability
 	and handling */
 
@@ -1810,11 +1850,11 @@ fil_op_log_parse_or_replay(
 				not fir completely between ptr and end_ptr */
 	byte*	end_ptr,	/* in: buffer end */
 	ulint	type,		/* in: the type of this log record */
-	ibool	do_replay,	/* in: TRUE if we want to replay the
-				operation, and not just parse the log record */
-	ulint	space_id)	/* in: if do_replay is TRUE, the space id of
-				the tablespace in question; otherwise
-				ignored */
+	ulint	space_id,	/* in: the space id of the tablespace in
+				question, or 0 if the log record should
+				only be parsed but not replayed */
+	ulint	log_flags)	/* in: redo log flags
+				(stored in the page number parameter) */
 {
 	ulint		name_len;
 	ulint		new_name_len;
@@ -1868,7 +1908,7 @@ fil_op_log_parse_or_replay(
 	printf("new name %s\n", new_name);
 	}
 	*/
-	if (do_replay == FALSE) {
+	if (!space_id) {
 
 		return(ptr);
 	}
@@ -1917,6 +1957,8 @@ fil_op_log_parse_or_replay(
 		} else if (fil_get_space_id_for_table(name)
 			   != ULINT_UNDEFINED) {
 			/* Do nothing */
+		} else if (log_flags & MLOG_FILE_FLAG_TEMP) {
+			/* Temporary table, do nothing */
 		} else {
 			/* Create the database directory for name, if it does
 			not exist yet */
@@ -2044,6 +2086,19 @@ try_again:
 	path = mem_strdup(space->name);
 
 	mutex_exit(&(system->mutex));
+
+	/* Important: We rely on the data dictionary mutex to ensure
+	that a race is not possible here. It should serialize the tablespace
+	drop/free. We acquire an X latch only to avoid a race condition
+	when accessing the tablespace instance via:
+
+	  fsp_get_available_space_in_free_extents().
+
+	There our main motivation is to reduce the contention on the
+	dictionary mutex and not correctness. */
+
+	rw_lock_x_lock(&space->latch);
+
 #ifndef UNIV_HOTBACKUP
 	/* Invalidate in the buffer pool all pages belonging to the
 	tablespace. Since we have set space->is_being_deleted = TRUE, readahead
@@ -2056,7 +2111,11 @@ try_again:
 #endif
 	/* printf("Deleting tablespace %s id %lu\n", space->name, id); */
 
-	success = fil_space_free(id);
+	mutex_enter(&system->mutex);
+
+	success = fil_space_free(id, TRUE);
+
+	mutex_exit(&system->mutex);
 
 	if (success) {
 		success = os_file_delete(path);
@@ -2064,6 +2123,8 @@ try_again:
 		if (!success) {
 			success = os_file_delete_if_exists(path);
 		}
+	} else {
+		rw_lock_x_unlock(&space->latch);
 	}
 
 	if (success) {
@@ -2078,7 +2139,7 @@ try_again:
 		to write any log record */
 		mtr_start(&mtr);
 
-		fil_op_write_log(MLOG_FILE_DELETE, id, path, NULL, &mtr);
+		fil_op_write_log(MLOG_FILE_DELETE, id, 0, path, NULL, &mtr);
 		mtr_commit(&mtr);
 #endif
 		mem_free(path);
@@ -2241,7 +2302,7 @@ fil_rename_tablespace(
 retry:
 	count++;
 
-	if (count > 1000) {
+	if (!(count % 1000)) {
 		ut_print_timestamp(stderr);
 		fputs("  InnoDB: Warning: problems renaming ", stderr);
 		ut_print_filename(stderr, old_name);
@@ -2349,7 +2410,7 @@ retry:
 
 		mtr_start(&mtr);
 
-		fil_op_write_log(MLOG_FILE_RENAME, id, old_name, new_name,
+		fil_op_write_log(MLOG_FILE_RENAME, id, 0, old_name, new_name,
 				 &mtr);
 		mtr_commit(&mtr);
 	}
@@ -2525,8 +2586,9 @@ error_exit2:
 
 		mtr_start(&mtr);
 
-		fil_op_write_log(MLOG_FILE_CREATE, *space_id, tablename,
-				 NULL, &mtr);
+		fil_op_write_log(MLOG_FILE_CREATE, *space_id,
+				 is_temp ? MLOG_FILE_FLAG_TEMP : 0,
+				 tablename, NULL, &mtr);
 
 		mtr_commit(&mtr);
 	}
@@ -4563,4 +4625,29 @@ fil_page_get_type(
 	ut_ad(page);
 
 	return(mach_read_from_2(page + FIL_PAGE_TYPE));
+}
+
+/***********************************************************************
+Returns TRUE if a single-table tablespace is being deleted. */
+
+ibool
+fil_tablespace_is_being_deleted(
+/*============================*/
+				/* out: TRUE if space is being deleted */
+	ulint		id)	/* in: space id */
+{
+	fil_space_t*	space;
+	ibool		is_being_deleted;
+
+	mutex_enter(&fil_system->mutex);
+
+	HASH_SEARCH(hash, fil_system->spaces, id, space, space->id == id);
+
+	ut_a(space != NULL);
+
+	is_being_deleted = space->is_being_deleted;
+
+	mutex_exit(&fil_system->mutex);
+
+	return(is_being_deleted);
 }

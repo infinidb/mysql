@@ -1,4 +1,4 @@
-/* Copyright (C) 2004 MySQL AB
+/* Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* get time since epoc in 100 nanosec units */
 /* thus to get the current time we should use the system function
@@ -170,7 +170,13 @@ ulonglong my_micro_time_and_time(time_t *time_arg)
 
   pthread_mutex_lock(&THR_LOCK_time);
   cur_gethrtime= gethrtime();
-  if ((cur_gethrtime - prev_gethrtime) > DELTA_FOR_SECONDS)
+  /*
+    Due to bugs in the Solaris (x86) implementation of gethrtime(),
+    the time returned by it might not be monotonic. Don't use the
+    cached time(2) value if this is a case.
+  */
+  if ((prev_gethrtime > cur_gethrtime) ||
+      ((cur_gethrtime - prev_gethrtime) > DELTA_FOR_SECONDS))
   {
     cur_time= time(0);
     prev_gethrtime= cur_gethrtime;

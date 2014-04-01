@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
 Read and write locks for Posix threads. All tread must acquire
@@ -125,8 +127,7 @@ static int check_lock(struct st_lock_list *list, const char* lock_type,
 {
   THR_LOCK_DATA *data,**prev;
   uint count=0;
-  THR_LOCK_OWNER *first_owner;
-  LINT_INIT(first_owner);
+  THR_LOCK_OWNER *UNINIT_VAR(first_owner);
 
   prev= &list->data;
   if (list->data)
@@ -397,6 +398,28 @@ wait_for_lock(struct st_lock_list *wait, THR_LOCK_DATA *data,
   enum enum_thr_lock_result result= THR_LOCK_ABORTED;
   my_bool can_deadlock= test(data->owner->info->n_cursors);
   DBUG_ENTER("wait_for_lock");
+
+  /*
+    One can use this to signal when a thread is going to wait for a lock.
+    See debug_sync.cc.
+
+    Beware of waiting for a signal here. The lock has aquired its mutex.
+    While waiting on a signal here, the locking thread could not aquire
+    the mutex to release the lock. One could lock up the table
+    completely.
+
+    In detail it works so: When thr_lock() tries to acquire a table
+    lock, it locks the lock->mutex, checks if it can have the lock, and
+    if not, it calls wait_for_lock(). Here it unlocks the table lock
+    while waiting on a condition. The sync point is located before this
+    wait for condition. If we have a waiting action here, we hold the
+    the table locks mutex all the time. Any attempt to look at the table
+    lock by another thread blocks it immediately on lock->mutex. This
+    can easily become an unexpected and unobvious blockage. So be
+    warned: Do not request a WAIT_FOR action for the 'wait_for_lock'
+    sync point unless you really know what you do.
+  */
+  DEBUG_SYNC_C("wait_for_lock");
 
   if (!in_wait_list)
   {

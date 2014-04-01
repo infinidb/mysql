@@ -1,4 +1,4 @@
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,12 +29,12 @@ SET(MYSYS_SOURCES  array.c charset-def.c charset.c checksum.c default.c default_
 				errors.c hash.c list.c md5.c mf_brkhant.c mf_cache.c mf_dirname.c mf_fn_ext.c
 				mf_format.c mf_getdate.c mf_iocache.c mf_iocache2.c mf_keycache.c 
 				mf_keycaches.c mf_loadpath.c mf_pack.c mf_path.c mf_qsort.c mf_qsort2.c
-				mf_radix.c mf_same.c mf_sort.c mf_soundex.c mf_strip.c mf_arr_appstr.c mf_tempdir.c
+				mf_radix.c mf_same.c mf_sort.c mf_soundex.c mf_arr_appstr.c mf_tempdir.c
 				mf_tempfile.c mf_unixpath.c mf_wcomp.c mf_wfile.c mulalloc.c my_access.c
 				my_aes.c my_alarm.c my_alloc.c my_append.c my_bit.c my_bitmap.c my_chsize.c
 				my_clock.c my_compress.c my_conio.c my_copy.c my_crc32.c my_create.c my_delete.c
-				my_div.c my_error.c my_file.c my_fopen.c my_fstream.c my_gethostbyname.c 
-				my_gethwaddr.c my_getopt.c my_getsystime.c my_getwd.c my_handler.c my_init.c
+				my_div.c my_error.c my_file.c my_fopen.c my_fstream.c 
+				my_gethwaddr.c my_getopt.c my_getsystime.c my_getwd.c my_compare.c my_init.c
 				my_lib.c my_lock.c my_lockmem.c my_malloc.c my_messnc.c
 				my_mkdir.c my_mmap.c my_net.c my_once.c my_open.c my_pread.c my_pthread.c 
 				my_quick.c my_read.c my_realloc.c my_redel.c my_rename.c my_seek.c my_sleep.c

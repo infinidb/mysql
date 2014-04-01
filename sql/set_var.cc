@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -94,14 +96,13 @@ TYPELIB delay_key_write_typelib=
   delay_key_write_type_names, NULL
 };
 
-const char *slave_exec_mode_names[]=
-{ "STRICT", "IDEMPOTENT", NullS };
-static const unsigned int slave_exec_mode_names_len[]=
-{ sizeof("STRICT") - 1, sizeof("IDEMPOTENT") - 1, 0 };
+static const char *slave_exec_mode_names[]= { "STRICT", "IDEMPOTENT", NullS };
+static unsigned int slave_exec_mode_names_len[]= { sizeof("STRICT") - 1,
+                                                   sizeof("IDEMPOTENT") - 1, 0 };
 TYPELIB slave_exec_mode_typelib=
 {
   array_elements(slave_exec_mode_names)-1, "",
-  slave_exec_mode_names, (unsigned int *) slave_exec_mode_names_len
+  slave_exec_mode_names, slave_exec_mode_names_len
 };
 
 static int  sys_check_ftb_syntax(THD *thd,  set_var *var);
@@ -149,6 +150,9 @@ static bool sys_update_general_log_path(THD *thd, set_var * var);
 static void sys_default_general_log_path(THD *thd, enum_var_type type);
 static bool sys_update_slow_log_path(THD *thd, set_var * var);
 static void sys_default_slow_log_path(THD *thd, enum_var_type type);
+static uchar *get_myisam_mmap_size(THD *thd);
+static int check_max_allowed_packet(THD *thd,  set_var *var);
+static int check_net_buffer_length(THD *thd,  set_var *var);
 
 /*
   Variable definition list
@@ -182,6 +186,8 @@ static sys_var_long_ptr	sys_binlog_cache_size(&vars, "binlog_cache_size",
 					      &binlog_cache_size);
 static sys_var_thd_binlog_format sys_binlog_format(&vars, "binlog_format",
                                             &SV::binlog_format);
+static sys_var_thd_bool sys_binlog_direct_non_trans_update(&vars, "binlog_direct_non_transactional_updates",
+                                                           &SV::binlog_direct_non_trans_update);
 static sys_var_thd_ulong	sys_bulk_insert_buff_size(&vars, "bulk_insert_buffer_size",
 						  &SV::bulk_insert_buff_size);
 static sys_var_const_os         sys_character_sets_dir(&vars,
@@ -360,7 +366,10 @@ static sys_var_const    sys_lower_case_table_names(&vars,
                                                    (uchar*)
                                                    &lower_case_table_names);
 static sys_var_thd_ulong_session_readonly sys_max_allowed_packet(&vars, "max_allowed_packet",
-					       &SV::max_allowed_packet);
+					       &SV::max_allowed_packet,
+                                               check_max_allowed_packet);
+static sys_var_long_ptr sys_slave_max_allowed_packet(&vars, "slave_max_allowed_packet",
+                                              &slave_max_allowed_packet); 
 static sys_var_ulonglong_ptr sys_max_binlog_cache_size(&vars, "max_binlog_cache_size",
                                                        &max_binlog_cache_size);
 static sys_var_long_ptr	sys_max_binlog_size(&vars, "max_binlog_size",
@@ -394,6 +403,12 @@ static sys_var_thd_ulong	sys_max_seeks_for_key(&vars, "max_seeks_for_key",
 					      &SV::max_seeks_for_key);
 static sys_var_thd_ulong   sys_max_length_for_sort_data(&vars, "max_length_for_sort_data",
                                                  &SV::max_length_for_sort_data);
+static sys_var_const    sys_max_long_data_size(&vars,
+                                               "max_long_data_size",
+                                               OPT_GLOBAL, SHOW_LONG,
+                                               (uchar*)
+                                               &max_long_data_size);
+
 #ifndef TO_BE_DELETED	/* Alias for max_join_size */
 static sys_var_thd_ha_rows	sys_sql_max_join_size(&vars, "sql_max_join_size",
 					      &SV::max_join_size,
@@ -444,7 +459,8 @@ static sys_var_const            sys_named_pipe(&vars, "named_pipe",
 /* purecov: end */
 #endif
 static sys_var_thd_ulong_session_readonly sys_net_buffer_length(&vars, "net_buffer_length",
-					      &SV::net_buffer_length);
+					      &SV::net_buffer_length,
+                                              check_net_buffer_length);
 static sys_var_thd_ulong	sys_net_read_timeout(&vars, "net_read_timeout",
 					     &SV::net_read_timeout,
 					     0, fix_net_read_timeout);
@@ -512,6 +528,9 @@ static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_a
 static sys_var_thd_bool sys_infinidb_double_for_decimal_math(&vars,
 							"infinidb_double_for_decimal_math",
 					       &SV::infinidb_double_for_decimal_math);
+static sys_var_thd_ulong sys_infinidb_local_query(&vars,
+							"infinidb_local_query",
+					       &SV::infinidb_local_query);
 /* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
                                               &SV::div_precincrement);
@@ -553,11 +572,15 @@ static sys_var_const    sys_skip_networking(&vars, "skip_networking",
 static sys_var_const    sys_skip_show_database(&vars, "skip_show_database",
                                             OPT_GLOBAL, SHOW_BOOL,
                                             (uchar*) &opt_skip_show_db);
-#ifdef HAVE_SYS_UN_H
+
+static sys_var_const    sys_skip_name_resolve(&vars, "skip_name_resolve",
+                                            OPT_GLOBAL, SHOW_BOOL,
+                                            (uchar*) &opt_skip_name_resolve);
+
 static sys_var_const    sys_socket(&vars, "socket",
                                    OPT_GLOBAL, SHOW_CHAR_PTR,
                                    (uchar*) &mysqld_unix_port);
-#endif
+
 #ifdef HAVE_THR_SETCONCURRENCY
 /* purecov: begin tested */
 static sys_var_const    sys_thread_concurrency(&vars, "thread_concurrency",
@@ -649,6 +672,12 @@ static sys_var_long_ptr	sys_table_cache_size(&vars, "table_open_cache",
 					     &table_cache_size);
 static sys_var_long_ptr	sys_table_lock_wait_timeout(&vars, "table_lock_wait_timeout",
                                                     &table_lock_wait_timeout);
+
+#if defined(ENABLED_DEBUG_SYNC)
+/* Debug Sync Facility. Implemented in debug_sync.cc. */
+static sys_var_debug_sync sys_debug_sync(&vars, "debug_sync");
+#endif /* defined(ENABLED_DEBUG_SYNC) */
+
 static sys_var_long_ptr	sys_thread_cache_size(&vars, "thread_cache_size",
 					      &thread_cache_size);
 #if HAVE_POOL_OF_THREADS == 1
@@ -916,6 +945,10 @@ sys_var_str sys_var_slow_log_path(&vars, "slow_query_log_file", sys_check_log_pa
 				  opt_slow_logname);
 static sys_var_log_output sys_var_log_output_state(&vars, "log_output", &log_output_options,
 					    &log_output_typelib, 0);
+static sys_var_readonly         sys_myisam_mmap_size(&vars, "myisam_mmap_size",
+                                                     OPT_GLOBAL,
+                                                     SHOW_LONGLONG,
+                                                     get_myisam_mmap_size);
 
 
 bool sys_var::check(THD *thd, set_var *var)
@@ -1222,16 +1255,14 @@ uchar *sys_var_set::value_ptr(THD *thd, enum_var_type type,
 
 void sys_var_set_slave_mode::set_default(THD *thd, enum_var_type type)
 {
-  slave_exec_mode_options= 0;
-  bit_do_set(slave_exec_mode_options, SLAVE_EXEC_MODE_STRICT);
+  slave_exec_mode_options= SLAVE_EXEC_MODE_STRICT;
 }
 
 bool sys_var_set_slave_mode::check(THD *thd, set_var *var)
 {
   bool rc=  sys_var_set::check(thd, var);
-  if (!rc &&
-      bit_is_set(var->save_result.ulong_value, SLAVE_EXEC_MODE_STRICT) == 1 &&
-      bit_is_set(var->save_result.ulong_value, SLAVE_EXEC_MODE_IDEMPOTENT) == 1)
+  if (!rc && (var->save_result.ulong_value & SLAVE_EXEC_MODE_STRICT) &&
+      (var->save_result.ulong_value & SLAVE_EXEC_MODE_IDEMPOTENT))
   {
     rc= true;
     my_error(ER_SLAVE_AMBIGOUS_EXEC_MODE, MYF(0), "");
@@ -1248,20 +1279,19 @@ bool sys_var_set_slave_mode::update(THD *thd, set_var *var)
   return rc;
 }
 
-void fix_slave_exec_mode(enum_var_type type)
+void fix_slave_exec_mode(void)
 {
   DBUG_ENTER("fix_slave_exec_mode");
-  compile_time_assert(sizeof(slave_exec_mode_options) * CHAR_BIT
-                      > SLAVE_EXEC_MODE_LAST_BIT - 1);
-  if (bit_is_set(slave_exec_mode_options, SLAVE_EXEC_MODE_STRICT) == 1 &&
-      bit_is_set(slave_exec_mode_options, SLAVE_EXEC_MODE_IDEMPOTENT) == 1)
+
+  if ((slave_exec_mode_options & SLAVE_EXEC_MODE_STRICT) &&
+      (slave_exec_mode_options & SLAVE_EXEC_MODE_IDEMPOTENT))
   {
-    sql_print_error("Ambiguous slave modes combination."
-                    " STRICT will be used");
-    bit_do_clear(slave_exec_mode_options, SLAVE_EXEC_MODE_IDEMPOTENT);
+    sql_print_error("Ambiguous slave modes combination. STRICT will be used");
+    slave_exec_mode_options&= ~SLAVE_EXEC_MODE_IDEMPOTENT;
   }
-  if (bit_is_set(slave_exec_mode_options, SLAVE_EXEC_MODE_IDEMPOTENT) == 0)
-    bit_do_set(slave_exec_mode_options, SLAVE_EXEC_MODE_STRICT);
+  if (!(slave_exec_mode_options & SLAVE_EXEC_MODE_IDEMPOTENT))
+    slave_exec_mode_options|= SLAVE_EXEC_MODE_STRICT;
+  DBUG_VOID_RETURN;
 }
 
 
@@ -1435,44 +1465,6 @@ bool throw_bounds_warning(THD *thd, bool fixed, bool unsignd,
 
 
 /**
-  check an unsigned user-supplied value for a systemvariable against bounds.
-
-  TODO: This is a wrapper function to call clipping from within an update()
-        function.  Calling bounds from within update() is fair game in theory,
-        but we can only send warnings from in there, not errors, and besides,
-        it violates our model of separating check from update phase.
-        To avoid breaking out of the server with an ASSERT() in strict mode,
-        we pretend we're not in strict mode when we go through here. Bug#43233
-        was opened to remind us to replace this kludge with The Right Thing,
-        which of course is to do the check in the actual check phase, and then
-        throw an error or warning accordingly.
-
-  @param thd             thread handle
-  @param num             the value to limit
-  @param option_limits   the bounds-record, or NULL if none
- */
-static void bound_unsigned(THD *thd, ulonglong *num,
-                              const struct my_option *option_limits)
-{
-  if (option_limits)
-  {
-    my_bool   fixed     = FALSE;
-    ulonglong unadjusted= *num;
-
-    *num= getopt_ull_limit_value(unadjusted, option_limits, &fixed);
-
-    if (fixed)
-    {
-      ulong ssm= thd->variables.sql_mode;
-      thd->variables.sql_mode&= ~MODE_STRICT_ALL_TABLES;
-      throw_bounds_warning(thd, fixed, TRUE, option_limits->name, unadjusted);
-      thd->variables.sql_mode= ssm;
-    }
-  }
-}
-
-
-/**
   Get unsigned system-variable.
   Negative value does not wrap around, but becomes zero.
   Check user-supplied value for a systemvariable against bounds.
@@ -1590,11 +1582,16 @@ void sys_var_long_ptr_global::set_default(THD *thd, enum_var_type type)
 }
 
 
+bool sys_var_ulonglong_ptr::check(THD *thd, set_var *var)
+{
+  return get_unsigned(thd, var, 0, GET_ULL);
+}
+
+
 bool sys_var_ulonglong_ptr::update(THD *thd, set_var *var)
 {
   ulonglong tmp= var->save_result.ulonglong_value;
   pthread_mutex_lock(&LOCK_global_system_variables);
-  bound_unsigned(thd, &tmp, option_limits);
   *value= (ulonglong) tmp;
   pthread_mutex_unlock(&LOCK_global_system_variables);
   return 0;
@@ -1686,25 +1683,30 @@ uchar *sys_var_thd_ulong::value_ptr(THD *thd, enum_var_type type,
 }
 
 
+bool sys_var_thd_ha_rows::check(THD *thd, set_var *var)
+{
+  return get_unsigned(thd, var, max_system_variables.*offset,
+#ifdef BIG_TABLES
+                      GET_ULL
+#else
+                      GET_ULONG
+#endif
+                     );
+}
+
+
 bool sys_var_thd_ha_rows::update(THD *thd, set_var *var)
 {
-  ulonglong tmp= var->save_result.ulonglong_value;
-
-  /* Don't use bigger value than given with --maximum-variable-name=.. */
-  if ((ha_rows) tmp > max_system_variables.*offset)
-    tmp= max_system_variables.*offset;
-
-  bound_unsigned(thd, &tmp, option_limits);
-
   if (var->type == OPT_GLOBAL)
   {
     /* Lock is needed to make things safe on 32 bit systems */
     pthread_mutex_lock(&LOCK_global_system_variables);
-    global_system_variables.*offset= (ha_rows) tmp;
+    global_system_variables.*offset= (ha_rows)
+                                     var->save_result.ulonglong_value;
     pthread_mutex_unlock(&LOCK_global_system_variables);
   }
   else
-    thd->variables.*offset= (ha_rows) tmp;
+    thd->variables.*offset= (ha_rows) var->save_result.ulonglong_value;
   return 0;
 }
 
@@ -1867,7 +1869,7 @@ bool sys_var::check_set(THD *thd, set_var *var, TYPELIB *enum_names)
     }
 
     var->save_result.ulong_value= ((ulong)
-				   find_set(enum_names, res->c_ptr(),
+				   find_set(enum_names, res->c_ptr_safe(),
 					    res->length(),
                                             NULL,
                                             &error, &error_len,
@@ -2226,7 +2228,7 @@ bool sys_var_character_set_client::check(THD *thd, set_var *var)
   if (sys_var_character_set_sv::check(thd, var))
     return 1;
   /* Currently, UCS-2 cannot be used as a client character set */
-  if (var->save_result.charset->mbminlen > 1)
+  if (!is_supported_parser_charset(var->save_result.charset))
   {
     my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name,
              var->save_result.charset->csname);
@@ -2316,6 +2318,12 @@ uchar *sys_var_key_cache_param::value_ptr(THD *thd, enum_var_type type,
 }
 
 
+bool sys_var_key_buffer_size::check(THD *thd, set_var *var)
+{
+  return get_unsigned(thd, var, 0, GET_ULL);
+}
+
+
 bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
 {
   ulonglong tmp= var->save_result.ulonglong_value;
@@ -2332,7 +2340,7 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
 
   if (!key_cache)
   {
-    /* Key cache didn't exists */
+    /* Key cache didn't exist */
     if (!tmp)					// Tried to delete cache
       goto end;					// Ok, nothing to do
     if (!(key_cache= create_key_cache(base_name->str, base_name->length)))
@@ -2354,9 +2362,8 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
   {
     if (key_cache == dflt_key_cache)
     {
-      push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_WARN,
-                          ER_WARN_CANT_DROP_DEFAULT_KEYCACHE,
-                          ER(ER_WARN_CANT_DROP_DEFAULT_KEYCACHE));
+      error= 1;
+      my_error(ER_WARN_CANT_DROP_DEFAULT_KEYCACHE, MYF(0));
       goto end;					// Ignore default key cache
     }
 
@@ -2382,7 +2389,6 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
     goto end;
   }
 
-  bound_unsigned(thd, &tmp, option_limits);
   key_cache->param_buff_size= (ulonglong) tmp;
 
   /* If key cache didn't exist initialize it, else resize it */
@@ -2399,7 +2405,16 @@ bool sys_var_key_buffer_size::update(THD *thd, set_var *var)
 
 end:
   pthread_mutex_unlock(&LOCK_global_system_variables);
+
+ var->save_result.ulonglong_value = SIZE_T_MAX;
+
   return error;
+}
+
+
+bool sys_var_key_cache_long::check(THD *thd, set_var *var)
+{
+  return get_unsigned(thd, var, 0, GET_ULONG);
 }
 
 
@@ -2411,7 +2426,6 @@ end:
 */
 bool sys_var_key_cache_long::update(THD *thd, set_var *var)
 {
-  ulonglong tmp= var->value->val_int();
   LEX_STRING *base_name= &var->base;
   bool error= 0;
 
@@ -2436,8 +2450,8 @@ bool sys_var_key_cache_long::update(THD *thd, set_var *var)
   if (key_cache->in_init)
     goto end;
 
-  bound_unsigned(thd, &tmp, option_limits);
-  *((ulong*) (((char*) key_cache) + offset))= (ulong) tmp;
+  *((ulong*) (((char*) key_cache) + offset))= (ulong)
+                                              var->save_result.ulonglong_value;
 
   /*
     Don't create a new key cache if it didn't exist
@@ -2515,6 +2529,9 @@ static int  sys_check_log_path(THD *thd,  set_var *var)
     goto err;
   }
 
+  if (!is_filename_allowed(log_file_str, strlen(log_file_str)))
+    goto err;
+
   if (my_stat(path, &f_stat, MYF(0)))
   {
     /*
@@ -2570,7 +2587,7 @@ bool update_sys_var_str_path(THD *thd, sys_var_str *var_str,
     file_log= logger.get_log_file_handler();
     break;
   default:
-    assert(0);                                  // Impossible
+    MY_ASSERT_UNREACHABLE();
   }
 
   if (!old_value)
@@ -2724,10 +2741,26 @@ int set_var_collation_client::update(THD *thd)
 
 /****************************************************************************/
 
+bool sys_var_timestamp::check(THD *thd, set_var *var)
+{
+  longlong val;
+  var->save_result.ulonglong_value= var->value->val_int();
+  val= (longlong) var->save_result.ulonglong_value;
+  if (val != 0 &&          // this is how you set the default value
+      (val < TIMESTAMP_MIN_VALUE || val > TIMESTAMP_MAX_VALUE))
+  {
+    char buf[64];
+    my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "timestamp", llstr(val, buf));
+    return TRUE;
+  }
+  return FALSE;
+}
+
+
 bool sys_var_timestamp::update(THD *thd,  set_var *var)
 {
   thd->set_time((time_t) var->save_result.ulonglong_value);
-  return 0;
+  return FALSE;
 }
 
 
@@ -2952,7 +2985,7 @@ bool sys_var_thd_lc_time_names::check(THD *thd, set_var *var)
       my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name, "NULL");
       return 1;
     }
-    const char *locale_str= res->c_ptr();
+    const char *locale_str= res->c_ptr_safe();
     if (!(locale_match= my_locale_by_name(locale_str)))
     {
       my_printf_error(ER_UNKNOWN_ERROR,
@@ -3088,6 +3121,13 @@ static bool set_option_autocommit(THD *thd, set_var *var)
     if ((org_options & OPTION_NOT_AUTOCOMMIT))
     {
       /* We changed to auto_commit mode */
+      if (thd->transaction.xid_state.xa_state != XA_NOTR)
+      {
+        thd->options= org_options;
+        my_error(ER_XAER_RMFAIL, MYF(0),
+                 xa_state_names[thd->transaction.xid_state.xa_state]);
+        return 1;
+      }
       thd->options&= ~(ulonglong) (OPTION_BEGIN | OPTION_KEEP_LOG);
       thd->transaction.all.modified_non_trans_table= FALSE;
       thd->server_status|= SERVER_STATUS_AUTOCOMMIT;
@@ -3191,6 +3231,12 @@ static uchar *get_tmpdir(THD *thd)
     return (uchar *)opt_mysql_tmpdir;
   return (uchar*)mysql_tmpdir;
 }
+
+static uchar *get_myisam_mmap_size(THD *thd)
+{
+  return (uchar *)&myisam_mmap_size;
+}
+
 
 /****************************************************************************
   Main handling of variables:
@@ -3371,8 +3417,8 @@ int set_var_init()
 {
   uint count= 0;
   DBUG_ENTER("set_var_init");
-
-  for (sys_var *var=vars.first; var; var= var->next, count++);
+  
+  for (sys_var *var=vars.first; var; var= var->next, count++) ;
 
   if (hash_init(&system_variable_hash, system_charset_info, count, 0,
                 0, (hash_get_key) get_sys_var_length, 0, HASH_UNIQUE))
@@ -4143,7 +4189,7 @@ bool process_key_caches(process_key_cache_t func)
 
 void sys_var_trust_routine_creators::warn_deprecated(THD *thd)
 {
-  WARN_DEPRECATED(thd, "6.0", "@@log_bin_trust_routine_creators",
+  WARN_DEPRECATED(thd, VER_CELOSIA, "@@log_bin_trust_routine_creators",
                       "'@@log_bin_trust_function_creators'");
 }
 
@@ -4207,10 +4253,10 @@ bool sys_var_opt_readonly::update(THD *thd, set_var *var)
     can cause to wait on a read lock, it's required for the client application
     to unlock everything, and acceptable for the server to wait on all locks.
   */
-  if (result= close_cached_tables(thd, NULL, FALSE, TRUE, TRUE))
+  if ((result= close_cached_tables(thd, NULL, FALSE, TRUE, TRUE)))
     goto end_with_read_lock;
 
-  if (result= make_global_read_lock_block_commit(thd))
+  if ((result= make_global_read_lock_block_commit(thd)))
     goto end_with_read_lock;
 
   /* Change the opt_readonly system variable, safe because the lock is held */
@@ -4223,6 +4269,7 @@ end_with_read_lock:
 }
 
 
+#ifndef DBUG_OFF
 /* even session variable here requires SUPER, because of -#o,file */
 bool sys_var_thd_dbug::check(THD *thd, set_var *var)
 {
@@ -4231,10 +4278,15 @@ bool sys_var_thd_dbug::check(THD *thd, set_var *var)
 
 bool sys_var_thd_dbug::update(THD *thd, set_var *var)
 {
+  char buf[256];
+  String str(buf, sizeof(buf), system_charset_info), *res;
+
+  res= var->value->val_str(&str);
+
   if (var->type == OPT_GLOBAL)
-    DBUG_SET_INITIAL(var ? var->value->str_value.c_ptr() : "");
+    DBUG_SET_INITIAL(res ? res->c_ptr() : "");
   else
-    DBUG_SET(var ? var->value->str_value.c_ptr() : "");
+    DBUG_SET(res ? res->c_ptr() : "");
 
   return 0;
 }
@@ -4249,6 +4301,8 @@ uchar *sys_var_thd_dbug::value_ptr(THD *thd, enum_var_type type, LEX_STRING *b)
     DBUG_EXPLAIN(buf, sizeof(buf));
   return (uchar*) thd->strdup(buf);
 }
+#endif /* DBUG_OFF */
+
 
 #ifdef HAVE_EVENT_SCHEDULER
 bool sys_var_event_scheduler::check(THD *thd, set_var *var)
@@ -4295,6 +4349,36 @@ uchar *sys_var_event_scheduler::value_ptr(THD *thd, enum_var_type type,
   return (uchar *) Events::get_opt_event_scheduler_str();
 }
 #endif
+
+
+int 
+check_max_allowed_packet(THD *thd,  set_var *var)
+{
+  longlong val= var->value->val_int();
+  if (val < (longlong) global_system_variables.net_buffer_length)
+  {
+    push_warning(thd, MYSQL_ERROR::WARN_LEVEL_WARN, 
+                        ER_UNKNOWN_ERROR, 
+                        "The value of 'max_allowed_packet' should be no less than "
+                        "the value of 'net_buffer_length'");
+  }
+  return 0;
+}
+
+
+int 
+check_net_buffer_length(THD *thd,  set_var *var)
+{
+  longlong val= var->value->val_int();
+  if (val > (longlong) global_system_variables.max_allowed_packet)
+  {
+    push_warning(thd, MYSQL_ERROR::WARN_LEVEL_WARN, 
+                        ER_UNKNOWN_ERROR, 
+                        "The value of 'max_allowed_packet' should be no less than "
+                        "the value of 'net_buffer_length'");
+  }
+  return 0;
+}
 
 /****************************************************************************
   Used templates

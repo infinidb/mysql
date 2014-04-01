@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Functions to handle space-packed-records and blobs
@@ -66,9 +68,12 @@ static int _mi_cmp_buffer(File file, const uchar *buff, my_off_t filepos,
 my_bool mi_dynmap_file(MI_INFO *info, my_off_t size)
 {
   DBUG_ENTER("mi_dynmap_file");
-  if (size > (my_off_t) (~((size_t) 0)))
+  if (size == 0 || size > (my_off_t) (~((size_t) 0)))
   {
-    DBUG_PRINT("warning", ("File is too large for mmap"));
+    if (size)
+      DBUG_PRINT("warning", ("File is too large for mmap"));
+    else
+      DBUG_PRINT("warning", ("Do not mmap zero-length"));
     DBUG_RETURN(1);
   }
   /*
@@ -94,6 +99,34 @@ my_bool mi_dynmap_file(MI_INFO *info, my_off_t size)
   madvise((char*) info->s->file_map, size, MADV_RANDOM);
 #endif
   info->s->mmaped_length= size;
+  info->s->file_read= mi_mmap_pread;
+  info->s->file_write= mi_mmap_pwrite;
+  DBUG_RETURN(0);
+}
+
+
+/*
+  Destroy mmaped area for MyISAM handler
+
+  SYNOPSIS
+    mi_munmap_file()
+    info                  MyISAM handler
+
+  RETURN
+    0  ok
+   !0  error.
+*/
+
+int mi_munmap_file(MI_INFO *info)
+{
+  int ret;
+  DBUG_ENTER("mi_unmap_file");
+  if ((ret= my_munmap(info->s->file_map, info->s->mmaped_length)))
+    DBUG_RETURN(ret);
+  info->s->file_read= mi_nommap_pread;
+  info->s->file_write= mi_nommap_pwrite;
+  info->s->file_map= 0;
+  info->s->mmaped_length= 0;
   DBUG_RETURN(0);
 }
 
@@ -112,8 +145,7 @@ void mi_remap_file(MI_INFO *info, my_off_t size)
 {
   if (info->s->file_map)
   {
-    VOID(my_munmap((char*) info->s->file_map,
-                   (size_t) info->s->mmaped_length));
+    mi_munmap_file(info);
     mi_dynmap_file(info, size);
   }
 }
@@ -933,8 +965,16 @@ static int update_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *record,
   }
 
   if (block_info.next_filepos != HA_OFFSET_ERROR)
+  {
+    /*
+      delete_dynamic_record() may change data file position.
+      IO cache must be notified as it may still have cached
+      data, which has to be flushed later.
+    */
+    info->rec_cache.seek_not_done= 1;
     if (delete_dynamic_record(info,block_info.next_filepos,1))
       goto err;
+  }
   DBUG_RETURN(0);
 err:
   DBUG_RETURN(1);

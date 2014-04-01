@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* To avoid problems with alarms in debug code, we disable DBUG here */
 #define FORCE_DBUG_OFF
@@ -50,6 +52,8 @@ static QUEUE alarm_queue;
 static uint max_used_alarms=0;
 pthread_t alarm_thread;
 
+#define MY_THR_ALARM_QUEUE_EXTENT 10
+
 #ifdef USE_ALARM_THREAD
 static void *alarm_handler(void *arg);
 #define reschedule_alarms() pthread_cond_signal(&COND_alarm)
@@ -72,8 +76,8 @@ void init_thr_alarm(uint max_alarms)
   DBUG_ENTER("init_thr_alarm");
   alarm_aborted=0;
   next_alarm_expire_time= ~ (time_t) 0;
-  init_queue(&alarm_queue,max_alarms+1,offsetof(ALARM,expire_time),0,
-	     compare_ulong,NullS);
+  init_queue_ex(&alarm_queue, max_alarms + 1, offsetof(ALARM,expire_time), 0,
+                compare_ulong, NullS, MY_THR_ALARM_QUEUE_EXTENT);
   sigfillset(&full_signal_set);			/* Neaded to block signals */
   pthread_mutex_init(&LOCK_alarm,MY_MUTEX_INIT_FAST);
   pthread_cond_init(&COND_alarm,NULL);
@@ -125,7 +129,10 @@ void resize_thr_alarm(uint max_alarms)
     than max_alarms
   */
   if (alarm_queue.elements < max_alarms)
+  {
     resize_queue(&alarm_queue,max_alarms+1);
+    max_used_alarms= alarm_queue.elements;
+  }
   pthread_mutex_unlock(&LOCK_alarm);
 }
 
@@ -180,17 +187,6 @@ my_bool thr_alarm(thr_alarm_t *alrm, uint sec, ALARM *alarm_data)
 
   if (alarm_queue.elements >= max_used_alarms)
   {
-    if (alarm_queue.elements == alarm_queue.max_elements)
-    {
-      DBUG_PRINT("info", ("alarm queue full"));
-      fprintf(stderr,"Warning: thr_alarm queue is full\n");
-      *alrm= 0;					/* No alarm */
-      pthread_mutex_unlock(&LOCK_alarm);
-#ifndef USE_ONE_SIGNAL_HAND
-      pthread_sigmask(SIG_SETMASK,&old_mask,NULL);
-#endif
-      DBUG_RETURN(1);
-    }
     max_used_alarms=alarm_queue.elements+1;
   }
   reschedule= (ulong) next_alarm_expire_time > (ulong) now + sec;
@@ -214,7 +210,7 @@ my_bool thr_alarm(thr_alarm_t *alrm, uint sec, ALARM *alarm_data)
   alarm_data->alarmed=0;
   alarm_data->thread=    current_my_thread_var->pthread_self;
   alarm_data->thread_id= current_my_thread_var->id;
-  queue_insert(&alarm_queue,(uchar*) alarm_data);
+  queue_insert_safe(&alarm_queue, (uchar*) alarm_data);
 
   /* Reschedule alarm if the current one has more than sec left */
   if (reschedule)
@@ -306,7 +302,7 @@ sig_handler process_alarm(int sig __attribute__((unused)))
 #if defined(MAIN) && !defined(__bsdi__)
     printf("thread_alarm in process_alarm\n"); fflush(stdout);
 #endif
-#ifdef DONT_REMEMBER_SIGNAL
+#ifdef SIGNAL_HANDLER_RESET_ON_DELIVERY
     my_sigset(thr_client_alarm, process_alarm);	/* int. thread system calls */
 #endif
     return;
@@ -325,7 +321,7 @@ sig_handler process_alarm(int sig __attribute__((unused)))
 #endif
   process_alarm_part2(sig);
 #ifndef USE_ALARM_THREAD
-#if defined(DONT_REMEMBER_SIGNAL) && !defined(USE_ONE_SIGNAL_HAND)
+#if defined(SIGNAL_HANDLER_RESET_ON_DELIVERY) && !defined(USE_ONE_SIGNAL_HAND)
   my_sigset(THR_SERVER_ALARM,process_alarm);
 #endif
   pthread_mutex_unlock(&LOCK_alarm);
@@ -523,12 +519,12 @@ void thr_alarm_info(ALARM_INFO *info)
 */
 
 
-static sig_handler thread_alarm(int sig)
+static sig_handler thread_alarm(int sig __attribute__((unused)))
 {
 #ifdef MAIN
   printf("thread_alarm\n"); fflush(stdout);
 #endif
-#ifdef DONT_REMEMBER_SIGNAL
+#ifdef SIGNAL_HANDLER_RESET_ON_DELIVERY
   my_sigset(sig,thread_alarm);		/* int. thread system calls */
 #endif
 }
@@ -797,7 +793,7 @@ static sig_handler print_signal_warning(int sig)
 {
   printf("Warning: Got signal %d from thread %s\n",sig,my_thread_name());
   fflush(stdout);
-#ifdef DONT_REMEMBER_SIGNAL
+#ifdef SIGNAL_HANDLER_RESET_ON_DELIVERY
   my_sigset(sig,print_signal_warning);		/* int. thread system calls */
 #endif
   if (sig == SIGALRM)

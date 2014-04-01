@@ -1,4 +1,5 @@
-/* Copyright (C) 2004 MySQL AB
+/*
+   Copyright (c) 2004, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
    Most of the following code and structures were derived from
@@ -1806,7 +1808,7 @@ static Time_zone*
 tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
 {
   TABLE *table= 0;
-  TIME_ZONE_INFO *tz_info;
+  TIME_ZONE_INFO *tz_info= NULL;
   Tz_names_entry *tmp_tzname;
   Time_zone *return_val= 0;
   int res;
@@ -1814,7 +1816,8 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   my_time_t ttime;
   char buff[MAX_FIELD_WIDTH];
   String abbr(buff, sizeof(buff), &my_charset_latin1);
-  char *alloc_buff, *tz_name_buff;
+  char *alloc_buff= NULL;
+  char *tz_name_buff= NULL;
   /*
     Temporary arrays that are used for loading of data for filling
     TIME_ZONE_INFO structure
@@ -1833,22 +1836,6 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   memset(&tmp_tz_info, 0, sizeof(TIME_ZONE_INFO));
 
   DBUG_ENTER("tz_load_from_open_tables");
-
-  /* Prepare tz_info for loading also let us make copy of time zone name */
-  if (!(alloc_buff= (char*) alloc_root(&tz_storage, sizeof(TIME_ZONE_INFO) +
-                                       tz_name->length() + 1)))
-  {
-    sql_print_error("Out of memory while loading time zone description");
-    return 0;
-  }
-  tz_info= (TIME_ZONE_INFO *)alloc_buff;
-  bzero(tz_info, sizeof(TIME_ZONE_INFO));
-  tz_name_buff= alloc_buff + sizeof(TIME_ZONE_INFO);
-  /*
-    By writing zero to the end we guarantee that we can call ptr()
-    instead of c_ptr() for time zone name.
-  */
-  strmake(tz_name_buff, tz_name->ptr(), tz_name->length());
 
   /*
     Let us find out time zone id by its name (there is only one index
@@ -2259,7 +2246,7 @@ my_tz_find(THD *thd, const String *name)
   DBUG_PRINT("enter", ("time zone name='%s'",
                        name ? ((String *)name)->c_ptr_safe() : "NULL"));
 
-  if (!name)
+  if (!name || name->is_empty())
     DBUG_RETURN(0);
 
   VOID(pthread_mutex_lock(&tz_LOCK));

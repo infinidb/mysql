@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2012, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -285,6 +285,10 @@ dtype_new_store_for_order_and_null_size(
 #endif
 	ulint	len;
 
+	ut_ad(type);
+	ut_ad(type->mtype >= DATA_VARCHAR);
+	ut_ad(type->mtype <= DATA_MYSQL);
+
 	buf[0] = (byte)(type->mtype & 0xFFUL);
 
 	if (type->prtype & DATA_BINARY_TYPE) {
@@ -435,34 +439,16 @@ dtype_get_fixed_size_low(
 		} else if (!comp) {
 			return(len);
 		} else {
-			/* We play it safe here and ask MySQL for
-			mbminlen and mbmaxlen.	Although
-			mbminlen and mbmaxlen are
-			initialized if and only if prtype
-			is (in one of the 3 functions in this file),
-			it could be that none of these functions
-			has been called. */
-
+#ifdef UNIV_DEBUG
 			ulint	i_mbminlen, i_mbmaxlen;
 
 			innobase_get_cset_width(
 				dtype_get_charset_coll(prtype),
 				&i_mbminlen, &i_mbmaxlen);
 
-			if (UNIV_UNLIKELY(mbminlen != i_mbminlen)
-			    || UNIV_UNLIKELY(mbmaxlen != i_mbmaxlen)) {
-
-				ut_print_timestamp(stderr);
-				fprintf(stderr, "  InnoDB: "
-					"mbminlen=%lu, "
-					"mbmaxlen=%lu, "
-					"type->mbminlen=%lu, "
-					"type->mbmaxlen=%lu\n",
-					(ulong) i_mbminlen,
-					(ulong) i_mbmaxlen,
-					(ulong) mbminlen,
-					(ulong) mbmaxlen);
-			}
+			ut_ad(mbminlen == i_mbminlen);
+			ut_ad(mbmaxlen == i_mbmaxlen);
+#endif /* UNIV_DEBUG */
 			if (mbminlen == mbmaxlen) {
 				return(len);
 			}

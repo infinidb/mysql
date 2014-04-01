@@ -14,7 +14,8 @@
 
 @SET_MAKE@
 
-# Copyright (C) 2001-2006 MySQL AB
+# Copyright (c) 2001-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+# Use is subject to license terms.
 # 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -28,8 +29,8 @@
 # 
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-# MA 02111-1307, USA
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
 #
 # This file is public domain and comes with NO WARRANTY of any kind
 
@@ -61,7 +62,8 @@ subdir = libmysqld
 DIST_COMMON = $(noinst_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -135,10 +137,10 @@ am__objects_3 = derror.$(OBJEXT) field.$(OBJEXT) field_conv.$(OBJEXT) \
 	parse_file.$(OBJEXT) sql_view.$(OBJEXT) sql_trigger.$(OBJEXT) \
 	my_decimal.$(OBJEXT) rpl_filter.$(OBJEXT) \
 	sql_partition.$(OBJEXT) sql_builtin.$(OBJEXT) \
-	sql_plugin.$(OBJEXT) sql_tablespace.$(OBJEXT) \
-	rpl_injector.$(OBJEXT) my_user.$(OBJEXT) \
-	partition_info.$(OBJEXT) sql_servers.$(OBJEXT) \
-	event_parse_data.$(OBJEXT)
+	sql_plugin.$(OBJEXT) debug_sync.$(OBJEXT) \
+	sql_tablespace.$(OBJEXT) rpl_injector.$(OBJEXT) \
+	my_user.$(OBJEXT) partition_info.$(OBJEXT) \
+	sql_servers.$(OBJEXT) event_parse_data.$(OBJEXT)
 nodist_libmysqld_int_a_OBJECTS = $(am__objects_2) $(am__objects_3)
 libmysqld_int_a_OBJECTS = $(am_libmysqld_int_a_OBJECTS) \
 	$(nodist_libmysqld_int_a_OBJECTS)
@@ -181,6 +183,8 @@ ALLOCA = @ALLOCA@
 AMDEP_FALSE = @AMDEP_FALSE@
 AMDEP_TRUE = @AMDEP_TRUE@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -291,6 +295,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -308,6 +313,8 @@ NDB_VERSION_BUILD = @NDB_VERSION_BUILD@
 NDB_VERSION_MAJOR = @NDB_VERSION_MAJOR@
 NDB_VERSION_MINOR = @NDB_VERSION_MINOR@
 NDB_VERSION_STATUS = @NDB_VERSION_STATUS@
+NEED_THREAD_FALSE = @NEED_THREAD_FALSE@
+NEED_THREAD_TRUE = @NEED_THREAD_TRUE@
 NM = @NM@
 NOINST_LDFLAGS = @NOINST_LDFLAGS@
 NON_THREADED_LIBS = @NON_THREADED_LIBS@
@@ -352,6 +359,7 @@ THREAD_SAFE_CLIENT_TRUE = @THREAD_SAFE_CLIENT_TRUE@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -438,8 +446,6 @@ plugin_federated_shared_target = @plugin_federated_shared_target@
 plugin_federated_static_target = @plugin_federated_static_target@
 plugin_heap_shared_target = @plugin_heap_shared_target@
 plugin_heap_static_target = @plugin_heap_static_target@
-plugin_ibmdb2i_shared_target = @plugin_ibmdb2i_shared_target@
-plugin_ibmdb2i_static_target = @plugin_ibmdb2i_static_target@
 plugin_innobase_shared_target = @plugin_innobase_shared_target@
 plugin_innobase_static_target = @plugin_innobase_static_target@
 plugin_innodb_plugin_shared_target = @plugin_innodb_plugin_shared_target@
@@ -454,8 +460,6 @@ plugin_partition_shared_target = @plugin_partition_shared_target@
 plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -480,6 +484,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 MYSQLDATAdir = $(localstatedir)
 MYSQLSHAREdir = $(pkgdatadir)
@@ -531,6 +536,7 @@ sqlsources = derror.cc field.cc field_conv.cc strfunc.cc filesort.cc \
 	sp_head.cc sp_pcontext.cc sp.cc sp_cache.cc sp_rcontext.cc \
 	parse_file.cc sql_view.cc sql_trigger.cc my_decimal.cc \
 	rpl_filter.cc sql_partition.cc sql_builtin.cc sql_plugin.cc \
+	debug_sync.cc \
 	sql_tablespace.cc \
 	rpl_injector.cc my_user.c partition_info.cc \
 	sql_servers.cc event_parse_data.cc
@@ -639,6 +645,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/client.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/debug_sync.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/derror.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/discover.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/emb_qcache.Po@am__quote@
@@ -1086,7 +1093,7 @@ uninstall-info: uninstall-info-recursive
 
 
 # automake misses these
-sql_yacc.cc sql_yacc.h: $(top_srcdir)/sql/sql_yacc.yy
+sql_yacc.cc sql_yacc.$(YACC_HEXT): $(top_srcdir)/sql/sql_yacc.yy
 
 # Storage engine specific compilation options
 ha_ndbcluster.o:ha_ndbcluster.cc

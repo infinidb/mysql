@@ -1,4 +1,5 @@
-/* Copyright (C) 2002-2003 MySQL AB
+/*
+   Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*
@@ -147,10 +149,11 @@ bool mysql_derived_prepare(THD *thd, LEX *lex, TABLE_LIST *orig_table_list)
     if (!(derived_result= new select_union))
       DBUG_RETURN(TRUE); // out of memory
 
+    lex->context_analysis_only|= CONTEXT_ANALYSIS_ONLY_DERIVED;
     // st_select_lex_unit::prepare correctly work for single select
     if ((res= unit->prepare(thd, derived_result, 0)))
       goto exit;
-
+    lex->context_analysis_only&= ~CONTEXT_ANALYSIS_ONLY_DERIVED;
     if ((res= check_duplicate_names(unit->types, 0)))
       goto exit;
 
@@ -281,13 +284,13 @@ bool mysql_derived_filling(THD *thd, LEX *lex, TABLE_LIST *orig_table_list)
 
       lex->current_select= first_select;
       res= mysql_select(thd, &first_select->ref_pointer_array,
-			(TABLE_LIST*) first_select->table_list.first,
+			first_select->table_list.first,
 			first_select->with_wild,
 			first_select->item_list, first_select->where,
 			(first_select->order_list.elements+
 			 first_select->group_list.elements),
-			(ORDER *) first_select->order_list.first,
-			(ORDER *) first_select->group_list.first,
+			first_select->order_list.first,
+			first_select->group_list.first,
 			first_select->having, (ORDER*) NULL,
 			(first_select->options | thd->options |
 			 SELECT_NO_UNLOCK),

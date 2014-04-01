@@ -11,7 +11,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 # Process this file with automake to create Makefile.in
 
@@ -156,14 +156,14 @@ libinnobase_a_SOURCES=	btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c	\
 			ut/ut0ut.c ut/ut0vec.c ut/ut0wqueue.c		\
 			handler/ha_innodb.cc
 
-libinnobase_a_CXXFLAGS=	$(AM_CFLAGS)
+libinnobase_a_CXXFLAGS=	$(AM_CXXFLAGS)
 libinnobase_a_CFLAGS=	$(AM_CFLAGS)
 
 EXTRA_LTLIBRARIES=	ha_innodb.la
 pkgplugin_LTLIBRARIES=	@plugin_innobase_shared_target@
 
 ha_innodb_la_LDFLAGS=	-module -rpath $(pkgplugindir)
-ha_innodb_la_CXXFLAGS=	$(AM_CFLAGS) $(INNODB_DYNAMIC_CFLAGS)
+ha_innodb_la_CXXFLAGS=	$(AM_CXXFLAGS) $(INNODB_DYNAMIC_CFLAGS)
 ha_innodb_la_CFLAGS=	$(AM_CFLAGS) $(INNODB_DYNAMIC_CFLAGS)
 ha_innodb_la_SOURCES=	$(libinnobase_a_SOURCES)
 

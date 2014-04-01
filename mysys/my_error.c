@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysys_priv.h"
 #include "mysys_err.h"
@@ -123,6 +125,28 @@ int my_printf_error(uint error, const char *format, myf MyFlags, ...)
   (void) my_vsnprintf (ebuff, sizeof(ebuff), format, args);
   va_end(args);
   DBUG_RETURN((*error_handler_hook)(error, ebuff, MyFlags));
+}
+
+/*
+  Warning as printf
+
+  SYNOPSIS
+    my_printf_warning()
+      format>   Format string
+      ...>      variable list
+*/
+void(*sql_print_warning_hook)(const char *format,...);
+void my_printf_warning(const char *format, ...)
+{
+  va_list args;
+  char wbuff[ERRMSGSIZE];
+  DBUG_ENTER("my_printf_warning");
+  DBUG_PRINT("my", ("Format: %s", format));
+  va_start(args,format);
+  (void) my_vsnprintf (wbuff, sizeof(wbuff), format, args);
+  va_end(args);
+  (*sql_print_warning_hook)(wbuff);
+  DBUG_VOID_RETURN;
 }
 
 /*

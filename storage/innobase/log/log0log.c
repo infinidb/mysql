@@ -3045,19 +3045,20 @@ loop:
 
 	if (srv_fast_shutdown < 2
 	   && (srv_error_monitor_active
-	      || srv_lock_timeout_and_monitor_active)) {
+	      || srv_lock_timeout_active || srv_monitor_active)) {
 
 		mutex_exit(&kernel_mutex);
 
 		goto loop;
 	}
 
-	/* Check that there are no longer transactions. We need this wait even
-	for the 'very fast' shutdown, because the InnoDB layer may have
-	committed or prepared transactions and we don't want to lose them. */
+	/* Check that there are no longer transactions, except for
+	PREPARED ones. We need this wait even for the 'very fast'
+	shutdown, because the InnoDB layer may have committed or
+	prepared transactions and we don't want to lose them. */
 
 	if (trx_n_mysql_transactions > 0
-	    || UT_LIST_GET_LEN(trx_sys->trx_list) > 0) {
+	    || UT_LIST_GET_LEN(trx_sys->trx_list) > trx_n_prepared) {
 
 		mutex_exit(&kernel_mutex);
 

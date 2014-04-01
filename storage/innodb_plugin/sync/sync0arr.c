@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
@@ -18,8 +18,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -227,24 +227,21 @@ sync_array_create(
 				SYNC_ARRAY_MUTEX: determines the type
 				of mutex protecting the data structure */
 {
+	ulint		sz;
 	sync_array_t*	arr;
-	sync_cell_t*	cell_array;
-	sync_cell_t*	cell;
-	ulint		i;
 
 	ut_a(n_cells > 0);
 
 	/* Allocate memory for the data structures */
 	arr = ut_malloc(sizeof(sync_array_t));
+	memset(arr, 0x0, sizeof(*arr));
 
-	cell_array = ut_malloc(sizeof(sync_cell_t) * n_cells);
+	sz = sizeof(sync_cell_t) * n_cells;
+	arr->array = ut_malloc(sz);
+	memset(arr->array, 0x0, sz);
 
 	arr->n_cells = n_cells;
-	arr->n_reserved = 0;
-	arr->array = cell_array;
 	arr->protection = protection;
-	arr->sg_count = 0;
-	arr->res_count = 0;
 
 	/* Then create the mutex to protect the wait array complex */
 	if (protection == SYNC_ARRAY_OS_MUTEX) {
@@ -253,13 +250,6 @@ sync_array_create(
 		mutex_create(&arr->mutex, SYNC_NO_ORDER_CHECK);
 	} else {
 		ut_error;
-	}
-
-	for (i = 0; i < n_cells; i++) {
-		cell = sync_array_get_nth_cell(arr, i);
-	cell->wait_object = NULL;
-		cell->waiting = FALSE;
-		cell->signal_count = 0;
 	}
 
 	return(arr);
@@ -508,7 +498,9 @@ sync_array_cell_print(
 		   || type == RW_LOCK_WAIT_EX
 		   || type == RW_LOCK_SHARED) {
 
-		fputs(type == RW_LOCK_EX ? "X-lock on" : "S-lock on", file);
+		fputs(type == RW_LOCK_EX ? "X-lock on"
+		      : type == RW_LOCK_WAIT_EX ? "X-lock (wait_ex) on"
+		      : "S-lock on", file);
 
 		rwlock = cell->old_wait_rw_lock;
 
@@ -723,7 +715,7 @@ print:
 					fprintf(stderr, "rw-lock %p ",
 						(void*) lock);
 					sync_array_cell_print(stderr, cell);
-					rw_lock_debug_print(debug);
+					rw_lock_debug_print(stderr, debug);
 					return(TRUE);
 				}
 			}
@@ -922,8 +914,10 @@ Prints warnings of long semaphore waits to stderr.
 @return	TRUE if fatal semaphore wait threshold was exceeded */
 UNIV_INTERN
 ibool
-sync_array_print_long_waits(void)
-/*=============================*/
+sync_array_print_long_waits(
+/*========================*/
+	os_thread_id_t*	waiter,	/*!< out: longest waiting thread */
+	const void**	sema)	/*!< out: longest-waited-for semaphore */
 {
 	sync_cell_t*	cell;
 	ibool		old_val;
@@ -931,25 +925,50 @@ sync_array_print_long_waits(void)
 	ulint		i;
 	ulint		fatal_timeout = srv_fatal_semaphore_wait_threshold;
 	ibool		fatal = FALSE;
+	double		longest_diff = 0;
+
+	/* For huge tables, skip the check during CHECK TABLE etc... */
+	if (fatal_timeout > SRV_SEMAPHORE_WAIT_EXTENSION) {
+		return(FALSE);
+	}
+
+	sync_array_enter(sync_primary_wait_array);
 
 	for (i = 0; i < sync_primary_wait_array->n_cells; i++) {
 
+		double	diff;
+		void*	wait_object;
+
 		cell = sync_array_get_nth_cell(sync_primary_wait_array, i);
 
-		if (cell->wait_object != NULL && cell->waiting
-		    && difftime(time(NULL), cell->reservation_time) > 240) {
+		wait_object = cell->wait_object;
+
+		if (wait_object == NULL || !cell->waiting) {
+
+			continue;
+		}
+
+		diff = difftime(time(NULL), cell->reservation_time);
+
+		if (diff > 240) {
 			fputs("InnoDB: Warning: a long semaphore wait:\n",
 			      stderr);
 			sync_array_cell_print(stderr, cell);
 			noticed = TRUE;
 		}
 
-		if (cell->wait_object != NULL && cell->waiting
-		    && difftime(time(NULL), cell->reservation_time)
-		    > fatal_timeout) {
+		if (diff > fatal_timeout) {
 			fatal = TRUE;
 		}
+
+		if (diff > longest_diff) {
+			longest_diff = diff;
+			*sema = wait_object;
+			*waiter = cell->thread;
+		}
 	}
+
+	sync_array_exit(sync_primary_wait_array);
 
 	if (noticed) {
 		fprintf(stderr,

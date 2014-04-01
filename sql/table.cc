@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* Some general useful functions */
@@ -44,6 +46,8 @@ static void fix_type_pointers(const char ***array, TYPELIB *point_to_type,
 static uint find_field(Field **fields, uchar *record, uint start, uint length);
 
 inline bool is_system_table_name(const char *name, uint length);
+
+static ulong get_form_pos(File file, uchar *head);
 
 /**************************************************************************
   Object_creation_ctx implementation.
@@ -212,10 +216,7 @@ TABLE_CATEGORY get_table_category(const LEX_STRING *db, const LEX_STRING *name)
   DBUG_ASSERT(db != NULL);
   DBUG_ASSERT(name != NULL);
 
-  if ((db->length == INFORMATION_SCHEMA_NAME.length) &&
-      (my_strcasecmp(system_charset_info,
-                    INFORMATION_SCHEMA_NAME.str,
-                    db->str) == 0))
+  if (is_schema_db(db->str, db->length))
   {
     return TABLE_CATEGORY_INFORMATION;
   }
@@ -300,13 +301,6 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, char *key,
     share->version=       refresh_version;
 
     /*
-      This constant is used to mark that no table map version has been
-      assigned.  No arithmetic is done on the value: it will be
-      overwritten with a value taken from MYSQL_BIN_LOG.
-    */
-    share->table_map_version= ~(ulonglong)0;
-
-    /*
       Since alloc_table_share() can be called without any locking (for
       example, ha_create_table... functions), we do not assign a table
       map id here.  Instead we assign a value that is not used
@@ -369,11 +363,6 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   share->path.length= share->normalized_path.length= strlen(path);
   share->frm_version= 		 FRM_VER_TRUE_VARCHAR;
 
-  /*
-    Temporary tables are not replicated, but we set up these fields
-    anyway to be able to catch errors.
-   */
-  share->table_map_version= ~(ulonglong)0;
   share->cached_row_logging_check= -1;
 
   /*
@@ -438,6 +427,11 @@ void free_table_share(TABLE_SHARE *share)
       key_info->flags= 0;
     }
   }
+  if (share->ha_data_destroy)
+  {
+    share->ha_data_destroy(share->ha_data);
+    share->ha_data_destroy= NULL;
+  }
   /* We must copy mem_root from share because share is allocated through it */
   memcpy((char*) &mem_root, (char*) &share->mem_root, sizeof(mem_root));
   free_root(&mem_root, MYF(0));                 // Free's share
@@ -497,6 +491,26 @@ inline bool is_system_table_name(const char *name, uint length)
 }
 
 
+/**
+  Check if a string contains path elements
+*/  
+
+static inline bool has_disabled_path_chars(const char *str)
+{
+  for (; *str; str++)
+    switch (*str)
+    {
+      case FN_EXTCHAR:
+      case '/':
+      case '\\':
+      case '~':
+      case '@':
+        return TRUE;
+    }
+  return FALSE;
+}
+
+
 /*
   Read table definition from a binary / text based .frm file
   
@@ -527,7 +541,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
   int error, table_type;
   bool error_given;
   File file;
-  uchar head[288], *disk_buff;
+  uchar head[288];
   char	path[FN_REFLEN];
   MEM_ROOT **root_ptr, *old_root;
   DBUG_ENTER("open_table_def");
@@ -536,7 +550,6 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
 
   error= 1;
   error_given= 0;
-  disk_buff= NULL;
 
   strxmov(path, share->normalized_path.str, reg_ext, NullS);
   if ((file= my_open(path, O_RDONLY | O_SHARE, MYF(0))) < 0)
@@ -552,7 +565,8 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
         This kind of tables must have been opened only by the
         my_open() above.
     */
-    if (strchr(share->table_name.str, '@') ||
+    if (has_disabled_path_chars(share->table_name.str) ||
+        has_disabled_path_chars(share->db.str) ||
         !strncmp(share->db.str, MYSQL50_TABLE_NAME_PREFIX,
                  MYSQL50_TABLE_NAME_PREFIX_LENGTH) ||
         !strncmp(share->table_name.str, MYSQL50_TABLE_NAME_PREFIX,
@@ -687,7 +701,8 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   disk_buff= 0;
 
   error= 3;
-  if (!(pos=get_form_pos(file,head,(TYPELIB*) 0)))
+  /* Position of the form in the form file. */
+  if (!(pos= get_form_pos(file, head)))
     goto err;                                   /* purecov: inspected */
 
   share->frm_version= head[2];
@@ -1315,8 +1330,16 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       share->timestamp_field_offset= i;
 
     if (use_hash)
-      (void) my_hash_insert(&share->name_hash,
-                            (uchar*) field_ptr); // never fail
+      if (my_hash_insert(&share->name_hash, (uchar*) field_ptr) )
+      {
+        /*
+          Set return code 8 here to indicate that an error has
+          occurred but that the error message already has been
+          sent (OOM).
+        */
+        error= 8; 
+        goto err;
+      }
   }
   *field_ptr=0;					// End marker
 
@@ -1600,6 +1623,11 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   delete crypted;
   delete handler_file;
   hash_free(&share->name_hash);
+  if (share->ha_data_destroy)
+  {
+    share->ha_data_destroy(share->ha_data);
+    share->ha_data_destroy= NULL;
+  }
 
   open_table_error(share, error, share->open_errno, errarg);
   DBUG_RETURN(error);
@@ -1841,8 +1869,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
     {
       if (work_part_info_used)
         tmp= fix_partition_func(thd, outparam, is_create_table);
-      outparam->part_info->item_free_list= part_func_arena.free_list;
     }
+    outparam->part_info->item_free_list= part_func_arena.free_list;
 partititon_err:
     if (tmp)
     {
@@ -2033,52 +2061,46 @@ void free_field_buffers_larger_than(TABLE *table, uint32 size)
   }
 }
 
-	/* Find where a form starts */
-	/* if formname is NullS then only formnames is read */
+/**
+  Find where a form starts.
 
-ulong get_form_pos(File file, uchar *head, TYPELIB *save_names)
+  @param head The start of the form file.
+
+  @remark If formname is NULL then only formnames is read.
+
+  @retval The form position.
+*/
+
+static ulong get_form_pos(File file, uchar *head)
 {
-  uint a_length,names,length;
-  uchar *pos,*buf;
+  uchar *pos, *buf;
+  uint names, length;
   ulong ret_value=0;
   DBUG_ENTER("get_form_pos");
 
-  names=uint2korr(head+8);
-  a_length=(names+2)*sizeof(char *);		/* Room for two extra */
+  names= uint2korr(head+8);
 
-  if (!save_names)
-    a_length=0;
-  else
-    save_names->type_names=0;			/* Clear if error */
+  if (!(names= uint2korr(head+8)))
+    DBUG_RETURN(0);
 
-  if (names)
+  length= uint2korr(head+4);
+
+  my_seek(file, 64L, MY_SEEK_SET, MYF(0));
+
+  if (!(buf= (uchar*) my_malloc(length+names*4, MYF(MY_WME))))
+    DBUG_RETURN(0);
+
+  if (my_read(file, buf, length+names*4, MYF(MY_NABP)))
   {
-    length=uint2korr(head+4);
-    VOID(my_seek(file,64L,MY_SEEK_SET,MYF(0)));
-    if (!(buf= (uchar*) my_malloc((size_t) length+a_length+names*4,
-				  MYF(MY_WME))) ||
-	my_read(file, buf+a_length, (size_t) (length+names*4),
-		MYF(MY_NABP)))
-    {						/* purecov: inspected */
-      x_free((uchar*) buf);			/* purecov: inspected */
-      DBUG_RETURN(0L);				/* purecov: inspected */
-    }
-    pos= buf+a_length+length;
-    ret_value=uint4korr(pos);
+    x_free(buf);
+    DBUG_RETURN(0);
   }
-  if (! save_names)
-  {
-    if (names)
-      my_free((uchar*) buf,MYF(0));
-  }
-  else if (!names)
-    bzero((char*) save_names,sizeof(save_names));
-  else
-  {
-    char *str;
-    str=(char *) (buf+a_length);
-    fix_type_pointers((const char ***) &buf,save_names,1,&str);
-  }
+
+  pos= buf+length;
+  ret_value= uint4korr(pos);
+
+  my_free(buf, MYF(0));
+
   DBUG_RETURN(ret_value);
 }
 
@@ -2245,7 +2267,7 @@ void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg)
   default:				/* Better wrong error than none */
   case 4:
     strxmov(buff, share->normalized_path.str, reg_ext, NullS);
-    my_error(ER_NOT_FORM_FILE, errortype, buff, 0);
+    my_error(ER_NOT_FORM_FILE, errortype, buff);
     break;
   }
   DBUG_VOID_RETURN;
@@ -2675,35 +2697,21 @@ bool check_db_name(LEX_STRING *org_name)
 {
   char *name= org_name->str;
   uint name_length= org_name->length;
+  bool check_for_path_chars;
 
   if (!name_length || name_length > NAME_LEN)
     return 1;
 
+  if ((check_for_path_chars= check_mysql50_prefix(name)))
+  {
+    name+= MYSQL50_TABLE_NAME_PREFIX_LENGTH;
+    name_length-= MYSQL50_TABLE_NAME_PREFIX_LENGTH;
+  }
+
   if (lower_case_table_names && name != any_db)
     my_casedn_str(files_charset_info, name);
 
-#if defined(USE_MB) && defined(USE_MB_IDENT)
-  if (use_mb(system_charset_info))
-  {
-    name_length= 0;
-    bool last_char_is_space= TRUE;
-    char *end= name + org_name->length;
-    while (name < end)
-    {
-      int len;
-      last_char_is_space= my_isspace(system_charset_info, *name);
-      len= my_ismbchar(system_charset_info, name, end);
-      if (!len)
-        len= 1;
-      name+= len;
-      name_length++;
-    }
-    return (last_char_is_space || name_length > NAME_CHAR_LEN);
-  }
-  else
-#endif
-    return ((org_name->str[org_name->length - 1] != ' ') ||
-            (name_length > NAME_CHAR_LEN)); /* purecov: inspected */
+  return check_table_name(name, name_length, check_for_path_chars);
 }
 
 
@@ -2713,8 +2721,7 @@ bool check_db_name(LEX_STRING *org_name)
   returns 1 on error
 */
 
-
-bool check_table_name(const char *name, uint length)
+bool check_table_name(const char *name, uint length, bool check_for_path_chars)
 {
   uint name_length= 0;  // name length in symbols
   const char *end= name+length;
@@ -2742,6 +2749,9 @@ bool check_table_name(const char *name, uint length)
       }
     }
 #endif
+    if (check_for_path_chars &&
+        (*name == '/' || *name == '\\' || *name == '~' || *name == FN_EXTCHAR))
+      return 1;
     name++;
     name_length++;
   }
@@ -2803,34 +2813,39 @@ bool check_column_name(const char *name)
                   and such errors never reach the user.
 */
 
-my_bool
-table_check_intact(TABLE *table, const uint table_f_count,
-                   const TABLE_FIELD_W_TYPE *table_def)
+bool
+Table_check_intact::check(TABLE *table, const TABLE_FIELD_DEF *table_def)
 {
   uint i;
   my_bool error= FALSE;
-  my_bool fields_diff_count;
+  const TABLE_FIELD_TYPE *field_def= table_def->field;
   DBUG_ENTER("table_check_intact");
   DBUG_PRINT("info",("table: %s  expected_count: %d",
-                     table->alias, table_f_count));
+                     table->alias, table_def->count));
 
-  fields_diff_count= (table->s->fields != table_f_count);
-  if (fields_diff_count)
+  /* Whether the table definition has already been validated. */
+  if (table->s->table_field_def_cache == table_def)
+    DBUG_RETURN(FALSE);
+
+  if (table->s->fields != table_def->count)
   {
     DBUG_PRINT("info", ("Column count has changed, checking the definition"));
 
     /* previous MySQL version */
     if (MYSQL_VERSION_ID > table->s->mysql_version)
     {
-      sql_print_error(ER(ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE),
-                      table->alias, table_f_count, table->s->fields,
-                      table->s->mysql_version, MYSQL_VERSION_ID);
+      report_error(ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE,
+                   ER(ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE),
+                   table->alias, table_def->count, table->s->fields,
+                   static_cast<int>(table->s->mysql_version),
+                   MYSQL_VERSION_ID);
       DBUG_RETURN(TRUE);
     }
     else if (MYSQL_VERSION_ID == table->s->mysql_version)
     {
-      sql_print_error(ER(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED), table->alias,
-                      table_f_count, table->s->fields);
+      report_error(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED,
+                   ER(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED), table->alias,
+                   table_def->count, table->s->fields);
       DBUG_RETURN(TRUE);
     }
     /*
@@ -2842,7 +2857,7 @@ table_check_intact(TABLE *table, const uint table_f_count,
     */
   }
   char buffer[STRING_BUFFER_USUAL_SIZE];
-  for (i=0 ; i < table_f_count; i++, table_def++)
+  for (i=0 ; i < table_def->count; i++, field_def++)
   {
     String sql_type(buffer, sizeof(buffer), system_charset_info);
     sql_type.length(0);
@@ -2850,18 +2865,18 @@ table_check_intact(TABLE *table, const uint table_f_count,
     {
       Field *field= table->field[i];
 
-      if (strncmp(field->field_name, table_def->name.str,
-                  table_def->name.length))
+      if (strncmp(field->field_name, field_def->name.str,
+                  field_def->name.length))
       {
         /*
           Name changes are not fatal, we use ordinal numbers to access columns.
           Still this can be a sign of a tampered table, output an error
           to the error log.
         */
-        sql_print_error("Incorrect definition of table %s.%s: "
-                        "expected column '%s' at position %d, found '%s'.",
-                        table->s->db.str, table->alias, table_def->name.str, i,
-                        field->field_name);
+        report_error(0, "Incorrect definition of table %s.%s: "
+                     "expected column '%s' at position %d, found '%s'.",
+                     table->s->db.str, table->alias, field_def->name.str, i,
+                     field->field_name);
       }
       field->sql_type(sql_type);
       /*
@@ -2881,47 +2896,51 @@ table_check_intact(TABLE *table, const uint table_f_count,
         the new table definition is backward compatible with the
         original one.
        */
-      if (strncmp(sql_type.c_ptr_safe(), table_def->type.str,
-                  table_def->type.length - 1))
+      if (strncmp(sql_type.c_ptr_safe(), field_def->type.str,
+                  field_def->type.length - 1))
       {
-        sql_print_error("Incorrect definition of table %s.%s: "
-                        "expected column '%s' at position %d to have type "
-                        "%s, found type %s.", table->s->db.str, table->alias,
-                        table_def->name.str, i, table_def->type.str,
-                        sql_type.c_ptr_safe());
+        report_error(0, "Incorrect definition of table %s.%s: "
+                     "expected column '%s' at position %d to have type "
+                     "%s, found type %s.", table->s->db.str, table->alias,
+                     field_def->name.str, i, field_def->type.str,
+                     sql_type.c_ptr_safe());
         error= TRUE;
       }
-      else if (table_def->cset.str && !field->has_charset())
+      else if (field_def->cset.str && !field->has_charset())
       {
-        sql_print_error("Incorrect definition of table %s.%s: "
-                        "expected the type of column '%s' at position %d "
-                        "to have character set '%s' but the type has no "
-                        "character set.", table->s->db.str, table->alias,
-                        table_def->name.str, i, table_def->cset.str);
+        report_error(0, "Incorrect definition of table %s.%s: "
+                     "expected the type of column '%s' at position %d "
+                     "to have character set '%s' but the type has no "
+                     "character set.", table->s->db.str, table->alias,
+                     field_def->name.str, i, field_def->cset.str);
         error= TRUE;
       }
-      else if (table_def->cset.str &&
-               strcmp(field->charset()->csname, table_def->cset.str))
+      else if (field_def->cset.str &&
+               strcmp(field->charset()->csname, field_def->cset.str))
       {
-        sql_print_error("Incorrect definition of table %s.%s: "
-                        "expected the type of column '%s' at position %d "
-                        "to have character set '%s' but found "
-                        "character set '%s'.", table->s->db.str, table->alias,
-                        table_def->name.str, i, table_def->cset.str,
-                        field->charset()->csname);
+        report_error(0, "Incorrect definition of table %s.%s: "
+                     "expected the type of column '%s' at position %d "
+                     "to have character set '%s' but found "
+                     "character set '%s'.", table->s->db.str, table->alias,
+                     field_def->name.str, i, field_def->cset.str,
+                     field->charset()->csname);
         error= TRUE;
       }
     }
     else
     {
-      sql_print_error("Incorrect definition of table %s.%s: "
-                      "expected column '%s' at position %d to have type %s "
-                      " but the column is not found.",
-                      table->s->db.str, table->alias,
-                      table_def->name.str, i, table_def->type.str);
+      report_error(0, "Incorrect definition of table %s.%s: "
+                   "expected column '%s' at position %d to have type %s "
+                   " but the column is not found.",
+                   table->s->db.str, table->alias,
+                   field_def->name.str, i, field_def->type.str);
       error= TRUE;
     }
   }
+
+  if (! error)
+    table->s->table_field_def_cache= table_def;
+
   DBUG_RETURN(error);
 }
 
@@ -3338,7 +3357,12 @@ bool TABLE_LIST::prep_check_option(THD *thd, uint8 check_opt_type)
 
 
 /**
-  Hide errors which show view underlying table information
+  Hide errors which show view underlying table information. 
+  There are currently two mechanisms at work that handle errors for views,
+  this one and a more general mechanism based on an Internal_error_handler,
+  see Show_create_error_handler. The latter handles errors encountered during
+  execution of SHOW CREATE VIEW, while the machanism using this method is
+  handles SELECT from views. The two methods should not clash.
 
   @param[in,out]  thd     thread handler
 
@@ -3347,6 +3371,8 @@ bool TABLE_LIST::prep_check_option(THD *thd, uint8 check_opt_type)
 
 void TABLE_LIST::hide_view_error(THD *thd)
 {
+  if (thd->killed || thd->get_internal_handler())
+    return;
   /* Hide "Unknown column" or "Unknown function" error */
   DBUG_ASSERT(thd->is_error());
 
@@ -3953,6 +3979,7 @@ Item *Field_iterator_table::create_item(THD *thd)
   {
     select->non_agg_fields.push_back(item);
     item->marker= select->cur_pos_in_select_list;
+    select->set_non_agg_field_used(true);
   }
   return item;
 }
@@ -4003,9 +4030,7 @@ Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
   {
     DBUG_RETURN(field);
   }
-  Item *item= new Item_direct_view_ref(&view->view->select_lex.context,
-                                       field_ref, view->alias,
-                                       name);
+  Item *item= new Item_direct_view_ref(view, field_ref, name);
   DBUG_RETURN(item);
 }
 
@@ -4354,10 +4379,31 @@ void st_table::mark_columns_used_by_index(uint index)
   MY_BITMAP *bitmap= &tmp_set;
   DBUG_ENTER("st_table::mark_columns_used_by_index");
 
-  (void) file->extra(HA_EXTRA_KEYREAD);
+  set_keyread(TRUE);
   bitmap_clear_all(bitmap);
   mark_columns_used_by_index_no_reset(index, bitmap);
   column_bitmaps_set(bitmap, bitmap);
+  DBUG_VOID_RETURN;
+}
+
+
+/*
+  Add fields used by a specified index to the table's read_set.
+
+  NOTE:
+    The original state can be restored with
+    restore_column_maps_after_mark_index().
+*/
+
+void st_table::add_read_columns_used_by_index(uint index)
+{
+  MY_BITMAP *bitmap= &tmp_set;
+  DBUG_ENTER("st_table::add_read_columns_used_by_index");
+
+  set_keyread(TRUE);
+  bitmap_copy(bitmap, read_set);
+  mark_columns_used_by_index_no_reset(index, bitmap);
+  column_bitmaps_set(bitmap, write_set);
   DBUG_VOID_RETURN;
 }
 
@@ -4377,8 +4423,7 @@ void st_table::restore_column_maps_after_mark_index()
 {
   DBUG_ENTER("st_table::restore_column_maps_after_mark_index");
 
-  key_read= 0;
-  (void) file->extra(HA_EXTRA_NO_KEYREAD);
+  set_keyread(FALSE);
   default_column_bitmaps();
   file->column_bitmaps_signal();
   DBUG_VOID_RETURN;
@@ -4630,7 +4675,8 @@ Item_subselect *TABLE_LIST::containing_subselect()
     (TABLE_LIST::index_hints). Using the information in this tagged list
     this function sets the members st_table::keys_in_use_for_query, 
     st_table::keys_in_use_for_group_by, st_table::keys_in_use_for_order_by,
-    st_table::force_index and st_table::covering_keys.
+    st_table::force_index, st_table::force_index_order, 
+    st_table::force_index_group and st_table::covering_keys.
 
     Current implementation of the runtime does not allow mixing FORCE INDEX
     and USE INDEX, so this is checked here. Then the FORCE INDEX list 
@@ -4758,14 +4804,28 @@ bool TABLE_LIST::process_index_hints(TABLE *tbl)
     }
 
     /* process FORCE INDEX as USE INDEX with a flag */
+    if (!index_order[INDEX_HINT_FORCE].is_clear_all())
+    {
+      tbl->force_index_order= TRUE;
+      index_order[INDEX_HINT_USE].merge(index_order[INDEX_HINT_FORCE]);
+    }
+
+    if (!index_group[INDEX_HINT_FORCE].is_clear_all())
+    {
+      tbl->force_index_group= TRUE;
+      index_group[INDEX_HINT_USE].merge(index_group[INDEX_HINT_FORCE]);
+    }
+
+    /*
+      TODO: get rid of tbl->force_index (on if any FORCE INDEX is specified) and
+      create tbl->force_index_join instead.
+      Then use the correct force_index_XX instead of the global one.
+    */
     if (!index_join[INDEX_HINT_FORCE].is_clear_all() ||
-        !index_order[INDEX_HINT_FORCE].is_clear_all() ||
-        !index_group[INDEX_HINT_FORCE].is_clear_all())
+        tbl->force_index_group || tbl->force_index_order)
     {
       tbl->force_index= TRUE;
       index_join[INDEX_HINT_USE].merge(index_join[INDEX_HINT_FORCE]);
-      index_order[INDEX_HINT_USE].merge(index_order[INDEX_HINT_FORCE]);
-      index_group[INDEX_HINT_USE].merge(index_group[INDEX_HINT_FORCE]);
     }
 
     /* apply USE INDEX */

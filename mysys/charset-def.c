@@ -1,4 +1,4 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 #include "mysys_priv.h"
 
@@ -132,6 +132,7 @@ my_bool init_compiled_charsets(myf flags __attribute__((unused)))
 #ifdef HAVE_CHARSET_ucs2
   add_compiled_collation(&my_charset_ucs2_general_ci);
   add_compiled_collation(&my_charset_ucs2_bin);
+  add_compiled_collation(&my_charset_ucs2_general_mysql500_ci);
 #ifdef HAVE_UCA_COLLATIONS
   add_compiled_collation(&my_charset_ucs2_unicode_ci);
   add_compiled_collation(&my_charset_ucs2_icelandic_uca_ci);
@@ -163,6 +164,7 @@ my_bool init_compiled_charsets(myf flags __attribute__((unused)))
 #ifdef HAVE_CHARSET_utf8
   add_compiled_collation(&my_charset_utf8_general_ci);
   add_compiled_collation(&my_charset_utf8_bin);
+  add_compiled_collation(&my_charset_utf8_general_mysql500_ci);
 #ifdef HAVE_UTF8_GENERAL_CS
   add_compiled_collation(&my_charset_utf8_general_cs);
 #endif

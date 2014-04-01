@@ -1,5 +1,5 @@
 # -*- cperl -*-
-# Copyright 2004-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+# Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@ our @EXPORT= qw(report_option mtr_print_line mtr_print_thick_line
 use mtr_match;
 use My::Platform;
 use POSIX qw[ _exit ];
+use IO::Handle qw[ flush ];
 require "mtr_io.pl";
 
 my $tot_real_time= 0;
@@ -69,7 +70,7 @@ sub _mtr_report_test_name ($) {
   $tname.= " '$tinfo->{combination}'"
     if defined $tinfo->{combination};
 
-  print _name(), _timestamp();
+  print _name(). _timestamp();
   printf "%-40s ", $tname;
   my $worker = $tinfo->{worker};
   printf "w$worker " if $worker;
@@ -124,18 +125,19 @@ sub mtr_report_test ($) {
     my $timest = format_time();
     my $fail = "fail";
 
-    if ( $::opt_experimental )
+    if ( @$::experimental_test_cases )
     {
       # Find out if this test case is an experimental one, so we can treat
       # the failure as an expected failure instead of a regression.
       for my $exp ( @$::experimental_test_cases ) {
-        if ( $exp ne $test_name ) {
+	# Include pattern match for combinations
+        if ( $exp ne $test_name && $test_name !~ /^$exp / ) {
           # if the expression is not the name of this test case, but has
           # an asterisk at the end, determine if the characters up to
           # but excluding the asterisk are the same
           if ( $exp ne "" && substr($exp, -1, 1) eq "*" ) {
-            $exp = substr($exp, 0, length($exp) - 1);
-            if ( substr($test_name, 0, length($exp)) ne $exp ) {
+            my $nexp = substr($exp, 0, length($exp) - 1);
+            if ( substr($test_name, 0, length($nexp)) ne $nexp ) {
               # no match, try next entry
               next;
             }
@@ -146,6 +148,7 @@ sub mtr_report_test ($) {
           }
         }
         $fail = "exp-fail";
+        $tinfo->{exp_fail}= 1;
         last;
       }
     }
@@ -221,8 +224,8 @@ sub mtr_report_test ($) {
 }
 
 
-sub mtr_report_stats ($;$) {
-  my ($tests, $dont_error)= @_;
+sub mtr_report_stats ($$;$) {
+  my ($prefix, $tests, $dont_error)= @_;
 
   # ----------------------------------------------------------------------
   # Find out how we where doing
@@ -327,6 +330,9 @@ sub mtr_report_stats ($;$) {
     }
   }
 
+  # Print summary line prefix
+  print "$prefix: ";
+
   # Print a list of testcases that failed
   if ( $tot_failed != 0 )
   {
@@ -386,13 +392,13 @@ sub mtr_report_stats ($;$) {
 ##############################################################################
 
 sub mtr_print_line () {
-  print '-' x 60, "\n";
+  print '-' x 60 . "\n";
 }
 
 
 sub mtr_print_thick_line {
   my $char= shift || '=';
-  print $char x 78, "\n";
+  print $char x 78 . "\n";
 }
 
 
@@ -450,7 +456,7 @@ sub _timestamp {
 
 # Always print message to screen
 sub mtr_print (@) {
-  print _name(), join(" ", @_), "\n";
+  print _name(). join(" ", @_). "\n";
 }
 
 
@@ -458,22 +464,23 @@ sub mtr_print (@) {
 sub mtr_report (@) {
   if (defined $verbose)
   {
-    print _name(), join(" ", @_), "\n";
+    print _name(). join(" ", @_). "\n";
   }
 }
 
 
 # Print warning to screen
 sub mtr_warning (@) {
-  print STDERR _name(), _timestamp(),
-    "mysql-test-run: WARNING: ", join(" ", @_), "\n";
+  print STDERR _name(). _timestamp().
+    "mysql-test-run: WARNING: ". join(" ", @_). "\n";
 }
 
 
 # Print error to screen and then exit
 sub mtr_error (@) {
-  print STDERR _name(), _timestamp(),
-    "mysql-test-run: *** ERROR: ", join(" ", @_), "\n";
+  IO::Handle::flush(\*STDOUT) if IS_WINDOWS;
+  print STDERR _name(). _timestamp().
+    "mysql-test-run: *** ERROR: ". join(" ", @_). "\n";
   if (IS_WINDOWS)
   {
     POSIX::_exit(1);
@@ -488,8 +495,8 @@ sub mtr_error (@) {
 sub mtr_debug (@) {
   if ( $verbose > 2 )
   {
-    print STDERR _name(),
-      _timestamp(), "####: ", join(" ", @_), "\n";
+    print STDERR _name().
+      _timestamp(). "####: ". join(" ", @_). "\n";
   }
 }
 
@@ -497,8 +504,8 @@ sub mtr_debug (@) {
 sub mtr_verbose (@) {
   if ( $verbose )
   {
-    print STDERR _name(), _timestamp(),
-      "> ",join(" ", @_),"\n";
+    print STDERR _name(). _timestamp().
+      "> ".join(" ", @_)."\n";
   }
 }
 
@@ -508,8 +515,8 @@ sub mtr_verbose_restart (@) {
   my $proc= $server->{proc};
   if ( $verbose_restart )
   {
-    print STDERR _name(),_timestamp(),
-      "> Restart $proc - ",join(" ", @args),"\n";
+    print STDERR _name()._timestamp().
+      "> Restart $proc - ".join(" ", @args)."\n";
   }
 }
 

@@ -34,6 +34,10 @@ trx_purge_t*	purge_sys = NULL;
 which needs no purge */
 trx_undo_rec_t	trx_purge_dummy_rec;
 
+#ifdef UNIV_DEBUG
+my_bool		srv_purge_view_update_only_debug;
+#endif /* UNIV_DEBUG */
+
 /*********************************************************************
 Checks if trx_id is >= purge_view: then it is guaranteed that its update
 undo log still exists in the system. */
@@ -209,6 +213,7 @@ trx_purge_sys_create(void)
 	purge_sys->purge_trx_no = ut_dulint_zero;
 	purge_sys->purge_undo_no = ut_dulint_zero;
 	purge_sys->next_stored = FALSE;
+	ut_d(purge_sys->done_trx_no = ut_dulint_zero);
 
 	rw_lock_create(&purge_sys->latch, SYNC_PURGE_LATCH);
 
@@ -249,9 +254,10 @@ trx_purge_add_update_undo_to_history(
 	trx_undo_t*	undo;
 	trx_rseg_t*	rseg;
 	trx_rsegf_t*	rseg_header;
+#ifdef UNIV_DEBUG
 	trx_usegf_t*	seg_header;
+#endif /* UNIV_DEBUG */
 	trx_ulogf_t*	undo_header;
-	trx_upagef_t*	page_header;
 	ulint		hist_size;
 
 	undo = trx->update_undo;
@@ -265,8 +271,9 @@ trx_purge_add_update_undo_to_history(
 	rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, mtr);
 
 	undo_header = undo_page + undo->hdr_offset;
+#ifdef UNIV_DEBUG
 	seg_header  = undo_page + TRX_UNDO_SEG_HDR;
-	page_header = undo_page + TRX_UNDO_PAGE_HDR;
+#endif /* UNIV_DEBUG */
 
 	if (undo->state != TRX_UNDO_CACHED) {
 		/* The undo log segment will not be reused */
@@ -574,6 +581,7 @@ trx_purge_truncate_if_arr_empty(void)
 	ut_ad(mutex_own(&(purge_sys->mutex)));
 
 	if (purge_sys->arr->n_used == 0) {
+		ut_d(purge_sys->done_trx_no = purge_sys->purge_trx_no);
 
 		trx_purge_truncate_history();
 
@@ -594,7 +602,6 @@ trx_purge_rseg_get_next_history_log(
 {
 	page_t*		undo_page;
 	trx_ulogf_t*	log_hdr;
-	trx_usegf_t*	seg_hdr;
 	fil_addr_t	prev_log_addr;
 	dulint		trx_no;
 	ibool		del_marks;
@@ -615,7 +622,6 @@ trx_purge_rseg_get_next_history_log(
 	undo_page = trx_undo_page_get_s_latched(rseg->space,
 						rseg->last_page_no, &mtr);
 	log_hdr = undo_page + rseg->last_offset;
-	seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
 
 	/* Increase the purge page count by one for every handled log */
 
@@ -1004,11 +1010,7 @@ trx_purge_rec_release(
 /*==================*/
 	trx_undo_inf_t*	cell)	/* in: storage cell */
 {
-	trx_undo_arr_t*	arr;
-
 	mutex_enter(&(purge_sys->mutex));
-
-	arr = purge_sys->arr;
 
 	trx_purge_arr_remove_info(cell);
 
@@ -1026,7 +1028,7 @@ trx_purge(void)
 {
 	que_thr_t*	thr;
 	/*	que_thr_t*	thr2; */
-	ulint		old_pages_handled;
+	ulonglong	old_pages_handled;
 
 	mutex_enter(&(purge_sys->mutex));
 
@@ -1081,6 +1083,13 @@ trx_purge(void)
 
 	rw_lock_x_unlock(&(purge_sys->latch));
 
+#ifdef UNIV_DEBUG
+	if (srv_purge_view_update_only_debug) {
+		mutex_exit(&(purge_sys->mutex));
+		return(0);
+	}
+#endif
+
 	purge_sys->state = TRX_PURGE_ON;
 
 	/* Handle at most 20 undo log pages in one purge batch */
@@ -1120,7 +1129,7 @@ trx_purge(void)
 			(ulong) purge_sys->n_pages_handled);
 	}
 
-	return(purge_sys->n_pages_handled - old_pages_handled);
+	return((ulint) (purge_sys->n_pages_handled - old_pages_handled));
 }
 
 /**********************************************************************

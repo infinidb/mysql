@@ -1,4 +1,5 @@
-/* Copyright 2004-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #include "event_db_repository.h"
@@ -26,7 +28,7 @@
 */
 
 static
-const TABLE_FIELD_W_TYPE event_table_fields[ET_FIELD_COUNT] =
+const TABLE_FIELD_TYPE event_table_fields[ET_FIELD_COUNT] =
 {
   {
     { C_STRING_WITH_LEN("db") },
@@ -151,6 +153,24 @@ const TABLE_FIELD_W_TYPE event_table_fields[ET_FIELD_COUNT] =
   }
 };
 
+static const TABLE_FIELD_DEF
+  event_table_def= {ET_FIELD_COUNT, event_table_fields};
+
+class Event_db_intact : public Table_check_intact
+{
+protected:
+  void report_error(uint, const char *fmt, ...)
+  {
+    va_list args;
+    va_start(args, fmt);
+    error_log_print(ERROR_LEVEL, fmt, args);
+    va_end(args);
+  }
+};
+
+/** In case of an error, a message is printed to the error log. */
+static Event_db_intact table_intact;
+
 
 /**
   Puts some data common to CREATE and ALTER EVENT into a row.
@@ -208,9 +228,16 @@ mysql_event_fill_row(THD *thd,
   if (fields[f_num= ET_FIELD_NAME]->store(et->name.str, et->name.length, scs))
     goto err_truncate;
 
-  /* both ON_COMPLETION and STATUS are NOT NULL thus not calling set_notnull()*/
+  /* ON_COMPLETION field is NOT NULL thus not calling set_notnull()*/
   rs|= fields[ET_FIELD_ON_COMPLETION]->store((longlong)et->on_completion, TRUE);
-  rs|= fields[ET_FIELD_STATUS]->store((longlong)et->status, TRUE);
+
+  /*
+    Set STATUS value unconditionally in case of CREATE EVENT.
+    For ALTER EVENT set it only if value of this field was changed.
+    Since STATUS field is NOT NULL call to set_notnull() is not needed.
+  */
+  if (!is_update || et->status_changed)
+    rs|= fields[ET_FIELD_STATUS]->store((longlong)et->status, TRUE);
   rs|= fields[ET_FIELD_ORIGINATOR]->store((longlong)et->originator, TRUE);
 
   /*
@@ -406,7 +433,7 @@ Event_db_repository::index_read_for_db_for_i_s(THD *thd, TABLE *schema_table,
   key_copy(key_buf, event_table->record[0], key_info, key_len);
   if (!(ret= event_table->file->index_read_map(event_table->record[0], key_buf,
                                                (key_part_map)1,
-                                               HA_READ_PREFIX)))
+                                               HA_READ_KEY_EXACT)))
   {
     DBUG_PRINT("info",("Found rows. Let's retrieve them. ret=%d", ret));
     do
@@ -564,6 +591,14 @@ Event_db_repository::open_event_table(THD *thd, enum thr_lock_type lock_type,
 
   *table= tables.table;
   tables.table->use_all_columns();
+
+  if (table_intact.check(*table, &event_table_def))
+  {
+    close_thread_tables(thd);
+    my_error(ER_EVENT_OPEN_TABLE_FAILED, MYF(0));
+    DBUG_RETURN(TRUE);
+  }
+
   DBUG_RETURN(FALSE);
 }
 
@@ -578,18 +613,21 @@ Event_db_repository::open_event_table(THD *thd, enum thr_lock_type lock_type,
   only creates a record on disk.
   @pre The thread handle has no open tables.
 
-  @param[in,out] thd           THD
-  @param[in]     parse_data    Parsed event definition
-  @param[in]     create_if_not TRUE if IF NOT EXISTS clause was provided
-                               to CREATE EVENT statement
-
+  @param[in,out] thd                   THD
+  @param[in]     parse_data            Parsed event definition
+  @param[in]     create_if_not         TRUE if IF NOT EXISTS clause was provided
+                                       to CREATE EVENT statement
+  @param[out]    event_already_exists  When method is completed successfully
+                                       set to true if event already exists else
+                                       set to false
   @retval FALSE  success
   @retval TRUE   error
 */
 
 bool
 Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
-                                  my_bool create_if_not)
+                                  bool create_if_not,
+                                  bool *event_already_exists)
 {
   int ret= 1;
   TABLE *table= NULL;
@@ -615,6 +653,7 @@ Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
   {
     if (create_if_not)
     {
+      *event_already_exists= true;
       push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_NOTE,
                           ER_EVENT_ALREADY_EXISTS, ER(ER_EVENT_ALREADY_EXISTS),
                           parse_data->name.str);
@@ -622,8 +661,10 @@ Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
     }
     else
       my_error(ER_EVENT_ALREADY_EXISTS, MYF(0), parse_data->name.str);
+
     goto end;
-  }
+  } else
+    *event_already_exists= false;
 
   DBUG_PRINT("info", ("non-existent, go forward"));
 
@@ -661,8 +702,6 @@ Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
   */
   if (mysql_event_fill_row(thd, table, parse_data, sp, saved_mode, FALSE))
     goto end;
-
-  table->field[ET_FIELD_STATUS]->store((longlong)parse_data->status, TRUE);
 
   if ((ret= table->file->ha_write_row(table->record[0])))
   {
@@ -711,7 +750,7 @@ Event_db_repository::update_event(THD *thd, Event_parse_data *parse_data,
   DBUG_ENTER("Event_db_repository::update_event");
 
   /* None or both must be set */
-  DBUG_ASSERT(new_dbname && new_name || new_dbname == new_name);
+  DBUG_ASSERT((new_dbname && new_name) || new_dbname == new_name);
 
   /* Reset sql_mode during data dictionary operations. */
   thd->variables.sql_mode= 0;
@@ -1027,6 +1066,7 @@ update_timing_fields_for_event(THD *thd,
   TABLE *table= NULL;
   Field **fields;
   int ret= 1;
+  bool save_binlog_row_based;
 
   DBUG_ENTER("Event_db_repository::update_timing_fields_for_event");
 
@@ -1034,8 +1074,8 @@ update_timing_fields_for_event(THD *thd,
     Turn off row binlogging of event timing updates. These are not used
     for RBR of events replicated to the slave.
   */
-  if (thd->current_stmt_binlog_row_based)
-    thd->clear_current_stmt_binlog_row_based();
+  save_binlog_row_based= thd->current_stmt_binlog_row_based;
+  thd->clear_current_stmt_binlog_row_based();
 
   DBUG_ASSERT(thd->security_ctx->master_access & SUPER_ACL);
 
@@ -1077,6 +1117,8 @@ update_timing_fields_for_event(THD *thd,
 end:
   if (table)
     close_thread_tables(thd);
+  /* Restore the state of binlog format */
+  thd->current_stmt_binlog_row_based= save_binlog_row_based;
 
   DBUG_RETURN(test(ret));
 }
@@ -1117,10 +1159,8 @@ Event_db_repository::check_system_tables(THD *thd)
   }
   else
   {
-    if (table_check_intact(tables.table, MYSQL_DB_FIELD_COUNT,
-                           mysql_db_table_fields))
+    if (table_intact.check(tables.table, &mysql_db_table_def))
       ret= 1;
-    /* in case of an error, the message is printed inside table_check_intact */
 
     close_thread_tables(thd);
   }
@@ -1154,9 +1194,8 @@ Event_db_repository::check_system_tables(THD *thd)
   }
   else
   {
-    if (table_check_intact(tables.table, ET_FIELD_COUNT, event_table_fields))
+    if (table_intact.check(tables.table, &event_table_def))
       ret= 1;
-    /* in case of an error, the message is printed inside table_check_intact */
     close_thread_tables(thd);
   }
 

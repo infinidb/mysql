@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -229,6 +229,12 @@ trx_id_t
 trx_sys_get_new_trx_no(void);
 /*========================*/
 #endif /* !UNIV_HOTBACKUP */
+
+#ifdef UNIV_DEBUG
+/* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
+extern uint			trx_rseg_n_slots_debug;
+#endif
+
 /*****************************************************************//**
 Writes a trx id to an index page. In case that the id size changes in
 some future version, this function should be used instead of
@@ -284,6 +290,17 @@ ibool
 trx_in_trx_list(
 /*============*/
 	trx_t*	in_trx);/*!< in: trx */
+#if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
+/***********************************************************//**
+Assert that a transaction has been recovered.
+@return TRUE */
+UNIV_INLINE
+ibool
+trx_assert_recovered(
+/*=================*/
+	trx_id_t	trx_id)		/*!< in: transaction identifier */
+	__attribute__((warn_unused_result));
+#endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 /*****************************************************************//**
 Updates the offset information about the end of the MySQL binlog entry
 which corresponds to the transaction just being committed. In a MySQL
@@ -333,6 +350,14 @@ UNIV_INTERN
 void
 trx_sys_file_format_tag_init(void);
 /*==============================*/
+#ifndef UNIV_HOTBACKUP
+/*****************************************************************//**
+Shutdown/Close the transaction system. */
+UNIV_INTERN
+void
+trx_sys_close(void);
+/*===============*/
+#endif /* !UNIV_HOTBACKUP */
 /*****************************************************************//**
 Get the name representation of the file format from its id.
 @return	pointer to the name */
@@ -489,7 +514,6 @@ this contains the same fields as TRX_SYS_MYSQL_LOG_INFO below */
 						within that file */
 #define TRX_SYS_MYSQL_LOG_NAME		12	/*!< MySQL log file name */
 
-#ifndef UNIV_HOTBACKUP
 /** Doublewrite buffer */
 /* @{ */
 /** The offset of the doublewrite buffer header on the trx system header page */
@@ -541,6 +565,7 @@ FIL_PAGE_ARCH_LOG_NO_OR_SPACE_NO. */
 #define TRX_SYS_DOUBLEWRITE_BLOCK_SIZE	FSP_EXTENT_SIZE
 /* @} */
 
+#ifndef UNIV_HOTBACKUP
 /** File format tag */
 /* @{ */
 /** The offset of the file format tag on the trx system header page

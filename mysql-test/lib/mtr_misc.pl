@@ -1,15 +1,16 @@
 # -*- cperl -*-
-# Copyright (C) 2004-2006 MySQL AB
-# 
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
-# 
+# Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; version 2
+# of the License.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
@@ -30,7 +31,9 @@ sub mtr_script_exists(@);
 sub mtr_file_exists(@);
 sub mtr_exe_exists(@);
 sub mtr_exe_maybe_exists(@);
-
+sub mtr_milli_sleep($);
+sub start_timer($);
+sub has_expired($);
 
 ##############################################################################
 #
@@ -147,6 +150,28 @@ sub mtr_exe_maybe_exists (@) {
 
 #
 # NOTE! More specific paths should be given before less specific.
+#
+sub mtr_pl_maybe_exists (@) {
+  my @path= @_;
+
+  map {$_.= ".pl"} @path if IS_WINDOWS;
+  foreach my $path ( @path )
+  {
+    if(IS_WINDOWS)
+    {
+      return $path if -f $path;
+    }
+    else
+    {
+      return $path if -x $path;
+    }
+  }
+  return "";
+}
+
+
+#
+# NOTE! More specific paths should be given before less specific.
 # For example /client/debug should be listed before /client
 #
 sub mtr_exe_exists (@) {
@@ -167,11 +192,18 @@ sub mtr_exe_exists (@) {
 }
 
 
-sub mtr_milli_sleep {
+sub mtr_milli_sleep ($) {
   die "usage: mtr_milli_sleep(milliseconds)" unless @_ == 1;
   my ($millis)= @_;
 
   select(undef, undef, undef, ($millis/1000));
 }
+
+# Simple functions to start and check timers (have to be actively polled)
+# Timer can be "killed" by setting it to 0
+
+sub start_timer ($) { return time + $_[0]; }
+
+sub has_expired ($) { return $_[0] && time gt $_[0]; }
 
 1;

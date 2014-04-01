@@ -29,16 +29,14 @@ SET GLOBAL storage_engine=memory;
 START SLAVE;
 --enable_query_log
 
---source include/reset_master_and_slave.inc
+--source include/rpl_reset.inc
 
 connection master;
 CREATE TABLE t1 (a INT, b INT);
 CREATE TABLE t2 (a INT, b INT) ENGINE=Merge;
 CREATE TABLE t3 (a INT, b INT) CHARSET=utf8;
 CREATE TABLE t4 (a INT, b INT) ENGINE=Merge CHARSET=utf8;
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/
---query_vertical SHOW BINLOG EVENTS FROM 106
+--source include/show_binlog_events.inc
 --echo **** On Master ****
 --query_vertical SHOW CREATE TABLE t1
 --query_vertical SHOW CREATE TABLE t2
@@ -67,16 +65,14 @@ SELECT * FROM t5 ORDER BY a,b,c;
 --query_vertical SHOW CREATE TABLE t6
 SELECT * FROM t6 ORDER BY a,b,c;
 
---source include/reset_master_and_slave.inc
+--source include/rpl_reset.inc
 
 connection master;
 # Test for erroneous constructions
 --error ER_DUP_ENTRY
 CREATE TABLE t7 (UNIQUE(b)) SELECT a,b FROM tt3;
 # Shouldn't be written to the binary log
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 
 # Test that INSERT-SELECT works the same way as for SBR.
 CREATE TABLE t7 (a INT, b INT UNIQUE);
@@ -84,13 +80,11 @@ CREATE TABLE t7 (a INT, b INT UNIQUE);
 INSERT INTO t7 SELECT a,b FROM tt3;
 SELECT * FROM t7 ORDER BY a,b;
 # Should be written to the binary log
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 sync_slave_with_master;
 SELECT * FROM t7 ORDER BY a,b;
 
---source include/reset_master_and_slave.inc
+--source include/rpl_reset.inc
 
 connection master;
 CREATE TEMPORARY TABLE tt4 (a INT, b INT);
@@ -98,14 +92,12 @@ INSERT INTO tt4 VALUES (4,8), (5,10), (6,12);
 BEGIN;
 INSERT INTO t7 SELECT a,b FROM tt4;
 ROLLBACK;
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 SELECT * FROM t7 ORDER BY a,b;
 sync_slave_with_master;
 SELECT * FROM t7 ORDER BY a,b;
 
---source include/reset_master_and_slave.inc
+--source include/rpl_reset.inc
 
 connection master;
 CREATE TABLE t8 LIKE t4;
@@ -116,9 +108,7 @@ CREATE TEMPORARY TABLE tt7 SELECT 1;
 --echo **** On Master ****
 --query_vertical SHOW CREATE TABLE t8
 --query_vertical SHOW CREATE TABLE t9
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 sync_slave_with_master;
 --echo **** On Slave ****
 --query_vertical SHOW CREATE TABLE t8
@@ -136,13 +126,9 @@ START SLAVE;
 # BUG#22864 (Rollback following CREATE ... SELECT discards 'CREATE
 # table' from log):
 --echo ================ BUG#22864 ================
-connection slave;
-STOP SLAVE;
-RESET SLAVE;
-connection master;
-RESET MASTER;
-connection slave;
-START SLAVE;
+
+--source include/rpl_reset.inc
+
 connection master;
 SET AUTOCOMMIT=0;
 CREATE TABLE t1 (a INT);
@@ -160,23 +146,13 @@ INSERT INTO t1 VALUES (4),(5),(6);
 ROLLBACK;
 
 SHOW TABLES;
-SELECT   TABLE_NAME,ENGINE
-  FROM   INFORMATION_SCHEMA.TABLES
- WHERE   TABLE_NAME LIKE 't_'
-ORDER BY TABLE_NAME;
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
 SELECT * FROM t3 ORDER BY a;
 SELECT * FROM t4 ORDER BY a;
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 sync_slave_with_master;
 SHOW TABLES;
-SELECT   TABLE_NAME,ENGINE
-  FROM   INFORMATION_SCHEMA.TABLES
- WHERE   TABLE_NAME LIKE 't_'
-ORDER BY TABLE_NAME;
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
 SELECT * FROM t3 ORDER BY a;
@@ -188,15 +164,7 @@ SET AUTOCOMMIT=1;
 sync_slave_with_master;
 
 # Some tests with temporary tables
-connection slave;
-STOP SLAVE;
-RESET SLAVE;
-
-connection master;
-RESET MASTER;
-
-connection slave;
-START SLAVE;
+--source include/rpl_reset.inc
 
 connection master;
 CREATE TABLE t1 (a INT);
@@ -214,9 +182,7 @@ INSERT INTO t2 SELECT a+2 FROM tt1;
 COMMIT;
 
 SELECT * FROM t2 ORDER BY a;
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+--source include/show_binlog_events.inc
 sync_slave_with_master;
 SELECT * FROM t2 ORDER BY a;
 
@@ -224,7 +190,7 @@ connection master;
 TRUNCATE TABLE t2;
 sync_slave_with_master;
 
---source include/reset_master_and_slave.inc
+--source include/rpl_reset.inc
 
 connection master;
 BEGIN;
@@ -237,9 +203,7 @@ INSERT INTO t2 SELECT a+2 FROM tt2;
 ROLLBACK;
 
 SELECT * FROM t2 ORDER BY a;
---replace_column 1 # 4 #
---replace_regex /\/\* xid=.* \*\//\/* XID *\// /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/
-SHOW BINLOG EVENTS FROM 106;
+source include/show_binlog_events.inc;
 sync_slave_with_master;
 SELECT * FROM t2 ORDER BY a;
 
@@ -275,7 +239,7 @@ sync_slave_with_master;
 # BUG#34707: Row based replication: slave creates table within wrong database
 #
 
-source include/master-slave-reset.inc;
+--source include/rpl_reset.inc
 
 connection master;
 --disable_warnings
@@ -291,5 +255,56 @@ sync_slave_with_master;
 connection master;
 DROP DATABASE mysqltest1;
 sync_slave_with_master;
+
+#
+# BUG#48506: crash in CREATE TABLE <existing_view> IF NOT EXISTS LIKE
+# <tmp_tbl> with RBL
+#
+
+--source include/rpl_reset.inc
+
+connection master;
+CREATE TEMPORARY TABLE t7(c1 INT);
+CREATE TABLE t5(c1 INT);
+CREATE TABLE t4(c1 INT);
+CREATE VIEW bug48506_t1 AS SELECT 1;
+CREATE VIEW bug48506_t2 AS SELECT * FROM t4;
+CREATE VIEW bug48506_t3 AS SELECT t5.c1 AS A, t4.c1 AS B FROM t5, t4;
+CREATE TABLE bug48506_t4(c1 INT);
+--disable_warnings
+sync_slave_with_master;
+DROP VIEW bug48506_t1, bug48506_t2, bug48506_t3;
+DROP TABLE bug48506_t4;
+
+connection master;
+CREATE TABLE IF NOT EXISTS bug48506_t1 LIKE t7;
+CREATE TABLE IF NOT EXISTS bug48506_t2 LIKE t7;
+CREATE TABLE IF NOT EXISTS bug48506_t3 LIKE t7;
+CREATE TABLE IF NOT EXISTS bug48506_t4 LIKE t7;
+--enable_warnings
+sync_slave_with_master;
+
+SHOW TABLES LIKE 'bug48506%';
+
+connection master;
+DROP VIEW IF EXISTS bug48506_t1, bug48506_t2, bug48506_t3;
+DROP TEMPORARY TABLES t7;
+DROP TABLES t4, t5;
+DROP TABLES IF EXISTS bug48506_t4;
+
+sync_slave_with_master;
+
+#
+# Bug#55598 RBR: CREATE TABLE IF NOT EXISTS and INSERT written to binary log
+# twice
+#
+connection master;
+CREATE TABLE t1 SELECT 1;
+CREATE TABLE IF NOT EXISTS t1 SELECT 1;
+--let $diff_tables= master:test.t1,slave:test.t1
+--source include/diff_tables.inc
+DROP TABLE t1;
+
+--source include/rpl_end.inc
 
 --echo end of the tests

@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -58,6 +58,12 @@ void
 lock_sys_create(
 /*============*/
 	ulint	n_cells);	/*!< in: number of slots in lock hash table */
+/*********************************************************************//**
+Closes the lock system at database shutdown. */
+UNIV_INTERN
+void
+lock_sys_close(void);
+/*================*/
 /*********************************************************************//**
 Checks if some transaction has an implicit x-lock on a record in a clustered
 index.
@@ -334,11 +340,12 @@ lock_sec_rec_modify_check_and_lock(
 	que_thr_t*	thr,	/*!< in: query thread */
 	mtr_t*		mtr);	/*!< in/out: mini-transaction */
 /*********************************************************************//**
-Like the counterpart for a clustered index below, but now we read a
+Like lock_clust_rec_read_check_and_lock(), but reads a
 secondary index record.
-@return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
+@return	DB_SUCCESS, DB_SUCCESS_LOCKED_REC, DB_LOCK_WAIT, DB_DEADLOCK,
+or DB_QUE_THR_SUSPENDED */
 UNIV_INTERN
-ulint
+enum db_err
 lock_sec_rec_read_check_and_lock(
 /*=============================*/
 	ulint			flags,	/*!< in: if BTR_NO_LOCKING_FLAG
@@ -365,9 +372,10 @@ if the query thread should anyway be suspended for some reason; if not, then
 puts the transaction and the query thread to the lock wait state and inserts a
 waiting request for a record lock to the lock queue. Sets the requested mode
 lock on the record.
-@return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
+@return	DB_SUCCESS, DB_SUCCESS_LOCKED_REC, DB_LOCK_WAIT, DB_DEADLOCK,
+or DB_QUE_THR_SUSPENDED */
 UNIV_INTERN
-ulint
+enum db_err
 lock_clust_rec_read_check_and_lock(
 /*===============================*/
 	ulint			flags,	/*!< in: if BTR_NO_LOCKING_FLAG
@@ -607,13 +615,16 @@ lock_rec_print(
 	FILE*		file,	/*!< in: file where to print */
 	const lock_t*	lock);	/*!< in: record type lock */
 /*********************************************************************//**
-Prints info of locks for all transactions. */
+Prints info of locks for all transactions.
+@return FALSE if not able to obtain kernel mutex
+and exits without printing info */
 UNIV_INTERN
-void
+ibool
 lock_print_info_summary(
 /*====================*/
-	FILE*	file);	/*!< in: file where to print */
-/*********************************************************************//**
+	FILE*	file,	/*!< in: file where to print */
+	ibool   nowait);/*!< in: whether to wait for the kernel mutex */
+/*************************************************************************
 Prints info of locks for each transaction. */
 UNIV_INTERN
 void
@@ -629,6 +640,14 @@ ulint
 lock_number_of_rows_locked(
 /*=======================*/
 	trx_t*	trx);	/*!< in: transaction */
+/*******************************************************************//**
+Check if a transaction holds any autoinc locks.
+@return TRUE if the transaction holds any AUTOINC locks. */
+UNIV_INTERN
+ibool
+lock_trx_holds_autoinc_locks(
+/*=========================*/
+	const trx_t*	trx);		/*!< in: transaction */
 /*******************************************************************//**
 Release all the transaction's autoinc locks. */
 UNIV_INTERN
@@ -777,13 +796,21 @@ lock_rec_get_page_no(
 				remains set when the waiting lock is granted,
 				or if the lock is inherited to a neighboring
 				record */
-#if (LOCK_WAIT|LOCK_GAP|LOCK_REC_NOT_GAP|LOCK_INSERT_INTENTION)&LOCK_MODE_MASK
+#define LOCK_CONV_BY_OTHER 4096 /*!< this bit is set when the lock is created
+				by other transaction */
+#if (LOCK_WAIT|LOCK_GAP|LOCK_REC_NOT_GAP|LOCK_INSERT_INTENTION|LOCK_CONV_BY_OTHER)&LOCK_MODE_MASK
 # error
 #endif
-#if (LOCK_WAIT|LOCK_GAP|LOCK_REC_NOT_GAP|LOCK_INSERT_INTENTION)&LOCK_TYPE_MASK
+#if (LOCK_WAIT|LOCK_GAP|LOCK_REC_NOT_GAP|LOCK_INSERT_INTENTION|LOCK_CONV_BY_OTHER)&LOCK_TYPE_MASK
 # error
 #endif
 /* @} */
+
+/** Checks if this is a waiting lock created by lock->trx itself.
+@param type_mode lock->type_mode
+@return whether it is a waiting lock belonging to lock->trx */
+#define lock_is_wait_not_by_other(type_mode) \
+	((type_mode & (LOCK_CONV_BY_OTHER | LOCK_WAIT)) == LOCK_WAIT)
 
 /** Lock operation struct */
 typedef struct lock_op_struct	lock_op_t;

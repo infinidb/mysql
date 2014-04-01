@@ -1,4 +1,5 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2005, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #include <my_pthread.h>
@@ -231,6 +233,26 @@ extern bool check_if_table_exists(THD *thd, TABLE_LIST *table, bool *exists);
 #endif /* EMBEDDED_LIBRARY */
 
 
+/**
+   Check if the provided path is valid in the sense that it does cause
+   a relative reference outside the directory.
+
+   @note Currently, this function only check if there are any
+   characters in FN_DIRSEP in the string, but it might change in the
+   future.
+
+   @code
+   check_valid_path("../foo.so") -> true
+   check_valid_path("foo.so") -> false
+   @endcode
+ */
+bool check_valid_path(const char *path, size_t len)
+{
+  size_t prefix= my_strcspn(files_charset_info, path, path + len, FN_DIRSEP);
+  return  prefix < len;
+}
+
+
 /****************************************************************************
   Value type thunks, allows the C world to play in the C++ world
 ****************************************************************************/
@@ -354,13 +376,15 @@ static st_plugin_dl *plugin_dl_add(const LEX_STRING *dl, int report)
   struct st_plugin_dl *tmp, plugin_dl;
   void *sym;
   DBUG_ENTER("plugin_dl_add");
+  DBUG_PRINT("enter", ("dl->str: '%s', dl->length: %d",
+                       dl->str, (int) dl->length));
   plugin_dir_len= strlen(opt_plugin_dir);
   /*
     Ensure that the dll doesn't have a path.
     This is done to ensure that only approved libraries from the
     plugin directory are used (to make this even remotely secure).
   */
-  if (my_strchr(files_charset_info, dl->str, dl->str + dl->length, FN_LIBCHAR) ||
+  if (check_valid_path(dl->str, dl->length) ||
       check_string_char_length((LEX_STRING *) dl, "", NAME_CHAR_LEN,
                                system_charset_info, 1) ||
       plugin_dir_len + dl->length + 1 >= FN_REFLEN)
@@ -368,7 +392,7 @@ static st_plugin_dl *plugin_dl_add(const LEX_STRING *dl, int report)
     if (report & REPORT_TO_USER)
       my_error(ER_UDF_NO_PATHS, MYF(0));
     if (report & REPORT_TO_LOG)
-      sql_print_error(ER(ER_UDF_NO_PATHS));
+      sql_print_error("%s", ER(ER_UDF_NO_PATHS));
     DBUG_RETURN(0);
   }
   /* If this dll is already loaded just increase ref_count. */
@@ -473,9 +497,11 @@ static st_plugin_dl *plugin_dl_add(const LEX_STRING *dl, int report)
     {
       free_plugin_mem(&plugin_dl);
       if (report & REPORT_TO_USER)
-        my_error(ER_OUTOFMEMORY, MYF(0), plugin_dl.dl.length);
+        my_error(ER_OUTOFMEMORY, MYF(0),
+                 static_cast<int>(plugin_dl.dl.length));
       if (report & REPORT_TO_LOG)
-        sql_print_error(ER(ER_OUTOFMEMORY), plugin_dl.dl.length);
+        sql_print_error(ER(ER_OUTOFMEMORY),
+                        static_cast<int>(plugin_dl.dl.length));
       DBUG_RETURN(0);
     }
     /*
@@ -498,9 +524,10 @@ static st_plugin_dl *plugin_dl_add(const LEX_STRING *dl, int report)
   {
     free_plugin_mem(&plugin_dl);
     if (report & REPORT_TO_USER)
-      my_error(ER_OUTOFMEMORY, MYF(0), plugin_dl.dl.length);
+      my_error(ER_OUTOFMEMORY, MYF(0), static_cast<int>(plugin_dl.dl.length));
     if (report & REPORT_TO_LOG)
-      sql_print_error(ER(ER_OUTOFMEMORY), plugin_dl.dl.length);
+      sql_print_error(ER(ER_OUTOFMEMORY),
+                      static_cast<int>(plugin_dl.dl.length));
     DBUG_RETURN(0);
   }
   plugin_dl.dl.length= copy_and_convert(plugin_dl.dl.str, plugin_dl.dl.length,
@@ -512,9 +539,11 @@ static st_plugin_dl *plugin_dl_add(const LEX_STRING *dl, int report)
   {
     free_plugin_mem(&plugin_dl);
     if (report & REPORT_TO_USER)
-      my_error(ER_OUTOFMEMORY, MYF(0), sizeof(struct st_plugin_dl));
+      my_error(ER_OUTOFMEMORY, MYF(0),
+               static_cast<int>(sizeof(struct st_plugin_dl)));
     if (report & REPORT_TO_LOG)
-      sql_print_error(ER(ER_OUTOFMEMORY), sizeof(struct st_plugin_dl));
+      sql_print_error(ER(ER_OUTOFMEMORY),
+                      static_cast<int>(sizeof(struct st_plugin_dl)));
     DBUG_RETURN(0);
   }
   DBUG_RETURN(tmp);
@@ -1006,9 +1035,14 @@ void plugin_unlock_list(THD *thd, plugin_ref *list, uint count)
 
 static int plugin_initialize(struct st_plugin_int *plugin)
 {
+  int ret= 1;
   DBUG_ENTER("plugin_initialize");
 
   safe_mutex_assert_owner(&LOCK_plugin);
+  uint state= plugin->state;
+  DBUG_ASSERT(state == PLUGIN_IS_UNINITIALIZED);
+
+  pthread_mutex_unlock(&LOCK_plugin);
   if (plugin_type_initialize[plugin->plugin->type])
   {
     if ((*plugin_type_initialize[plugin->plugin->type])(plugin))
@@ -1027,8 +1061,7 @@ static int plugin_initialize(struct st_plugin_int *plugin)
       goto err;
     }
   }
-
-  plugin->state= PLUGIN_IS_READY;
+  state= PLUGIN_IS_READY; // plugin->init() succeeded
 
   if (plugin->plugin->status_vars)
   {
@@ -1047,7 +1080,8 @@ static int plugin_initialize(struct st_plugin_int *plugin)
     if (add_status_vars(array)) // add_status_vars makes a copy
       goto err;
 #else
-    add_status_vars(plugin->plugin->status_vars); // add_status_vars makes a copy
+    if (add_status_vars(plugin->plugin->status_vars))
+      goto err;
 #endif /* FIX_LATER */
   }
 
@@ -1067,9 +1101,12 @@ static int plugin_initialize(struct st_plugin_int *plugin)
     }
   }
 
-  DBUG_RETURN(0);
+  ret= 0;
+
 err:
-  DBUG_RETURN(1);
+  pthread_mutex_lock(&LOCK_plugin);
+  plugin->state= state;
+  DBUG_RETURN(ret);
 }
 
 
@@ -1520,7 +1557,7 @@ error:
 
 void plugin_shutdown(void)
 {
-  uint i, count= plugin_array.elements, free_slots= 0;
+  uint i, count= plugin_array.elements;
   struct st_plugin_int **plugins, *plugin;
   struct st_plugin_dl **dl;
   DBUG_ENTER("plugin_shutdown");
@@ -1541,18 +1578,13 @@ void plugin_shutdown(void)
     while (reap_needed && (count= plugin_array.elements))
     {
       reap_plugins();
-      for (i= free_slots= 0; i < count; i++)
+      for (i= 0; i < count; i++)
       {
         plugin= *dynamic_element(&plugin_array, i, struct st_plugin_int **);
-        switch (plugin->state) {
-        case PLUGIN_IS_READY:
+        if (plugin->state == PLUGIN_IS_READY)
+        {
           plugin->state= PLUGIN_IS_DELETED;
           reap_needed= true;
-          break;
-        case PLUGIN_IS_FREED:
-        case PLUGIN_IS_UNINITIALIZED:
-          free_slots++;
-          break;
         }
       }
       if (!reap_needed)
@@ -1564,9 +1596,6 @@ void plugin_shutdown(void)
         unlock_variables(NULL, &max_system_variables);
       }
     }
-
-    if (count > free_slots)
-      sql_print_warning("Forcing shutdown of %d plugins", count - free_slots);
 
     plugins= (struct st_plugin_int **) my_alloca(sizeof(void*) * (count+1));
 
@@ -1589,8 +1618,8 @@ void plugin_shutdown(void)
       if (!(plugins[i]->state & (PLUGIN_IS_UNINITIALIZED | PLUGIN_IS_FREED |
                                  PLUGIN_IS_DISABLED)))
       {
-        sql_print_information("Plugin '%s' will be forced to shutdown",
-                              plugins[i]->name.str);
+        sql_print_warning("Plugin '%s' will be forced to shutdown",
+                          plugins[i]->name.str);
         /*
           We are forcing deinit on plugins so we don't want to do a ref_count
           check until we have processed all the plugins.
@@ -1664,6 +1693,12 @@ bool mysql_install_plugin(THD *thd, const LEX_STRING *name, const LEX_STRING *dl
   char **argv=orig_argv;
   struct st_plugin_int *tmp;
   DBUG_ENTER("mysql_install_plugin");
+
+  if (opt_noacl)
+  {
+    my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--skip-grant-tables");
+    DBUG_RETURN(TRUE);
+  }
 
   bzero(&tables, sizeof(tables));
   tables.db= (char *)"mysql";
@@ -1741,9 +1776,17 @@ bool mysql_uninstall_plugin(THD *thd, const LEX_STRING *name)
   struct st_plugin_int *plugin;
   DBUG_ENTER("mysql_uninstall_plugin");
 
+  if (opt_noacl)
+  {
+    my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--skip-grant-tables");
+    DBUG_RETURN(TRUE);
+  }
+
   bzero(&tables, sizeof(tables));
   tables.db= (char *)"mysql";
   tables.table_name= tables.alias= (char *)"plugin";
+  if (check_table_access(thd, DELETE_ACL, &tables, 1, FALSE))
+    DBUG_RETURN(TRUE);
 
   /* need to open before acquiring LOCK_plugin or it will deadlock */
   if (! (table= open_ltable(thd, &tables, TL_WRITE, 0)))
@@ -1898,10 +1941,6 @@ typedef DECLARE_MYSQL_THDVAR_SIMPLE(thdvar_longlong_t, longlong);
 typedef DECLARE_MYSQL_THDVAR_SIMPLE(thdvar_uint_t, uint);
 typedef DECLARE_MYSQL_THDVAR_SIMPLE(thdvar_ulong_t, ulong);
 typedef DECLARE_MYSQL_THDVAR_SIMPLE(thdvar_ulonglong_t, ulonglong);
-
-#define SET_PLUGIN_VAR_RESOLVE(opt)\
-  *(mysql_sys_var_ptr_p*)&((opt)->resolve)= mysql_sys_var_ptr
-typedef uchar *(*mysql_sys_var_ptr_p)(void* a_thd, int offset);
 
 
 /****************************************************************************
@@ -2074,7 +2113,7 @@ static int check_func_set(THD *thd, struct st_mysql_sys_var *var,
   const char *strvalue= "NULL", *str;
   TYPELIB *typelib;
   ulonglong result;
-  uint error_len;
+  uint error_len= 0;                            // init as only set on error
   bool not_used;
   int length;
 
@@ -2092,7 +2131,7 @@ static int check_func_set(THD *thd, struct st_mysql_sys_var *var,
                      &error, &error_len, &not_used);
     if (error_len)
     {
-      strmake(buff, error, min(sizeof(buff), error_len));
+      strmake(buff, error, min(sizeof(buff) - 1, error_len));
       strvalue= buff;
       goto err;
     }
@@ -2431,11 +2470,49 @@ static uchar *intern_sys_var_ptr(THD* thd, int offset, bool global_lock)
   return (uchar*)thd->variables.dynamic_variables_ptr + offset;
 }
 
-static uchar *mysql_sys_var_ptr(void* a_thd, int offset)
+
+/**
+  For correctness and simplicity's sake, a pointer to a function
+  must be compatible with pointed-to type, that is, the return and
+  parameters types must be the same. Thus, a callback function is
+  defined for each scalar type. The functions are assigned in
+  construct_options to their respective types.
+*/
+
+static char *mysql_sys_var_char(THD* thd, int offset)
 {
-  return intern_sys_var_ptr((THD *)a_thd, offset, true);
+  return (char *) intern_sys_var_ptr(thd, offset, true);
 }
 
+static int *mysql_sys_var_int(THD* thd, int offset)
+{
+  return (int *) intern_sys_var_ptr(thd, offset, true);
+}
+
+static long *mysql_sys_var_long(THD* thd, int offset)
+{
+  return (long *) intern_sys_var_ptr(thd, offset, true);
+}
+
+static unsigned long *mysql_sys_var_ulong(THD* thd, int offset)
+{
+  return (unsigned long *) intern_sys_var_ptr(thd, offset, true);
+}
+
+static long long *mysql_sys_var_longlong(THD* thd, int offset)
+{
+  return (long long *) intern_sys_var_ptr(thd, offset, true);
+}
+
+static unsigned long long *mysql_sys_var_ulonglong(THD* thd, int offset)
+{
+  return (unsigned long long *) intern_sys_var_ptr(thd, offset, true);
+}
+
+static char **mysql_sys_var_str(THD* thd, int offset)
+{
+  return (char **) intern_sys_var_ptr(thd, offset, true);
+}
 
 void plugin_thdvar_init(THD *thd)
 {
@@ -2673,7 +2750,9 @@ uchar* sys_var_pluginvar::value_ptr(THD *thd, enum_var_type type,
     {
       if (!(value & mask))
         continue;
-      str.append(typelib->type_names[i], typelib->type_lengths[i]);
+      str.append(typelib->type_names[i], typelib->type_lengths
+                                       ? typelib->type_lengths[i]
+                                       : strlen(typelib->type_names[i]));
       str.append(',');
     }
 
@@ -2980,12 +3059,12 @@ static int construct_options(MEM_ROOT *mem_root, struct st_plugin_int *tmp,
     Allocate temporary space for the value of the tristate.
     This option will have a limited lifetime and is not used beyond
     server initialization.
-    GET_ENUM value is an integer.
+    GET_ENUM value is a unsigned long integer.
   */
   options[0].value= options[1].value= (uchar **)alloc_root(mem_root,
-                                                          sizeof(int));
-  *((uint*) options[0].value)= *((uint*) options[1].value)=
-    (uint) options[0].def_value;
+                                                          sizeof(ulong));
+  *((ulong*) options[0].value)= *((ulong*) options[1].value)=
+    (ulong) options[0].def_value;
 
   options+= 2;
 
@@ -3004,25 +3083,25 @@ static int construct_options(MEM_ROOT *mem_root, struct st_plugin_int *tmp,
       continue;
     switch (opt->flags & PLUGIN_VAR_TYPEMASK) {
     case PLUGIN_VAR_BOOL:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_bool_t *) opt);
+      ((thdvar_bool_t *) opt)->resolve= mysql_sys_var_char;
       break;
     case PLUGIN_VAR_INT:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_int_t *) opt);
+      ((thdvar_int_t *) opt)->resolve= mysql_sys_var_int;
       break;
     case PLUGIN_VAR_LONG:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_long_t *) opt);
+      ((thdvar_long_t *) opt)->resolve= mysql_sys_var_long;
       break;
     case PLUGIN_VAR_LONGLONG:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_longlong_t *) opt);
+      ((thdvar_longlong_t *) opt)->resolve= mysql_sys_var_longlong;
       break;
     case PLUGIN_VAR_STR:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_str_t *) opt);
+      ((thdvar_str_t *) opt)->resolve= mysql_sys_var_str;
       break;
     case PLUGIN_VAR_ENUM:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_enum_t *) opt);
+      ((thdvar_enum_t *) opt)->resolve= mysql_sys_var_ulong;
       break;
     case PLUGIN_VAR_SET:
-      SET_PLUGIN_VAR_RESOLVE((thdvar_set_t *) opt);
+      ((thdvar_set_t *) opt)->resolve= mysql_sys_var_ulonglong;
       break;
     default:
       sql_print_error("Unknown variable type code 0x%x in plugin '%s'.",
@@ -3269,7 +3348,7 @@ static int test_plugin_options(MEM_ROOT *tmp_root, struct st_plugin_int *tmp,
      Set plugin loading policy from option value. First element in the option
      list is always the <plugin name> option value.
     */
-    plugin_load_policy= (enum_plugin_load_policy)*(uint*)opts[0].value;
+    plugin_load_policy= (enum_plugin_load_policy)*(ulong*)opts[0].value;
   }
 
   disable_plugin= (plugin_load_policy == PLUGIN_OFF);

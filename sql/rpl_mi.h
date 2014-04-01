@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef RPL_MI_H
 #define RPL_MI_H
@@ -108,7 +110,8 @@ int init_master_info(Master_info* mi, const char* master_info_fname,
 		     bool abort_if_no_master_info_file,
 		     int thread_mask);
 void end_master_info(Master_info* mi);
-int flush_master_info(Master_info* mi, bool flush_relay_log_cache);
-
+int flush_master_info(Master_info* mi, 
+                      bool flush_relay_log_cache, 
+                      bool need_lock_relay_log);
 #endif /* HAVE_REPLICATION */
 #endif /* RPL_MI_H */

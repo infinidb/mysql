@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -29,18 +29,6 @@
 extern "C" void* memcpy(void*, const void*, size_t);
 extern "C" void* memset(void*, int, size_t);
 extern "C" void  printk(char *fmt, ...);
-
-#define KERN_ERR "<3>"   /* error conditions */
-
-#if defined(NDEBUG)
-    #define assert(p)  	((void)0)
-#else
-    #define assert(expr)   \
-    if (!(expr))         { \
-         printk(KERN_ERR "Assertion failed! %s,%s,%s,line=%d\n", \
-         #expr,__FILE__,__FUNCTION__,__LINE__); }
-#endif
-
 
 
 #endif // TAOCRYPT_KERNELC_HPP

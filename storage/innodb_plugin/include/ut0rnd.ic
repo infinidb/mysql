@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -85,9 +85,6 @@ ut_rnd_gen_ulint(void)
 /*==================*/
 {
 	ulint	rnd;
-	ulint	n_bits;
-
-	n_bits = 8 * sizeof(ulint);
 
 	ut_rnd_ulint_counter = UT_RND1 * ut_rnd_ulint_counter + UT_RND2;
 
@@ -117,7 +114,7 @@ ut_rnd_interval(
 
 	rnd = ut_rnd_gen_ulint();
 
-	return(low + (rnd % (high - low + 1)));
+	return(low + (rnd % (high - low)));
 }
 
 /*********************************************************//**
@@ -152,6 +149,7 @@ ut_hash_ulint(
 	ulint	 key,		/*!< in: value to be hashed */
 	ulint	 table_size)	/*!< in: hash table size */
 {
+	ut_ad(table_size);
 	key = key ^ UT_HASH_RANDOM_MASK2;
 
 	return(key % table_size);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
 
 #include "mysys_priv.h"
 #include <m_string.h>
@@ -52,7 +53,7 @@ void pack_dirname(char * to, const char *from)
     buff_length= strlen(buff);
     d_length= (size_t) (start-to);
     if ((start == to ||
-	 (buff_length == d_length && !bcmp(buff,start,d_length))) &&
+	 (buff_length == d_length && !memcmp(buff,start,d_length))) &&
 	*start != FN_LIBCHAR && *start)
     {						/* Put current dir before */
       bchange((uchar*) to, d_length, (uchar*) buff, buff_length, strlen(to)+1);
@@ -70,7 +71,7 @@ void pack_dirname(char * to, const char *from)
     }
     if (length > 1 && length < d_length)
     {						/* test if /xx/yy -> ~/yy */
-      if (bcmp(to,home_dir,length) == 0 && to[length] == FN_LIBCHAR)
+      if (memcmp(to,home_dir,length) == 0 && to[length] == FN_LIBCHAR)
       {
 	to[0]=FN_HOMELIB;			/* Filename begins with ~ */
 	(void) strmov_overlapp(to+1,to+length);
@@ -80,7 +81,7 @@ void pack_dirname(char * to, const char *from)
     {						/* Test if cwd is ~/... */
       if (length > 1 && length < buff_length)
       {
-	if (bcmp(buff,home_dir,length) == 0 && buff[length] == FN_LIBCHAR)
+	if (memcmp(buff,home_dir,length) == 0 && buff[length] == FN_LIBCHAR)
 	{
 	  buff[0]=FN_HOMELIB;
 	  (void) strmov_overlapp(buff+1,buff+length);
@@ -166,7 +167,7 @@ size_t cleanup_dirname(register char *to, const char *from)
       *pos = FN_LIBCHAR;
     if (*pos == FN_LIBCHAR)
     {
-      if ((size_t) (pos-start) > length && bcmp(pos-length,parent,length) == 0)
+      if ((size_t) (pos-start) > length && memcmp(pos-length,parent,length) == 0)
       {						/* If .../../; skip prev */
 	pos-=length;
 	if (pos != start)
@@ -197,7 +198,7 @@ size_t cleanup_dirname(register char *to, const char *from)
 	  end_parentdir=pos;
 	  while (pos >= start && *pos != FN_LIBCHAR)	/* remove prev dir */
 	    pos--;
-	  if (pos[1] == FN_HOMELIB || bcmp(pos,parent,length) == 0)
+	  if (pos[1] == FN_HOMELIB || memcmp(pos,parent,length) == 0)
 	  {					/* Don't remove ~user/ */
 	    pos=strmov(end_parentdir+1,parent);
 	    *pos=FN_LIBCHAR;
@@ -206,7 +207,7 @@ size_t cleanup_dirname(register char *to, const char *from)
 	}
       }
       else if ((size_t) (pos-start) == length-1 &&
-	       !bcmp(start,parent+1,length-1))
+	       !memcmp(start,parent+1,length-1))
 	start=pos;				/* Starts with "../" */
       else if (pos-start > 0 && pos[-1] == FN_LIBCHAR)
       {
@@ -245,7 +246,7 @@ my_bool my_use_symdir=0;	/* Set this if you want to use symdirs */
 #ifdef USE_SYMDIR
 void symdirget(char *dir)
 {
-  char buff[FN_REFLEN];
+  char buff[FN_REFLEN+1];
   char *pos=strend(dir);
   if (dir[0] && pos[-1] != FN_DEVCHAR && my_access(dir, F_OK))
   {
@@ -257,7 +258,7 @@ void symdirget(char *dir)
     *pos++=temp; *pos=0;	  /* Restore old filename */
     if (file >= 0)
     {
-      if ((length= my_read(file, buff, sizeof(buff), MYF(0))) > 0)
+      if ((length= my_read(file, buff, sizeof(buff) - 1, MYF(0))) > 0)
       {
 	for (pos= buff + length ;
 	     pos > buff && (iscntrl(pos[-1]) || isspace(pos[-1])) ;
@@ -311,6 +312,9 @@ size_t normalize_dirname(char *to, const char *from)
 #endif
       buff[length - 1] != FN_LIBCHAR && buff[length - 1] != '/')
   {
+    /* we need reserve 2 bytes for the trailing slash and the zero */
+    if (length >= sizeof (buff) - 1)
+      length= sizeof (buff) - 2;
     buff[length]= FN_LIBCHAR;
     buff[length + 1]= '\0';
   }
@@ -516,10 +520,10 @@ char *intern_filename(char *to, const char *from)
   char buff[FN_REFLEN];
   if (from == to)
   {						/* Dirname may destroy from */
-    strmov(buff,from);
+    (void) strnmov(buff, from, FN_REFLEN);
     from=buff;
   }
   length= dirname_part(to, from, &to_length);	/* Copy dirname & fix chars */
-  (void) strmov(to + to_length,from+length);
+  (void) strnmov(to + to_length, from + length, FN_REFLEN - to_length);
   return (to);
 } /* intern_filename */

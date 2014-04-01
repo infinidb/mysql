@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,11 +12,14 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "client_priv.h"
 #include <sslopt-vars.h>
 #include "../scripts/mysql_fix_privilege_tables_sql.c"
+
+#include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 #define VER "1.1"
 
@@ -44,7 +48,7 @@ static DYNAMIC_STRING conn_args;
 static char *opt_password= 0;
 static my_bool tty_password= 0;
 
-static char opt_tmpdir[FN_REFLEN];
+static char opt_tmpdir[FN_REFLEN] = "";
 
 #ifndef DBUG_OFF
 static char *default_dbug_option= (char*) "d:t:O,/tmp/mysql_upgrade.trace";
@@ -54,46 +58,48 @@ static char **defaults_argv;
 
 static my_bool not_used; /* Can't use GET_BOOL without a value pointer */
 
+static my_bool opt_write_binlog;
+
 #include <help_start.h>
 
 static struct my_option my_long_options[]=
 {
   {"help", '?', "Display this help message and exit.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"basedir", 'b', "Not used by mysql_upgrade. Only for backward compatibilty",
+  {"basedir", 'b', "Not used by mysql_upgrade. Only for backward compatibility.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"character-sets-dir", OPT_CHARSETS_DIR,
-   "Directory where character sets are.", 0,
+   "Directory for character set files.", 0,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"compress", OPT_COMPRESS, "Use compression in server/client protocol.",
-   (uchar**)&not_used, (uchar**)&not_used, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+   &not_used, &not_used, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"datadir", 'd',
-   "Not used by mysql_upgrade. Only for backward compatibilty",
+   "Not used by mysql_upgrade. Only for backward compatibility.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef DBUG_OFF
-  {"debug", '#', "This is a non-debug version. Catch this and exit",
+  {"debug", '#', "This is a non-debug version. Catch this and exit.",
    0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
-  {"debug", '#', "Output debug log", (uchar* *) & default_dbug_option,
-   (uchar* *) & default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug", '#', "Output debug log.", &default_dbug_option,
+   &default_dbug_option, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"debug-check", OPT_DEBUG_CHECK, "Check memory and open file usage at exit.",
-   (uchar**) &debug_check_flag, (uchar**) &debug_check_flag, 0,
+   &debug_check_flag, &debug_check_flag, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"debug-info", 'T', "Print some debug info at exit.", (uchar**) &debug_info_flag,
-   (uchar**) &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"debug-info", 'T', "Print some debug info at exit.", &debug_info_flag,
+   &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"default-character-set", OPT_DEFAULT_CHARSET,
    "Set the default character set.", 0,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"force", 'f', "Force execution of mysqlcheck even if mysql_upgrade "
    "has already been executed for the current version of MySQL.",
-   (uchar**)&opt_force, (uchar**)&opt_force, 0,
+   &opt_force, &opt_force, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"host",'h', "Connect to host.", 0,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"password", 'p',
-   "Password to use when connecting to server. If password is not given"
-   " it's solicited on the tty.", (uchar**) &opt_password,(uchar**) &opt_password,
+   "Password to use when connecting to server. If password is not given,"
+   " it's solicited on the tty.", &opt_password,&opt_password,
    0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef __WIN__
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0,
@@ -107,23 +113,28 @@ static struct my_option my_long_options[]=
    "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"protocol", OPT_MYSQL_PROTOCOL,
-   "The protocol of connection (tcp,socket,pipe,memory).",
+   "The protocol to use for connection (tcp, socket, pipe, memory).",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", 0,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"socket", 'S', "Socket file to use for connection.",
+  {"socket", 'S', "The socket file to use for connection.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #include <sslopt-longopts.h>
-  {"tmpdir", 't', "Directory for temporary files",
+  {"tmpdir", 't', "Directory for temporary files.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"user", 'u', "User for login if not current user.", (uchar**) &opt_user,
-   (uchar**) &opt_user, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"verbose", 'v', "Display more output about the process",
-   (uchar**) &opt_verbose, (uchar**) &opt_verbose, 0,
+  {"user", 'u', "User for login if not current user.", &opt_user,
+   &opt_user, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"verbose", 'v', "Display more output about the process.",
+   &opt_verbose, &opt_verbose, 0,
    GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
+  {"write-binlog", OPT_WRITE_BINLOG,
+   "All commands including mysqlcheck are binlogged. Enabled by default;"
+   "use --skip-write-binlog when commands should not be sent to replication slaves.",
+   &opt_write_binlog, &opt_write_binlog, 0, GET_BOOL, NO_ARG,
+   1, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -219,9 +230,10 @@ get_one_option(int optid, const struct my_option *opt,
   switch (optid) {
 
   case '?':
+    puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
     printf("%s  Ver %s Distrib %s, for %s (%s)\n",
            my_progname, VER, MYSQL_SERVER_VERSION, SYSTEM_TYPE, MACHINE_TYPE);
-    puts("MySQL utility for upgrading databases to new MySQL versions\n");
+    puts("MySQL utility for upgrading databases to new MySQL versions.\n");
     my_print_help(my_long_options);
     exit(0);
     break;
@@ -448,12 +460,31 @@ static int run_query(const char *query, DYNAMIC_STRING *ds_res,
   int ret;
   File fd;
   char query_file_path[FN_REFLEN];
+  const uchar sql_log_bin[]= "SET SQL_LOG_BIN=0;";
+
   DBUG_ENTER("run_query");
   DBUG_PRINT("enter", ("query: %s", query));
-  if ((fd= create_temp_file(query_file_path, opt_tmpdir,
+  if ((fd= create_temp_file(query_file_path, 
+                            opt_tmpdir[0] ? opt_tmpdir : NULL,
                             "sql", O_CREAT | O_SHARE | O_RDWR,
                             MYF(MY_WME))) < 0)
     die("Failed to create temporary file for defaults");
+
+  /*
+    Master and slave should be upgraded separately. All statements executed
+    by mysql_upgrade will not be binlogged.
+    'SET SQL_LOG_BIN=0' is executed before any other statements.
+   */
+  if (!opt_write_binlog)
+  {
+    if (my_write(fd, sql_log_bin, sizeof(sql_log_bin)-1,
+                 MYF(MY_FNABP | MY_WME)))
+    {
+      my_close(fd, MYF(0));
+      my_delete(query_file_path, MYF(0));
+      die("Failed to write to '%s'", query_file_path);
+    }
+  }
 
   if (my_write(fd, (uchar*) query, strlen(query),
                MYF(MY_FNABP | MY_WME)))
@@ -569,7 +600,10 @@ static int upgrade_already_done(void)
 
   my_fclose(in, MYF(0));
 
-  return (strncmp(buf, MYSQL_SERVER_VERSION,
+  if (!res)
+    return 0; /* Could not read from file => not sure */
+
+  return (strncmp(res, MYSQL_SERVER_VERSION,
                   sizeof(MYSQL_SERVER_VERSION)-1)==0);
 }
 
@@ -648,6 +682,7 @@ static int run_mysqlcheck_upgrade(void)
                   "--check-upgrade",
                   "--all-databases",
                   "--auto-repair",
+                  opt_write_binlog ? "--write-binlog" : "--skip-write-binlog",
                   NULL);
 }
 
@@ -662,6 +697,7 @@ static int run_mysqlcheck_fixnames(void)
                   "--all-databases",
                   "--fix-db-names",
                   "--fix-table-names",
+                  opt_write_binlog ? "--write-binlog" : "--skip-write-binlog",
                   NULL);
 }
 
@@ -749,6 +785,10 @@ static int run_sql_fix_privilege_tables(void)
       {
         /* Something unexpected failed, dump error line to screen */
         found_real_errors++;
+        print_line(line);
+      }
+      else if (strncmp(line, "WARNING", 7) == 0)
+      {
         print_line(line);
       }
     } while ((line= get_line(line)) && *line);

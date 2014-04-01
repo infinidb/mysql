@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqlshow\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 11/04/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYSQLSHOW\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLSHOW\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -33,13 +42,13 @@ mysqlshow \- display database, table, and column information
 .PP
 The
 \fBmysqlshow\fR
-client can be used to quickly see which databases exist, their tables, or a table\'s columns or indexes\&.
+client can be used to quickly see which databases exist, their tables, or a table\*(Aqs columns or indexes\&.
 .PP
 \fBmysqlshow\fR
 provides a command\-line interface to several SQL
 SHOW
 statements\&. See
-Section\ \&12.5.5, \(lqSHOW Syntax\(rq\&. The same information can be obtained by using those statements directly\&. For example, you can issue them from the
+Section\ \&13.7.5, \(lqSHOW Syntax\(rq\&. The same information can be obtained by using those statements directly\&. For example, you can issue them from the
 \fBmysql\fR
 client program\&.
 .PP
@@ -112,8 +121,14 @@ shows you only the table names that match the pattern\&. This is easily fixed by
 last on the command line as a separate argument\&.
 .PP
 \fBmysqlshow\fR
-supports the options in the following list\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+supports the following options, which can be specified on the command line or in the
+[mysqlshow]
+and
+[client]
+groups of an option file\&.
+\fBmysqlshow\fR
+also supports the options for processing option files described at
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .sp
 .RS 4
 .ie n \{\
@@ -139,12 +154,31 @@ Display a help message and exit\&.
 .sp -1
 .IP \(bu 2.3
 .\}
+.\" mysqlshow: bind-address option
+.\" bind-address option: mysqlshow
+\fB\-\-bind\-address=\fR\fB\fIip_address\fR\fR
+.sp
+On a computer having multiple network interfaces, this option can be used to select which interface is employed when connecting to the MySQL server\&.
+.sp
+This option is supported only in the version of
+\fBmysqlshow\fR
+that is supplied with MySQL Cluster, beginning with MySQL Cluster NDB 6\&.3\&.4\&. It is not available in standard MySQL 5\&.1 releases\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 .\" mysqlshow: character-sets-dir option
 .\" character-sets-dir option: mysqlshow
 \fB\-\-character\-sets\-dir=\fR\fB\fIpath\fR\fR
 .sp
 The directory where character sets are installed\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
 .RE
 .sp
 .RS 4
@@ -195,8 +229,8 @@ tables\&.
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. The default is
-\'d:t:o\'\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. The default is
+\*(Aqd:t:o\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -244,7 +278,7 @@ Print debugging information and memory and CPU usage statistics when the program
 Use
 \fIcharset_name\fR
 as the default character set\&. See
-Section\ \&9.2, \(lqThe Character Set Used for Data and Sorting\(rq\&.
+Section\ \&10.5, \(lqCharacter Set Configuration\(rq\&.
 .RE
 .sp
 .RS 4
@@ -300,10 +334,12 @@ value following the
 \fB\-\-password\fR
 or
 \fB\-p\fR
-option on the command line, you are prompted for one\&.
+option on the command line,
+\fBmysqlshow\fR
+prompts for one\&.
 .sp
 Specifying a password on the command line should be considered insecure\&. See
-Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
+Section\ \&6.1.2.1, \(lqEnd-User Guidelines for Password Security\(rq\&. You can use an option file to avoid giving the password on the command line\&.
 .RE
 .sp
 .RS 4
@@ -319,7 +355,7 @@ Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
 \fB\-\-pipe\fR,
 \fB\-W\fR
 .sp
-On Windows, connect to the server via a named pipe\&. This option applies only for connections to a local server, and only if the server supports named\-pipe connections\&.
+On Windows, connect to the server using a named pipe\&. This option applies only if the server supports named\-pipe connections\&.
 .RE
 .sp
 .RS 4
@@ -350,7 +386,7 @@ The TCP/IP port number to use for the connection\&.
 .\" protocol option: mysqlshow
 \fB\-\-protocol={TCP|SOCKET|PIPE|MEMORY}\fR
 .sp
-The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the allowable values, see
+The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the permissible values, see
 Section\ \&4.2.2, \(lqConnecting to the MySQL Server\(rq\&.
 .RE
 .sp
@@ -405,8 +441,8 @@ localhost, the Unix socket file to use, or, on Windows, the name of the named pi
 .sp
 Options that begin with
 \fB\-\-ssl\fR
-specify whether to connect to the server via SSL and indicate where to find SSL keys and certificates\&. See
-Section\ \&5.5.7.3, \(lqSSL Command Options\(rq\&.
+specify whether to connect to the server using SSL and indicate where to find SSL keys and certificates\&. See
+Section\ \&6.3.6.4, \(lqSSL Command Options\(rq\&.
 .RE
 .sp
 .RS 4
@@ -475,7 +511,7 @@ Display version information and exit\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -488,4 +524,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

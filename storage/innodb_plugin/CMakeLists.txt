@@ -11,21 +11,27 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 # This is the CMakeLists for InnoDB Plugin
 
 
 SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-INCLUDE("${PROJECT_SOURCE_DIR}/storage/mysql_storage_engine.cmake")
+
+# Starting at 5.1.38, MySQL CMake files are simplified. But the plugin
+# CMakeLists.txt still needs to work with previous versions of MySQL.
+IF (MYSQL_VERSION_ID GREATER "50137")
+	INCLUDE("${PROJECT_SOURCE_DIR}/storage/mysql_storage_engine.cmake")
+ENDIF (MYSQL_VERSION_ID GREATER "50137")
+
 IF (CMAKE_SIZEOF_VOID_P MATCHES 8)
 	SET(WIN64 TRUE)
 ENDIF (CMAKE_SIZEOF_VOID_P MATCHES 8)
 
 # Include directories under innodb_plugin
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/storage/innodb_plugin/include
-		    ${CMAKE_SOURCE_DIR}/storage/innodfb_plugin/handler)
+		    ${CMAKE_SOURCE_DIR}/storage/innodb_plugin/handler)
 
 # Include directories under mysql
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include
@@ -36,10 +42,10 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include
 
 # Removing compiler optimizations for innodb/mem/* files on 64-bit Windows
 # due to 64-bit compiler error, See MySQL Bug #19424, #36366, #34297
-IF(MSVC AND $(WIN64))
+IF (MSVC AND $(WIN64))
 	SET_SOURCE_FILES_PROPERTIES(mem/mem0mem.c mem/mem0pool.c
 				    PROPERTIES COMPILE_FLAGS -Od)
-ENDIF(MSVC AND $(WIN64))
+ENDIF (MSVC AND $(WIN64))
 
 SET(INNODB_PLUGIN_SOURCES	btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c btr/btr0sea.c
 			buf/buf0buddy.c buf/buf0buf.c buf/buf0flu.c buf/buf0lru.c buf/buf0rea.c
@@ -72,7 +78,11 @@ SET(INNODB_PLUGIN_SOURCES	btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c btr/btr0sea
 			trx/trx0i_s.c trx/trx0purge.c trx/trx0rec.c trx/trx0roll.c trx/trx0rseg.c
 			trx/trx0sys.c trx/trx0trx.c trx/trx0undo.c
 			usr/usr0sess.c
-			ut/ut0byte.c ut/ut0dbg.c ut/ut0mem.c ut/ut0rnd.c ut/ut0ut.c ut/ut0vec.c
+			ut/ut0byte.c ut/ut0dbg.c ut/ut0mem.c ut/ut0rbt.c ut/ut0rnd.c ut/ut0ut.c ut/ut0vec.c
 			ut/ut0list.c ut/ut0wqueue.c)
-ADD_DEFINITIONS(-DHAVE_WINDOWS_ATOMICS -DINNODB_RW_LOCKS_USE_ATOMICS -DIB_HAVE_PAUSE_INSTRUCTION)
+# Windows atomics do not perform well. Disable Windows atomics by default.
+# See bug#52102 for details.
+#ADD_DEFINITIONS(-DHAVE_WINDOWS_ATOMICS -DINNODB_RW_LOCKS_USE_ATOMICS -DHAVE_IB_PAUSE_INSTRUCTION)
+ADD_DEFINITIONS(-DHAVE_IB_PAUSE_INSTRUCTION)
+
 MYSQL_STORAGE_ENGINE(INNODB_PLUGIN)

@@ -1,4 +1,6 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2001-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include <my_global.h>
 #include <mysql.h>
@@ -164,6 +167,7 @@ mysql_real_connect(MYSQL *mysql,const char *host, const char *user,
   port=0;
   unix_socket=0;
 
+  client_flag|=mysql->options.client_flag;
   /* Send client information for access check */
   client_flag|=CLIENT_CAPABILITIES;
   if (client_flag & CLIENT_MULTI_STATEMENTS)

@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2004 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 /* Returns info about database status */
 
@@ -53,6 +53,7 @@ int heap_info(reg1 HP_INFO *info,reg2 HEAPINFO *x, int flag )
   x->index_length    = info->s->index_length;
   x->max_records     = info->s->max_records;
   x->errkey          = info->errkey;
+  x->create_time     = info->s->create_time;
   if (flag & HA_STATUS_AUTO)
     x->auto_increment= info->s->auto_increment + 1;
   DBUG_RETURN(0);

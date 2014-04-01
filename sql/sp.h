@@ -1,5 +1,7 @@
 /* -*- C++ -*- */
-/* Copyright (C) 2002 MySQL AB
+/*
+   Copyright (c) 2002-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,7 +14,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _SP_H_
 #define _SP_H_
@@ -69,7 +72,7 @@ void sp_get_prelocking_info(THD *thd, bool *need_prelocking,
 void sp_add_used_routine(LEX *lex, Query_arena *arena,
                          sp_name *rt, char rt_type);
 void sp_remove_not_own_routines(LEX *lex);
-void sp_update_sp_used_routines(HASH *dst, HASH *src);
+bool sp_update_sp_used_routines(HASH *dst, HASH *src);
 int sp_cache_routines_and_add_tables(THD *thd, LEX *lex,
                                      bool first_no_prelock);
 int sp_cache_routines_and_add_tables_for_view(THD *thd, LEX *lex,

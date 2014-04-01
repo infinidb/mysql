@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,11 +12,13 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysys_priv.h"
 #include <my_dir.h> /* for stat */
 #include <m_string.h>
+#include "mysys_err.h"
 #if defined(HAVE_UTIME_H)
 #include <utime.h>
 #elif defined(HAVE_SYS_UTIME_H)
@@ -56,7 +59,6 @@ int my_copy(const char *from, const char *to, myf MyFlags)
   File from_file,to_file;
   uchar buff[IO_SIZE];
   MY_STAT stat_buff,new_stat_buff;
-  int res;
   DBUG_ENTER("my_copy");
   DBUG_PRINT("my",("from %s to %s MyFlags %d", from, to, MyFlags));
 
@@ -88,6 +90,13 @@ int my_copy(const char *from, const char *to, myf MyFlags)
 	goto err;
     }
 
+    /* sync the destination file */
+    if (MyFlags & MY_SYNC)
+    {
+      if (my_sync(to_file, MyFlags))
+        goto err;
+    }
+
     if (my_close(from_file,MyFlags) | my_close(to_file,MyFlags))
       DBUG_RETURN(-1);				/* Error on close */
 
@@ -95,9 +104,23 @@ int my_copy(const char *from, const char *to, myf MyFlags)
 
     if (MyFlags & MY_HOLD_ORIGINAL_MODES && !new_file_stat)
 	DBUG_RETURN(0);			/* File copyed but not stat */
-    res= chmod(to, stat_buff.st_mode & 07777); /* Copy modes */
+    /* Copy modes */
+    if (chmod(to, stat_buff.st_mode & 07777))
+    {
+      my_errno= errno;
+      if (MyFlags & (MY_FAE+MY_WME))
+        my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from, errno);
+      goto err;
+    }
 #if !defined(__WIN__) && !defined(__NETWARE__)
-    res= chown(to, stat_buff.st_uid,stat_buff.st_gid); /* Copy ownership */
+    /* Copy ownership */
+    if (chown(to, stat_buff.st_uid,stat_buff.st_gid))
+    {
+      my_errno= errno;
+      if (MyFlags & (MY_FAE+MY_WME))
+        my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from, errno);
+      goto err;
+    }
 #endif
 #if !defined(VMS) && !defined(__ZTC__)
     if (MyFlags & MY_COPYTIME)

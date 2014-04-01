@@ -16,12 +16,10 @@ typedef struct dict_index_struct	dict_index_t;
 typedef struct dict_table_struct	dict_table_t;
 typedef struct dict_foreign_struct	dict_foreign_t;
 
-/* A cluster object is a table object with the type field set to
-DICT_CLUSTERED */
-
-typedef dict_table_t			dict_cluster_t;
-
 typedef struct ind_node_struct		ind_node_t;
 typedef struct tab_node_struct		tab_node_t;
+
+#define TEMP_TABLE_PREFIX                "#sql"
+#define TEMP_TABLE_PATH_PREFIX           "/" TEMP_TABLE_PREFIX
 
 #endif

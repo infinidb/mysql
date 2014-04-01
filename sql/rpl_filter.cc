@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysql_priv.h"
 #include "rpl_filter.h"
@@ -151,11 +154,14 @@ Rpl_filter::db_ok(const char* db)
     DBUG_RETURN(1); // Ok to replicate if the user puts no constraints
 
   /*
-    If the user has specified restrictions on which databases to replicate
-    and db was not selected, do not replicate.
+    Previous behaviour "if the user has specified restrictions on which
+    databases to replicate and db was not selected, do not replicate" has
+    been replaced with "do replicate".
+    Since the filtering criteria is not equal to "NULL" the statement should
+    be logged into binlog.
   */
   if (!db)
-    DBUG_RETURN(0);
+    DBUG_RETURN(1);
 
   if (!do_db.is_empty()) // if the do's are not empty
   {
@@ -350,6 +356,7 @@ Rpl_filter::add_do_db(const char* table_spec)
   DBUG_ENTER("Rpl_filter::add_do_db");
   i_string *db = new i_string(table_spec);
   do_db.push_back(db);
+  DBUG_VOID_RETURN;
 }
 
 
@@ -359,6 +366,7 @@ Rpl_filter::add_ignore_db(const char* table_spec)
   DBUG_ENTER("Rpl_filter::add_ignore_db");
   i_string *db = new i_string(table_spec);
   ignore_db.push_back(db);
+  DBUG_VOID_RETURN;
 }
 
 extern "C" uchar *get_table_key(const uchar *, size_t *, my_bool);

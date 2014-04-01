@@ -1,4 +1,4 @@
-/* Copyright (C) 2002 MySQL AB & tommy@valley.ne.jp.
+/* Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved. & tommy@valley.ne.jp.
    
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -12,8 +12,9 @@
    
    You should have received a copy of the GNU Library General Public
    License along with this library; if not, write to the Free
-   Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-   MA 02111-1307, USA */
+   Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+   MA 02110-1301, USA
+*/
 
 /* This file is for Japanese EUC charset, and created based on
 ctype-ujis.c file.
@@ -8710,7 +8711,7 @@ CHARSET_INFO my_charset_eucjpms_japanese_ci=
     1,			/* mbminlen     */
     3,			/* mbmaxlen     */
     0,			/* min_sort_char */
-    255,		/* max_sort_char */
+    0xFEFE,		/* max_sort_char */
     ' ',		/* pad_char      */
     0,                  /* escape_with_backslash_is_dangerous */
     &my_charset_handler,
@@ -8743,7 +8744,7 @@ CHARSET_INFO my_charset_eucjpms_bin=
     1,			/* mbminlen     */
     3,			/* mbmaxlen     */
     0,			/* min_sort_char */
-    255,		/* max_sort_char */
+    0xFEFE,		/* max_sort_char */
     ' ',		/* pad_char      */
     0,                  /* escape_with_backslash_is_dangerous */
     &my_charset_handler,

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2011, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -31,9 +31,7 @@ Created 8/22/1994 Heikki Tuuri
 #ifdef UNIV_DEBUG
 # include "buf0buf.h"
 #endif /* UNIV_DEBUG */
-#ifdef UNIV_SYNC_DEBUG
-# include "btr0sea.h"
-#endif /* UNIV_SYNC_DEBUG */
+#include "btr0sea.h"
 #include "page0page.h"
 
 /*************************************************************//**
@@ -91,41 +89,10 @@ ha_create_func(
 }
 
 /*************************************************************//**
-Empties a hash table and frees the memory heaps. */
-UNIV_INTERN
-void
-ha_clear(
-/*=====*/
-	hash_table_t*	table)	/*!< in, own: hash table */
-{
-	ulint	i;
-	ulint	n;
-
-#ifdef UNIV_SYNC_DEBUG
-	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EXCLUSIVE));
-#endif /* UNIV_SYNC_DEBUG */
-
-#ifndef UNIV_HOTBACKUP
-	/* Free the memory heaps. */
-	n = table->n_mutexes;
-
-	for (i = 0; i < n; i++) {
-		mem_heap_free(table->heaps[i]);
-	}
-#endif /* !UNIV_HOTBACKUP */
-
-	/* Clear the hash table. */
-	n = hash_get_n_cells(table);
-
-	for (i = 0; i < n; i++) {
-		hash_get_nth_cell(table, i)->node = NULL;
-	}
-}
-
-/*************************************************************//**
 Inserts an entry into a hash table. If an entry with the same fold number
 is found, its node is updated to point to the new data, and no new node
-is inserted.
+is inserted. If btr_search_enabled is set to FALSE, we will only allow
+updating existing nodes, but no new node is allowed to be added.
 @return	TRUE if succeed, FALSE if no more memory could be allocated */
 UNIV_INTERN
 ibool
@@ -139,18 +106,24 @@ ha_insert_for_fold_func(
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 	buf_block_t*	block,	/*!< in: buffer block containing the data */
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-	void*		data)	/*!< in: data, must not be NULL */
+	const rec_t*	data)	/*!< in: data, must not be NULL */
 {
 	hash_cell_t*	cell;
 	ha_node_t*	node;
 	ha_node_t*	prev_node;
 	ulint		hash;
 
-	ut_ad(table && data);
+	ut_ad(data);
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 	ut_a(block->frame == page_align(data));
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
+#ifdef UNIV_SYNC_DEBUG
+	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
 	ASSERT_HASH_MUTEX_OWN(table, fold);
+	ut_ad(btr_search_enabled);
 
 	hash = hash_calc_hash(fold, table);
 
@@ -237,6 +210,12 @@ ha_delete_hash_node(
 	hash_table_t*	table,		/*!< in: hash table */
 	ha_node_t*	del_node)	/*!< in: node to be deleted */
 {
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+#ifdef UNIV_SYNC_DEBUG
+	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+	ut_ad(btr_search_enabled);
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 # ifndef UNIV_HOTBACKUP
 	if (table->adaptive) {
@@ -259,18 +238,27 @@ ha_search_and_update_if_found_func(
 /*===============================*/
 	hash_table_t*	table,	/*!< in/out: hash table */
 	ulint		fold,	/*!< in: folded value of the searched data */
-	void*		data,	/*!< in: pointer to the data */
+	const rec_t*	data,	/*!< in: pointer to the data */
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 	buf_block_t*	new_block,/*!< in: block containing new_data */
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-	void*		new_data)/*!< in: new pointer to the data */
+	const rec_t*	new_data)/*!< in: new pointer to the data */
 {
 	ha_node_t*	node;
 
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 	ASSERT_HASH_MUTEX_OWN(table, fold);
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 	ut_a(new_block->frame == page_align(new_data));
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
+#ifdef UNIV_SYNC_DEBUG
+	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+
+	if (!btr_search_enabled) {
+		return;
+	}
 
 	node = ha_search_with_data(table, fold, data);
 
@@ -304,7 +292,13 @@ ha_remove_all_nodes_to_page(
 {
 	ha_node_t*	node;
 
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 	ASSERT_HASH_MUTEX_OWN(table, fold);
+#ifdef UNIV_SYNC_DEBUG
+	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+	ut_ad(btr_search_enabled);
 
 	node = ha_chain_get_first(table, fold);
 
@@ -337,6 +331,7 @@ ha_remove_all_nodes_to_page(
 #endif
 }
 
+#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 /*************************************************************//**
 Validates a given range of the cells in hash table.
 @return	TRUE if ok */
@@ -353,6 +348,8 @@ ha_validate(
 	ibool		ok	= TRUE;
 	ulint		i;
 
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 	ut_a(start_index <= end_index);
 	ut_a(start_index < hash_get_n_cells(table));
 	ut_a(end_index < hash_get_n_cells(table));
@@ -381,6 +378,7 @@ ha_validate(
 
 	return(ok);
 }
+#endif /* defined UNIV_AHI_DEBUG || defined UNIV_DEBUG */
 
 /*************************************************************//**
 Prints info of a hash table. */
@@ -404,6 +402,8 @@ builds, see http://bugs.mysql.com/36941 */
 #endif /* PRINT_USED_CELLS */
 	ulint		n_bufs;
 
+	ut_ad(table);
+	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 #ifdef PRINT_USED_CELLS
 	for (i = 0; i < hash_get_n_cells(table); i++) {
 

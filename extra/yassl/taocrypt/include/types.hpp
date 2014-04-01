@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -62,7 +62,7 @@ typedef unsigned int   word32;
 // compilers we've found 64-bit multiply insructions for
 #if defined(__GNUC__) || defined(_MSC_VER) || defined(__DECCXX)
     #if !(defined(__ICC) || defined(__INTEL_COMPILER))
-    #define HAVE_64_MULTIPLY
+        #define HAVE_64_MULTIPLY
     #endif
 #endif
 

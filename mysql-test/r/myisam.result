@@ -1853,6 +1853,34 @@ CHECK TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 DROP TABLE t1;
+#
+# Bug #49465: valgrind warnings and incorrect live checksum...
+#
+CREATE TABLE t1(
+a VARCHAR(1), b VARCHAR(1), c VARCHAR(1),
+f VARCHAR(1), g VARCHAR(1), h VARCHAR(1),
+i VARCHAR(1), j VARCHAR(1), k VARCHAR(1)) CHECKSUM=1;
+INSERT INTO t1 VALUES('', '', '', '', '', '', '', '', '');
+CHECKSUM TABLE t1 QUICK;
+Table	Checksum
+test.t1	467455460
+CHECKSUM TABLE t1 EXTENDED;
+Table	Checksum
+test.t1	467455460
+DROP TABLE t1;
+#
+# BUG#48438 - crash with error in unioned query against merge table and view...
+#
+SET GLOBAL table_open_cache=3;
+CREATE TABLE t1(a INT);
+SELECT 1 FROM t1 AS a1, t1 AS a2, t1 AS a3, t1 AS a4 FOR UPDATE;
+1
+SELECT TABLE_ROWS, DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1';
+TABLE_ROWS	DATA_LENGTH
+0	0
+DROP TABLE t1;
+SET GLOBAL table_open_cache=DEFAULT;
 End of 5.0 tests
 create table t1 (a int not null, key `a` (a) key_block_size=1024);
 show create table t1;
@@ -2251,5 +2279,174 @@ h+0	d + 0	e	g + 0
 1	1	2	0
 1	1	3	0
 1	1	4	0
+DROP TABLE t1;
+#
+# Test of BUG#35570 CHECKSUM TABLE unreliable if LINESTRING field
+# (same content / differen checksum)
+#
+CREATE TABLE t1 (line LINESTRING NOT NULL) engine=myisam;
+INSERT INTO t1 VALUES (GeomFromText("POINT(0 0)"));
+checksum table t1;
+Table	Checksum
+test.t1	326284887
+CREATE TABLE t2 (line LINESTRING NOT NULL) engine=myisam;
+INSERT INTO t2 VALUES (GeomFromText("POINT(0 0)"));
+checksum table t2;
+Table	Checksum
+test.t2	326284887
+CREATE TABLE t3 select * from t1;
+checksum table t3;
+Table	Checksum
+test.t3	326284887
+drop table t1,t2,t3;
+CREATE TABLE t1(a INT, b CHAR(10), KEY(a), KEY(b));
+INSERT INTO t1 VALUES(1,'0'),(2,'0'),(3,'0'),(4,'0'),(5,'0'),
+(6,'0'),(7,'0');
+INSERT INTO t1 SELECT a+10,b FROM t1;
+INSERT INTO t1 SELECT a+20,b FROM t1;
+INSERT INTO t1 SELECT a+40,b FROM t1;
+INSERT INTO t1 SELECT a+80,b FROM t1;
+INSERT INTO t1 SELECT a+160,b FROM t1;
+INSERT INTO t1 SELECT a+320,b FROM t1;
+INSERT INTO t1 SELECT a+640,b FROM t1;
+INSERT INTO t1 SELECT a+1280,b FROM t1;
+INSERT INTO t1 SELECT a+2560,b FROM t1;
+INSERT INTO t1 SELECT a+5120,b FROM t1;
+SET myisam_sort_buffer_size=4;
+Warnings:
+Warning	1292	Truncated incorrect myisam_sort_buffer_size value: '4'
+REPAIR TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	repair	error	myisam_sort_buffer_size is too small
+test.t1	repair	warning	Number of rows changed from 0 to 7168
+test.t1	repair	status	OK
+SET myisam_repair_threads=2;
+REPAIR TABLE t1;
+SET myisam_repair_threads=@@global.myisam_repair_threads;
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+#
+# BUG#49628 - corrupt table after legal SQL, LONGTEXT column
+#
+CREATE TABLE t1(a INT, b LONGTEXT, UNIQUE(a));
+REPLACE INTO t1 VALUES
+(1, REPEAT('a', 129015)),(1, NULL),
+(2, NULL),(3, NULL),(4, NULL),(5, NULL),(6, NULL),(7, NULL),
+(1, REPEAT('b', 129016)),(1, NULL),
+(1, REPEAT('c', 129015)),(1, REPEAT('d', 129015));
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+#
+# Bug#51304: checksum table gives different results
+# for same data when using bit fields
+#
+CREATE TABLE t1(a INT, b BIT(1));
+INSERT INTO t1 VALUES(1, 0), (2, 1);
+CREATE TABLE t2 SELECT * FROM t1;
+CHECKSUM TABLE t1 EXTENDED;
+Table	Checksum
+test.t1	3775188275
+CHECKSUM TABLE t2 EXTENDED;
+Table	Checksum
+test.t2	3775188275
+CHECKSUM TABLE t3 EXTENDED;
+Table	Checksum
+test.t3	3775188275
+DROP TABLE t1, t2, t3;
+#
+# BUG#51307 - widespread corruption with partitions and insert...select
+#
+CREATE TABLE t1(a CHAR(255), KEY(a));
+SELECT * FROM t1, t1 AS a1;
+a	a
+SET myisam_sort_buffer_size=4;
+Warnings:
+Warning	1292	Truncated incorrect myisam_sort_buffer_size value: '4'
+INSERT INTO t1 VALUES
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0');
+Warnings:
+Error	1034	myisam_sort_buffer_size is too small
+Error	1034	Number of rows changed from 0 to 157
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+INSERT INTO t1 VALUES('1');
+SELECT * FROM t1, t1 AS a1 WHERE t1.a=1 AND a1.a=1;
+a	a
+1	1
+DROP TABLE t1;
+#
+# BUG#47444 - --myisam_repair_threads>1can result in all index
+#             cardinalities=1
+#
+SET myisam_repair_threads=2;
+SET myisam_sort_buffer_size=4096;
+CREATE TABLE t1(a CHAR(255), KEY(a), KEY(a), KEY(a));
+INSERT INTO t1 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0),(1),(2),(3);
+REPAIR TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	repair	status	OK
+SELECT CARDINALITY FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1';
+CARDINALITY
+14
+14
+14
+DROP TABLE t1;
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+SET myisam_repair_threads=@@global.myisam_repair_threads;
+#
+# BUG#11757032 - 49030: OPTIMIZE TABLE BREAKS MYISAM TABLE WHEN
+#                USING MYISAM_USE_MMAP ON WINDOWS
+#
+SET GLOBAL myisam_use_mmap=1;
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(1),(2);
+DELETE FROM t1 WHERE a=1;
+FLUSH TABLE t1;
+LOCK TABLE t1 WRITE;
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	status	OK
+INSERT INTO t1 VALUES(3);
+UNLOCK TABLES;
+SELECT * FROM t1;
+a
+2
+3
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+SET GLOBAL myisam_use_mmap=default;
+#
+# BUG 11756869 - 48848: MYISAMCHK DOING SORT RECOVER IN CERTAIN
+#                       CASES RESETS DATA POINTER TO SMAL
+#
+CREATE TABLE t1(a INT, KEY(a));
+ALTER TABLE t1 DISABLE KEYS;
+SET @before:= (SELECT MAX_DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test');
+FLUSH TABLES;
+SET @after:= (SELECT MAX_DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test');
+SELECT @before=@after;
+@before=@after
+1
 DROP TABLE t1;
 End of 5.1 tests

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "mysys_priv.h"
 #include "mysys_err.h"
@@ -33,9 +35,21 @@ size_t my_write(int Filedes, const uchar *Buffer, size_t Count, myf MyFlags)
   if (unlikely(!Count))
     DBUG_RETURN(0);
   
+  DBUG_EXECUTE_IF ("simulate_file_write_error_once",
+                   { DBUG_SET("+d,simulate_file_write_error");});
   for (;;)
   {
-    if ((writenbytes= write(Filedes, Buffer, Count)) == Count)
+    writenbytes= write(Filedes, Buffer, Count);
+    /**
+       To simulate the write error set the errno = error code
+       and the number pf written bytes to -1.
+     */
+    DBUG_EXECUTE_IF ("simulate_file_write_error",
+                     {
+                       errno= ENOSPC;
+                       writenbytes= (size_t) -1;
+                     });
+    if (writenbytes == Count)
       break;
     if (writenbytes != (size_t) -1)
     {						/* Safeguard */
@@ -56,6 +70,8 @@ size_t my_write(int Filedes, const uchar *Buffer, size_t Count, myf MyFlags)
     {
       wait_for_free_space(my_filename(Filedes), errors);
       errors++;
+      DBUG_EXECUTE_IF("simulate_file_write_error_once",
+                      { DBUG_SET("-d,simulate_file_write_error");});
       continue;
     }
 

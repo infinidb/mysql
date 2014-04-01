@@ -1,4 +1,4 @@
-/* Copyright (C) 2000 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* 
  * This file is for Korean EUC charset, and created by powerm90@tinc.co.kr.
@@ -8762,7 +8763,7 @@ CHARSET_INFO my_charset_euckr_korean_ci=
     1,			/* mbminlen   */
     2,			/* mbmaxlen   */
     0,			/* min_sort_char */
-    255,		/* max_sort_char */
+    0xFEFE,		/* max_sort_char */
     ' ',                /* pad char      */
     0,                  /* escape_with_backslash_is_dangerous */
     &my_charset_handler,
@@ -8795,7 +8796,7 @@ CHARSET_INFO my_charset_euckr_bin=
     1,			/* mbminlen   */
     2,			/* mbmaxlen   */
     0,			/* min_sort_char */
-    255,		/* max_sort_char */
+    0xFEFE,		/* max_sort_char */
     ' ',                /* pad char      */
     0,                  /* escape_with_backslash_is_dangerous */
     &my_charset_handler,

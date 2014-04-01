@@ -1,4 +1,4 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
- 
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+
 /* Copyright (C) 2013 Calpont Corp. */
 
 /** @file handler.cc
@@ -161,7 +161,7 @@ redo:
 }
 
 
-plugin_ref ha_lock_engine(THD *thd, handlerton *hton)
+plugin_ref ha_lock_engine(THD *thd, const handlerton *hton)
 {
   if (hton)
   {
@@ -277,7 +277,7 @@ handler *get_ha_partition(partition_info *part_info)
   }
   else
   {
-    my_error(ER_OUTOFMEMORY, MYF(0), sizeof(ha_partition));
+    my_error(ER_OUTOFMEMORY, MYF(0), static_cast<int>(sizeof(ha_partition)));
   }
   DBUG_RETURN(((handler*) partition));
 }
@@ -347,6 +347,7 @@ int ha_init_errors(void)
   SETMSG(HA_ERR_AUTOINC_READ_FAILED,    ER(ER_AUTOINC_READ_FAILED));
   SETMSG(HA_ERR_AUTOINC_ERANGE,         ER(ER_WARN_DATA_OUT_OF_RANGE));
   SETMSG(HA_ERR_TOO_MANY_CONCURRENT_TRXS, ER(ER_TOO_MANY_CONCURRENT_TRXS));
+  SETMSG(HA_ERR_TABLE_IN_FK_CHECK,      "Table being used in foreign key check");
 
   /* Register the error messages for use with my_error(). */
   return my_error_register(errmsgs, HA_ERR_FIRST, HA_ERR_LAST);
@@ -599,10 +600,6 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
                                    void *unused)
 {
   handlerton *hton= plugin_data(plugin, handlerton *);
-  /*
-    there's no need to rollback here as all transactions must
-    be rolled back already
-  */
   //Not all storage engines can handle a close_connection() on startup, so...
   //There's got to be a better way to do this. ha_resolve_by_name() doesn't seem to work.
   // @InfiniDB
@@ -619,10 +616,16 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
   }
   else
   {
-    if (hton->state == SHOW_OPTION_YES && hton->close_connection &&
-        thd_get_ha_data(thd, hton))
+    /*
+      there's no need to rollback here as all transactions must
+      be rolled back already
+    */
+    if (hton->state == SHOW_OPTION_YES && thd_get_ha_data(thd, hton))
     {
-      hton->close_connection(hton, thd);
+      if (hton->close_connection)
+        hton->close_connection(hton, thd);
+      /* make sure ha_data is reset and ha_data_lock is released */
+      thd_set_ha_data(thd, hton, NULL);
     }
   }
 
@@ -1151,7 +1154,7 @@ int ha_commit_trans(THD *thd, bool all)
     uint rw_ha_count;
     bool rw_trans;
 
-    DBUG_EXECUTE_IF("crash_commit_before", abort(););
+    DBUG_EXECUTE_IF("crash_commit_before", DBUG_SUICIDE(););
 
     /* Close all cursors that can not survive COMMIT */
     if (is_real_trans)                          /* not a statement commit */
@@ -1203,7 +1206,7 @@ int ha_commit_trans(THD *thd, bool all)
         }
         status_var_increment(thd->status_var.ha_prepare_count);
       }
-      DBUG_EXECUTE_IF("crash_commit_after_prepare", abort(););
+      DBUG_EXECUTE_IF("crash_commit_after_prepare", DBUG_SUICIDE(););
       if (error || (is_real_trans && xid &&
                     (error= !(cookie= tc_log->log_xid(thd, xid)))))
       {
@@ -1211,13 +1214,17 @@ int ha_commit_trans(THD *thd, bool all)
         error= 1;
         goto end;
       }
-      DBUG_EXECUTE_IF("crash_commit_after_log", abort(););
+      DBUG_EXECUTE_IF("crash_commit_after_log", DBUG_SUICIDE(););
     }
     error=ha_commit_one_phase(thd, all) ? (cookie ? 2 : 1) : 0;
-    DBUG_EXECUTE_IF("crash_commit_before_unlog", abort(););
+    DBUG_EXECUTE_IF("crash_commit_before_unlog", DBUG_SUICIDE(););
     if (cookie)
-      tc_log->unlog(cookie, xid);
-    DBUG_EXECUTE_IF("crash_commit_after", abort(););
+      if(tc_log->unlog(cookie, xid))
+      {
+        error= 2;
+        goto end;
+      }
+    DBUG_EXECUTE_IF("crash_commit_after", DBUG_SUICIDE(););
 end:
     if (rw_trans)
       start_waiting_global_read_lock(thd);
@@ -1339,7 +1346,8 @@ int ha_rollback_trans(THD *thd, bool all)
     }
     trans->ha_list= 0;
     trans->no_2pc=0;
-    if (is_real_trans && thd->transaction_rollback_request)
+    if (is_real_trans && thd->transaction_rollback_request &&
+        thd->transaction.xid_state.xa_state != XA_NOTR)
       thd->transaction.xid_state.rm_error= thd->main_da.sql_errno();
     if (all)
       thd->variables.tx_isolation=thd->session_tx_isolation;
@@ -1623,7 +1631,8 @@ int ha_recover(HASH *commit_list)
   }
   if (!info.list)
   {
-    sql_print_error(ER(ER_OUTOFMEMORY), info.len*sizeof(XID));
+    sql_print_error(ER(ER_OUTOFMEMORY),
+                    static_cast<int>(info.len*sizeof(XID)));
     DBUG_RETURN(1);
   }
 
@@ -1913,11 +1922,41 @@ bool ha_flush_logs(handlerton *db_type)
   return FALSE;
 }
 
+
+/**
+  @brief make canonical filename
+
+  @param[in]  file     table handler
+  @param[in]  path     original path
+  @param[out] tmp_path buffer for canonized path
+
+  @details Lower case db name and table name path parts for
+           non file based tables when lower_case_table_names
+           is 2 (store as is, compare in lower case).
+           Filesystem path prefix (mysql_data_home or tmpdir)
+           is left intact.
+
+  @note tmp_path may be left intact if no conversion was
+        performed.
+
+  @retval canonized path
+
+  @todo This may be done more efficiently when table path
+        gets built. Convert this function to something like
+        ASSERT_CANONICAL_FILENAME.
+*/
 const char *get_canonical_filename(handler *file, const char *path,
                                    char *tmp_path)
 {
+  uint i;
   if (lower_case_table_names != 2 || (file->ha_table_flags() & HA_FILE_BASED))
     return path;
+
+  for (i= 0; i <= mysql_tmpdir_list.max; i++)
+  {
+    if (is_prefix(path, mysql_tmpdir_list.list[i]))
+      return path;
+  }
 
   /* Ensure that table handler get path in lower case */
   if (tmp_path != path)
@@ -2026,22 +2065,29 @@ int ha_delete_table(THD *thd, handlerton *table_type, const char *path,
 /****************************************************************************
 ** General handler functions
 ****************************************************************************/
-handler *handler::clone(MEM_ROOT *mem_root)
+handler *handler::clone(const char *name, MEM_ROOT *mem_root)
 {
-  handler *new_handler= get_new_handler(table->s, mem_root, table->s->db_type());
+  handler *new_handler= get_new_handler(table->s, mem_root, ht);
   /*
     Allocate handler->ref here because otherwise ha_open will allocate it
     on this->table->mem_root and we will not be able to reclaim that memory 
     when the clone handler object is destroyed.
   */
-  if (!(new_handler->ref= (uchar*) alloc_root(mem_root, ALIGN_SIZE(ref_length)*2)))
-    return NULL;
-  if (new_handler && !new_handler->ha_open(table,
-                                           table->s->normalized_path.str,
-                                           table->db_stat,
-                                           HA_OPEN_IGNORE_IF_LOCKED))
-    return new_handler;
-  return NULL;
+  if (new_handler &&
+     !(new_handler->ref= (uchar*) alloc_root(mem_root,
+                                             ALIGN_SIZE(ref_length)*2)))
+    new_handler= NULL;
+  /*
+    TODO: Implement a more efficient way to have more than one index open for
+    the same table instance. The ha_open call is not cachable for clone.
+  */
+  if (new_handler && new_handler->ha_open(table,
+                                          name,
+                                          table->db_stat,
+                                          HA_OPEN_IGNORE_IF_LOCKED))
+    new_handler= NULL;
+
+  return new_handler;
 }
 
 
@@ -2159,7 +2205,8 @@ int handler::read_first_row(uchar * buf, uint primary_key)
   computes the lowest number
   - strictly greater than "nr"
   - of the form: auto_increment_offset + N * auto_increment_increment
-
+  If overflow happened then return MAX_ULONGLONG value as an
+  indication of overflow.
   In most cases increment= offset= 1, in which case we get:
   @verbatim 1,2,3,4,5,... @endverbatim
     If increment=10 and offset=5 and previous number is 1, we get:
@@ -2168,13 +2215,23 @@ int handler::read_first_row(uchar * buf, uint primary_key)
 inline ulonglong
 compute_next_insert_id(ulonglong nr,struct system_variables *variables)
 {
+  const ulonglong save_nr= nr;
+
   if (variables->auto_increment_increment == 1)
-    return (nr+1); // optimization of the formula below
-  nr= (((nr+ variables->auto_increment_increment -
-         variables->auto_increment_offset)) /
-       (ulonglong) variables->auto_increment_increment);
-  return (nr* (ulonglong) variables->auto_increment_increment +
-          variables->auto_increment_offset);
+    nr= nr + 1; // optimization of the formula below
+  else
+  {
+    nr= (((nr+ variables->auto_increment_increment -
+           variables->auto_increment_offset)) /
+         (ulonglong) variables->auto_increment_increment);
+    nr= (nr* (ulonglong) variables->auto_increment_increment +
+         variables->auto_increment_offset);
+  }
+
+  if (unlikely(nr <= save_nr))
+    return ULONGLONG_MAX;
+
+  return nr;
 }
 
 
@@ -2366,8 +2423,19 @@ int handler::update_auto_increment()
         reservation means potentially losing unused values).
         Note that in prelocked mode no estimation is given.
       */
+
       if ((auto_inc_intervals_count == 0) && (estimation_rows_to_insert > 0))
         nb_desired_values= estimation_rows_to_insert;
+      else if ((auto_inc_intervals_count == 0) &&
+               (thd->lex->many_values.elements > 0))
+      {
+        /*
+          For multi-row inserts, if the bulk inserts cannot be started, the
+          handler::estimation_rows_to_insert will not be set. But we still
+          want to reserve the autoinc values.
+        */
+        nb_desired_values= thd->lex->many_values.elements;
+      }
       else /* go with the increasing defaults */
       {
         /* avoid overflow in formula, with this if() */
@@ -2385,7 +2453,7 @@ int handler::update_auto_increment()
                          variables->auto_increment_increment,
                          nb_desired_values, &nr,
                          &nb_reserved_values);
-      if (nr == ~(ulonglong) 0)
+      if (nr == ULONGLONG_MAX)
         DBUG_RETURN(HA_ERR_AUTOINC_READ_FAILED);  // Mark failure
 
       /*
@@ -2415,6 +2483,9 @@ int handler::update_auto_increment()
       DBUG_PRINT("info",("auto_increment: special not-first-in-index"));
     }
   }
+
+  if (unlikely(nr == ULONGLONG_MAX))
+      DBUG_RETURN(HA_ERR_AUTOINC_ERANGE); 
 
   DBUG_PRINT("info",("auto_increment: %lu", (ulong) nr));
 
@@ -2659,7 +2730,13 @@ void handler::print_error(int error, myf errflag)
       char key[MAX_KEY_LENGTH];
       String str(key,sizeof(key),system_charset_info);
       /* Table is opened and defined at this point */
-      key_unpack(&str,table,(uint) key_nr);
+      key_unpack(&str,table,0 /* Use 0 instead of key_nr because key_nr
+                 is a key number in the child FK table, not in our 'table'. See
+		 Bug#12661768 UPDATE IGNORE CRASHES SERVER IF TABLE IS INNODB
+		 AND IT IS PARENT FOR OTHER ONE
+		 This bug gets a better fix in MySQL 5.6, but it is too risky
+		 to get that in 5.1 and 5.5 (extending the handler interface
+		 and adding new error message codes */);
       max_length= (MYSQL_ERRMSG_SIZE-
                    (uint) strlen(ER(ER_FOREIGN_DUPLICATE_KEY)));
       if (str.length() >= max_length)
@@ -2781,6 +2858,7 @@ void handler::print_error(int error, myf errflag)
   case HA_ERR_TOO_MANY_CONCURRENT_TRXS:
     textno= ER_TOO_MANY_CONCURRENT_TRXS;
     break;
+  case HA_ERR_TABLE_IN_FK_CHECK:
   default:
     {
       /* The error was "unknown" to this function.
@@ -3499,14 +3577,10 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen)
   if (!(error=index_next(buf)))
   {
     my_ptrdiff_t ptrdiff= buf - table->record[0];
-    uchar *save_record_0;
-    KEY *key_info;
-    KEY_PART_INFO *key_part;
-    KEY_PART_INFO *key_part_end;
-    LINT_INIT(save_record_0);
-    LINT_INIT(key_info);
-    LINT_INIT(key_part);
-    LINT_INIT(key_part_end);
+    uchar *UNINIT_VAR(save_record_0);
+    KEY *UNINIT_VAR(key_info);
+    KEY_PART_INFO *UNINIT_VAR(key_part);
+    KEY_PART_INFO *UNINIT_VAR(key_part_end);
 
     /*
       key_cmp_if_same() compares table->record[0] against 'key'.
@@ -4138,7 +4212,7 @@ int handler::read_multi_range_first(KEY_MULTI_RANGE **found_range_p,
 */
 int handler::read_multi_range_next(KEY_MULTI_RANGE **found_range_p)
 {
-  int result;
+  int UNINIT_VAR(result);
   DBUG_ENTER("handler::read_multi_range_next");
 
   /* We should not be called after the last call returned EOF. */
@@ -4239,7 +4313,19 @@ int handler::read_range_first(const key_range *start_key,
 		? HA_ERR_END_OF_FILE
 		: result);
 
-  DBUG_RETURN (compare_key(end_range) <= 0 ? 0 : HA_ERR_END_OF_FILE);
+  if (compare_key(end_range) <= 0)
+  {
+    DBUG_RETURN(0);
+  }
+  else
+  {
+    /*
+      The last read row does not fall in the range. So request
+      storage engine to release row lock if possible.
+    */
+    unlock_row();
+    DBUG_RETURN(HA_ERR_END_OF_FILE);
+  }
 }
 
 
@@ -4271,7 +4357,20 @@ int handler::read_range_next()
   result= index_next(table->record[0]);
   if (result)
     DBUG_RETURN(result);
-  DBUG_RETURN(compare_key(end_range) <= 0 ? 0 : HA_ERR_END_OF_FILE);
+
+  if (compare_key(end_range) <= 0)
+  {
+    DBUG_RETURN(0);
+  }
+  else
+  {
+    /*
+      The last read row does not fall in the range. So request
+      storage engine to release row lock if possible.
+    */
+    unlock_row();
+    DBUG_RETURN(HA_ERR_END_OF_FILE);
+  }
 }
 
 
@@ -4636,6 +4735,7 @@ int handler::ha_reset()
   free_io_cache(table);
   /* reset the bitmaps to point to defaults */
   table->default_column_bitmaps();
+  pushed_cond= NULL;
   DBUG_RETURN(reset());
 }
 
@@ -4652,6 +4752,8 @@ int handler::ha_write_row(uchar *buf)
     DBUG_RETURN(error);
   if (unlikely(error= binlog_log_row(table, 0, buf, log_func)))
     DBUG_RETURN(error); /* purecov: inspected */
+
+  DEBUG_SYNC_C("ha_write_row_end");
   DBUG_RETURN(0);
 }
 

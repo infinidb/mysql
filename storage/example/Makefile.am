@@ -1,4 +1,4 @@
-# Copyright (C) 2005-2006 MySQL AB
+# Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,14 +35,14 @@ noinst_HEADERS =	ha_example.h
 EXTRA_LTLIBRARIES =	ha_example.la
 pkgplugin_LTLIBRARIES =	@plugin_example_shared_target@
 ha_example_la_LDFLAGS =	-module -rpath $(pkgplugindir)
-ha_example_la_CXXFLAGS=	$(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
+ha_example_la_CXXFLAGS=	$(AM_CXXFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 ha_example_la_CFLAGS =	$(AM_CFLAGS) -DMYSQL_DYNAMIC_PLUGIN
 ha_example_la_SOURCES =	ha_example.cc
 
 
 EXTRA_LIBRARIES =	libexample.a
 noinst_LIBRARIES =	@plugin_example_static_target@
-libexample_a_CXXFLAGS =	$(AM_CFLAGS)
+libexample_a_CXXFLAGS =	$(AM_CXXFLAGS)
 libexample_a_CFLAGS =	$(AM_CFLAGS)
 libexample_a_SOURCES=	ha_example.cc
 

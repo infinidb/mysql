@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -176,6 +176,12 @@ UNIV_INTERN
 void
 recv_recovery_from_checkpoint_finish(void);
 /*======================================*/
+/********************************************************//**
+Initiates the rollback of active transactions. */
+UNIV_INTERN
+void
+recv_recovery_rollback_active(void);
+/*===============================*/
 /*******************************************************//**
 Scans log from a buffer and stores new log data to the parsing buffer.
 Parses and hashes the log records if new data found.  Unless
@@ -239,6 +245,18 @@ UNIV_INTERN
 void
 recv_sys_create(void);
 /*=================*/
+/**********************************************************//**
+Release recovery system mutexes. */
+UNIV_INTERN
+void
+recv_sys_close(void);
+/*================*/
+/********************************************************//**
+Frees the recovery system memory. */
+UNIV_INTERN
+void
+recv_sys_mem_free(void);
+/*===================*/
 /********************************************************//**
 Inits the recovery system for a recovery operation. */
 UNIV_INTERN
@@ -246,6 +264,14 @@ void
 recv_sys_init(
 /*==========*/
 	ulint	available_memory);	/*!< in: available memory in bytes */
+#ifndef UNIV_HOTBACKUP
+/********************************************************//**
+Reset the state of the recovery system variables. */
+UNIV_INTERN
+void
+recv_sys_var_init(void);
+/*===================*/
+#endif /* !UNIV_HOTBACKUP */
 /*******************************************************************//**
 Empties the hash table of stored log records, applying them to appropriate
 pages. */
@@ -342,8 +368,8 @@ typedef struct recv_addr_struct	recv_addr_t;
 struct recv_addr_struct{
 	enum recv_addr_state state;
 				/*!< recovery state of the page */
-	ulint		space;	/*!< space id */
-	ulint		page_no;/*!< page number */
+	unsigned	space:32;/*!< space id */
+	unsigned	page_no:32;/*!< page number */
 	UT_LIST_BASE_NODE_T(recv_t)
 			rec_list;/*!< list of log records for this page */
 	hash_node_t	addr_hash;/*!< hash node in the hash bucket chain */
@@ -433,6 +459,11 @@ are allowed yet: the variable name is misleading. */
 extern ibool		recv_no_ibuf_operations;
 /** TRUE when recv_init_crash_recovery() has been called. */
 extern ibool		recv_needed_recovery;
+#ifdef UNIV_DEBUG
+/** TRUE if writing to the redo log (mtr_commit) is forbidden.
+Protected by log_sys->mutex. */
+extern ibool		recv_no_log_write;
+#endif /* UNIV_DEBUG */
 
 /** TRUE if buf_page_is_corrupted() should check if the log sequence
 number (FIL_PAGE_LSN) is in the future.  Initially FALSE, and set by

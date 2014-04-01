@@ -1,4 +1,6 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* The hash functions used for saveing keys */
 /* One of key_length or key_length_offset must be given */
@@ -332,13 +335,8 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
 {
   int flag;
   size_t idx,halfbuff,hash_nr,first_index;
-  uchar *ptr_to_rec,*ptr_to_rec2;
-  HASH_LINK *data,*empty,*gpos,*gpos2,*pos;
-
-  LINT_INIT(gpos);
-  LINT_INIT(gpos2);
-  LINT_INIT(ptr_to_rec);
-  LINT_INIT(ptr_to_rec2);
+  uchar *UNINIT_VAR(ptr_to_rec),*UNINIT_VAR(ptr_to_rec2);
+  HASH_LINK *data,*empty,*UNINIT_VAR(gpos),*UNINIT_VAR(gpos2),*pos;
 
   if (HASH_UNIQUE & info->flags)
   {

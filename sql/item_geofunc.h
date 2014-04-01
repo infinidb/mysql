@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
 
 
 /* This file defines all spatial functions */
@@ -175,6 +175,22 @@ public:
     item_type=it;
   }
   String *val_str(String *);
+  void fix_length_and_dec()
+  {
+    Item_geometry_func::fix_length_and_dec();
+    for (unsigned int i= 0; i < arg_count; ++i)
+    {
+      if (args[i]->fixed && args[i]->field_type() != MYSQL_TYPE_GEOMETRY)
+      {
+        String str;
+        args[i]->print(&str, QT_ORDINARY);
+        str.append('\0');
+        my_error(ER_ILLEGAL_VALUE_FOR_TYPE, MYF(0), "non geometric",
+                 str.ptr());
+      }
+    }
+  }
+ 
   const char *func_name() const { return "multipoint"; }
 };
 

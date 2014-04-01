@@ -16,7 +16,7 @@
 #  BUG#33413 show binlog events fails if binlog has event size of close
 #            to max_allowed_packet
 
-source include/have_binlog_format_mixed_or_statement.inc;
+source include/have_binlog_format_statement.inc;
 source include/master-slave.inc;
 
 
@@ -71,3 +71,4 @@ connection master;
 drop table t2;
 sync_slave_with_master;
 remove_file $MYSQLTEST_VARDIR/tmp/bug30435_5k.txt;
+--source include/rpl_end.inc

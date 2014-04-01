@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -50,6 +50,9 @@ UNIV_INTERN sess_t*		trx_dummy_sess = NULL;
 /** Number of transactions currently allocated for MySQL: protected by
 the kernel mutex */
 UNIV_INTERN ulint	trx_n_mysql_transactions = 0;
+/* Number of transactions currently in the XA PREPARED state: protected by
+the kernel mutex */
+UNIV_INTERN ulint	trx_n_prepared = 0;
 
 /*************************************************************//**
 Set detailed error message for the transaction. */
@@ -119,7 +122,6 @@ trx_create(
 	trx->table_id = ut_dulint_zero;
 
 	trx->mysql_thd = NULL;
-	trx->mysql_query_str = NULL;
 	trx->active_trans = 0;
 	trx->duplicates = 0;
 
@@ -335,6 +337,60 @@ trx_free(
 }
 
 /********************************************************************//**
+At shutdown, frees a transaction object that is in the PREPARED state. */
+UNIV_INTERN
+void
+trx_free_prepared(
+/*==============*/
+	trx_t*	trx)	/*!< in, own: trx object */
+{
+	ut_ad(mutex_own(&kernel_mutex));
+	ut_a(trx->conc_state == TRX_PREPARED);
+	ut_a(trx->magic_n == TRX_MAGIC_N);
+
+	/* Prepared transactions are sort of active; they allow
+	ROLLBACK and COMMIT operations. Because the system does not
+	contain any other transactions than prepared transactions at
+	the shutdown stage and because a transaction cannot become
+	PREPARED while holding locks, it is safe to release the locks
+	held by PREPARED transactions here at shutdown.*/
+	lock_release_off_kernel(trx);
+
+	trx_undo_free_prepared(trx);
+
+	mutex_free(&trx->undo_mutex);
+
+	if (trx->undo_no_arr) {
+		trx_undo_arr_free(trx->undo_no_arr);
+	}
+
+	ut_a(UT_LIST_GET_LEN(trx->signals) == 0);
+	ut_a(UT_LIST_GET_LEN(trx->reply_signals) == 0);
+
+	ut_a(trx->wait_lock == NULL);
+	ut_a(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
+
+	ut_a(!trx->has_search_latch);
+
+	ut_a(trx->dict_operation_lock_mode == 0);
+
+	if (trx->lock_heap) {
+		mem_heap_free(trx->lock_heap);
+	}
+
+	if (trx->global_read_view_heap) {
+		mem_heap_free(trx->global_read_view_heap);
+	}
+
+	ut_a(ib_vector_is_empty(trx->autoinc_locks));
+	ib_vector_free(trx->autoinc_locks);
+
+	UT_LIST_REMOVE(trx_list, trx_sys->trx_list, trx);
+
+	mem_free(trx);
+}
+
+/********************************************************************//**
 Frees a transaction object for MySQL. */
 UNIV_INTERN
 void
@@ -425,6 +481,7 @@ trx_lists_init_at_db_start(void)
 	trx_undo_t*	undo;
 	trx_t*		trx;
 
+	ut_ad(mutex_own(&kernel_mutex));
 	UT_LIST_INIT(trx_sys->trx_list);
 
 	/* Look from the rollback segments if there exist undo logs for
@@ -463,6 +520,7 @@ trx_lists_init_at_db_start(void)
 					if (srv_force_recovery == 0) {
 
 						trx->conc_state = TRX_PREPARED;
+						trx_n_prepared++;
 					} else {
 						fprintf(stderr,
 							"InnoDB: Since"
@@ -541,6 +599,7 @@ trx_lists_init_at_db_start(void)
 
 							trx->conc_state
 								= TRX_PREPARED;
+							trx_n_prepared++;
 						} else {
 							fprintf(stderr,
 								"InnoDB: Since"
@@ -803,7 +862,7 @@ trx_commit_off_kernel(
 		in exactly the same order as commit lsn's, if the transactions
 		have different rollback segments. To get exactly the same
 		order we should hold the kernel mutex up to this point,
-		adding to to the contention of the kernel mutex. However, if
+		adding to the contention of the kernel mutex. However, if
 		a transaction T2 is able to see modifications made by
 		a transaction T1, T2 will always get a bigger transaction
 		number and a bigger commit lsn than T1. */
@@ -819,6 +878,11 @@ trx_commit_off_kernel(
 	ut_ad(trx->conc_state == TRX_ACTIVE
 	      || trx->conc_state == TRX_PREPARED);
 	ut_ad(mutex_own(&kernel_mutex));
+
+	if (UNIV_UNLIKELY(trx->conc_state == TRX_PREPARED)) {
+		ut_a(trx_n_prepared > 0);
+		trx_n_prepared--;
+	}
 
 	/* The following assignment makes the transaction committed in memory
 	and makes its changes to data visible to other transactions.
@@ -842,7 +906,7 @@ trx_commit_off_kernel(
 	recovery i.e.: back ground rollback thread is still active
 	then there is a chance that the rollback thread may see
 	this trx as COMMITTED_IN_MEMORY and goes adhead to clean it
-	up calling trx_cleanup_at_db_startup(). This can happen 
+	up calling trx_cleanup_at_db_startup(). This can happen
 	in the case we are committing a trx here that is left in
 	PREPARED state during the crash. Note that commit of the
 	rollback of a PREPARED trx happens in the recovery thread
@@ -939,18 +1003,19 @@ trx_commit_off_kernel(
 	trx->rseg = NULL;
 	trx->undo_no = ut_dulint_zero;
 	trx->last_sql_stat_start.least_undo_no = ut_dulint_zero;
-	trx->mysql_query_str = NULL;
 
 	ut_ad(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
 	ut_ad(UT_LIST_GET_LEN(trx->trx_locks) == 0);
 
 	UT_LIST_REMOVE(trx_list, trx_sys->trx_list, trx);
+
+	trx->error_state = DB_SUCCESS;
 }
 
 /****************************************************************//**
 Cleans up a transaction at database startup. The cleanup is needed if
 the transaction already got to the middle of a commit when the database
-crashed, andf we cannot roll it back. */
+crashed, and we cannot roll it back. */
 UNIV_INTERN
 void
 trx_cleanup_at_db_startup(
@@ -1636,9 +1701,7 @@ trx_mark_sql_stat_end(
 
 /**********************************************************************//**
 Prints info about a transaction to the given file. The caller must own the
-kernel mutex and must have called
-innobase_mysql_prepare_print_arbitrary_thd(), unless he knows that MySQL
-or InnoDB cannot meanwhile change the info printed here. */
+kernel mutex. */
 UNIV_INTERN
 void
 trx_print(
@@ -1808,7 +1871,6 @@ trx_prepare_off_kernel(
 /*===================*/
 	trx_t*	trx)	/*!< in: transaction */
 {
-	page_t*		update_hdr_page;
 	trx_rseg_t*	rseg;
 	ib_uint64_t	lsn		= 0;
 	mtr_t		mtr;
@@ -1841,7 +1903,7 @@ trx_prepare_off_kernel(
 		}
 
 		if (trx->update_undo) {
-			update_hdr_page = trx_undo_set_state_at_prepare(
+			trx_undo_set_state_at_prepare(
 				trx, trx->update_undo, &mtr);
 		}
 
@@ -1861,6 +1923,7 @@ trx_prepare_off_kernel(
 
 	/*--------------------------------------*/
 	trx->conc_state = TRX_PREPARED;
+	trx_n_prepared++;
 	/*--------------------------------------*/
 
 	if (lsn) {
@@ -2014,18 +2077,18 @@ trx_recover_for_mysql(
 /*******************************************************************//**
 This function is used to find one X/Open XA distributed transaction
 which is in the prepared state
-@return	trx or NULL */
+@return	trx or NULL; on match, the trx->xid will be invalidated */
 UNIV_INTERN
 trx_t*
 trx_get_trx_by_xid(
 /*===============*/
-	XID*	xid)	/*!< in: X/Open XA transaction identification */
+	const XID*	xid)	/*!< in: X/Open XA transaction identifier */
 {
 	trx_t*	trx;
 
 	if (xid == NULL) {
 
-		return (NULL);
+		return(NULL);
 	}
 
 	mutex_enter(&kernel_mutex);
@@ -2035,13 +2098,20 @@ trx_get_trx_by_xid(
 	while (trx) {
 		/* Compare two X/Open XA transaction id's: their
 		length should be the same and binary comparison
-		of gtrid_lenght+bqual_length bytes should be
+		of gtrid_length+bqual_length bytes should be
 		the same */
 
-		if (xid->gtrid_length == trx->xid.gtrid_length
+		if (trx->is_recovered
+		    && trx->conc_state == TRX_PREPARED
+		    && xid->gtrid_length == trx->xid.gtrid_length
 		    && xid->bqual_length == trx->xid.bqual_length
 		    && memcmp(xid->data, trx->xid.data,
 			      xid->gtrid_length + xid->bqual_length) == 0) {
+
+			/* Invalidate the XID, so that subsequent calls
+			will not find it. */
+			memset(&trx->xid, 0, sizeof(trx->xid));
+			trx->xid.formatID = -1;
 			break;
 		}
 
@@ -2050,14 +2120,5 @@ trx_get_trx_by_xid(
 
 	mutex_exit(&kernel_mutex);
 
-	if (trx) {
-		if (trx->conc_state != TRX_PREPARED) {
-
-			return(NULL);
-		}
-
-		return(trx);
-	} else {
-		return(NULL);
-	}
+	return(trx);
 }

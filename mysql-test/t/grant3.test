@@ -64,6 +64,7 @@ SELECT user, host FROM mysql.user where user = 'CUser' order by 1,2;
 SELECT user, host, db, select_priv FROM mysql.db where user = 'CUser' order by 1,2;
 
 DROP USER CUser@localhost;
+--error ER_CANNOT_USER
 DROP USER CUser@LOCALHOST;
 
 #### table grants
@@ -88,6 +89,7 @@ SELECT user, host FROM mysql.user where user = 'CUser' order by 1,2;
 SELECT user, host, db, Table_name, Table_priv, Column_priv FROM mysql.tables_priv where user = 'CUser' order by 1,2;
 
 DROP USER CUser@localhost;
+--error ER_CANNOT_USER
 DROP USER CUser@LOCALHOST;
 
 ### column grants
@@ -112,6 +114,7 @@ SELECT user, host FROM mysql.user where user = 'CUser' order by 1,2;
 SELECT user, host, db, Table_name, Table_priv, Column_priv FROM mysql.tables_priv where user = 'CUser' order by 1,2;
 
 DROP USER CUser@localhost;
+--error ER_CANNOT_USER
 DROP USER CUser@LOCALHOST;
 
 drop table t1;
@@ -131,6 +134,7 @@ flush privileges;
 SELECT user, host FROM mysql.user where user = 'CUser2' order by 1,2;
 SELECT user, host, db, select_priv FROM mysql.db where user = 'CUser2' order by 1,2;
 
+--error ER_NONEXISTING_GRANT
 REVOKE SELECT ON test.* FROM 'CUser2'@'localhost';
 flush privileges;
 
@@ -138,6 +142,7 @@ SELECT user, host FROM mysql.user where user = 'CUser2' order by 1,2;
 SELECT user, host, db, select_priv FROM mysql.db where user = 'CUser2' order by 1,2;
 
 DROP USER CUser2@localhost;
+--error ER_CANNOT_USER
 DROP USER CUser2@LOCALHOST;
 
 
@@ -163,6 +168,41 @@ connection default;
 DROP USER 'mysqltest1'@'%';
 DROP DATABASE mysqltest_1;
 
+--echo #
+--echo # Bug#41597 - After rename of user, there are additional grants
+--echo #             when grants are reapplied.
+--echo #
+
+CREATE DATABASE temp;
+CREATE TABLE temp.t1(a INT, b VARCHAR(10));
+INSERT INTO temp.t1 VALUES(1, 'name1');
+INSERT INTO temp.t1 VALUES(2, 'name2');
+INSERT INTO temp.t1 VALUES(3, 'name3');
+
+
+CREATE USER 'user1'@'%';
+RENAME USER 'user1'@'%' TO 'user2'@'%';
+--echo # Show privileges after rename and BEFORE grant
+SHOW GRANTS FOR 'user2'@'%';
+GRANT SELECT (a), INSERT (b) ON `temp`.`t1` TO 'user2'@'%';
+--echo # Show privileges after rename and grant
+SHOW GRANTS FOR 'user2'@'%';
+
+--echo # Connect as the renamed user
+connect (conn1, localhost, user2,,);
+connection conn1;
+SHOW GRANTS;
+SELECT a FROM temp.t1;
+--echo # Check for additional privileges by accessing a
+--echo # non privileged column. We shouldn't be able to 
+--echo # access this column.
+--error ER_COLUMNACCESS_DENIED_ERROR 
+SELECT b FROM temp.t1;
+disconnect conn1;
+
+connection default;
+DROP USER 'user2'@'%';
+DROP DATABASE temp;
 
 --echo End of 5.0 tests
 

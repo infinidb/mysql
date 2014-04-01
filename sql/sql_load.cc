@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* Copy data from a textfile to table */
@@ -23,6 +25,7 @@
 #include "sp_head.h"
 #include "sql_trigger.h"
 
+#include "sql_show.h"
 class READ_INFO {
   File	file;
   uchar	*buffer,			/* Buffer for read text */
@@ -83,10 +86,13 @@ static int read_sep_field(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
 			  String &enclosed, ulong skip_lines,
 			  bool ignore_check_option_errors);
 #ifndef EMBEDDED_LIBRARY
-static bool write_execute_load_query_log_event(THD *thd,
-					       bool duplicates, bool ignore,
-					       bool transactional_table,
-                                               int errcode);
+static bool write_execute_load_query_log_event(THD *thd, sql_exchange* ex,
+                                               const char* db_arg, /* table's database */
+                                               const char* table_name_arg,
+                                               enum enum_duplicates duplicates,
+                                               bool ignore,
+                                               bool transactional_table,
+                                               int errocode);
 #endif /* EMBEDDED_LIBRARY */
 
 /*
@@ -119,12 +125,13 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
   char name[FN_REFLEN];
   File file;
   TABLE *table= NULL;
-  int error;
+  int error= 0;
   String *field_term=ex->field_term,*escaped=ex->escaped;
   String *enclosed=ex->enclosed;
   bool is_fifo=0;
 #ifndef EMBEDDED_LIBRARY
   LOAD_FILE_INFO lf_info;
+  THD::killed_state killed_status;
 #endif
   char *db = table_list->db;			// This is never null
   /*
@@ -135,8 +142,15 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
   char *tdb= thd->db ? thd->db : db;		// Result is never null
   ulong skip_lines= ex->skip_lines;
   bool transactional_table;
-  THD::killed_state killed_status= THD::NOT_KILLED;
   DBUG_ENTER("mysql_load");
+
+  /*
+    Bug #34283
+    mysqlbinlog leaves tmpfile after termination if binlog contains
+    load data infile, so in mixed mode we go to row-based for
+    avoiding the problem.
+  */
+  thd->set_current_stmt_binlog_row_based_if_mixed();
 
 #ifdef EMBEDDED_LIBRARY
   read_file_from_client  = 0; //server is always in the same process 
@@ -301,58 +315,59 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
     else
     {
       (void) fn_format(name, ex->file_name, mysql_real_data_home, "",
-		       MY_RELATIVE_PATH | MY_UNPACK_FILENAME);
-#if !defined(__WIN__) && ! defined(__NETWARE__)
-      MY_STAT stat_info;
-      if (!my_stat(name,&stat_info,MYF(MY_WME)))
-	DBUG_RETURN(TRUE);
+                       MY_RELATIVE_PATH | MY_UNPACK_FILENAME |
+                       MY_RETURN_REAL_PATH);
+    }
 
-      // if we are not in slave thread, the file must be:
-      if (!thd->slave_thread &&
-	  !((stat_info.st_mode & S_IROTH) == S_IROTH &&  // readable by others
-	    (stat_info.st_mode & S_IFLNK) != S_IFLNK && // and not a symlink
-	    ((stat_info.st_mode & S_IFREG) == S_IFREG ||
-	     (stat_info.st_mode & S_IFIFO) == S_IFIFO)))
-      {
-	my_error(ER_TEXTFILE_NOT_READABLE, MYF(0), name);
-	DBUG_RETURN(TRUE);
-      }
-      if ((stat_info.st_mode & S_IFIFO) == S_IFIFO)
-	is_fifo = 1;
-#endif
-
-      if (thd->slave_thread)
-      {
+    if (thd->slave_thread)
+    {
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
-        if (strncmp(active_mi->rli.slave_patternload_file, name, 
-            active_mi->rli.slave_patternload_file_size))
-        {
-          /*
-            LOAD DATA INFILE in the slave SQL Thread can only read from 
-            --slave-load-tmpdir". This should never happen. Please, report a bug.
-           */
-
-          sql_print_error("LOAD DATA INFILE in the slave SQL Thread can only read from --slave-load-tmpdir. " \
-                          "Please, report a bug.");
-          my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--slave-load-tmpdir");
-          DBUG_RETURN(TRUE);
-        }
-#else
-        /*
-          This is impossible and should never happen.
-        */
-        DBUG_ASSERT(FALSE); 
-#endif
-      }
-      else if (opt_secure_file_priv &&
-               strncmp(opt_secure_file_priv, name, strlen(opt_secure_file_priv)))
+      if (strncmp(active_mi->rli.slave_patternload_file, name, 
+          active_mi->rli.slave_patternload_file_size))
       {
-        /* Read only allowed from within dir specified by secure_file_priv */
-        my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--secure-file-priv");
+        /*
+          LOAD DATA INFILE in the slave SQL Thread can only read from 
+          --slave-load-tmpdir". This should never happen. Please, report a bug.
+        */
+
+        sql_print_error("LOAD DATA INFILE in the slave SQL Thread can only read from --slave-load-tmpdir. " \
+                        "Please, report a bug.");
+        my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--slave-load-tmpdir");
         DBUG_RETURN(TRUE);
       }
-
+#else
+      /*
+        This is impossible and should never happen.
+      */
+      DBUG_ASSERT(FALSE); 
+#endif
     }
+    else if (!is_secure_file_path(name))
+    {
+      /* Read only allowed from within dir specified by secure_file_priv */
+      my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--secure-file-priv");
+      DBUG_RETURN(TRUE);
+    }
+
+#if !defined(__WIN__) && ! defined(__NETWARE__)
+    MY_STAT stat_info;
+    if (!my_stat(name, &stat_info, MYF(MY_WME)))
+      DBUG_RETURN(TRUE);
+
+    // if we are not in slave thread, the file must be:
+    if (!thd->slave_thread &&
+        !((stat_info.st_mode & S_IROTH) == S_IROTH &&  // readable by others
+          (stat_info.st_mode & S_IFLNK) != S_IFLNK &&  // and not a symlink
+          ((stat_info.st_mode & S_IFREG) == S_IFREG || // and a regular file
+           (stat_info.st_mode & S_IFIFO) == S_IFIFO))) // or FIFO
+    {
+      my_error(ER_TEXTFILE_NOT_READABLE, MYF(0), name);
+      DBUG_RETURN(TRUE);
+    }
+    if ((stat_info.st_mode & S_IFIFO) == S_IFIFO)
+      is_fifo= 1;
+#endif
+
     if ((file=my_open(name,O_RDONLY,MYF(MY_WME))) < 0)
       DBUG_RETURN(TRUE);
   }
@@ -452,7 +467,11 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
                     error=1;
                     thd->killed= THD::KILL_QUERY;
                   };);
-  killed_status= (error == 0)? THD::NOT_KILLED : thd->killed;
+
+#ifndef EMBEDDED_LIBRARY
+  killed_status= (error == 0) ? THD::NOT_KILLED : thd->killed;
+#endif
+
   /*
     We must invalidate the table in query cache before binlog writing and
     ha_autocommit_...
@@ -496,15 +515,19 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
 	{
           int errcode= query_error_code(thd, killed_status == THD::NOT_KILLED);
           
+          /* since there is already an error, the possible error of
+             writing binary log will be ignored */
 	  if (thd->transaction.stmt.modified_non_trans_table)
-	    write_execute_load_query_log_event(thd, handle_duplicates,
-					       ignore, transactional_table,
-                                               errcode);
+            (void) write_execute_load_query_log_event(thd, ex,
+                                                      table_list->db, 
+                                                      table_list->table_name,
+                                                      handle_duplicates, ignore,
+                                                      transactional_table,
+                                                      errcode);
 	  else
 	  {
 	    Delete_file_log_event d(thd, db, transactional_table);
-            d.flags|= LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F;
-	    mysql_bin_log.write(&d);
+	    (void) mysql_bin_log.write(&d);
 	  }
 	}
       }
@@ -530,7 +553,7 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
       after this point.
      */
     if (thd->current_stmt_binlog_row_based)
-      thd->binlog_flush_pending_rows_event(true);
+      error= thd->binlog_flush_pending_rows_event(true);
     else
     {
       /*
@@ -542,10 +565,22 @@ int mysql_load(THD *thd,sql_exchange *ex,TABLE_LIST *table_list,
       if (lf_info.wrote_create_file)
       {
         int errcode= query_error_code(thd, killed_status == THD::NOT_KILLED);
-        write_execute_load_query_log_event(thd, handle_duplicates, ignore,
-                                           transactional_table, errcode);
+        error= write_execute_load_query_log_event(thd, ex,
+                                                  table_list->db, table_list->table_name,
+                                                  handle_duplicates, ignore,
+                                                  transactional_table,
+                                                  errcode);
       }
+
+      /*
+        Flushing the IO CACHE while writing the execute load query log event
+        may result in error (for instance, because the max_binlog_size has been 
+        reached, and rotation of the binary log failed).
+      */
+      error= error || mysql_bin_log.get_log_file()->error;
     }
+    if (error)
+      goto err;
   }
 #endif /*!EMBEDDED_LIBRARY*/
 
@@ -564,19 +599,111 @@ err:
 #ifndef EMBEDDED_LIBRARY
 
 /* Not a very useful function; just to avoid duplication of code */
-static bool write_execute_load_query_log_event(THD *thd,
-					       bool duplicates, bool ignore,
-					       bool transactional_table,
+static bool write_execute_load_query_log_event(THD *thd, sql_exchange* ex,
+                                               const char* db_arg,  /* table's database */
+                                               const char* table_name_arg,
+                                               enum enum_duplicates duplicates,
+                                               bool ignore,
+                                               bool transactional_table,
                                                int errcode)
 {
+  char                *load_data_query,
+                      *end,
+                      *fname_start,
+                      *fname_end,
+                      *p= NULL;
+  size_t               pl= 0;
+  List<Item>           fv;
+  Item                *item, *val;
+  String               pfield, pfields;
+  int                  n;
+  const char          *tbl= table_name_arg;
+  const char          *tdb= (thd->db != NULL ? thd->db : db_arg);
+  String              string_buf;
+  if (!thd->db || strcmp(db_arg, thd->db))
+  {
+    /*
+      If used database differs from table's database,
+      prefix table name with database name so that it
+      becomes a FQ name.
+     */
+    string_buf.set_charset(system_charset_info);
+    append_identifier(thd, &string_buf, db_arg, strlen(db_arg));
+    string_buf.append(".");
+  }
+  append_identifier(thd, &string_buf, table_name_arg,
+                    strlen(table_name_arg));
+  tbl= string_buf.c_ptr_safe();
+  Load_log_event       lle(thd, ex, tdb, tbl, fv, duplicates,
+                           ignore, transactional_table);
+
+  /*
+    force in a LOCAL if there was one in the original.
+  */
+  if (thd->lex->local_file)
+    lle.set_fname_outside_temp_buf(ex->file_name, strlen(ex->file_name));
+
+  /*
+    prepare fields-list and SET if needed; print_query won't do that for us.
+  */
+  if (!thd->lex->field_list.is_empty())
+  {
+    List_iterator<Item>  li(thd->lex->field_list);
+
+    pfields.append(" (");
+    n= 0;
+
+    while ((item= li++))
+    {
+      if (n++)
+        pfields.append(", ");
+      if (item->name)
+        append_identifier(thd, &pfields, item->name, strlen(item->name));
+      else
+        item->print(&pfields, QT_ORDINARY);
+    }
+    pfields.append(")");
+  }
+
+  if (!thd->lex->update_list.is_empty())
+  {
+    List_iterator<Item> lu(thd->lex->update_list);
+    List_iterator<Item> lv(thd->lex->value_list);
+
+    pfields.append(" SET ");
+    n= 0;
+
+    while ((item= lu++))
+    {
+      val= lv++;
+      if (n++)
+        pfields.append(", ");
+      append_identifier(thd, &pfields, item->name, strlen(item->name));
+      pfields.append("=");
+      val->print(&pfields, QT_ORDINARY);
+    }
+  }
+
+  p= pfields.c_ptr_safe();
+  pl= strlen(p);
+
+  if (!(load_data_query= (char *)thd->alloc(lle.get_query_buffer_length() + 1 + pl)))
+    return TRUE;
+
+  lle.print_query(FALSE, (const char *) ex->cs?ex->cs->csname:NULL,
+                  load_data_query, &end,
+                  (char **)&fname_start, (char **)&fname_end);
+
+  strcpy(end, p);
+  end += pl;
+
   Execute_load_query_log_event
-    e(thd, thd->query, thd->query_length,
-      (uint) ((char*)thd->lex->fname_start - (char*)thd->query),
-      (uint) ((char*)thd->lex->fname_end - (char*)thd->query),
+    e(thd, load_data_query, end-load_data_query,
+      (uint) ((char*) fname_start - load_data_query - 1),
+      (uint) ((char*) fname_end - load_data_query),
       (duplicates == DUP_REPLACE) ? LOAD_DUP_REPLACE :
       (ignore ? LOAD_DUP_IGNORE : LOAD_DUP_ERROR),
       transactional_table, FALSE, errcode);
-  e.flags|= LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F;
   return mysql_bin_log.write(&e);
 }
 
@@ -595,12 +722,9 @@ read_fixed_length(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
   List_iterator_fast<Item> it(fields_vars);
   Item_field *sql_field;
   TABLE *table= table_list->table;
-  ulonglong id;
   bool err;
   DBUG_ENTER("read_fixed_length");
 
-  id= 0;
- 
   while (!read_info.read_fixed_length())
   {
     if (thd->killed)
@@ -726,12 +850,10 @@ read_sep_field(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
   Item *item;
   TABLE *table= table_list->table;
   uint enclosed_length;
-  ulonglong id;
   bool err;
   DBUG_ENTER("read_sep_field");
 
   enclosed_length=enclosed.length();
-  id= 0;
 
   for (;;it.rewind())
   {
@@ -820,6 +942,10 @@ read_sep_field(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
         DBUG_RETURN(1);
       }
     }
+
+    if (thd->is_error())
+      read_info.error= 1;
+
     if (read_info.error)
       break;
     if (skip_lines)
@@ -943,9 +1069,10 @@ READ_INFO::READ_INFO(File file_par, uint tot_length, CHARSET_INFO *cs,
 		     String &field_term, String &line_start, String &line_term,
 		     String &enclosed_par, int escape, bool get_it_from_net,
 		     bool is_fifo)
-  :file(file_par),escape_char(escape)
+  :file(file_par), buff_length(tot_length), escape_char(escape),
+   found_end_of_line(false), eof(false), need_end_io_cache(false),
+   error(false), line_cuted(false), found_null(false), read_charset(cs)
 {
-  read_charset= cs;
   field_term_ptr=(char*) field_term.ptr();
   field_term_length= field_term.length();
   line_term_ptr=(char*) line_term.ptr();
@@ -972,12 +1099,10 @@ READ_INFO::READ_INFO(File file_par, uint tot_length, CHARSET_INFO *cs,
     (uchar) enclosed_par[0] : INT_MAX;
   field_term_char= field_term_length ? (uchar) field_term_ptr[0] : INT_MAX;
   line_term_char= line_term_length ? (uchar) line_term_ptr[0] : INT_MAX;
-  error=eof=found_end_of_line=found_null=line_cuted=0;
-  buff_length=tot_length;
 
 
   /* Set of a stack for unget if long terminators */
-  uint length=max(field_term_length,line_term_length)+1;
+  uint length= max(cs->mbmaxlen, max(field_term_length, line_term_length)) + 1;
   set_if_bigger(length,line_start.length());
   stack=stack_pos=(int*) sql_alloc(sizeof(int)*length);
 
@@ -992,6 +1117,7 @@ READ_INFO::READ_INFO(File file_par, uint tot_length, CHARSET_INFO *cs,
 		      MYF(MY_WME)))
     {
       my_free((uchar*) buffer,MYF(0)); /* purecov: inspected */
+      buffer= NULL;
       error=1;
     }
     else
@@ -1018,13 +1144,10 @@ READ_INFO::READ_INFO(File file_par, uint tot_length, CHARSET_INFO *cs,
 
 READ_INFO::~READ_INFO()
 {
-  if (!error)
-  {
-    if (need_end_io_cache)
-      ::end_io_cache(&cache);
-    my_free((uchar*) buffer,MYF(0));
-    error=1;
-  }
+  if (need_end_io_cache)
+    ::end_io_cache(&cache);
+
+  my_free(buffer, MYF(MY_ALLOW_ZERO_PTR));
 }
 
 
@@ -1091,29 +1214,6 @@ int READ_INFO::read_field()
     while ( to < end_of_buff)
     {
       chr = GET;
-#ifdef USE_MB
-      if ((my_mbcharlen(read_charset, chr) > 1) &&
-          to+my_mbcharlen(read_charset, chr) <= end_of_buff)
-      {
-	  uchar* p = (uchar*)to;
-	  *to++ = chr;
-	  int ml = my_mbcharlen(read_charset, chr);
-	  int i;
-	  for (i=1; i<ml; i++) {
-	      chr = GET;
-	      if (chr == my_b_EOF)
-		  goto found_eof;
-	      *to++ = chr;
-	  }
-	  if (my_ismbchar(read_charset,
-                          (const char *)p,
-                          (const char *)to))
-	    continue;
-	  for (i=0; i<ml; i++)
-	    PUSH((uchar) *--to);
-	  chr = GET;
-      }
-#endif
       if (chr == my_b_EOF)
 	goto found_eof;
       if (chr == escape_char)
@@ -1197,6 +1297,39 @@ int READ_INFO::read_field()
 	  return 0;
 	}
       }
+#ifdef USE_MB
+      if (my_mbcharlen(read_charset, chr) > 1 &&
+          to + my_mbcharlen(read_charset, chr) <= end_of_buff)
+      {
+        uchar* p= (uchar*) to;
+        int ml, i;
+        *to++ = chr;
+
+        ml= my_mbcharlen(read_charset, chr);
+
+        for (i= 1; i < ml; i++) 
+        {
+          chr= GET;
+          if (chr == my_b_EOF)
+          {
+            /*
+             Need to back up the bytes already ready from illformed
+             multi-byte char 
+            */
+            to-= i;
+            goto found_eof;
+          }
+          *to++ = chr;
+        }
+        if (my_ismbchar(read_charset,
+                        (const char *)p,
+                        (const char *)to))
+          continue;
+        for (i= 0; i < ml; i++)
+          PUSH((uchar) *--to);
+        chr= GET;
+      }
+#endif
       *to++ = (uchar) chr;
     }
     /*

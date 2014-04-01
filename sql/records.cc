@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /**
@@ -57,10 +59,12 @@ void init_read_record_idx(READ_RECORD *info, THD *thd, TABLE *table,
 {
   empty_record(table);
   bzero((char*) info,sizeof(*info));
+  info->thd= thd;
   info->table= table;
   info->file=  table->file;
   info->record= table->record[0];
   info->print_error= print_error;
+  info->unlock_row= rr_unlock_row;
 
   table->status=0;			/* And it's always found */
   if (!table->file->inited)
@@ -186,11 +190,21 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
   }
   info->select=select;
   info->print_error=print_error;
+  info->unlock_row= rr_unlock_row;
   info->ignore_not_found_rows= 0;
   table->status=0;			/* And it's always found */
 
   if (select && my_b_inited(&select->file))
     tempfile= &select->file;
+  else if (select && select->quick && select->quick->clustered_pk_range())
+  {
+    /*
+      In case of QUICK_INDEX_MERGE_SELECT with clustered pk range we have to
+      use its own access method(i.e QUICK_INDEX_MERGE_SELECT::get_next()) as
+      sort file does not contain rowids which satisfy clustered pk range.
+    */
+    tempfile= 0;
+  }
   else
     tempfile= table->sort.io_cache;
   if (tempfile && my_b_inited(tempfile)) // Test if ref-records was used
@@ -292,6 +306,12 @@ void end_read_record(READ_RECORD *info)
 
 static int rr_handle_error(READ_RECORD *info, int error)
 {
+  if (info->thd->killed)
+  {
+    info->thd->send_kill_message();
+    return 1;
+  }
+
   if (error == HA_ERR_END_OF_FILE)
     error= -1;
   else
@@ -312,12 +332,7 @@ static int rr_quick(READ_RECORD *info)
   int tmp;
   while ((tmp= info->select->quick->get_next()))
   {
-    if (info->thd->killed)
-    {
-      my_error(ER_SERVER_SHUTDOWN, MYF(0));
-      return 1;
-    }
-    if (tmp != HA_ERR_RECORD_DELETED)
+    if (info->thd->killed || (tmp != HA_ERR_RECORD_DELETED))
     {
       tmp= rr_handle_error(info, tmp);
       break;
@@ -380,16 +395,11 @@ int rr_sequential(READ_RECORD *info)
   int tmp;
   while ((tmp=info->file->rnd_next(info->record)))
   {
-    if (info->thd->killed)
-    {
-      info->thd->send_kill_message();
-      return 1;
-    }
     /*
       rnd_next can return RECORD_DELETED for MyISAM when one thread is
       reading and another deleting without locks.
     */
-    if (tmp != HA_ERR_RECORD_DELETED)
+    if (info->thd->killed || (tmp != HA_ERR_RECORD_DELETED))
     {
       tmp= rr_handle_error(info, tmp);
       break;
@@ -621,7 +631,7 @@ static int rr_cmp(uchar *a,uchar *b)
   if (a[4] != b[4])
     return (int) a[4] - (int) b[4];
   if (a[5] != b[5])
-    return (int) a[1] - (int) b[5];
+    return (int) a[5] - (int) b[5];
   if (a[6] != b[6])
     return (int) a[6] - (int) b[6];
   return (int) a[7] - (int) b[7];

@@ -1206,7 +1206,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 479 "sql_yacc.yy"
+#line 646 "sql_yacc.yy"
 {
   int  num;
   ulong ulong_num;

@@ -1,4 +1,5 @@
-/* Copyright (C) 2004 MySQL AB
+/*
+   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #if defined(__GNUC__) && defined(USE_PRAGMA_IMPLEMENTATION)
 #pragma implementation
@@ -303,7 +305,6 @@ bool Instance_options::fill_log_options()
   enum { MAX_LOG_OPTION_LENGTH= 256 };
   char datadir[MAX_LOG_OPTION_LENGTH];
   char hostname[MAX_LOG_OPTION_LENGTH];
-  uint hostname_length;
   struct log_files_st
   {
     const char *name;
@@ -335,8 +336,6 @@ bool Instance_options::fill_log_options()
     strmov(hostname, "mysql");
 
   hostname[MAX_LOG_OPTION_LENGTH - 1]= 0; /* Safety */
-  hostname_length= strlen(hostname);
-
 
   for (log_files= logs_st; log_files->name; log_files++)
   {

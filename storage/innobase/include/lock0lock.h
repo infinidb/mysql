@@ -292,14 +292,15 @@ lock_sec_rec_modify_check_and_lock(
 	dict_index_t*	index,	/* in: secondary index */
 	que_thr_t*	thr);	/* in: query thread */
 /*************************************************************************
-Like the counterpart for a clustered index below, but now we read a
+Like lock_clust_rec_read_check_and_lock(), but reads a
 secondary index record. */
 
 ulint
 lock_sec_rec_read_check_and_lock(
 /*=============================*/
-				/* out: DB_SUCCESS, DB_LOCK_WAIT,
-				DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
+				/* out: DB_SUCCESS, DB_SUCCESS_LOCKED_REC,
+				DB_LOCK_WAIT, DB_DEADLOCK,
+				or DB_QUE_THR_SUSPENDED */
 	ulint		flags,	/* in: if BTR_NO_LOCKING_FLAG bit is set,
 				does nothing */
 	rec_t*		rec,	/* in: user record or page supremum record
@@ -324,8 +325,9 @@ lock on the record. */
 ulint
 lock_clust_rec_read_check_and_lock(
 /*===============================*/
-				/* out: DB_SUCCESS, DB_LOCK_WAIT,
-				DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
+				/* out: DB_SUCCESS, DB_SUCCESS_LOCKED_REC,
+				DB_LOCK_WAIT, DB_DEADLOCK,
+				or DB_QUE_THR_SUSPENDED */
 	ulint		flags,	/* in: if BTR_NO_LOCKING_FLAG bit is set,
 				does nothing */
 	rec_t*		rec,	/* in: user record or page supremum record
@@ -579,10 +581,15 @@ lock_rec_print(
 /*************************************************************************
 Prints info of locks for all transactions. */
 
-void
+ibool
 lock_print_info_summary(
 /*====================*/
-	FILE*	file);	/* in: file where to print */
+			/* out: FALSE if not able to obtain
+			kernel mutex and exits without
+			printing info */
+	FILE*	file,	/* in: file where to print */
+	ibool   nowait);/* in: whether to wait for the kernel
+			mutex */
 /*************************************************************************
 Prints info of locks for each transaction. */
 
@@ -678,6 +685,13 @@ extern lock_sys_t*	lock_sys;
 				remains set when the waiting lock is granted,
 				or if the lock is inherited to a neighboring
 				record */
+#define LOCK_CONV_BY_OTHER 4096	/* this bit is set when the lock is created
+				by other transaction */
+/* Checks if this is a waiting lock created by lock->trx itself.
+@param type_mode lock->type_mode
+@return whether it is a waiting lock belonging to lock->trx */
+#define lock_is_wait_not_by_other(type_mode) \
+	((type_mode & (LOCK_CONV_BY_OTHER | LOCK_WAIT)) == LOCK_WAIT)
 
 /* When lock bits are reset, the following flags are available: */
 #define LOCK_RELEASE_WAIT	1

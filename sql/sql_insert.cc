@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
-
-/* Copyright (C) 2013 Calpont Corp. */
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Insert of records */
 
@@ -63,6 +62,8 @@
 #include "sql_show.h"
 #include "slave.h"
 #include "rpl_mi.h"
+
+#include "debug_sync.h"
 
 #ifndef EMBEDDED_LIBRARY
 static bool delayed_get_table(THD *thd, TABLE_LIST *table_list);
@@ -142,6 +143,8 @@ error:
            view->view_db.str, view->view_name.str);
   return TRUE;
 }
+
+/* Copyright (C) 2013 Calpont Corp. */
 
 
 /*
@@ -502,6 +505,22 @@ bool open_and_lock_for_insert_delayed(THD *thd, TABLE_LIST *table_list)
   DBUG_ENTER("open_and_lock_for_insert_delayed");
 
 #ifndef EMBEDDED_LIBRARY
+  if (thd->locked_tables && thd->global_read_lock)
+  {
+    /*
+      If this connection has the global read lock, the handler thread
+      will not be able to lock the table. It will wait for the global
+      read lock to go away, but this will never happen since the
+      connection thread will be stuck waiting for the handler thread
+      to open and lock the table.
+      If we are not in locked tables mode, INSERT will seek protection
+      against the global read lock (and fail), thus we will only get
+      to this point in locked tables mode.
+    */
+    my_error(ER_CANT_UPDATE_WITH_READLOCK, MYF(0));
+    DBUG_RETURN(TRUE);
+  }
+
   if (delayed_get_table(thd, table_list))
     DBUG_RETURN(TRUE);
 
@@ -569,7 +588,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
   Name_resolution_context *context;
   Name_resolution_context_state ctx_state;
 #ifndef EMBEDDED_LIBRARY
-  char *query= thd->query;
+  char *query= thd->query();
   /*
     log_on is about delayed inserts only.
     By default, both logs are enabled (this won't cause problems if the server
@@ -616,7 +635,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
   lock_type= table_list->lock_type;
 
   thd_proc_info(thd, "init");
-  thd->used_tables=0;
+  thd->lex->used_tables=0;
   values= its++;
   value_count= values->elements;
 
@@ -764,16 +783,25 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
     }
     else
     {
-      if (thd->used_tables)			// Column used in values()
+      if (thd->lex->used_tables)		      // Column used in values()
 	restore_record(table,s->default_values);	// Get empty record
       else
       {
+        TABLE_SHARE *share= table->s;
+
         /*
           Fix delete marker. No need to restore rest of record since it will
           be overwritten by fill_record() anyway (and fill_record() does not
           use default values in this case).
         */
-	table->record[0][0]= table->s->default_values[0];
+        table->record[0][0]= share->default_values[0];
+
+        /* Fix undefined null_bits. */
+        if (share->null_bytes > 1 && share->last_null_bit_pos)
+        {
+          table->record[0][share->null_bytes - 1]= 
+            share->default_values[share->null_bytes - 1];
+        }
       }
       if (fill_record_n_invoke_before_triggers(thd, table->field, *values, 0,
                                                table->triggers,
@@ -803,7 +831,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
 #ifndef EMBEDDED_LIBRARY
     if (lock_type == TL_WRITE_DELAYED)
     {
-      LEX_STRING const st_query = { query, thd->query_length };
+      LEX_STRING const st_query = { query, thd->query_length() };
       error=write_delayed(thd, table, duplic, st_query, ignore, log_on);
       query=0;
     }
@@ -858,7 +886,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
       */
       query_cache_invalidate3(thd, table_list, 1);
     }
-    if ((changed && error <= 0) ||
+    if (error <= 0 ||
         thd->transaction.stmt.modified_non_trans_table ||
         was_insert_delayed)
     {
@@ -896,7 +924,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
 	*/
 	DBUG_ASSERT(thd->killed != THD::KILL_BAD_DATA || error > 0);
 	if (thd->binlog_query(THD::ROW_QUERY_TYPE,
-			      thd->query, thd->query_length,
+                              thd->query(), thd->query_length(),
 			      transactional_table, FALSE,
 			      errcode))
         {
@@ -1387,6 +1415,8 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
 	error= HA_ERR_FOUND_DUPP_KEY;         /* Database can't find key */
 	goto err;
       }
+      DEBUG_SYNC(thd, "write_row_replace");
+
       /* Read all columns for the row we are going to replace */
       table->use_all_columns();
       /*
@@ -1460,9 +1490,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
           table->file->adjust_next_insert_id_after_explicit_value(
             table->next_number_field->val_int());
         info->touched++;
-        if ((table->file->ha_table_flags() & HA_PARTIAL_COLUMN_READ &&
-             !bitmap_is_subset(table->write_set, table->read_set)) ||
-            compare_record(table))
+        if (!records_are_comparable(table) || compare_records(table))
         {
           if ((error=table->file->ha_update_row(table->record[1],
                                                 table->record[0])) &&
@@ -1582,6 +1610,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
   }
   else if ((error=table->file->ha_write_row(table->record[0])))
   {
+    DEBUG_SYNC(thd, "write_row_noreplace");
     if (!info->ignore ||
         table->file->is_fatal_error(error, HA_CHECK_DUP))
       goto err;
@@ -1766,7 +1795,7 @@ public:
     pthread_cond_destroy(&cond);
     pthread_cond_destroy(&cond_client);
     thd.unlink();				// Must be unlinked under lock
-    x_free(thd.query);
+    x_free(thd.query());
     thd.security_ctx->user= thd.security_ctx->host=0;
     thread_count--;
     delayed_insert_threads--;
@@ -1912,7 +1941,7 @@ bool delayed_get_table(THD *thd, TABLE_LIST *table_list)
       pthread_mutex_unlock(&LOCK_thread_count);
       di->thd.set_db(table_list->db, (uint) strlen(table_list->db));
       di->thd.set_query(my_strdup(table_list->table_name, MYF(MY_WME)), 0);
-      if (di->thd.db == NULL || di->thd.query == NULL)
+      if (di->thd.db == NULL || di->thd.query() == NULL)
       {
         /* The error is reported */
 	delete di;
@@ -1921,7 +1950,7 @@ bool delayed_get_table(THD *thd, TABLE_LIST *table_list)
       }
       di->table_list= *table_list;			// Needed to open table
       /* Replace volatile strings with local copies */
-      di->table_list.alias= di->table_list.table_name= di->thd.query;
+      di->table_list.alias= di->table_list.table_name= di->thd.query();
       di->table_list.db= di->thd.db;
       di->lock();
       pthread_mutex_lock(&di->mutex);
@@ -2276,44 +2305,9 @@ void kill_delayed_threads(void)
 }
 
 
-/*
- * Create a new delayed insert thread
-*/
-
-pthread_handler_t handle_delayed_insert(void *arg)
+static void handle_delayed_insert_impl(THD *thd, Delayed_insert *di)
 {
-  Delayed_insert *di=(Delayed_insert*) arg;
-  THD *thd= &di->thd;
-
-  pthread_detach_this_thread();
-  /* Add thread to THD list so that's it's visible in 'show processlist' */
-  pthread_mutex_lock(&LOCK_thread_count);
-  thd->thread_id= thd->variables.pseudo_thread_id= thread_id++;
-  thd->set_current_time();
-  threads.append(thd);
-  thd->killed=abort_loop ? THD::KILL_CONNECTION : THD::NOT_KILLED;
-  pthread_mutex_unlock(&LOCK_thread_count);
-
-  /*
-    Wait until the client runs into pthread_cond_wait(),
-    where we free it after the table is opened and di linked in the list.
-    If we did not wait here, the client might detect the opened table
-    before it is linked to the list. It would release LOCK_delayed_create
-    and allow another thread to create another handler for the same table,
-    since it does not find one in the list.
-  */
-  pthread_mutex_lock(&di->mutex);
-#if !defined( __WIN__) /* Win32 calls this in pthread_create */
-  if (my_thread_init())
-  {
-    /* Can't use my_error since store_globals has not yet been called */
-    thd->main_da.set_error_status(thd, ER_OUT_OF_RESOURCES,
-                                  ER(ER_OUT_OF_RESOURCES));
-    goto end;
-  }
-#endif
-
-  DBUG_ENTER("handle_delayed_insert");
+  DBUG_ENTER("handle_delayed_insert_impl");
   thd->thread_stack= (char*) &thd;
   if (init_thr_lock() || thd->store_globals())
   {
@@ -2502,6 +2496,49 @@ err:
    */
   ha_autocommit_or_rollback(thd, 1);
 
+  DBUG_VOID_RETURN;
+}
+
+
+/*
+ * Create a new delayed insert thread
+*/
+
+pthread_handler_t handle_delayed_insert(void *arg)
+{
+  Delayed_insert *di=(Delayed_insert*) arg;
+  THD *thd= &di->thd;
+
+  pthread_detach_this_thread();
+  /* Add thread to THD list so that's it's visible in 'show processlist' */
+  pthread_mutex_lock(&LOCK_thread_count);
+  thd->thread_id= thd->variables.pseudo_thread_id= thread_id++;
+  thd->set_current_time();
+  threads.append(thd);
+  thd->killed=abort_loop ? THD::KILL_CONNECTION : THD::NOT_KILLED;
+  pthread_mutex_unlock(&LOCK_thread_count);
+
+  /*
+    Wait until the client runs into pthread_cond_wait(),
+    where we free it after the table is opened and di linked in the list.
+    If we did not wait here, the client might detect the opened table
+    before it is linked to the list. It would release LOCK_delayed_create
+    and allow another thread to create another handler for the same table,
+    since it does not find one in the list.
+  */
+  pthread_mutex_lock(&di->mutex);
+#if !defined( __WIN__) /* Win32 calls this in pthread_create */
+  if (my_thread_init())
+  {
+    /* Can't use my_error since store_globals has not yet been called */
+    thd->main_da.set_error_status(thd, ER_OUT_OF_RESOURCES,
+                                  ER(ER_OUT_OF_RESOURCES));
+    goto end;
+  }
+#endif
+
+  handle_delayed_insert_impl(thd, di);
+
 #ifndef __WIN__
 end:
 #endif
@@ -2525,7 +2562,8 @@ end:
 
   my_thread_end();
   pthread_exit(0);
-  DBUG_RETURN(0);
+
+  return 0;
 }
 
 
@@ -2711,10 +2749,11 @@ bool Delayed_insert::handle_inserts(void)
         will be binlogged together as one single Table_map event and one
         single Rows event.
       */
-      thd.binlog_query(THD::ROW_QUERY_TYPE,
-                       row->query.str, row->query.length,
-                       FALSE, FALSE, errcode);
-
+      if (thd.binlog_query(THD::ROW_QUERY_TYPE,
+                           row->query.str, row->query.length,
+                           FALSE, FALSE, errcode))
+        goto err;
+      
       thd.time_zone_used = backup_time_zone_used;
       thd.variables.time_zone = backup_time_zone;
     }
@@ -2782,8 +2821,9 @@ bool Delayed_insert::handle_inserts(void)
 
     TODO: Move the logging to last in the sequence of rows.
    */
-  if (thd.current_stmt_binlog_row_based)
-    thd.binlog_flush_pending_rows_event(TRUE);
+  if (thd.current_stmt_binlog_row_based &&
+      thd.binlog_flush_pending_rows_event(TRUE))
+    goto err;
 
   if ((error=table->file->extra(HA_EXTRA_NO_CACHE)))
   {						// This shouldn't happen
@@ -2927,6 +2967,9 @@ select_insert::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
     we are fixing fields from insert list.
   */
   lex->current_select= &lex->select_lex;
+
+  /* Errors during check_insert_fields() should not be ignored. */
+  lex->current_select->no_error= FALSE;
   res= check_insert_fields(thd, table_list, *fields, values,
                            !insert_into_view, &map) ||
        setup_fields(thd, 0, values, MARK_COLUMNS_READ, 0, 0);
@@ -3124,7 +3167,7 @@ bool select_insert::send_data(List<Item> &values)
 
   thd->count_cuted_fields= CHECK_FIELD_WARN;	// Calculate cuted fields
   store_values(values);
-  thd->count_cuted_fields= CHECK_FIELD_IGNORE;
+  thd->count_cuted_fields= CHECK_FIELD_ERROR_FOR_NULL;
   if (thd->is_error())
   {
     table->auto_increment_field_not_null= FALSE;
@@ -3231,20 +3274,24 @@ bool select_insert::send_eof()
 
   /*
     Write to binlog before commiting transaction.  No statement will
-    be written by the binlog_query() below in RBR mode.  All the
+    be written by the write_to_binlog() below in RBR mode.  All the
     events are in the transaction cache and will be written when
     ha_autocommit_or_rollback() is issued below.
   */
-  if (mysql_bin_log.is_open())
+  if (mysql_bin_log.is_open() &&
+      (!error || thd->transaction.stmt.modified_non_trans_table))
   {
     int errcode= 0;
     if (!error)
       thd->clear_error();
     else
       errcode= query_error_code(thd, killed_status == THD::NOT_KILLED);
-    thd->binlog_query(THD::ROW_QUERY_TYPE,
-                      thd->query, thd->query_length,
-                      trans_table, FALSE, errcode);
+
+    if (write_to_binlog(trans_table, errcode))
+    {
+      table->file->ha_release_auto_increment();
+      DBUG_RETURN(1);
+    }
   }
   table->file->ha_release_auto_increment();
 
@@ -3313,8 +3360,8 @@ void select_insert::abort() {
         if (mysql_bin_log.is_open())
         {
           int errcode= query_error_code(thd, thd->killed == THD::NOT_KILLED);
-          thd->binlog_query(THD::ROW_QUERY_TYPE, thd->query, thd->query_length,
-                            transactional_table, FALSE, errcode);
+          /* error of writing binary log is ignored */
+          write_to_binlog(transactional_table, errcode);
         }
         if (!thd->current_stmt_binlog_row_based && !can_rollback_data())
           thd->transaction.all.modified_non_trans_table= TRUE;
@@ -3329,6 +3376,102 @@ void select_insert::abort() {
   DBUG_VOID_RETURN;
 }
 
+int select_insert::write_to_binlog(bool is_trans, int errcode)
+{
+  /* It is only for statement mode */
+  if (thd->current_stmt_binlog_row_based)
+    return 0;
+
+  return thd->binlog_query(THD::ROW_QUERY_TYPE,
+                           thd->query(), thd->query_length(),
+                           is_trans, FALSE, errcode);
+}
+
+/* Override the select_insert::write_to_binlog */
+int select_create::write_to_binlog(bool is_trans, int errcode)
+{
+  /* It is only for statement mode */
+  if (thd->current_stmt_binlog_row_based)
+    return 0;
+
+  /*
+    WL#5370 Keep the compatibility between 5.1 master and 5.5 slave.
+    Binlog a 'INSERT ... SELECT' statement only when it has the option
+    'IF NOT EXISTS' and the table already exists as a base table.
+  */
+  if ((create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS) &&
+      create_info->table_existed)
+  {
+    String query;
+    int result;
+
+    thd->binlog_start_trans_and_stmt();
+    /* Binlog the CREATE TABLE IF NOT EXISTS statement */
+    result= binlog_show_create_table(&table, 1, 0);
+    if (result)
+      return result;
+
+    uint db_len= strlen(create_table->db);
+    uint table_len= strlen(create_info->alias);
+    uint select_len= thd->query_length() - thd->lex->create_select_pos;
+    uint field_len= (table->s->fields - (field - table->field)) *
+      (MAX_FIELD_NAME + 3);
+
+    /*
+      pre-allocating memory reduces the times of reallocating memory,
+      when calling query.appen().
+      40bytes is enough for other words("INSERT IGNORE INTO", etc.).
+     */
+    if (query.real_alloc(40 + db_len + table_len + field_len + select_len))
+      return 1;
+
+    if (thd->lex->create_select_in_comment)
+      query.append(STRING_WITH_LEN("/*! "));
+    if (thd->lex->ignore)
+      query.append(STRING_WITH_LEN("INSERT IGNORE INTO "));
+    else if (thd->lex->duplicates == DUP_REPLACE)
+      query.append(STRING_WITH_LEN("REPLACE INTO "));
+    else
+      query.append(STRING_WITH_LEN("INSERT INTO "));
+
+    append_identifier(thd, &query, create_table->db, db_len);
+    query.append(STRING_WITH_LEN("."));
+    append_identifier(thd, &query, create_info->alias, table_len );
+    query.append(STRING_WITH_LEN(" "));
+
+    /*
+      The insert items.
+      Field is the the rightmost columns that the rows are inster in.
+    */
+    query.append(STRING_WITH_LEN("("));
+    for (Field **f= field ; *f ; f++)
+    {
+      if (f != field)
+        query.append(STRING_WITH_LEN(","));
+
+      append_identifier(thd, &query, (*f)->field_name,
+                        strlen((*f)->field_name));
+    }
+    query.append(STRING_WITH_LEN(") "));
+
+    /* The SELECT clause*/
+    DBUG_ASSERT(thd->lex->create_select_pos);
+    if (thd->lex->create_select_start_with_brace)
+      query.append(STRING_WITH_LEN("("));
+    if (query.append(thd->query() + thd->lex->create_select_pos, select_len))
+      return 1;
+
+    /*
+      Avoid to use thd->binlog_query() twice, otherwise it will print the unsafe
+      warning twice.
+    */
+    Query_log_event ev(thd, query.c_ptr_safe(), query.length(), is_trans,
+                       FALSE, errcode);
+    return mysql_bin_log.write(&ev);
+  }
+  else
+    return select_insert::write_to_binlog(is_trans, errcode);
+}
 
 /***************************************************************************
   CREATE TABLE (SELECT) ...
@@ -3569,7 +3712,9 @@ select_create::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
           !table->s->tmp_table &&
           !ptr->get_create_info()->table_existed)
       {
-        ptr->binlog_show_create_table(tables, count);
+        int errcode= query_error_code(thd, thd->killed == THD::NOT_KILLED);
+        if (int error= ptr->binlog_show_create_table(tables, count, errcode))
+          return error;
       }
       return 0;
     }
@@ -3598,7 +3743,7 @@ select_create::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
   DBUG_EXECUTE_IF("sleep_create_select_before_check_if_exists", my_sleep(6000000););
 
   if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
-      create_table->table->db_stat)
+      (create_table->table && create_table->table->db_stat))
   {
     /* Table already exists and was open at open_and_lock_tables() stage. */
     if (create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS)
@@ -3609,7 +3754,10 @@ select_create::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
                           ER_TABLE_EXISTS_ERROR, ER(ER_TABLE_EXISTS_ERROR),
                           create_table->table_name);
       if (thd->current_stmt_binlog_row_based)
-        binlog_show_create_table(&(create_table->table), 1);
+      {
+        int errcode= query_error_code(thd, thd->killed == THD::NOT_KILLED);
+        binlog_show_create_table(&(create_table->table), 1, errcode);
+      }
       table= create_table->table;
     }
     else
@@ -3639,7 +3787,7 @@ select_create::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
 
   if (table->s->fields < values.elements)
   {
-    my_error(ER_WRONG_VALUE_COUNT_ON_ROW, MYF(0), 1);
+    my_error(ER_WRONG_VALUE_COUNT_ON_ROW, MYF(0), 1L);
     DBUG_RETURN(-1);
   }
 
@@ -3676,11 +3824,11 @@ select_create::prepare(List<Item> &values, SELECT_LEX_UNIT *u)
   DBUG_RETURN(0);
 }
 
-void
-select_create::binlog_show_create_table(TABLE **tables, uint count)
+int
+select_create::binlog_show_create_table(TABLE **tables, uint count, int errcode)
 {
   /*
-    Note 1: In RBR mode, we generate a CREATE TABLE statement for the
+    Note 1: We generate a CREATE TABLE statement for the
     created table by calling store_create_info() (behaves as SHOW
     CREATE TABLE).  In the event of an error, nothing should be
     written to the binary log, even if the table is non-transactional;
@@ -3696,7 +3844,6 @@ select_create::binlog_show_create_table(TABLE **tables, uint count)
     schema that will do a close_thread_tables(), destroying the
     statement transaction cache.
   */
-  DBUG_ASSERT(thd->current_stmt_binlog_row_based);
   DBUG_ASSERT(tables && *tables && count > 0);
 
   char buf[2048];
@@ -3714,13 +3861,13 @@ select_create::binlog_show_create_table(TABLE **tables, uint count)
 
   if (mysql_bin_log.is_open())
   {
-    int errcode= query_error_code(thd, thd->killed == THD::NOT_KILLED);
-    thd->binlog_query(THD::STMT_QUERY_TYPE,
-                      query.ptr(), query.length(),
-                      /* is_trans */ TRUE,
-                      /* suppress_use */ FALSE,
-                      errcode);
+    result= thd->binlog_query(THD::STMT_QUERY_TYPE,
+                              query.ptr(), query.length(),
+                              /* is_trans */ TRUE,
+                              /* suppress_use */ FALSE,
+                              errcode);
   }
+  return result;
 }
 
 void select_create::store_values(List<Item> &values)
@@ -3818,7 +3965,8 @@ void select_create::abort()
   select_insert::abort();
   thd->transaction.stmt.modified_non_trans_table= FALSE;
   reenable_binlog(thd);
-  thd->binlog_flush_pending_rows_event(TRUE);
+  /* possible error of writing binary log is ignored deliberately */
+  (void)thd->binlog_flush_pending_rows_event(TRUE);
 
   if (m_plock)
   {
@@ -3829,6 +3977,17 @@ void select_create::abort()
 
   if (table)
   {
+    if (thd->lex->sql_command == SQLCOM_CREATE_TABLE &&
+        thd->current_stmt_binlog_row_based &&
+        !(thd->lex->create_info.options & HA_LEX_CREATE_TMP_TABLE) &&
+        mysql_bin_log.is_open())
+    {
+      /*
+        This should be removed after BUG#47899.
+      */
+      mysql_bin_log.reset_gathered_updates(thd);
+    }
+
     table->file->extra(HA_EXTRA_NO_IGNORE_DUP_KEY);
     table->file->extra(HA_EXTRA_WRITE_CANNOT_REPLACE);
     if (!create_info->table_existed)

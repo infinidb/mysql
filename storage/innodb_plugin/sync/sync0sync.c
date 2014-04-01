@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
@@ -18,8 +18,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -39,6 +39,7 @@ Created 9/5/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "srv0srv.h"
 #include "buf0types.h"
+#include "os0sync.h" /* for HAVE_ATOMIC_BUILTINS */
 
 /*
 	REASONS FOR IMPLEMENTING THE SPIN LOCK MUTEX
@@ -314,6 +315,15 @@ mutex_free(
 	ut_a(mutex_get_lock_word(mutex) == 0);
 	ut_a(mutex_get_waiters(mutex) == 0);
 
+#ifdef UNIV_MEM_DEBUG
+	if (mutex == &mem_hash_mutex) {
+		ut_ad(UT_LIST_GET_LEN(mutex_list) == 1);
+		ut_ad(UT_LIST_GET_FIRST(mutex_list) == &mem_hash_mutex);
+		UT_LIST_REMOVE(list, mutex_list, mutex);
+		goto func_exit;
+	}
+#endif /* UNIV_MEM_DEBUG */
+
 	if (mutex != &mutex_list_mutex
 #ifdef UNIV_SYNC_DEBUG
 	    && mutex != &sync_thread_mutex
@@ -335,7 +345,9 @@ mutex_free(
 	}
 
 	os_event_free(mutex->event);
-
+#ifdef UNIV_MEM_DEBUG
+func_exit:
+#endif /* UNIV_MEM_DEBUG */
 #if !defined(HAVE_ATOMIC_BUILTINS)
 	os_fast_mutex_free(&(mutex->os_fast_mutex));
 #endif
@@ -644,7 +656,7 @@ mutex_set_debug_info(
 	ut_ad(mutex);
 	ut_ad(file_name);
 
-	sync_thread_add_level(mutex, mutex->level);
+	sync_thread_add_level(mutex, mutex->level, FALSE);
 
 	mutex->file_name = file_name;
 	mutex->line	 = line;
@@ -849,7 +861,8 @@ sync_thread_levels_g(
 /*=================*/
 	sync_level_t*	arr,	/*!< in: pointer to level array for an OS
 				thread */
-	ulint		limit)	/*!< in: level limit */
+	ulint		limit,	/*!< in: level limit */
+	ulint		warn)	/*!< in: TRUE=display a diagnostic message */
 {
 	sync_level_t*	slot;
 	rw_lock_t*	lock;
@@ -862,6 +875,11 @@ sync_thread_levels_g(
 
 		if (slot->latch != NULL) {
 			if (slot->level <= limit) {
+
+				if (!warn) {
+
+					return(FALSE);
+				}
 
 				lock = slot->latch;
 				mutex = slot->latch;
@@ -940,12 +958,62 @@ sync_thread_levels_contain(
 }
 
 /******************************************************************//**
-Checks that the level array for the current thread is empty.
-@return	TRUE if empty except the exceptions specified below */
+Checks if the level array for the current thread contains a
+mutex or rw-latch at the specified level.
+@return	a matching latch, or NULL if not found */
 UNIV_INTERN
-ibool
-sync_thread_levels_empty_gen(
-/*=========================*/
+void*
+sync_thread_levels_contains(
+/*========================*/
+	ulint	level)			/*!< in: latching order level
+					(SYNC_DICT, ...)*/
+{
+	sync_level_t*	arr;
+	sync_thread_t*	thread_slot;
+	sync_level_t*	slot;
+	ulint		i;
+
+	if (!sync_order_checks_on) {
+
+		return(NULL);
+	}
+
+	mutex_enter(&sync_thread_mutex);
+
+	thread_slot = sync_thread_level_arrays_find_slot();
+
+	if (thread_slot == NULL) {
+
+		mutex_exit(&sync_thread_mutex);
+
+		return(NULL);
+	}
+
+	arr = thread_slot->levels;
+
+	for (i = 0; i < SYNC_THREAD_N_LEVELS; i++) {
+
+		slot = sync_thread_levels_get_nth(arr, i);
+
+		if (slot->latch != NULL && slot->level == level) {
+
+			mutex_exit(&sync_thread_mutex);
+			return(slot->latch);
+		}
+	}
+
+	mutex_exit(&sync_thread_mutex);
+
+	return(NULL);
+}
+
+/******************************************************************//**
+Checks that the level array for the current thread is empty.
+@return	a latch, or NULL if empty except the exceptions specified below */
+UNIV_INTERN
+void*
+sync_thread_levels_nonempty_gen(
+/*============================*/
 	ibool	dict_mutex_allowed)	/*!< in: TRUE if dictionary mutex is
 					allowed to be owned by the thread,
 					also purge_is_running mutex is
@@ -958,7 +1026,7 @@ sync_thread_levels_empty_gen(
 
 	if (!sync_order_checks_on) {
 
-		return(TRUE);
+		return(NULL);
 	}
 
 	mutex_enter(&sync_thread_mutex);
@@ -969,7 +1037,7 @@ sync_thread_levels_empty_gen(
 
 		mutex_exit(&sync_thread_mutex);
 
-		return(TRUE);
+		return(NULL);
 	}
 
 	arr = thread_slot->levels;
@@ -986,13 +1054,13 @@ sync_thread_levels_empty_gen(
 			mutex_exit(&sync_thread_mutex);
 			ut_error;
 
-			return(FALSE);
+			return(slot->latch);
 		}
 	}
 
 	mutex_exit(&sync_thread_mutex);
 
-	return(TRUE);
+	return(NULL);
 }
 
 /******************************************************************//**
@@ -1015,8 +1083,9 @@ void
 sync_thread_add_level(
 /*==================*/
 	void*	latch,	/*!< in: pointer to a mutex or an rw-lock */
-	ulint	level)	/*!< in: level in the latching order; if
+	ulint	level,	/*!< in: level in the latching order; if
 			SYNC_LEVEL_VARYING, nothing is done */
+	ibool	relock)	/*!< in: TRUE if re-entering an x-lock */
 {
 	sync_level_t*	array;
 	sync_level_t*	slot;
@@ -1064,6 +1133,10 @@ sync_thread_add_level(
 
 	array = thread_slot->levels;
 
+	if (relock) {
+		goto levels_ok;
+	}
+
 	/* NOTE that there is a problem with _NODE and _LEAF levels: if the
 	B-tree height changes, then a leaf can change to an internal node
 	or the other way around. We do not know at present if this can cause
@@ -1087,7 +1160,6 @@ sync_thread_add_level(
 	case SYNC_DOUBLEWRITE:
 	case SYNC_BUF_POOL:
 	case SYNC_SEARCH_SYS:
-	case SYNC_SEARCH_SYS_CONF:
 	case SYNC_TRX_LOCK_HEAP:
 	case SYNC_KERNEL:
 	case SYNC_IBUF_BITMAP_MUTEX:
@@ -1100,7 +1172,8 @@ sync_thread_add_level(
 	case SYNC_DICT_HEADER:
 	case SYNC_TRX_I_S_RWLOCK:
 	case SYNC_TRX_I_S_LAST_READ:
-		if (!sync_thread_levels_g(array, level)) {
+	case SYNC_IBUF_MUTEX:
+		if (!sync_thread_levels_g(array, level, TRUE)) {
 			fprintf(stderr,
 				"InnoDB: sync_thread_levels_g(array, %lu)"
 				" does not hold!\n", level);
@@ -1111,36 +1184,44 @@ sync_thread_add_level(
 		/* Either the thread must own the buffer pool mutex
 		(buf_pool_mutex), or it is allowed to latch only ONE
 		buffer block (block->mutex or buf_pool_zip_mutex). */
-		if (!sync_thread_levels_g(array, level)) {
-			ut_a(sync_thread_levels_g(array, level - 1));
+		if (!sync_thread_levels_g(array, level, FALSE)) {
+			ut_a(sync_thread_levels_g(array, level - 1, TRUE));
 			ut_a(sync_thread_levels_contain(array, SYNC_BUF_POOL));
 		}
 		break;
 	case SYNC_REC_LOCK:
-		ut_a((sync_thread_levels_contain(array, SYNC_KERNEL)
-		      && sync_thread_levels_g(array, SYNC_REC_LOCK - 1))
-		     || sync_thread_levels_g(array, SYNC_REC_LOCK));
+		if (sync_thread_levels_contain(array, SYNC_KERNEL)) {
+			ut_a(sync_thread_levels_g(array, SYNC_REC_LOCK - 1,
+						  TRUE));
+		} else {
+			ut_a(sync_thread_levels_g(array, SYNC_REC_LOCK, TRUE));
+		}
 		break;
 	case SYNC_IBUF_BITMAP:
 		/* Either the thread must own the master mutex to all
 		the bitmap pages, or it is allowed to latch only ONE
 		bitmap page. */
-		ut_a((sync_thread_levels_contain(array, SYNC_IBUF_BITMAP_MUTEX)
-		      && sync_thread_levels_g(array, SYNC_IBUF_BITMAP - 1))
-		     || sync_thread_levels_g(array, SYNC_IBUF_BITMAP));
+		if (sync_thread_levels_contain(array,
+					       SYNC_IBUF_BITMAP_MUTEX)) {
+			ut_a(sync_thread_levels_g(array, SYNC_IBUF_BITMAP - 1,
+						  TRUE));
+		} else {
+			ut_a(sync_thread_levels_g(array, SYNC_IBUF_BITMAP,
+						  TRUE));
+		}
 		break;
 	case SYNC_FSP_PAGE:
 		ut_a(sync_thread_levels_contain(array, SYNC_FSP));
 		break;
 	case SYNC_FSP:
 		ut_a(sync_thread_levels_contain(array, SYNC_FSP)
-		     || sync_thread_levels_g(array, SYNC_FSP));
+		     || sync_thread_levels_g(array, SYNC_FSP, TRUE));
 		break;
 	case SYNC_TRX_UNDO_PAGE:
 		ut_a(sync_thread_levels_contain(array, SYNC_TRX_UNDO)
 		     || sync_thread_levels_contain(array, SYNC_RSEG)
 		     || sync_thread_levels_contain(array, SYNC_PURGE_SYS)
-		     || sync_thread_levels_g(array, SYNC_TRX_UNDO_PAGE));
+		     || sync_thread_levels_g(array, SYNC_TRX_UNDO_PAGE, TRUE));
 		break;
 	case SYNC_RSEG_HEADER:
 		ut_a(sync_thread_levels_contain(array, SYNC_RSEG));
@@ -1152,43 +1233,59 @@ sync_thread_add_level(
 	case SYNC_TREE_NODE:
 		ut_a(sync_thread_levels_contain(array, SYNC_INDEX_TREE)
 		     || sync_thread_levels_contain(array, SYNC_DICT_OPERATION)
-		     || sync_thread_levels_g(array, SYNC_TREE_NODE - 1));
+		     || sync_thread_levels_g(array, SYNC_TREE_NODE - 1, TRUE));
 		break;
 	case SYNC_TREE_NODE_NEW:
-		ut_a(sync_thread_levels_contain(array, SYNC_FSP_PAGE)
-		     || sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
+		ut_a(sync_thread_levels_contain(array, SYNC_FSP_PAGE));
 		break;
 	case SYNC_INDEX_TREE:
-		ut_a((sync_thread_levels_contain(array, SYNC_IBUF_MUTEX)
-		      && sync_thread_levels_contain(array, SYNC_FSP)
-		      && sync_thread_levels_g(array, SYNC_FSP_PAGE - 1))
-		     || sync_thread_levels_g(array, SYNC_TREE_NODE - 1));
+		ut_a(sync_thread_levels_g(array, SYNC_TREE_NODE - 1, TRUE));
 		break;
-	case SYNC_IBUF_MUTEX:
-		ut_a(sync_thread_levels_g(array, SYNC_FSP_PAGE - 1));
+	case SYNC_IBUF_TREE_NODE:
+		ut_a(sync_thread_levels_contain(array, SYNC_IBUF_INDEX_TREE)
+		     || sync_thread_levels_g(array, SYNC_IBUF_TREE_NODE - 1,
+					     TRUE));
+		break;
+	case SYNC_IBUF_TREE_NODE_NEW:
+		/* ibuf_add_free_page() allocates new pages for the
+		change buffer while only holding the tablespace
+		x-latch. These pre-allocated new pages may only be
+		taken in use while holding ibuf_mutex, in
+		btr_page_alloc_for_ibuf(). */
+		ut_a(sync_thread_levels_contain(array, SYNC_IBUF_MUTEX)
+		     || sync_thread_levels_contain(array, SYNC_FSP));
+		break;
+	case SYNC_IBUF_INDEX_TREE:
+		if (sync_thread_levels_contain(array, SYNC_FSP)) {
+			ut_a(sync_thread_levels_g(array, level - 1, TRUE));
+		} else {
+			ut_a(sync_thread_levels_g(
+				     array, SYNC_IBUF_TREE_NODE - 1, TRUE));
+		}
 		break;
 	case SYNC_IBUF_PESS_INSERT_MUTEX:
-		ut_a(sync_thread_levels_g(array, SYNC_FSP - 1)
-		     && !sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
+		ut_a(sync_thread_levels_g(array, SYNC_FSP - 1, TRUE));
+		ut_a(!sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
 		break;
 	case SYNC_IBUF_HEADER:
-		ut_a(sync_thread_levels_g(array, SYNC_FSP - 1)
-		     && !sync_thread_levels_contain(array, SYNC_IBUF_MUTEX)
-		     && !sync_thread_levels_contain(
-			     array, SYNC_IBUF_PESS_INSERT_MUTEX));
+		ut_a(sync_thread_levels_g(array, SYNC_FSP - 1, TRUE));
+		ut_a(!sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
+		ut_a(!sync_thread_levels_contain(array,
+						 SYNC_IBUF_PESS_INSERT_MUTEX));
 		break;
 	case SYNC_DICT:
 #ifdef UNIV_DEBUG
 		ut_a(buf_debug_prints
-		     || sync_thread_levels_g(array, SYNC_DICT));
+		     || sync_thread_levels_g(array, SYNC_DICT, TRUE));
 #else /* UNIV_DEBUG */
-		ut_a(sync_thread_levels_g(array, SYNC_DICT));
+		ut_a(sync_thread_levels_g(array, SYNC_DICT, TRUE));
 #endif /* UNIV_DEBUG */
 		break;
 	default:
 		ut_error;
 	}
 
+levels_ok:
 	for (i = 0; i < SYNC_THREAD_N_LEVELS; i++) {
 
 		slot = sync_thread_levels_get_nth(array, i);
@@ -1351,6 +1448,12 @@ sync_close(void)
 	mutex = UT_LIST_GET_FIRST(mutex_list);
 
 	while (mutex) {
+#ifdef UNIV_MEM_DEBUG
+		if (mutex == &mem_hash_mutex) {
+			mutex = UT_LIST_GET_NEXT(list, mutex);
+			continue;
+		}
+#endif /* UNIV_MEM_DEBUG */
 		mutex_free(mutex);
 		mutex = UT_LIST_GET_FIRST(mutex_list);
 	}
@@ -1358,7 +1461,12 @@ sync_close(void)
 	mutex_free(&mutex_list_mutex);
 #ifdef UNIV_SYNC_DEBUG
 	mutex_free(&sync_thread_mutex);
+
+	/* Switch latching order checks on in sync0sync.c */
+	sync_order_checks_on = FALSE;
 #endif /* UNIV_SYNC_DEBUG */
+
+	sync_initialized = FALSE;	
 }
 
 /*******************************************************************//**

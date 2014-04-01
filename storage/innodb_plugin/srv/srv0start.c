@@ -1,13 +1,21 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2009, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
 briefly in the InnoDB documentation. The contributions by Google are
 incorporated with their permission, and subject to the conditions contained in
 the file COPYING.Google.
+
+Portions of this file contain modifications contributed and copyrighted
+by Percona Inc.. Those modifications are
+gratefully acknowledged and are described briefly in the InnoDB
+documentation. The contributions by Percona Inc. are incorporated with
+their permission, and subject to the conditions contained in the file
+COPYING.Percona.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -18,36 +26,10 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
-/***********************************************************************
-
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
-Copyright (c) 2009, Percona Inc.
-
-Portions of this file contain modifications contributed and copyrighted
-by Percona Inc.. Those modifications are
-gratefully acknowledged and are described briefly in the InnoDB
-documentation. The contributions by Percona Inc. are incorporated with
-their permission, and subject to the conditions contained in the file
-COPYING.Percona.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
-Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-
-***********************************************************************/
 
 /********************************************************************//**
 @file srv/srv0start.c
@@ -103,6 +85,9 @@ Created 2/16/1996 Heikki Tuuri
 # include "row0row.h"
 # include "row0mysql.h"
 # include "btr0pcur.h"
+# include "thr0loc.h"
+# include "os0sync.h" /* for INNODB_RW_LOCKS_USE_ATOMICS */
+# include "zlib.h" /* for ZLIB_VERSION */
 
 /** Log sequence number immediately after startup */
 UNIV_INTERN ib_uint64_t	srv_start_lsn;
@@ -141,9 +126,9 @@ static mutex_t		ios_mutex;
 static ulint		ios;
 
 /** io_handler_thread parameters for thread identification */
-static ulint		n[SRV_MAX_N_IO_THREADS + 5];
+static ulint		n[SRV_MAX_N_IO_THREADS + 6];
 /** io_handler_thread identifiers */
-static os_thread_id_t	thread_ids[SRV_MAX_N_IO_THREADS + 5];
+static os_thread_id_t	thread_ids[SRV_MAX_N_IO_THREADS + 6];
 
 /** We use this mutex to test the return value of pthread_mutex_trylock
    on successful locking. HP-UX does NOT return 0, though Linux et al do. */
@@ -478,7 +463,6 @@ io_handler_thread(
 			the aio array */
 {
 	ulint	segment;
-	ulint	i;
 
 	segment = *((ulint*)arg);
 
@@ -486,7 +470,7 @@ io_handler_thread(
 	fprintf(stderr, "Io handler thread %lu starts, id %lu\n", segment,
 		os_thread_pf(os_thread_get_curr_id()));
 #endif
-	for (i = 0;; i++) {
+	while (srv_shutdown_state != SRV_SHUTDOWN_EXIT_THREADS) {
 		fil_aio_wait(segment);
 
 		mutex_enter(&ios_mutex);
@@ -528,32 +512,6 @@ srv_normalize_path_for_win(
 		}
 	}
 #endif
-}
-
-/*********************************************************************//**
-Adds a slash or a backslash to the end of a string if it is missing
-and the string is not empty.
-@return	string which has the separator if the string is not empty */
-UNIV_INTERN
-char*
-srv_add_path_separator_if_needed(
-/*=============================*/
-	char*	str)	/*!< in: null-terminated character string */
-{
-	char*	out_str;
-	ulint	len	= ut_strlen(str);
-
-	if (len == 0 || str[len - 1] == SRV_PATH_SEPARATOR) {
-
-		return(str);
-	}
-
-	out_str = ut_malloc(len + 2);
-	memcpy(out_str, str, len);
-	out_str[len] = SRV_PATH_SEPARATOR;
-	out_str[len + 1] = 0;
-
-	return(out_str);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -604,19 +562,24 @@ open_or_create_log_file(
 	ulint	size;
 	ulint	size_high;
 	char	name[10000];
+	ulint	dirnamelen;
 
 	UT_NOT_USED(create_new_db);
 
 	*log_file_created = FALSE;
 
 	srv_normalize_path_for_win(srv_log_group_home_dirs[k]);
-	srv_log_group_home_dirs[k] = srv_add_path_separator_if_needed(
-		srv_log_group_home_dirs[k]);
 
-	ut_a(strlen(srv_log_group_home_dirs[k])
-	     < (sizeof name) - 10 - sizeof "ib_logfile");
-	sprintf(name, "%s%s%lu", srv_log_group_home_dirs[k],
-		"ib_logfile", (ulong) i);
+	dirnamelen = strlen(srv_log_group_home_dirs[k]);
+	ut_a(dirnamelen < (sizeof name) - 10 - sizeof "ib_logfile");
+	memcpy(name, srv_log_group_home_dirs[k], dirnamelen);
+
+	/* Add a path separator if needed. */
+	if (dirnamelen && name[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+		name[dirnamelen++] = SRV_PATH_SEPARATOR;
+	}
+
+	sprintf(name + dirnamelen, "%s%lu", "ib_logfile", (ulong) i);
 
 	files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL,
 				  OS_LOG_FILE, &ret);
@@ -779,14 +742,22 @@ open_or_create_data_files(
 	*create_new_db = FALSE;
 
 	srv_normalize_path_for_win(srv_data_home);
-	srv_data_home = srv_add_path_separator_if_needed(srv_data_home);
 
 	for (i = 0; i < srv_n_data_files; i++) {
-		srv_normalize_path_for_win(srv_data_file_names[i]);
+		ulint	dirnamelen;
 
-		ut_a(strlen(srv_data_home) + strlen(srv_data_file_names[i])
+		srv_normalize_path_for_win(srv_data_file_names[i]);
+		dirnamelen = strlen(srv_data_home);
+
+		ut_a(dirnamelen + strlen(srv_data_file_names[i])
 		     < (sizeof name) - 1);
-		sprintf(name, "%s%s", srv_data_home, srv_data_file_names[i]);
+		memcpy(name, srv_data_home, dirnamelen);
+		/* Add a path separator if needed. */
+		if (dirnamelen && name[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+			name[dirnamelen++] = SRV_PATH_SEPARATOR;
+		}
+
+		strcpy(name + dirnamelen, srv_data_file_names[i]);
 
 		if (srv_data_file_is_raw_partition[i] == 0) {
 
@@ -1008,7 +979,7 @@ skip_size_check:
 	return(DB_SUCCESS);
 }
 
-/****************************************************************//**
+/********************************************************************
 Starts InnoDB and creates a new database if database files
 are not found and the user wants.
 @return	DB_SUCCESS or error code */
@@ -1083,8 +1054,18 @@ innobase_start_or_create_for_mysql(void)
 #ifdef UNIV_IBUF_DEBUG
 	fprintf(stderr,
 		"InnoDB: !!!!!!!! UNIV_IBUF_DEBUG switched on !!!!!!!!!\n"
-		"InnoDB: Crash recovery will fail with UNIV_IBUF_DEBUG\n");
+# ifdef UNIV_IBUF_COUNT_DEBUG
+		"InnoDB: !!!!!!!! UNIV_IBUF_COUNT_DEBUG switched on !!!!!!!!!\n"
+		"InnoDB: Crash recovery will fail with UNIV_IBUF_COUNT_DEBUG\n"
+# endif
+		);
 #endif
+
+#ifdef UNIV_BLOB_DEBUG
+	fprintf(stderr,
+		"InnoDB: !!!!!!!! UNIV_BLOB_DEBUG switched on !!!!!!!!!\n"
+		"InnoDB: Server restart may fail with UNIV_BLOB_DEBUG\n");
+#endif /* UNIV_BLOB_DEBUG */
 
 #ifdef UNIV_SYNC_DEBUG
 	fprintf(stderr,
@@ -1096,6 +1077,10 @@ innobase_start_or_create_for_mysql(void)
 		"InnoDB: !!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
 #endif
 
+#ifdef UNIV_LOG_LSN_DEBUG
+	fprintf(stderr,
+		"InnoDB: !!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
+#endif /* UNIV_LOG_LSN_DEBUG */
 #ifdef UNIV_MEM_DEBUG
 	fprintf(stderr,
 		"InnoDB: !!!!!!!! UNIV_MEM_DEBUG switched on !!!!!!!!!\n");
@@ -1106,34 +1091,15 @@ innobase_start_or_create_for_mysql(void)
 			"InnoDB: The InnoDB memory heap is disabled\n");
 	}
 
-#ifdef HAVE_GCC_ATOMIC_BUILTINS
-# ifdef INNODB_RW_LOCKS_USE_ATOMICS
-	fprintf(stderr,
-		"InnoDB: Mutexes and rw_locks use GCC atomic builtins.\n");
-# else /* INNODB_RW_LOCKS_USE_ATOMICS */
-	fprintf(stderr,
-		"InnoDB: Mutexes use GCC atomic builtins, rw_locks do not.\n");
-# endif /* INNODB_RW_LOCKS_USE_ATOMICS */
-#elif defined(HAVE_SOLARIS_ATOMICS)
-# ifdef INNODB_RW_LOCKS_USE_ATOMICS
-	fprintf(stderr,
-		"InnoDB: Mutexes and rw_locks use Solaris atomic functions.\n");
-# else
-	fprintf(stderr,
-		"InnoDB: Mutexes use Solaris atomic functions.\n");
-# endif /* INNODB_RW_LOCKS_USE_ATOMICS */
-#elif HAVE_WINDOWS_ATOMICS
-# ifdef INNODB_RW_LOCKS_USE_ATOMICS
-	fprintf(stderr,
-		"InnoDB: Mutexes and rw_locks use Windows interlocked functions.\n");
-# else
-	fprintf(stderr,
-		"InnoDB: Mutexes use Windows interlocked functions.\n");
-# endif /* INNODB_RW_LOCKS_USE_ATOMICS */
-#else /* HAVE_GCC_ATOMIC_BUILTINS */
-	fprintf(stderr,
-		"InnoDB: Neither mutexes nor rw_locks use GCC atomic builtins.\n");
-#endif /* HAVE_GCC_ATOMIC_BUILTINS */
+	fputs("InnoDB: " IB_ATOMICS_STARTUP_MSG
+	      "\nInnoDB: Compressed tables use zlib " ZLIB_VERSION
+#ifdef UNIV_ZIP_DEBUG
+	      " with validation"
+#endif /* UNIV_ZIP_DEBUG */
+#ifdef UNIV_ZIP_COPY
+	      " and extra copying"
+#endif /* UNIV_ZIP_COPY */
+	      "\n" , stderr);
 
 	/* Since InnoDB does not currently clean up all its internal data
 	structures in MySQL Embedded Server Library server_end(), we
@@ -1142,7 +1108,7 @@ innobase_start_or_create_for_mysql(void)
 
 	if (srv_start_has_been_called) {
 		fprintf(stderr,
-			"InnoDB: Error:startup called second time"
+			"InnoDB: Error: startup called second time"
 			" during the process lifetime.\n"
 			"InnoDB: In the MySQL Embedded Server Library"
 			" you cannot call server_init()\n"
@@ -1326,7 +1292,24 @@ innobase_start_or_create_for_mysql(void)
 	fil_init(srv_file_per_table ? 50000 : 5000,
 		 srv_max_n_open_files);
 
+	/* Print time to initialize the buffer pool */
+	ut_print_timestamp(stderr);
+	fprintf(stderr,
+		"  InnoDB: Initializing buffer pool, size =");
+
+	if (srv_buf_pool_size >= 1024 * 1024 * 1024) {
+		fprintf(stderr,
+			" %.1fG\n",
+			((double) srv_buf_pool_size) / (1024 * 1024 * 1024));
+	} else {
+		fprintf(stderr,
+			" %.1fM\n",
+			((double) srv_buf_pool_size) / (1024 * 1024));
+	}
+
 	ret = buf_pool_init();
+
+	ut_print_timestamp(stderr);
 
 	if (ret == NULL) {
 		fprintf(stderr,
@@ -1335,6 +1318,9 @@ innobase_start_or_create_for_mysql(void)
 
 		return(DB_ERROR);
 	}
+
+	fprintf(stderr,
+		"  InnoDB: Completed initialization of buffer pool\n");
 
 #ifdef UNIV_DEBUG
 	/* We have observed deadlocks with a 5MB buffer pool but
@@ -1398,7 +1384,7 @@ innobase_start_or_create_for_mysql(void)
 		sum_of_new_sizes += srv_data_file_sizes[i];
 	}
 
-	if (sum_of_new_sizes < 640) {
+	if (sum_of_new_sizes < 10485760 / UNIV_PAGE_SIZE) {
 		fprintf(stderr,
 			"InnoDB: Error: tablespace size must be"
 			" at least 10 MB\n");
@@ -1607,6 +1593,14 @@ innobase_start_or_create_for_mysql(void)
 		dict_boot();
 		trx_sys_init_at_db_start();
 
+		/* Initialize the fsp free limit global variable in the log
+		system */
+		fsp_header_get_free_limit();
+
+		/* recv_recovery_from_checkpoint_finish needs trx lists which
+		are initialized in trx_sys_init_at_db_start(). */
+
+		recv_recovery_from_checkpoint_finish();
 		if (srv_force_recovery < SRV_FORCE_NO_IBUF_MERGE) {
 			/* The following call is necessary for the insert
 			buffer to work with multiple tablespaces. We must
@@ -1622,26 +1616,14 @@ innobase_start_or_create_for_mysql(void)
 			every table in the InnoDB data dictionary that has
 			an .ibd file.
 
-			We also determine the maximum tablespace id used.
-
-			TODO: We may have incomplete transactions in the
-			data dictionary tables. Does that harm the scanning of
-			the data dictionary below? */
+			We also determine the maximum tablespace id used. */
 
 			dict_check_tablespaces_and_store_max_id(
 				recv_needed_recovery);
 		}
 
 		srv_startup_is_before_trx_rollback_phase = FALSE;
-
-		/* Initialize the fsp free limit global variable in the log
-		system */
-		fsp_header_get_free_limit();
-
-		/* recv_recovery_from_checkpoint_finish needs trx lists which
-		are initialized in trx_sys_init_at_db_start(). */
-
-		recv_recovery_from_checkpoint_finish();
+		recv_recovery_rollback_active();
 
 		/* It is possible that file_format tag has never
 		been set. In this case we initialize it to minimum
@@ -1690,15 +1672,18 @@ innobase_start_or_create_for_mysql(void)
 	/* fprintf(stderr, "Max allowed record size %lu\n",
 	page_get_free_space_of_empty() / 2); */
 
-	/* Create the thread which watches the timeouts for lock waits
-	and prints InnoDB monitor info */
-
-	os_thread_create(&srv_lock_timeout_and_monitor_thread, NULL,
+	/* Create the thread which watches the timeouts for lock waits */
+	os_thread_create(&srv_lock_timeout_thread, NULL,
 			 thread_ids + 2 + SRV_MAX_N_IO_THREADS);
 
 	/* Create the thread which warns of long semaphore waits */
 	os_thread_create(&srv_error_monitor_thread, NULL,
 			 thread_ids + 3 + SRV_MAX_N_IO_THREADS);
+
+	/* Create the thread which prints InnoDB monitor info */
+	os_thread_create(&srv_monitor_thread, NULL,
+			 thread_ids + 4 + SRV_MAX_N_IO_THREADS);
+
 	srv_is_being_started = FALSE;
 
 	if (trx_doublewrite == NULL) {
@@ -1829,7 +1814,7 @@ innobase_start_or_create_for_mysql(void)
 		/* Actually, we did not change the undo log format between
 		4.0 and 4.1.1, and we would not need to run purge to
 		completion. Note also that the purge algorithm in 4.1.1
-		can process the the history list again even after a full
+		can process the history list again even after a full
 		purge, because our algorithm does not cut the end of the
 		history list in all cases so that it would become empty
 		after a full purge. That mean that we may purge 4.0 type
@@ -1932,7 +1917,7 @@ innobase_shutdown_for_mysql(void)
 #ifdef __NETWARE__
 	if (!panic_shutdown)
 #endif
-		logs_empty_and_mark_files_at_shutdown();
+	logs_empty_and_mark_files_at_shutdown();
 
 	if (srv_conc_n_threads != 0) {
 		fprintf(stderr,
@@ -1981,8 +1966,10 @@ innobase_shutdown_for_mysql(void)
 			/* All the threads have exited or are just exiting;
 			NOTE that the threads may not have completed their
 			exit yet. Should we use pthread_join() to make sure
-			they have exited? Now we just sleep 0.1 seconds and
-			hope that is enough! */
+			they have exited? If we did, we would have to
+			remove the pthread_detach() from
+			os_thread_exit().  Now we just sleep 0.1
+			seconds and hope that is enough! */
 
 			os_mutex_exit(os_sync_mutex);
 
@@ -2021,36 +2008,44 @@ innobase_shutdown_for_mysql(void)
 		srv_misc_tmpfile = 0;
 	}
 
+	/* This must be disabled before closing the buffer pool
+	and closing the data dictionary.  */
+	btr_search_disable();
+
+	ibuf_close();
+	log_shutdown();
+	lock_sys_close();
+	thr_local_close();
 	trx_sys_file_format_close();
+	trx_sys_close();
 
 	mutex_free(&srv_monitor_file_mutex);
 	mutex_free(&srv_dict_tmpfile_mutex);
 	mutex_free(&srv_misc_tmpfile_mutex);
+	dict_close();
+	btr_search_sys_free();
 
 	/* 3. Free all InnoDB's own mutexes and the os_fast_mutexes inside
 	them */
+	os_aio_free();
 	sync_close();
+	srv_free();
+	fil_close();
 
 	/* 4. Free the os_conc_mutex and all os_events and os_mutexes */
 
-	srv_free();
 	os_sync_free();
 
-	/* Check that all read views are closed except read view owned
-	by a purge. */
+	/* 5. Free all allocated memory */
 
-	if (UT_LIST_GET_LEN(trx_sys->view_list) > 1) {
-		fprintf(stderr,
-			"InnoDB: Error: all read views were not closed"
-			" before shutdown:\n"
-			"InnoDB: %lu read views open \n",
-			UT_LIST_GET_LEN(trx_sys->view_list) - 1);
-	}
-
-	/* 5. Free all allocated memory and the os_fast_mutex created in
-	ut0mem.c */
-
+	pars_lexer_close();
+	log_mem_free();
 	buf_pool_free();
+	mem_close();
+
+	/* ut_free_all_mem() frees all allocated memory not freed yet
+	in shutdown, and it will also free the ut_list_mutex, so it
+	should be the last one for all operation */
 	ut_free_all_mem();
 
 	if (os_thread_count != 0
@@ -2082,6 +2077,7 @@ innobase_shutdown_for_mysql(void)
 	}
 
 	srv_was_started = FALSE;
+	srv_start_has_been_called = FALSE;
 
 	return((int) DB_SUCCESS);
 }

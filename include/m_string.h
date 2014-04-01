@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* There may be prolems include all of theese. Try to test in
    configure with ones are needed? */
@@ -32,10 +34,6 @@
 
 /* need by my_vsnprintf */
 #include <stdarg.h> 
-
-#ifdef _AIX
-#undef HAVE_BCMP
-#endif
 
 /*  This is needed for the definitions of bzero... on solaris */
 #if defined(HAVE_STRINGS_H)
@@ -60,14 +58,12 @@
 /* Unixware 7 */
 #if !defined(HAVE_BFILL)
 # define bfill(A,B,C)           memset((A),(C),(B))
-# define bmove_align(A,B,C)    memcpy((A),(B),(C))
 #endif
 
-#if !defined(HAVE_BCMP)
-# define bcopy(s, d, n)		memcpy((d), (s), (n))
-# define bcmp(A,B,C)		memcmp((A),(B),(C))
-# define bzero(A,B)		memset((A),0,(B))
-# define bmove_align(A,B,C)     memcpy((A),(B),(C))
+#if !defined(bzero) && (!defined(HAVE_BZERO) || !HAVE_DECL_BZERO || defined(_AIX))
+/* See autoconf doku: "HAVE_DECL_symbol" will be defined after configure, to 0 or 1 */
+/* AIX has bzero() as a function, but the declaration prototype is strangely hidden */
+# define bzero(A,B)             memset((A),0,(B))
 #endif
 
 #if defined(__cplusplus)
@@ -81,6 +77,15 @@ extern "C" {
 extern void *(*my_str_malloc)(size_t);
 extern void (*my_str_free)(void *);
 
+#if defined(HAVE_STPCPY) && MY_GNUC_PREREQ(3, 4) && !defined(__INTEL_COMPILER)
+#define strmov(A,B) __builtin_stpcpy((A),(B))
+#elif defined(HAVE_STPCPY)
+#define strmov(A,B) stpcpy((A),(B))
+#ifndef stpcpy
+extern char *stpcpy(char *, const char *);	/* For AIX with gcc 2.95.3 */
+#endif
+#endif
+
 /* Declared in int2str() */
 extern char NEAR _dig_vec_upper[];
 extern char NEAR _dig_vec_lower[];
@@ -88,9 +93,7 @@ extern char NEAR _dig_vec_lower[];
 /* Defined in strtod.c */
 extern const double log_10[309];
 
-#ifdef BAD_STRING_COMPILER
-#define strmov(A,B)  (memccpy(A,B,0,INT_MAX)-1)
-#else
+#ifndef strmov
 #define strmov_overlapp(A,B) strmov(A,B)
 #define strmake_overlapp(A,B,C) strmake(A,B,C)
 #endif
@@ -110,22 +113,6 @@ extern const double log_10[309];
 #if !defined(bfill) && !defined(HAVE_BFILL)
 extern	void bfill(uchar *dst,size_t len,pchar fill);
 #endif
-
-#if !defined(bzero) && !defined(HAVE_BZERO)
-extern	void bzero(uchar * dst,size_t len);
-#endif
-
-#if !defined(bcmp) && !defined(HAVE_BCMP)
-extern	size_t bcmp(const uchar *s1,const uchar *s2,size_t len);
-#endif
-#ifdef HAVE_purify
-extern	size_t my_bcmp(const uchar *s1,const uchar *s2,size_t len);
-#undef bcmp
-#define bcmp(A,B,C) my_bcmp((A),(B),(C))
-#define bzero_if_purify(A,B) bzero(A,B)
-#else
-#define bzero_if_purify(A,B)
-#endif /* HAVE_purify */
 
 #ifndef bmove512
 extern	void bmove512(uchar *dst,const uchar *src,size_t len);
@@ -148,12 +135,11 @@ extern	size_t strinstr(const char *str,const char *search);
 extern  size_t r_strinstr(const char *str, size_t from, const char *search);
 extern	char *strkey(char *dst,char *head,char *tail,char *flags);
 extern	char *strmake(char *dst,const char *src,size_t length);
-#ifndef strmake_overlapp
-extern	char *strmake_overlapp(char *dst,const char *src, size_t length);
-#endif
 
 #ifndef strmov
 extern	char *strmov(char *dst,const char *src);
+#else
+extern	char *strmov_overlapp(char *dst,const char *src);
 #endif
 extern	char *strnmov(char *dst,const char *src,size_t n);
 extern	char *strsuff(const char *src,const char *suffix);
@@ -194,6 +180,15 @@ extern int is_prefix(const char *, const char *);
 /* Conversion routines */
 double my_strtod(const char *str, char **end, int *error);
 double my_atof(const char *nptr);
+
+#ifndef NOT_FIXED_DEC
+#define NOT_FIXED_DEC			31
+#endif
+
+/*
+  Max length of a floating point number.
+ */
+#define FLOATING_POINT_BUFFER (311 + NOT_FIXED_DEC)
 
 extern char *llstr(longlong value,char *buff);
 extern char *ullstr(longlong value,char *buff);

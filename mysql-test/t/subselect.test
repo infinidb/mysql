@@ -30,7 +30,7 @@ SELECT 1 IN (SELECT 1);
 SELECT 1 FROM (SELECT 1 as a) b WHERE 1 IN (SELECT (SELECT a));
 -- error ER_WRONG_USAGE
 select (SELECT 1 FROM (SELECT 1) a PROCEDURE ANALYSE(1));
--- error ER_WRONG_USAGE
+-- error ER_WRONG_PARAMETERS_TO_PROCEDURE
 SELECT 1 FROM (SELECT 1) a PROCEDURE ANALYSE((SELECT 1));
 -- error ER_BAD_FIELD_ERROR
 SELECT (SELECT 1) as a FROM (SELECT 1) b WHERE (SELECT a) IS NULL;
@@ -3368,6 +3368,120 @@ WHERE a = 230;
 
 DROP TABLE t1, st1, st2;
 
+--echo #
+--echo # Bug #48709: Assertion failed in sql_select.cc:11782: 
+--echo #   int join_read_key(JOIN_TAB*)
+--echo #
+
+CREATE TABLE t1 (pk int PRIMARY KEY, int_key int);
+INSERT INTO t1 VALUES (10,1), (14,1);
+
+CREATE TABLE t2 (pk int PRIMARY KEY, int_key int);
+INSERT INTO t2 VALUES (3,3), (5,NULL), (7,3);
+
+--echo # should have eq_ref for t1
+--replace_column 1 x 2 x 5 x 6 x 7 x 8 x 9 x 10 x
+EXPLAIN
+SELECT * FROM t2 outr
+WHERE outr.int_key NOT IN (SELECT t1.pk FROM t1, t2)  
+ORDER BY outr.pk;
+
+--echo # should not crash on debug binaries
+SELECT * FROM t2 outr
+WHERE outr.int_key NOT IN (SELECT t1.pk FROM t1, t2)  
+ORDER BY outr.pk;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#12329653 
+--echo # EXPLAIN, UNION, PREPARED STATEMENT, CRASH, SQL_FULL_GROUP_BY
+--echo #
+
+CREATE TABLE t1(a1 int);
+INSERT INTO t1 VALUES (1),(2);
+
+SELECT @@session.sql_mode INTO @old_sql_mode;
+SET SESSION sql_mode='ONLY_FULL_GROUP_BY';
+
+## First a simpler query, illustrating the transformation
+## '1 < some (...)' => '1 < max(...)'
+SELECT 1 FROM t1 WHERE 1 < SOME (SELECT a1 FROM t1);
+
+## The query which made the server crash.
+PREPARE stmt FROM 
+'SELECT 1 UNION ALL 
+SELECT 1 FROM t1
+ORDER BY
+(SELECT 1 FROM t1 AS t1_0  
+  WHERE 1 < SOME (SELECT a1 FROM t1)
+)' ;
+
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE stmt ;
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE stmt ;
+
+SET SESSION sql_mode=@old_sql_mode;
+
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#12763207 - ASSERT IN SUBSELECT::SINGLE_VALUE_TRANSFORMER
+--echo #
+
+CREATE TABLE t1(a1 int);
+INSERT INTO t1 VALUES (1),(2);
+
+CREATE TABLE t2(a1 int);
+INSERT INTO t2 VALUES (3);
+
+SELECT @@session.sql_mode INTO @old_sql_mode;
+SET SESSION sql_mode='ONLY_FULL_GROUP_BY';
+
+## All these are subject to the transformation
+## '1 < some (...)' => '1 < max(...)'
+SELECT 1 FROM t1 WHERE 1 < SOME (SELECT 2 FROM t2);
+SELECT 1 FROM t1 WHERE 1 < SOME (SELECT 2.0 FROM t2);
+SELECT 1 FROM t1 WHERE 1 < SOME (SELECT 'a' FROM t2);
+SELECT 1 FROM t1 WHERE 1 < SOME (SELECT a1 FROM t2);
+
+SET SESSION sql_mode=@old_sql_mode;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#12763207 - ASSERT IN SUBSELECT::SINGLE_VALUE_TRANSFORMER
+--echo #
+
+create table t2(i int);
+insert into t2 values(0);
+
+SELECT @@session.sql_mode INTO @old_sql_mode;
+SET SESSION sql_mode='ONLY_FULL_GROUP_BY';
+
+CREATE VIEW v1 AS  
+SELECT 'f' FROM t2 UNION SELECT 'x' FROM t2
+;
+
+CREATE TABLE t1 (
+  pk int NOT NULL,
+  col_varchar_key varchar(1) DEFAULT NULL,
+  PRIMARY KEY (pk),
+  KEY col_varchar_key (col_varchar_key)
+);
+
+SELECT t1.pk
+FROM t1
+WHERE t1.col_varchar_key < ALL ( SELECT * FROM v1 )
+;
+
+SET SESSION sql_mode=@old_sql_mode;
+
+drop table t2, t1;
+drop view v1;
+
 --echo End of 5.0 tests.
 
 #
@@ -3544,4 +3658,181 @@ where v in(select v
            where t1.g=t2.g) is unknown;
 drop table t1, t2;
 
+#
+# Bug #31157: Crash when select+order by the avg of some field within the
+# group by
+#
+CREATE TABLE t1 (a ENUM('rainbow'));
+INSERT INTO t1 VALUES (),(),(),(),();
+SELECT 1 FROM t1 GROUP BY (SELECT 1 FROM t1 ORDER BY AVG(LAST_INSERT_ID()));
+DROP TABLE t1;
+CREATE TABLE t1 (a LONGBLOB);
+INSERT INTO t1 SET a = 'aaaa';
+INSERT INTO t1 SET a = 'aaaa';
+SELECT 1 FROM t1 GROUP BY
+  (SELECT LAST_INSERT_ID() FROM t1 ORDER BY MIN(a) ASC LIMIT 1);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #49512 : subquery with aggregate function crash 
+--echo #   subselect_single_select_engine::exec()
+
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES();
+
+--echo # should not crash
+SELECT 1 FROM t1 WHERE a <> SOME
+(
+ SELECT MAX((SELECT a FROM t1 LIMIT 1)) AS d
+ FROM t1,t1 a
+);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #45989 take 2 : memory leak after explain encounters an 
+--echo # error in the query
+--echo #
+
+CREATE TABLE t1(a LONGTEXT);
+INSERT INTO t1 VALUES (repeat('a',@@global.max_allowed_packet));
+INSERT INTO t1 VALUES (repeat('b',@@global.max_allowed_packet));
+
+--error ER_BAD_FIELD_ERROR
+EXPLAIN EXTENDED SELECT DISTINCT 1 FROM t1,
+(SELECT DISTINCTROW a AS away FROM t1 GROUP BY a WITH ROLLUP) AS d1  
+WHERE t1.a = d1.a;
+
+DROP TABLE t1;
+
+
 --echo End of 5.1 tests.
+
+#
+# Bug #47904 Incorrect results w/ table subquery, derived SQs, and LEFT JOIN on index
+#
+
+--echo Set up test tables.
+CREATE TABLE t1 (
+	t1_id INT UNSIGNED,
+
+	PRIMARY KEY(t1_id)
+) Engine=MyISAM;
+
+INSERT INTO t1 (t1_id) VALUES (1), (2), (3), (4), (5);
+
+CREATE TABLE t2 SELECT * FROM t1;
+	
+CREATE TABLE t3 (
+	t3_id INT UNSIGNED AUTO_INCREMENT,
+	t1_id INT UNSIGNED,
+	amount DECIMAL(16,2),
+
+	PRIMARY KEY(t3_id),
+	KEY(t1_id)
+) Engine=MyISAM;
+
+INSERT INTO t3 (t1_id, t3_id, amount) 
+        VALUES (1, 1, 100.00), (2, 2, 200.00), (4, 4, 400.00);
+
+--echo This is the 'inner query' running by itself.
+--echo Produces correct results.
+SELECT
+	t1.t1_id,
+	IFNULL((SELECT SUM(amount) FROM t3 WHERE t3.t1_id=t1.t1_id), 0) AS total_amount
+FROM
+	t1
+	LEFT JOIN t2 ON t2.t1_id=t1.t1_id
+GROUP BY
+	t1.t1_id
+;
+
+--echo SELECT * FROM (the same inner query)
+--echo Produces correct results.
+SELECT * FROM (
+SELECT
+	t1.t1_id,
+	IFNULL((SELECT SUM(amount) FROM t3 WHERE t3.t1_id=t1.t1_id), 0) AS total_amount
+FROM
+	t1
+	LEFT JOIN t2 ON t2.t1_id=t1.t1_id
+GROUP BY
+	t1.t1_id
+) AS t;
+
+--echo Now make t2.t1_id part of a key.
+ALTER TABLE t2 ADD PRIMARY KEY(t1_id);
+
+--echo Same inner query by itself.
+--echo Still correct results.
+SELECT
+	t1.t1_id,
+	IFNULL((SELECT SUM(amount) FROM t3 WHERE t3.t1_id=t1.t1_id), 0) AS total_amount
+FROM
+	t1
+	LEFT JOIN t2 ON t2.t1_id=t1.t1_id
+GROUP BY
+	t1.t1_id;
+
+--echo SELECT * FROM (the same inner query), now with indexes on the LEFT JOIN
+SELECT * FROM (
+SELECT
+	t1.t1_id,
+	IFNULL((SELECT SUM(amount) FROM t3 WHERE t3.t1_id=t1.t1_id), 0) AS total_amount
+FROM
+	t1
+	LEFT JOIN t2 ON t2.t1_id=t1.t1_id
+GROUP BY
+	t1.t1_id
+) AS t;
+
+
+DROP TABLE t3;
+DROP TABLE t2;
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug #52711: Segfault when doing EXPLAIN SELECT with 
+--echo #  union...order by (select... where...)
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(10), FULLTEXT KEY a (a));
+INSERT INTO t1 VALUES (1),(2);
+CREATE TABLE t2 (b INT);
+INSERT INTO t2 VALUES (1),(2);
+
+--echo # Should not crash
+--disable_result_log
+EXPLAIN
+SELECT * FROM t2 UNION SELECT * FROM t2
+  ORDER BY (SELECT * FROM t1 WHERE MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE));
+
+--echo # Should not crash
+SELECT * FROM t2 UNION SELECT * FROM t2
+  ORDER BY (SELECT * FROM t1 WHERE MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE));
+DROP TABLE t1,t2;
+--enable_result_log
+
+--echo End of 5.1 tests
+
+--echo #
+--echo # Bug #11765713 58705:
+--echo # OPTIMIZER LET ENGINE DEPEND ON UNINITIALIZED VALUES
+--echo # CREATED BY OPT_SUM_QUERY
+--echo #
+
+CREATE TABLE t1(a INT NOT NULL, KEY (a));
+INSERT INTO t1 VALUES (0), (1);
+
+--error ER_SUBQUERY_NO_1_ROW
+SELECT 1 as foo FROM t1 WHERE a < SOME
+  (SELECT a FROM t1 WHERE a <=>
+    (SELECT a FROM t1)
+  );
+
+SELECT 1 as foo FROM t1 WHERE a < SOME
+  (SELECT a FROM t1 WHERE a <=>
+    (SELECT a FROM t1 where a is null)
+  ); 
+
+DROP TABLE t1;

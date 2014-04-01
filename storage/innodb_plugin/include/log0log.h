@@ -1,23 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
-
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
-
-*****************************************************************************/
-/*****************************************************************************
-
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2010, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2009, Google Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
@@ -35,8 +18,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
 
 *****************************************************************************/
 
@@ -57,6 +40,9 @@ Created 12/9/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "sync0rw.h"
 #endif /* !UNIV_HOTBACKUP */
+
+/* Type used for all log sequence number storage and arithmetics */
+typedef ib_uint64_t		lsn_t;
 
 /** Redo log buffer */
 typedef struct log_struct	log_t;
@@ -118,10 +104,9 @@ UNIV_INLINE
 ib_uint64_t
 log_reserve_and_write_fast(
 /*=======================*/
-	byte*		str,	/*!< in: string */
+	const void*	str,	/*!< in: string */
 	ulint		len,	/*!< in: string length */
-	ib_uint64_t*	start_lsn,/*!< out: start lsn of the log record */
-	ibool*		success);/*!< out: TRUE if success */
+	ib_uint64_t*	start_lsn);/*!< out: start lsn of the log record */
 /***********************************************************************//**
 Releases the log mutex. */
 UNIV_INLINE
@@ -283,7 +268,7 @@ log_make_checkpoint_at(
 					later lsn, if IB_ULONGLONG_MAX, makes
 					a checkpoint at the latest lsn */
 	ibool		write_always);	/*!< in: the function normally checks if
-					the the new checkpoint would have a
+					the new checkpoint would have a
 					greater lsn than the previous one: if
 					not, then no physical write is done;
 					by setting this parameter TRUE, a
@@ -573,6 +558,18 @@ UNIV_INTERN
 void
 log_refresh_stats(void);
 /*===================*/
+/**********************************************************
+Shutdown the log system but do not release all the memory. */
+UNIV_INTERN
+void
+log_shutdown(void);
+/*==============*/
+/**********************************************************
+Free the log system data structures. */
+UNIV_INTERN
+void
+log_mem_free(void);
+/*==============*/
 
 extern log_t*	log_sys;
 
@@ -585,7 +582,7 @@ extern log_t*	log_sys;
 #define LOG_RECOVER	98887331
 
 /* The counting of lsn's starts from this value: this must be non-zero */
-#define LOG_START_LSN	((ib_uint64_t) (16 * OS_FILE_LOG_BLOCK_SIZE))
+#define LOG_START_LSN		((ib_uint64_t) (16 * OS_FILE_LOG_BLOCK_SIZE))
 
 #define LOG_BUFFER_SIZE		(srv_log_buffer_size * UNIV_PAGE_SIZE)
 #define LOG_ARCHIVE_BUF_SIZE	(srv_log_buffer_size * UNIV_PAGE_SIZE / 4)
@@ -722,9 +719,12 @@ struct log_group_struct{
 	ulint		lsn_offset;	/*!< the offset of the above lsn */
 	ulint		n_pending_writes;/*!< number of currently pending flush
 					writes for this log group */
+	byte**		file_header_bufs_ptr;/*!< unaligned buffers */
 	byte**		file_header_bufs;/*!< buffers for each file
 					header in the group */
+#ifdef UNIV_LOG_ARCHIVE
 	/*-----------------------------*/
+	byte**		archive_file_header_bufs_ptr;/*!< unaligned buffers */
 	byte**		archive_file_header_bufs;/*!< buffers for each file
 					header in the group */
 	ulint		archive_space_id;/*!< file space which
@@ -743,10 +743,12 @@ struct log_group_struct{
 					completion function then sets the new
 					value to ..._file_no */
 	ulint		next_archived_offset; /*!< like the preceding field */
+#endif /* UNIV_LOG_ARCHIVE */
 	/*-----------------------------*/
 	ib_uint64_t	scanned_lsn;	/*!< used only in recovery: recovery scan
 					succeeded up to this lsn in this log
 					group */
+	byte*		checkpoint_buf_ptr;/*!< unaligned checkpoint header */
 	byte*		checkpoint_buf;	/*!< checkpoint header is written from
 					this buffer to the group */
 	UT_LIST_NODE_T(log_group_t)
@@ -764,6 +766,7 @@ struct log_struct{
 #ifndef UNIV_HOTBACKUP
 	mutex_t		mutex;		/*!< mutex protecting the log */
 #endif /* !UNIV_HOTBACKUP */
+	byte*		buf_ptr;	/* unaligned log buffer */
 	byte*		buf;		/*!< log buffer */
 	ulint		buf_size;	/*!< log buffer size in bytes */
 	ulint		max_buf_free;	/*!< recommended maximum value of
@@ -808,7 +811,17 @@ struct log_struct{
 					written to some log group; for this to
 					be advanced, it is enough that the
 					write i/o has been completed for all
-					log groups */
+					log groups.
+					Note that since InnoDB currently
+					has only one log group therefore
+					this value is redundant. Also it
+					is possible that this value
+					falls behind the
+					flushed_to_disk_lsn transiently.
+					It is appropriate to use either
+					flushed_to_disk_lsn or
+					write_lsn which are always
+					up-to-date and accurate. */
 	ib_uint64_t	write_lsn;	/*!< end lsn for the current running
 					write */
 	ulint		write_end_offset;/*!< the data in buffer has
@@ -900,6 +913,7 @@ struct log_struct{
 					should wait for this without owning
 					the log mutex */
 #endif /* !UNIV_HOTBACKUP */
+	byte*		checkpoint_buf_ptr;/* unaligned checkpoint header */
 	byte*		checkpoint_buf;	/*!< checkpoint header is read to this
 					buffer */
 	/* @} */

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2003 MySQL AB
+/*
+   Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   This file is included by both libmysql.c (the MySQL client C API)
@@ -389,7 +391,7 @@ HANDLE create_named_pipe(MYSQL *mysql, uint connect_timeout, char **arg_host,
 			    0,
 			    NULL,
 			    OPEN_EXISTING,
-			    0,
+			    FILE_FLAG_OVERLAPPED,
 			    NULL )) != INVALID_HANDLE_VALUE)
       break;
     if (GetLastError() != ERROR_PIPE_BUSY)
@@ -623,7 +625,7 @@ HANDLE create_shared_memory(MYSQL *mysql,NET *net, uint connect_timeout)
 err2:
   if (error_allow == 0)
   {
-    net->vio= vio_new_win32shared_memory(net,handle_file_map,handle_map,
+    net->vio= vio_new_win32shared_memory(handle_file_map,handle_map,
                                          event_server_wrote,
                                          event_server_read,event_client_wrote,
                                          event_client_read,event_conn_closed);
@@ -1266,7 +1268,7 @@ static void cli_fetch_lengths(ulong *to, MYSQL_ROW column,
 ***************************************************************************/
 
 MYSQL_FIELD *
-unpack_fields(MYSQL_DATA *data,MEM_ROOT *alloc,uint fields,
+unpack_fields(MYSQL *mysql, MYSQL_DATA *data,MEM_ROOT *alloc,uint fields,
 	      my_bool default_value, uint server_capabilities)
 {
   MYSQL_ROWS	*row;
@@ -1279,6 +1281,7 @@ unpack_fields(MYSQL_DATA *data,MEM_ROOT *alloc,uint fields,
   if (!result)
   {
     free_rows(data);				/* Free old data */
+    set_mysql_error(mysql, CR_OUT_OF_MEMORY, unknown_sqlstate);
     DBUG_RETURN(0);
   }
   bzero((char*) field, (uint) sizeof(MYSQL_FIELD)*fields);
@@ -1306,6 +1309,14 @@ unpack_fields(MYSQL_DATA *data,MEM_ROOT *alloc,uint fields,
       field->org_name_length=	lengths[5];
 
       /* Unpack fixed length parts */
+      if (lengths[6] != 12)
+      {
+        /* malformed packet. signal an error. */
+        free_rows(data);			/* Free old data */
+        set_mysql_error(mysql, CR_MALFORMED_PACKET, unknown_sqlstate);
+        DBUG_RETURN(0);
+      }
+
       pos= (uchar*) row->data[6];
       field->charsetnr= uint2korr(pos);
       field->length=	(uint) uint4korr(pos+2);
@@ -2028,7 +2039,7 @@ CLI_MYSQL_REAL_CONNECT(MYSQL *mysql,const char *host, const char *user,
     }
     else
     {
-      net->vio=vio_new_win32pipe(hPipe);
+      net->vio= vio_new_win32pipe(hPipe);
       my_snprintf(host_info=buff, sizeof(buff)-1,
                   ER(CR_NAMEDPIPE_CONNECTION), unix_socket);
     }
@@ -2455,6 +2466,11 @@ CLI_MYSQL_REAL_CONNECT(MYSQL *mysql,const char *host, const char *user,
     goto error;
   }
 
+  /*
+     Using init_commands is not supported when connecting from within the
+     server.
+  */
+#ifndef MYSQL_SERVER
   if (mysql->options.init_commands)
   {
     DYNAMIC_ARRAY *init_commands= mysql->options.init_commands;
@@ -2466,18 +2482,26 @@ CLI_MYSQL_REAL_CONNECT(MYSQL *mysql,const char *host, const char *user,
 
     for (; ptr < end_command; ptr++)
     {
-      MYSQL_RES *res;
+      int status;
+
       if (mysql_real_query(mysql,*ptr, (ulong) strlen(*ptr)))
 	goto error;
-      if (mysql->fields)
-      {
-	if (!(res= cli_use_result(mysql)))
-	  goto error;
-	mysql_free_result(res);
-      }
+
+      do {
+        if (mysql->fields)
+        {
+          MYSQL_RES *res;
+          if (!(res= cli_use_result(mysql)))
+            goto error;
+          mysql_free_result(res);
+        }
+        if ((status= mysql_next_result(mysql)) > 0)
+          goto error;
+      } while (status == 0);
     }
     mysql->reconnect=reconnect;
   }
+#endif
 
 #ifndef TO_BE_DELETED
   if (mysql->options.rpl_probe && mysql_rpl_probe(mysql))
@@ -2853,7 +2877,7 @@ get_info:
 
   if (!(fields=cli_read_rows(mysql,(MYSQL_FIELD*)0, protocol_41(mysql) ? 7:5)))
     DBUG_RETURN(1);
-  if (!(mysql->fields=unpack_fields(fields,&mysql->field_alloc,
+  if (!(mysql->fields=unpack_fields(mysql, fields,&mysql->field_alloc,
 				    (uint) field_count,0,
 				    mysql->server_capabilities)))
     DBUG_RETURN(1);
@@ -3143,6 +3167,7 @@ mysql_options(MYSQL *mysql,enum mysql_option option, const void *arg)
     mysql->options.methods_to_use= option;
     break;
   case MYSQL_SET_CLIENT_IP:
+    my_free(mysql->options.client_ip,MYF(MY_ALLOW_ZERO_PTR));
     mysql->options.client_ip= my_strdup(arg, MYF(MY_WME));
     break;
   case MYSQL_SECURE_AUTH:

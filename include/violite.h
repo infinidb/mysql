@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
  * Vio Lite.
@@ -44,7 +46,7 @@ enum enum_vio_type
 Vio*	vio_new(my_socket sd, enum enum_vio_type type, uint flags);
 #ifdef __WIN__
 Vio* vio_new_win32pipe(HANDLE hPipe);
-Vio* vio_new_win32shared_memory(NET *net,HANDLE handle_file_map,
+Vio* vio_new_win32shared_memory(HANDLE handle_file_map,
                                 HANDLE handle_map,
                                 HANDLE event_server_wrote,
                                 HANDLE event_server_read,
@@ -57,6 +59,9 @@ int vio_close_pipe(Vio * vio);
 #else
 #define HANDLE void *
 #endif /* __WIN__ */
+
+/* backport from 5.6 where it is part of PSI, not vio_*() */
+int	mysql_socket_shutdown(my_socket mysql_socket, int how);
 
 void	vio_delete(Vio* vio);
 int	vio_close(Vio* vio);
@@ -221,7 +226,11 @@ struct st_vio
   HANDLE  event_conn_closed;
   size_t  shared_memory_remain;
   char    *shared_memory_pos;
-  NET     *net;
 #endif /* HAVE_SMEM */
+#ifdef _WIN32
+  OVERLAPPED pipe_overlapped;
+  DWORD read_timeout_ms;
+  DWORD write_timeout_ms;
+#endif
 };
 #endif /* vio_violite_h_ */

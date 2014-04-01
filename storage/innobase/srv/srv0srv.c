@@ -48,6 +48,10 @@ Created 10/8/1995 Heikki Tuuri
 #include "srv0start.h"
 #include "row0mysql.h"
 #include "ha_prototypes.h"
+#include "read0read.h"
+
+#include "m_string.h" /* for my_sys.h */
+#include "my_sys.h" /* DEBUG_SYNC_C */
 
 /* This is set to TRUE if the MySQL user has set it in MySQL; currently
 affects only FOREIGN KEY definition parsing */
@@ -64,7 +68,8 @@ ulint	srv_fatal_semaphore_wait_threshold = 600;
 in microseconds, in order to reduce the lagging of the purge thread. */
 ulint	srv_dml_needed_delay = 0;
 
-ibool	srv_lock_timeout_and_monitor_active = FALSE;
+ibool	srv_lock_timeout_active = FALSE;
+ibool	srv_monitor_active = FALSE;
 ibool	srv_error_monitor_active = FALSE;
 
 const char*	srv_main_thread_op_info = "";
@@ -121,6 +126,16 @@ ulint	srv_n_log_files		= ULINT_MAX;
 ulint	srv_log_file_size	= ULINT_MAX;	/* size in database pages */
 ulint	srv_log_buffer_size	= ULINT_MAX;	/* size in database pages */
 ulong	srv_flush_log_at_trx_commit = 1;
+
+/* Maximum number of times allowed to conditionally acquire
+mutex before switching to blocking wait on the mutex */
+#define MAX_MUTEX_NOWAIT	20
+
+/* Check whether the number of failed nonblocking mutex
+acquisition attempts exceeds maximum allowed value. If so,
+srv_printf_innodb_monitor() will request mutex acquisition
+with mutex_enter(), which will wait until it gets the mutex. */
+#define MUTEX_NOWAIT(mutex_skipped)	((mutex_skipped) < MAX_MUTEX_NOWAIT)
 
 byte	srv_latin1_ordering[256]	/* The sort order table of the latin1
 					character set. The following table is
@@ -206,6 +221,11 @@ ulong	srv_max_buf_pool_modified_pct	= 90;
 
 /* variable counts amount of data read in total (in bytes) */
 ulint srv_data_read = 0;
+
+/* Internal setting for "innodb_stats_method". Decides how InnoDB treats
+NULL value when collecting statistics. By default, it is set to
+SRV_STATS_NULLS_EQUAL(0), ie. all NULL value are treated equal */
+ulong srv_innodb_stats_method = SRV_STATS_NULLS_EQUAL;
 
 /* here we count the amount of data written in total (in bytes) */
 ulint srv_data_written = 0;
@@ -1419,6 +1439,10 @@ srv_suspend_mysql_thread(
 
 	trx = thr_get_trx(thr);
 
+	if (trx->mysql_thd != 0) {
+		DEBUG_SYNC_C("srv_suspend_mysql_thread_enter");
+	}
+
 	os_event_set(srv_lock_timeout_thread_event);
 
 	mutex_enter(&kernel_mutex);
@@ -1548,6 +1572,11 @@ srv_suspend_mysql_thread(
 
 		trx->error_state = DB_LOCK_WAIT_TIMEOUT;
 	}
+
+	if (trx_is_interrupted(trx)) {
+
+		trx->error_state = DB_INTERRUPTED;
+	}
 #else /* UNIV_HOTBACKUP */
 	/* This function depends on MySQL code that is not included in
 	InnoDB Hot Backup builds.  Besides, this function should never
@@ -1626,10 +1655,13 @@ srv_refresh_innodb_monitor_stats(void)
 /**********************************************************************
 Outputs to a file the output of the InnoDB Monitor. */
 
-void
+ibool
 srv_printf_innodb_monitor(
 /*======================*/
+				/* out: FALSE if not all information printed
+				due to failure to obtain necessary mutex */
 	FILE*	file,		/* in: output stream */
+	ibool	nowait,		/* in: whether to wait for the mutex. */
 	ulint*	trx_start,	/* out: file position of the start of
 				the list of active transactions */
 	ulint*	trx_end)	/* out: file position of the end of
@@ -1638,6 +1670,7 @@ srv_printf_innodb_monitor(
 	double	time_elapsed;
 	time_t	current_time;
 	ulint	n_reserved;
+	ibool	ret;
 
 	mutex_enter(&srv_innodb_monitor_mutex);
 
@@ -1682,24 +1715,31 @@ srv_printf_innodb_monitor(
 
 	mutex_exit(&dict_foreign_err_mutex);
 
-	lock_print_info_summary(file);
-	if (trx_start) {
-		long	t = ftell(file);
-		if (t < 0) {
-			*trx_start = ULINT_UNDEFINED;
-		} else {
-			*trx_start = (ulint) t;
+	/* Only if lock_print_info_summary proceeds correctly,
+	before we call the lock_print_info_all_transactions
+	to print all the lock information. */
+	ret = lock_print_info_summary(file, nowait);
+
+	if (ret) {
+		if (trx_start) {
+			long	t = ftell(file);
+			if (t < 0) {
+				*trx_start = ULINT_UNDEFINED;
+			} else {
+				*trx_start = (ulint) t;
+			}
+		}
+		lock_print_info_all_transactions(file);
+		if (trx_end) {
+			long	t = ftell(file);
+			if (t < 0) {
+				*trx_end = ULINT_UNDEFINED;
+			} else {
+				*trx_end = (ulint) t;
+			}
 		}
 	}
-	lock_print_info_all_transactions(file);
-	if (trx_end) {
-		long	t = ftell(file);
-		if (t < 0) {
-			*trx_end = ULINT_UNDEFINED;
-		} else {
-			*trx_end = (ulint) t;
-		}
-	}
+
 	fputs("--------\n"
 	      "FILE I/O\n"
 	      "--------\n", file);
@@ -1804,6 +1844,8 @@ srv_printf_innodb_monitor(
 	      "============================\n", file);
 	mutex_exit(&srv_innodb_monitor_mutex);
 	fflush(file);
+
+	return(ret);
 }
 
 /**********************************************************************
@@ -1879,30 +1921,57 @@ srv_export_innodb_status(void)
 	export_vars.innodb_rows_updated = srv_n_rows_updated;
 	export_vars.innodb_rows_deleted = srv_n_rows_deleted;
 
+#ifdef UNIV_DEBUG
+	{
+		dulint	done_trx_no;
+		dulint	up_limit_id;
+
+		rw_lock_s_lock(&purge_sys->latch);
+		done_trx_no	= purge_sys->done_trx_no;
+		up_limit_id	= purge_sys->view
+			? purge_sys->view->up_limit_id
+			: ut_dulint_zero;
+		rw_lock_s_unlock(&purge_sys->latch);
+
+		if (ut_dulint_cmp(trx_sys->max_trx_id, done_trx_no) < 0) {
+			export_vars.innodb_purge_trx_id_age = 0;
+		} else {
+			export_vars.innodb_purge_trx_id_age = ut_dulint_minus(
+				trx_sys->max_trx_id, done_trx_no);
+		}
+
+		if (ut_dulint_is_zero(up_limit_id)
+		    || ut_dulint_cmp(trx_sys->max_trx_id, up_limit_id) < 0) {
+			export_vars.innodb_purge_view_trx_id_age = 0;
+		} else {
+			export_vars.innodb_purge_view_trx_id_age =
+				ut_dulint_minus(trx_sys->max_trx_id,
+						up_limit_id);
+		}
+	}
+#endif /* UNIV_DEBUG */
+
 	mutex_exit(&srv_innodb_monitor_mutex);
 }
 
 /*************************************************************************
-A thread which wakes up threads whose lock wait may have lasted too long.
-This also prints the info output by various InnoDB monitors. */
+A thread prints the info output by various InnoDB monitors. */
 
 os_thread_ret_t
-srv_lock_timeout_and_monitor_thread(
-/*================================*/
+srv_monitor_thread(
+/*===============*/
 			/* out: a dummy parameter */
 	void*	arg __attribute__((unused)))
 			/* in: a dummy parameter required by
 			os_thread_create */
 {
-	srv_slot_t*	slot;
 	double		time_elapsed;
 	time_t		current_time;
 	time_t		last_table_monitor_time;
 	time_t		last_tablespace_monitor_time;
 	time_t		last_monitor_time;
-	ibool		some_waits;
-	double		wait_time;
-	ulint		i;
+	ulint		mutex_skipped;
+	ibool		last_srv_print_monitor;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
 	fprintf(stderr, "Lock timeout thread starts, id %lu\n",
@@ -1913,13 +1982,15 @@ srv_lock_timeout_and_monitor_thread(
 	last_table_monitor_time = time(NULL);
 	last_tablespace_monitor_time = time(NULL);
 	last_monitor_time = time(NULL);
+	mutex_skipped = 0;
+	last_srv_print_monitor = srv_print_innodb_monitor;
 loop:
-	srv_lock_timeout_and_monitor_active = TRUE;
+	srv_monitor_active = TRUE;
 
-	/* When someone is waiting for a lock, we wake up every second
-	and check if a timeout has passed for a lock wait */
+	/* Wake up every 5 seconds to see if we need to print
+	monitor information. */
 
-	os_thread_sleep(1000000);
+	os_thread_sleep(5000000);
 
 	current_time = time(NULL);
 
@@ -1929,14 +2000,40 @@ loop:
 		last_monitor_time = time(NULL);
 
 		if (srv_print_innodb_monitor) {
-			srv_printf_innodb_monitor(stderr, NULL, NULL);
+			/* Reset mutex_skipped counter everytime
+			srv_print_innodb_monitor changes. This is to
+			ensure we will not be blocked by kernel_mutex
+			for short duration information printing,
+			such as requested by sync_array_print_long_waits() */
+			if (!last_srv_print_monitor) {
+				mutex_skipped = 0;
+				last_srv_print_monitor = TRUE;
+			}
+
+			if (!srv_printf_innodb_monitor(stderr,
+						MUTEX_NOWAIT(mutex_skipped),
+						NULL, NULL)) {
+				mutex_skipped++;
+			} else {
+				/* Reset the counter */
+				mutex_skipped = 0;
+			}
+		} else {
+			last_srv_print_monitor = FALSE;
 		}
+
 
 		if (srv_innodb_status) {
 			mutex_enter(&srv_monitor_file_mutex);
 			rewind(srv_monitor_file);
-			srv_printf_innodb_monitor(srv_monitor_file, NULL,
-						  NULL);
+			if (!srv_printf_innodb_monitor(srv_monitor_file,
+						MUTEX_NOWAIT(mutex_skipped),
+						NULL, NULL)) {
+				mutex_skipped++;
+			} else {
+				mutex_skipped = 0;
+			}
+
 			os_file_set_eof(srv_monitor_file);
 			mutex_exit(&srv_monitor_file_mutex);
 		}
@@ -1989,6 +2086,56 @@ loop:
 		}
 	}
 
+	if (srv_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
+		goto exit_func;
+	}
+
+	if (srv_print_innodb_monitor
+	    || srv_print_innodb_lock_monitor
+	    || srv_print_innodb_tablespace_monitor
+	    || srv_print_innodb_table_monitor) {
+		goto loop;
+	}
+
+	srv_monitor_active = FALSE;
+
+	goto loop;
+
+exit_func:
+	srv_monitor_active = FALSE;
+
+	/* We count the number of threads in os_thread_exit(). A created
+	thread should always use that to exit and not use return() to exit. */
+
+	os_thread_exit(NULL);
+
+	OS_THREAD_DUMMY_RETURN;
+}
+
+/*************************************************************************
+A thread which wakes up threads whose lock wait may have lasted too long. */
+
+os_thread_ret_t
+srv_lock_timeout_thread(
+/*====================*/
+			/* out: a dummy parameter */
+	void*	arg __attribute__((unused)))
+			/* in: a dummy parameter required by
+			os_thread_create */
+{
+	srv_slot_t*	slot;
+	ibool		some_waits;
+	double		wait_time;
+	ulint		i;
+
+loop:
+	/* When someone is waiting for a lock, we wake up every second
+	and check if a timeout has passed for a lock wait */
+
+	os_thread_sleep(1000000);
+
+	srv_lock_timeout_active = TRUE;
+
 	mutex_enter(&kernel_mutex);
 
 	some_waits = FALSE;
@@ -2005,9 +2152,10 @@ loop:
 
 			wait_time = ut_difftime(ut_time(), slot->suspend_time);
 
-			if (srv_lock_wait_timeout < 100000000
-			    && (wait_time > (double) srv_lock_wait_timeout
-				|| wait_time < 0)) {
+			if (trx_is_interrupted(thr_get_trx(slot->thr))
+			    || (srv_lock_wait_timeout < 100000000
+				&& (wait_time > (double) srv_lock_wait_timeout
+				    || wait_time < 0))) {
 
 				/* Timeout exceeded or a wrap-around in system
 				time counter: cancel the lock request queued
@@ -2033,17 +2181,11 @@ loop:
 		goto exit_func;
 	}
 
-	if (some_waits || srv_print_innodb_monitor
-	    || srv_print_innodb_lock_monitor
-	    || srv_print_innodb_tablespace_monitor
-	    || srv_print_innodb_table_monitor) {
+	if (some_waits) {
 		goto loop;
 	}
 
-	/* No one was waiting for a lock and no monitor was active:
-	suspend this thread */
-
-	srv_lock_timeout_and_monitor_active = FALSE;
+	srv_lock_timeout_active = FALSE;
 
 #if 0
 	/* The following synchronisation is disabled, since
@@ -2053,7 +2195,7 @@ loop:
 	goto loop;
 
 exit_func:
-	srv_lock_timeout_and_monitor_active = FALSE;
+	srv_lock_timeout_active = FALSE;
 
 	/* We count the number of threads in os_thread_exit(). A created
 	thread should always use that to exit and not use return() to exit. */
@@ -2076,9 +2218,15 @@ srv_error_monitor_thread(
 			os_thread_create */
 {
 	/* number of successive fatal timeouts observed */
-	ulint	fatal_cnt	= 0;
-	dulint	old_lsn;
-	dulint	new_lsn;
+	ulint		fatal_cnt	= 0;
+	dulint		old_lsn;
+	dulint		new_lsn;
+	/* longest waiting thread for a semaphore */
+	os_thread_id_t	waiter		= os_thread_get_curr_id();
+	os_thread_id_t	old_waiter	= waiter;
+	/* the semaphore that is being waited for */
+	const void*	sema		= NULL;
+	const void*	old_sema	= NULL;
 
 	old_lsn = srv_start_lsn;
 
@@ -2120,10 +2268,11 @@ loop:
 	/* In case mutex_exit is not a memory barrier, it is
 	theoretically possible some threads are left waiting though
 	the semaphore is already released. Wake up those threads: */
-	
+
 	sync_arr_wake_threads_if_sema_free();
 
-	if (sync_array_print_long_waits()) {
+	if (sync_array_print_long_waits(&waiter, &sema)
+	    && sema == old_sema && os_thread_eq(waiter, old_waiter)) {
 		fatal_cnt++;
 		if (fatal_cnt > 10) {
 
@@ -2138,6 +2287,8 @@ loop:
 		}
 	} else {
 		fatal_cnt = 0;
+		old_waiter = waiter;
+		old_sema = sema;
 	}
 
 	/* Flush stderr so that a database user gets the output
@@ -2274,7 +2425,30 @@ loop:
 			+ buf_pool->n_pages_written;
 		srv_main_thread_op_info = "sleeping";
 
-		if (!skip_sleep) {
+#ifdef UNIV_DEBUG
+		if (btr_cur_limit_optimistic_insert_debug) {
+			/* If btr_cur_limit_optimistic_insert_debug is enabled
+			and no purge_threads, purge opportunity is increased
+			by x100 (1purge/100msec), to speed up debug scripts
+			which should wait for purged. */
+
+			if (!skip_sleep && !srv_shutdown_state) {
+				os_thread_sleep(100000);
+			}
+
+			do {
+				if (srv_fast_shutdown
+				    && srv_shutdown_state > 0) {
+					goto background_loop;
+				}
+
+				srv_main_thread_op_info = "purging";
+				n_pages_purged = trx_purge();
+
+			} while (n_pages_purged);
+		} else
+#endif /* UNIV_DEBUG */
+		if (!skip_sleep && !srv_shutdown_state) {
 
 			os_thread_sleep(1000000);
 		}

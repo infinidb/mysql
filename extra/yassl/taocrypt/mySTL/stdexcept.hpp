@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 
 
 #include <string.h>  // strncpy
-#include <assert.h>  // assert
 #include <stdlib.h>  // size_t
 
 
@@ -41,7 +40,7 @@ public:
     virtual const char* what() const { return ""; }
 
     // for compiler generated call, never used
-    static void operator delete(void*) { assert(0); }
+    static void operator delete(void*) { }
 private:
     // don't allow dynamic creation of exceptions
     static void* operator new(size_t);

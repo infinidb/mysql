@@ -55,7 +55,7 @@ insert into t1 values (7), (8), (9);
 --echo [on slave]
 sync_slave_with_master;
 select * from t1 order by n;
-source include/show_slave_status2.inc;
+source include/check_slave_is_running.inc;
 
 --echo ==== Clean Up ====
 connection master;
@@ -78,7 +78,7 @@ insert into t1 values (1), (2), (3);
 --echo [on slave]
 sync_slave_with_master;
 select * from t1;
-source include/show_slave_status2.inc;
+source include/check_slave_is_running.inc;
 
 
 --echo ==== Clean Up ====
@@ -101,6 +101,8 @@ SHOW CREATE TABLE t1;
 SET SQL_LOG_BIN=1;
 
 connection slave;
+
+call mtr.add_suppression("Slave SQL.*Could not execute .*te_rows event on table test.t.; Duplicate entry.* Error_code: 1062");
 
 CREATE TABLE t1(id INT NOT NULL PRIMARY KEY, data INT) Engine=InnoDB;
 SHOW CREATE TABLE t1;
@@ -167,3 +169,4 @@ DROP TABLE t1;
 DROP TABLE t2;
 
 sync_slave_with_master;
+--source include/rpl_end.inc

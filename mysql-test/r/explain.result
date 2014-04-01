@@ -159,6 +159,32 @@ CREATE TABLE t1 (a INT PRIMARY KEY);
 EXPLAIN EXTENDED SELECT COUNT(a) FROM t1 USE KEY(a);
 ERROR 42000: Key 'a' doesn't exist in table 't1'
 DROP TABLE t1;
+CREATE TABLE t1(a LONGTEXT);
+INSERT INTO t1 VALUES (repeat('a',@@global.max_allowed_packet));
+INSERT INTO t1 VALUES (repeat('b',@@global.max_allowed_packet));
+EXPLAIN SELECT DISTINCT 1 FROM t1,
+(SELECT DISTINCTROW a AS away FROM t1 GROUP BY a WITH ROLLUP) as d1
+WHERE t1.a = d1.a;
+ERROR 42S22: Unknown column 'd1.a' in 'where clause'
+DROP TABLE t1;
+#
+# Bug#48295:
+# explain extended crash with subquery and ONLY_FULL_GROUP_BY sql_mode
+#
+CREATE TABLE t1 (f1 INT);
+SELECT @@session.sql_mode INTO @old_sql_mode;
+SET SESSION sql_mode='ONLY_FULL_GROUP_BY';
+EXPLAIN EXTENDED SELECT 1 FROM t1
+WHERE f1 > ALL( SELECT t.f1 FROM t1,t1 AS t );
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+2	SUBQUERY	t1	system	NULL	NULL	NULL	NULL	0	0.00	const row not found
+2	SUBQUERY	t	system	NULL	NULL	NULL	NULL	0	0.00	const row not found
+Warnings:
+Note	1003	select 1 AS `1` from `test`.`t1` where 0
+SET SESSION sql_mode=@old_sql_mode;
+DROP TABLE t1;
+End of 5.0 tests.
 #
 # Bug#37870: Usage of uninitialized value caused failed assertion.
 #
@@ -186,4 +212,90 @@ dt
 2001-01-01 01:01:01
 2001-01-01 01:01:01
 drop tables t1, t2;
+#
+# Bug#47669: Query showed by EXPLAIN EXTENDED gives different result from original query
+#
+CREATE TABLE t1 (c int);
+INSERT INTO t1 VALUES (NULL);
+CREATE TABLE t2 (d int);
+INSERT INTO t2 VALUES (NULL), (0);
+EXPLAIN EXTENDED SELECT (SELECT 1 FROM t2 WHERE d = c) FROM t1;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	100.00	
+2	DEPENDENT SUBQUERY	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1276	Field or reference 'test.t1.c' of SELECT #2 was resolved in SELECT #1
+Note	1003	select (select 1 from `test`.`t2` where (`test`.`t2`.`d` = NULL)) AS `(SELECT 1 FROM t2 WHERE d = c)` from `test`.`t1`
+DROP TABLE t1, t2;
+#
+# Bug #48419: another explain crash..
+#
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (b BLOB, KEY b(b(100)));
+INSERT INTO t2 VALUES ('1'), ('2'), ('3');
+FLUSH TABLES;
+EXPLAIN SELECT 1 FROM t1 WHERE a = (SELECT 1 FROM t1 t JOIN t2 WHERE b <= 1 AND t.a);
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+DROP TABLE t1, t2;
+#
+# Bug #48573: difference of index selection between rpm binary and
+#             .tar.gz, windows vs linux..
+#
+CREATE TABLE t1(c1 INT, c2 INT, c4 INT, c5 INT, KEY(c2, c5), KEY(c2, c4, c5));
+INSERT INTO t1 VALUES(4, 1, 1, 1);
+INSERT INTO t1 VALUES(3, 1, 1, 1);
+INSERT INTO t1 VALUES(2, 1, 1, 1);
+INSERT INTO t1 VALUES(1, 1, 1, 1);
+EXPLAIN SELECT c1 FROM t1 WHERE c2 = 1 AND c4 = 1 AND c5 = 1;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	ref	c2,c2_2	c2	10	const,const	3	Using where
+DROP TABLE t1;
+#
+# Bug#56814 Explain + subselect + fulltext crashes server
+#
+CREATE TABLE t1(f1 VARCHAR(6) NOT NULL,
+FULLTEXT KEY(f1),UNIQUE(f1));
+INSERT INTO t1 VALUES ('test');
+EXPLAIN SELECT 1 FROM t1
+WHERE 1 > ALL((SELECT 1 FROM t1 JOIN t1 a ON (MATCH(t1.f1) AGAINST (""))
+WHERE t1.f1 GROUP BY t1.f1));
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	
+2	SUBQUERY	a	system	NULL	NULL	NULL	NULL	1	Using filesort
+2	SUBQUERY	t1	fulltext	f1	f1	0		1	Using where
+PREPARE stmt FROM
+'EXPLAIN SELECT 1 FROM t1
+ WHERE 1 > ALL((SELECT 1 FROM t1 RIGHT OUTER JOIN t1 a
+ ON (MATCH(t1.f1) AGAINST (""))
+ WHERE t1.f1 GROUP BY t1.f1))';
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	
+2	SUBQUERY	a	system	NULL	NULL	NULL	NULL	1	Using filesort
+2	SUBQUERY	t1	fulltext	f1	f1	0		1	Using where
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	
+2	SUBQUERY	a	system	NULL	NULL	NULL	NULL	1	Using filesort
+2	SUBQUERY	t1	fulltext	f1	f1	0		1	Using where
+DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM
+'EXPLAIN SELECT 1 FROM t1
+ WHERE 1 > ALL((SELECT 1 FROM t1 JOIN t1 a
+ ON (MATCH(t1.f1) AGAINST (""))
+ WHERE t1.f1 GROUP BY t1.f1))';
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	
+2	SUBQUERY	a	system	NULL	NULL	NULL	NULL	1	Using filesort
+2	SUBQUERY	t1	fulltext	f1	f1	0		1	Using where
+EXECUTE stmt;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	system	NULL	NULL	NULL	NULL	1	
+2	SUBQUERY	a	system	NULL	NULL	NULL	NULL	1	Using filesort
+2	SUBQUERY	t1	fulltext	f1	f1	0		1	Using where
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
 End of 5.1 tests.

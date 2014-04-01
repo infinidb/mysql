@@ -14,7 +14,7 @@
 
 @SET_MAKE@
 
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -52,12 +52,12 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-noinst_PROGRAMS = bitmap-t$(EXEEXT) base64-t$(EXEEXT) \
-	my_atomic-t$(EXEEXT)
+noinst_PROGRAMS = bitmap-t$(EXEEXT) base64-t$(EXEEXT)
 subdir = unittest/mysys
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -89,13 +89,6 @@ bitmap_t_DEPENDENCIES = $(top_builddir)/unittest/mytap/libmytap.a \
 	$(top_builddir)/mysys/libmysys.a \
 	$(top_builddir)/dbug/libdbug.a \
 	$(top_builddir)/strings/libmystrings.a
-my_atomic_t_SOURCES = my_atomic-t.c
-my_atomic_t_OBJECTS = my_atomic-t.$(OBJEXT)
-my_atomic_t_LDADD = $(LDADD)
-my_atomic_t_DEPENDENCIES = $(top_builddir)/unittest/mytap/libmytap.a \
-	$(top_builddir)/mysys/libmysys.a \
-	$(top_builddir)/dbug/libdbug.a \
-	$(top_builddir)/strings/libmystrings.a
 DEFAULT_INCLUDES = -I. -I$(srcdir) -I$(top_builddir)/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -107,8 +100,8 @@ LTCOMPILE = $(LIBTOOL) --tag=CC --mode=compile $(CC) $(DEFS) \
 CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
-SOURCES = base64-t.c bitmap-t.c my_atomic-t.c
-DIST_SOURCES = base64-t.c bitmap-t.c my_atomic-t.c
+SOURCES = base64-t.c bitmap-t.c
+DIST_SOURCES = base64-t.c bitmap-t.c
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -118,6 +111,8 @@ ALLOCA = @ALLOCA@
 AMDEP_FALSE = @AMDEP_FALSE@
 AMDEP_TRUE = @AMDEP_TRUE@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -223,6 +218,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -240,6 +236,8 @@ NDB_VERSION_BUILD = @NDB_VERSION_BUILD@
 NDB_VERSION_MAJOR = @NDB_VERSION_MAJOR@
 NDB_VERSION_MINOR = @NDB_VERSION_MINOR@
 NDB_VERSION_STATUS = @NDB_VERSION_STATUS@
+NEED_THREAD_FALSE = @NEED_THREAD_FALSE@
+NEED_THREAD_TRUE = @NEED_THREAD_TRUE@
 NM = @NM@
 NOINST_LDFLAGS = @NOINST_LDFLAGS@
 NON_THREADED_LIBS = @NON_THREADED_LIBS@
@@ -284,6 +282,7 @@ THREAD_SAFE_CLIENT_TRUE = @THREAD_SAFE_CLIENT_TRUE@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -370,8 +369,6 @@ plugin_federated_shared_target = @plugin_federated_shared_target@
 plugin_federated_static_target = @plugin_federated_static_target@
 plugin_heap_shared_target = @plugin_heap_shared_target@
 plugin_heap_static_target = @plugin_heap_static_target@
-plugin_ibmdb2i_shared_target = @plugin_ibmdb2i_shared_target@
-plugin_ibmdb2i_static_target = @plugin_ibmdb2i_static_target@
 plugin_innobase_shared_target = @plugin_innobase_shared_target@
 plugin_innobase_static_target = @plugin_innobase_static_target@
 plugin_innodb_plugin_shared_target = @plugin_innodb_plugin_shared_target@
@@ -386,8 +383,6 @@ plugin_partition_shared_target = @plugin_partition_shared_target@
 plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -412,6 +407,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 AM_CPPFLAGS = @ZLIB_INCLUDES@ -I$(top_builddir)/include \
 	-I$(top_srcdir)/include -I$(top_srcdir)/unittest/mytap
@@ -466,9 +462,6 @@ base64-t$(EXEEXT): $(base64_t_OBJECTS) $(base64_t_DEPENDENCIES)
 bitmap-t$(EXEEXT): $(bitmap_t_OBJECTS) $(bitmap_t_DEPENDENCIES) 
 	@rm -f bitmap-t$(EXEEXT)
 	$(LINK) $(bitmap_t_LDFLAGS) $(bitmap_t_OBJECTS) $(bitmap_t_LDADD) $(LIBS)
-my_atomic-t$(EXEEXT): $(my_atomic_t_OBJECTS) $(my_atomic_t_DEPENDENCIES) 
-	@rm -f my_atomic-t$(EXEEXT)
-	$(LINK) $(my_atomic_t_LDFLAGS) $(my_atomic_t_OBJECTS) $(my_atomic_t_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -478,7 +471,6 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/base64-t.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/bitmap-t.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/my_atomic-t.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" -c -o $@ $<; \

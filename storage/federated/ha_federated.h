@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/*
+   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Please read ha_exmple.cc before reading this file.
@@ -84,6 +86,11 @@ class ha_federated: public handler
   FEDERATED_SHARE *share;    /* Shared lock info */
   MYSQL *mysql; /* MySQL connection */
   MYSQL_RES *stored_result;
+  /**
+    Array of all stored results we get during a query execution.
+  */
+  DYNAMIC_ARRAY results;
+  bool position_called;
   uint fetch_num; // stores the fetch num
   MYSQL_ROW_OFFSET current_position;  // Current position used by ::position()
   int remote_error_number;
@@ -251,6 +258,10 @@ public:
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,
                              enum thr_lock_type lock_type);     //required
   bool get_error_message(int error, String *buf);
+  
+  MYSQL_RES *store_result(MYSQL *mysql);
+  void free_result();
+  
   int external_lock(THD *thd, int lock_type);
   int connection_commit();
   int connection_rollback();

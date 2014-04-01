@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -79,7 +79,7 @@ ut_dbg_assertion_failed(
 	      " or crashes, even\n"
 	      "InnoDB: immediately after the mysqld startup, there may be\n"
 	      "InnoDB: corruption in the InnoDB tablespace. Please refer to\n"
-	      "InnoDB: " REFMAN "forcing-recovery.html\n"
+	      "InnoDB: " REFMAN "forcing-innodb-recovery.html\n"
 	      "InnoDB: about forcing recovery.\n", stderr);
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 	ut_dbg_stop_threads = TRUE;

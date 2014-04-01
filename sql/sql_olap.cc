@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*
@@ -146,14 +148,14 @@ int handle_olaps(LEX *lex, SELECT_LEX *select_lex)
 
   lex->last_selects=select_lex;
 
-  for (ORDER *order=(ORDER *)select_lex->group_list.first ; order ; order=order->next)
+  for (ORDER *order= select_lex->group_list.first ; order ; order=order->next)
     item_list_copy.push_back(*(order->item));
 
   List<Item>	all_fields(select_lex->item_list);
 
 
   if (setup_tables(lex->thd, &select_lex->context, &select_lex->top_join_list,
-                   (TABLE_LIST *)select_lex->table_list.first
+                   select_lex->table_list.first
                    &select_lex->leaf_tables, FALSE) ||
       setup_fields(lex->thd, 0, select_lex->item_list, MARK_COLUMNS_READ,
                    &all_fields,1) ||

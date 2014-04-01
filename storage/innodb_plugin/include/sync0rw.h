@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2011, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
@@ -18,8 +18,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -429,8 +429,9 @@ ibool
 rw_lock_own(
 /*========*/
 	rw_lock_t*	lock,		/*!< in: rw-lock */
-	ulint		lock_type);	/*!< in: lock type: RW_LOCK_SHARED,
+	ulint		lock_type)	/*!< in: lock type: RW_LOCK_SHARED,
 					RW_LOCK_EX */
+	__attribute__((warn_unused_result));
 #endif /* UNIV_SYNC_DEBUG */
 /******************************************************************//**
 Checks if somebody has locked the rw-lock in the specified mode. */
@@ -489,6 +490,7 @@ UNIV_INTERN
 void
 rw_lock_debug_print(
 /*================*/
+	FILE*			f,	/*!< in: output stream */
 	rw_lock_debug_t*	info);	/*!< in: debug struct */
 #endif /* UNIV_SYNC_DEBUG */
 
@@ -554,14 +556,16 @@ struct rw_lock_struct {
 	unsigned	cline:14;	/*!< Line where created */
 	unsigned	last_s_line:14;	/*!< Line number where last time s-locked */
 	unsigned	last_x_line:14;	/*!< Line number where last time x-locked */
+#ifdef UNIV_DEBUG
 	ulint	magic_n;	/*!< RW_LOCK_MAGIC_N */
-};
-
 /** Value of rw_lock_struct::magic_n */
 #define	RW_LOCK_MAGIC_N	22643
+#endif /* UNIV_DEBUG */
+};
 
 #ifdef UNIV_SYNC_DEBUG
-/** The structure for storing debug info of an rw-lock */
+/** The structure for storing debug info of an rw-lock.  All access to this
+structure must be protected by rw_lock_debug_mutex_enter(). */
 struct	rw_lock_debug_struct {
 
 	os_thread_id_t thread_id;  /*!< The thread id of the thread which

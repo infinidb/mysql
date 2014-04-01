@@ -1,4 +1,5 @@
-/* Copyright (C) 2001-2006 MySQL AB
+/*
+   Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code
    added support for long options (my_getopt) 22.5.2002 by Jani Tolonen */
@@ -113,7 +115,7 @@ int main(int argc,char *argv[])
 
     subkeys=ft_sintXkorr(info->lastkey+keylen+1);
     if (subkeys >= 0)
-      weight=*(float*)&subkeys;
+      ft_floatXget(weight, info->lastkey+keylen+1);
 
 #ifdef HAVE_SNPRINTF
     snprintf(buf,MAX_LEN,"%.*s",(int) keylen,info->lastkey+1);

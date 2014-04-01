@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -384,18 +384,13 @@ eval_notfound(
 /*==========*/
 	func_node_t*	func_node)	/*!< in: function node */
 {
-	que_node_t*	arg1;
-	que_node_t*	arg2;
 	sym_node_t*	cursor;
 	sel_node_t*	sel_node;
 	ibool		ibool_val;
 
-	arg1 = func_node->args;
-	arg2 = que_node_get_next(arg1);
-
 	ut_ad(func_node->func == PARS_NOTFOUND_TOKEN);
 
-	cursor = arg1;
+	cursor = func_node->args;
 
 	ut_ad(que_node_get_type(cursor) == QUE_NODE_SYMBOL);
 

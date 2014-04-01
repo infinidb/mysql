@@ -1,12 +1,11 @@
-/* Copyright (C) 2000-2004 MySQL AB
+/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation.
 
    There are special exceptions to the terms and conditions of the GPL as it
-   is applied to this software. View the full text of the exception in file
-   EXCEPTIONS-CLIENT in the directory of this software distribution.
+   is applied to this software.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -15,7 +14,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
 #include <my_sys.h>
@@ -131,8 +130,8 @@ int STDCALL mysql_server_init(int argc __attribute__((unused)),
       mysql_port = MYSQL_PORT;
 #ifndef MSDOS
       {
-	struct servent *serv_ptr;
-	char	*env;
+        char *env;
+        struct servent *serv_ptr __attribute__((unused));
 
         /*
           if builder specifically requested a default port, use that
@@ -328,7 +327,7 @@ sig_handler
 my_pipe_sig_handler(int sig __attribute__((unused)))
 {
   DBUG_PRINT("info",("Hit by signal %d",sig));
-#ifdef DONT_REMEMBER_SIGNAL
+#ifdef SIGNAL_HANDLER_RESET_ON_DELIVERY
   (void) signal(SIGPIPE, my_pipe_sig_handler);
 #endif
 }
@@ -719,7 +718,10 @@ my_bool	STDCALL mysql_change_user(MYSQL *mysql, const char *user,
   if (!passwd)
     passwd="";
 
-  /* Store user into the buffer */
+  /*
+    Store user into the buffer.
+    Advance position as strmake returns a pointer to the closing NUL.
+  */
   end= strmake(end, user, USERNAME_LENGTH) + 1;
 
   /* write scrambled password according to server capabilities */
@@ -1252,7 +1254,7 @@ MYSQL_FIELD *cli_list_fields(MYSQL *mysql)
     return NULL;
 
   mysql->field_count= (uint) query->rows;
-  return unpack_fields(query,&mysql->field_alloc,
+  return unpack_fields(mysql, query,&mysql->field_alloc,
 		       mysql->field_count, 1, mysql->server_capabilities);
 }
 
@@ -1269,7 +1271,7 @@ mysql_list_fields(MYSQL *mysql, const char *table, const char *wild)
 {
   MYSQL_RES   *result;
   MYSQL_FIELD *fields;
-  char	     buff[257],*end;
+  char	     buff[258],*end;
   DBUG_ENTER("mysql_list_fields");
   DBUG_PRINT("enter",("table: '%s'  wild: '%s'",table,wild ? wild : ""));
 
@@ -1312,7 +1314,7 @@ mysql_list_processes(MYSQL *mysql)
   if (!(fields = (*mysql->methods->read_rows)(mysql,(MYSQL_FIELD*) 0,
 					      protocol_41(mysql) ? 7 : 5)))
     DBUG_RETURN(NULL);
-  if (!(mysql->fields=unpack_fields(fields,&mysql->field_alloc,field_count,0,
+  if (!(mysql->fields=unpack_fields(mysql, fields,&mysql->field_alloc,field_count,0,
 				    mysql->server_capabilities)))
     DBUG_RETURN(0);
   mysql->status=MYSQL_STATUS_GET_RESULT;
@@ -1889,7 +1891,7 @@ my_bool cli_read_prepare_result(MYSQL *mysql, MYSQL_STMT *stmt)
 
     if (!(fields_data= (*mysql->methods->read_rows)(mysql,(MYSQL_FIELD*)0,7)))
       DBUG_RETURN(1);
-    if (!(stmt->fields= unpack_fields(fields_data,&stmt->mem_root,
+    if (!(stmt->fields= unpack_fields(mysql, fields_data,&stmt->mem_root,
 				      field_count,0,
 				      mysql->server_capabilities)))
       DBUG_RETURN(1);
@@ -2271,7 +2273,7 @@ mysql_stmt_param_metadata(MYSQL_STMT *stmt)
 
 /* Store type of parameter in network buffer. */
 
-static void store_param_type(char **pos, MYSQL_BIND *param)
+static void store_param_type(unsigned char **pos, MYSQL_BIND *param)
 {
   uint typecode= param->buffer_type | (param->is_unsigned ? 32768 : 0);
   int2store(*pos, typecode);
@@ -2492,9 +2494,16 @@ static my_bool execute(MYSQL_STMT *stmt, char *packet, ulong length)
   stmt->insert_id= mysql->insert_id;
   if (res)
   {
-    set_stmt_errmsg(stmt, net);
+    /* 
+      Don't set stmt error if stmt->mysql is NULL, as the error in this case 
+      has already been set by mysql_prune_stmt_list(). 
+    */
+    if (stmt->mysql)
+      set_stmt_errmsg(stmt, net);
     DBUG_RETURN(1);
   }
+  else if (mysql->status == MYSQL_STATUS_GET_RESULT)
+    stmt->mysql->status= MYSQL_STATUS_STATEMENT_GET_RESULT;
   DBUG_RETURN(0);
 }
 
@@ -2551,7 +2560,7 @@ int cli_stmt_execute(MYSQL_STMT *stmt)
 	that is sent to the server.
       */
       for (param= stmt->params;	param < param_end ; param++)
-        store_param_type((char**) &net->write_pos, param);
+        store_param_type(&net->write_pos, param);
     }
 
     for (param= stmt->params; param < param_end; param++)
@@ -2633,7 +2642,7 @@ static int stmt_read_row_unbuffered(MYSQL_STMT *stmt, unsigned char **row)
     set_stmt_error(stmt, CR_SERVER_LOST, unknown_sqlstate, NULL);
     return 1;
   }
-  if (mysql->status != MYSQL_STATUS_GET_RESULT)
+  if (mysql->status != MYSQL_STATUS_STATEMENT_GET_RESULT)
   {
     set_stmt_error(stmt, stmt->unbuffered_fetch_cancelled ?
                    CR_FETCH_CANCELED : CR_COMMANDS_OUT_OF_SYNC,
@@ -2703,7 +2712,12 @@ stmt_read_row_from_cursor(MYSQL_STMT *stmt, unsigned char **row)
                                             buff, sizeof(buff), (uchar*) 0, 0,
                                             1, stmt))
     {
-      set_stmt_errmsg(stmt, net);
+      /* 
+        Don't set stmt error if stmt->mysql is NULL, as the error in this case 
+        has already been set by mysql_prune_stmt_list(). 
+      */
+      if (stmt->mysql)
+        set_stmt_errmsg(stmt, net);
       return 1;
     }
     if ((*mysql->methods->read_rows_from_cursor)(stmt))
@@ -3384,7 +3398,12 @@ mysql_stmt_send_long_data(MYSQL_STMT *stmt, uint param_number,
                                             buff, sizeof(buff), (uchar*) data,
                                             length, 1, stmt))
     {
-      set_stmt_errmsg(stmt, &mysql->net);
+      /* 
+        Don't set stmt error if stmt->mysql is NULL, as the error in this case 
+        has already been set by mysql_prune_stmt_list(). 
+      */
+      if (stmt->mysql)
+        set_stmt_errmsg(stmt, &mysql->net);
       DBUG_RETURN(1);
     }
   }
@@ -4403,10 +4422,10 @@ static my_bool setup_one_fetch_function(MYSQL_BIND *param, MYSQL_FIELD *field)
   case MYSQL_TYPE_TIME:
     field->max_length= 15;                    /* 19:23:48.123456 */
     param->skip_result= skip_result_with_length;
+    break;
   case MYSQL_TYPE_DATE:
     field->max_length= 10;                    /* 2003-11-11 */
     param->skip_result= skip_result_with_length;
-    break;
     break;
   case MYSQL_TYPE_DATETIME:
   case MYSQL_TYPE_TIMESTAMP:
@@ -4634,7 +4653,7 @@ int STDCALL mysql_stmt_fetch_column(MYSQL_STMT *stmt, MYSQL_BIND *my_bind,
   if ((int) stmt->state < (int) MYSQL_STMT_FETCH_DONE)
   {
     set_stmt_error(stmt, CR_NO_DATA, unknown_sqlstate, NULL);
-    return 1;
+    DBUG_RETURN(1);
   }
   if (column >= stmt->field_count)
   {
@@ -4820,11 +4839,16 @@ int STDCALL mysql_stmt_store_result(MYSQL_STMT *stmt)
     if (cli_advanced_command(mysql, COM_STMT_FETCH, buff, sizeof(buff),
                              (uchar*) 0, 0, 1, stmt))
     {
-      set_stmt_errmsg(stmt, net);
+      /* 
+        Don't set stmt error if stmt->mysql is NULL, as the error in this case 
+        has already been set by mysql_prune_stmt_list(). 
+      */
+      if (stmt->mysql)
+        set_stmt_errmsg(stmt, net);
       DBUG_RETURN(1);
     }
   }
-  else if (mysql->status != MYSQL_STATUS_GET_RESULT)
+  else if (mysql->status != MYSQL_STATUS_STATEMENT_GET_RESULT)
   {
     set_stmt_error(stmt, CR_COMMANDS_OUT_OF_SYNC, unknown_sqlstate, NULL);
     DBUG_RETURN(1);

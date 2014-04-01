@@ -1,24 +1,23 @@
 --source include/have_ndb.inc
---source include/ndb_master-slave.inc
 
 # set up circular replication
+--let $rpl_topology= 1->2->1
+--source include/rpl_init.inc
 
---connection slave
-RESET MASTER;
+--let $rpl_connection_name= master
+--let $rpl_server_number= 1
+--source include/rpl_connect.inc
 
---connection master
---replace_result $SLAVE_MYPORT SLAVE_PORT
---eval CHANGE MASTER TO master_host="127.0.0.1",master_port=$SLAVE_MYPORT,master_user="root"
-START SLAVE;
+--let $rpl_connection_name= slave
+--let $rpl_server_number= 2
+--source include/rpl_connect.inc
 
 
 # create the table on the "slave"
 --connection slave
 CREATE TABLE t1 (a int key, b int) ENGINE=ndb;
 #CREATE TABLE t2 (a int key, b int) ENGINE=ndb;
---save_master_pos
---connection master
---sync_with_master
+sync_slave_with_master master;
 # now we should have a table on the master as well
 SHOW TABLES;
 
@@ -30,25 +29,19 @@ INSERT INTO t1 VALUES (2,3);
 
 # ensure data has propagated both ways
 --connection slave
---save_master_pos
---connection master
---sync_with_master
+sync_slave_with_master master;
 --sync_slave_with_master
 
 # connect to slave and ensure data it there.
 --connection slave
 SELECT * FROM t1 ORDER BY a;
 #SELECT * FROM t2 ORDER BY a;
-# BUG#34654 Last_IO_Errno is not reset - Mask columns 35 and 36
---replace_column 1 # 4 # 7 # 8 # 9 # 22 # 23 # 33 # 35 # 36 #
---query_vertical show slave status;
+source include/check_slave_is_running.inc;
 # connect to master and ensure data it there.
 --connection master
 SELECT * FROM t1 ORDER BY a;
 #SELECT * FROM t2 ORDER BY a;
-# BUG#34654 Last_IO_Errno is not reset - Mask columns 35 and 36
---replace_column 1 # 4 # 7 # 8 # 9 # 22 # 23 # 33 # 35 # 36 #
---query_vertical show slave status;
+source include/check_slave_is_running.inc;
 
 # stop replication on "master" as not to replicate
 # shutdown circularly, eg drop table
@@ -58,3 +51,7 @@ STOP SLAVE;
 # cleanup
 --connection master
 DROP TABLE t1;
+-- sync_slave_with_master
+
+--let $rpl_only_running_threads= 1
+--source include/rpl_end.inc

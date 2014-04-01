@@ -442,6 +442,8 @@ INSERT INTO t1(id, dept, age, name) VALUES
 EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 DELETE FROM t1;
+--echo # Masking (#) number in "rows" column of the following EXPLAIN output, as it may vary (bug#47746).
+--replace_column 9 #
 EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 
@@ -632,6 +634,10 @@ drop table t1;
 drop table bug29807;
 create table bug29807 (a int);
 drop table bug29807;
+--disable_query_log
+call mtr.add_suppression("InnoDB: Error: table .test...bug29807. does not exist in the InnoDB internal");
+call mtr.add_suppression("Cannot find or open table test\/bug29807 from");
+--enable_query_log
 
 
 #

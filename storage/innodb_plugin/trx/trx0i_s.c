@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2007, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -28,11 +28,18 @@ table cache" for later retrieval.
 Created July 17, 2007 Vasil Dimov
 *******************************************************/
 
+/* Found during the build of 5.5.3 on Linux 2.4 and early 2.6 kernels:
+   The includes "univ.i" -> "my_global.h" cause a different path
+   to be taken further down with pthread functions and types,
+   so they must come first.
+   From the symptoms, this is related to bug#46587 in the MySQL bug DB.
+*/
+#include "univ.i"
+
 #include <mysql/plugin.h>
 
 #include "mysql_addons.h"
 
-#include "univ.i"
 #include "buf0buf.h"
 #include "dict0dict.h"
 #include "ha0storage.h"
@@ -60,7 +67,7 @@ Created July 17, 2007 Vasil Dimov
 /** @brief The maximum number of chunks to allocate for a table cache.
 
 The rows of a table cache are stored in a set of chunks. When a new
-row is added a new chunk is allocated if necessary.  Assuming that the
+row is added a new chunk is allocated if necessary. Assuming that the
 first one is 1024 rows (TABLE_CACHE_INITIAL_ROWSNUM) and each
 subsequent is N/2 where N is the number of rows we have allocated till
 now, then 39th chunk would accommodate 1677416425 rows and all chunks
@@ -238,6 +245,27 @@ table_cache_init(
 }
 
 /*******************************************************************//**
+Frees a table cache. */
+static
+void
+table_cache_free(
+/*=============*/
+	i_s_table_cache_t*	table_cache)	/*!< in/out: table cache */
+{
+	ulint	i;
+
+	for (i = 0; i < MEM_CHUNKS_IN_TABLE_CACHE; i++) {
+
+		/* the memory is actually allocated in
+		table_cache_create_empty_row() */
+		if (table_cache->chunks[i].base) {
+			mem_free(table_cache->chunks[i].base);
+			table_cache->chunks[i].base = NULL;
+		}
+	}
+}
+
+/*******************************************************************//**
 Returns an empty row from a table cache. The row is allocated if no more
 empty rows are available. The number of used rows is incremented.
 If the memory limit is hit then NULL is returned and nothing is
@@ -380,6 +408,42 @@ table_cache_create_empty_row(
 	return(row);
 }
 
+#ifdef UNIV_DEBUG
+/*******************************************************************//**
+Validates a row in the locks cache.
+@return	TRUE if valid */
+static
+ibool
+i_s_locks_row_validate(
+/*===================*/
+	const i_s_locks_row_t*	row)	/*!< in: row to validate */
+{
+	ut_ad(row->lock_trx_id != 0);
+	ut_ad(row->lock_mode != NULL);
+	ut_ad(row->lock_type != NULL);
+	ut_ad(row->lock_table != NULL);
+	ut_ad(row->lock_table_id != 0);
+
+	if (row->lock_space == ULINT_UNDEFINED) {
+		/* table lock */
+		ut_ad(!strcmp("TABLE", row->lock_type));
+		ut_ad(row->lock_index == NULL);
+		ut_ad(row->lock_data == NULL);
+		ut_ad(row->lock_page == ULINT_UNDEFINED);
+		ut_ad(row->lock_rec == ULINT_UNDEFINED);
+	} else {
+		/* record lock */
+		ut_ad(!strcmp("RECORD", row->lock_type));
+		ut_ad(row->lock_index != NULL);
+		/* row->lock_data == NULL if buf_page_try_get() == NULL */
+		ut_ad(row->lock_page != ULINT_UNDEFINED);
+		ut_ad(row->lock_rec != ULINT_UNDEFINED);
+	}
+
+	return(TRUE);
+}
+#endif /* UNIV_DEBUG */
+
 /*******************************************************************//**
 Fills i_s_trx_row_t object.
 If memory can not be allocated then FALSE is returned.
@@ -401,57 +465,53 @@ fill_trx_row(
 						which to copy volatile
 						strings */
 {
+	const char*	stmt;
+	size_t		stmt_len;
+
 	row->trx_id = trx_get_id(trx);
 	row->trx_started = (ib_time_t) trx->start_time;
 	row->trx_state = trx_get_que_state_str(trx);
+	row->requested_lock_row = requested_lock_row;
+	ut_ad(requested_lock_row == NULL
+	      || i_s_locks_row_validate(requested_lock_row));
 
 	if (trx->wait_lock != NULL) {
-
 		ut_a(requested_lock_row != NULL);
-
-		row->requested_lock_row = requested_lock_row;
 		row->trx_wait_started = (ib_time_t) trx->wait_started;
 	} else {
-
 		ut_a(requested_lock_row == NULL);
-
-		row->requested_lock_row = NULL;
 		row->trx_wait_started = 0;
 	}
 
 	row->trx_weight = (ullint) ut_conv_dulint_to_longlong(TRX_WEIGHT(trx));
 
-	if (trx->mysql_thd != NULL) {
-		row->trx_mysql_thread_id
-			= thd_get_thread_id(trx->mysql_thd);
-	} else {
+	if (trx->mysql_thd == NULL) {
 		/* For internal transactions e.g., purge and transactions
 		being recovered at startup there is no associated MySQL
 		thread data structure. */
 		row->trx_mysql_thread_id = 0;
+		row->trx_query = NULL;
+		return(TRUE);
 	}
 
-	if (trx->mysql_query_str != NULL && *trx->mysql_query_str != NULL) {
+	row->trx_mysql_thread_id = thd_get_thread_id(trx->mysql_thd);
+	stmt = innobase_get_stmt(trx->mysql_thd, &stmt_len);
 
-		if (strlen(*trx->mysql_query_str)
-		    > TRX_I_S_TRX_QUERY_MAX_LEN) {
+	if (stmt != NULL) {
+		char	query[TRX_I_S_TRX_QUERY_MAX_LEN + 1];
 
-			char	query[TRX_I_S_TRX_QUERY_MAX_LEN + 1];
-
-			memcpy(query, *trx->mysql_query_str,
-			       TRX_I_S_TRX_QUERY_MAX_LEN);
-			query[TRX_I_S_TRX_QUERY_MAX_LEN] = '\0';
-
-			row->trx_query = ha_storage_put_memlim(
-				cache->storage, query,
-				TRX_I_S_TRX_QUERY_MAX_LEN + 1,
-				MAX_ALLOWED_FOR_STORAGE(cache));
-		} else {
-
-			row->trx_query = ha_storage_put_str_memlim(
-				cache->storage, *trx->mysql_query_str,
-				MAX_ALLOWED_FOR_STORAGE(cache));
+		if (stmt_len > TRX_I_S_TRX_QUERY_MAX_LEN) {
+			stmt_len = TRX_I_S_TRX_QUERY_MAX_LEN;
 		}
+
+		memcpy(query, stmt, stmt_len);
+		query[stmt_len] = '\0';
+
+		row->trx_query = ha_storage_put_memlim(
+			cache->storage, query, stmt_len + 1,
+			MAX_ALLOWED_FOR_STORAGE(cache));
+
+		row->trx_query_cs = innobase_get_charset(trx->mysql_thd);
 
 		if (row->trx_query == NULL) {
 
@@ -703,6 +763,7 @@ fill_locks_row(
 	row->lock_table_id = lock_get_table_id(lock);
 
 	row->hash_chain.value = row;
+	ut_ad(i_s_locks_row_validate(row));
 
 	return(TRUE);
 }
@@ -723,6 +784,9 @@ fill_lock_waits_row(
 						relevant blocking lock
 						row in innodb_locks */
 {
+	ut_ad(i_s_locks_row_validate(requested_lock_row));
+	ut_ad(i_s_locks_row_validate(blocking_lock_row));
+
 	row->requested_lock_row = requested_lock_row;
 	row->blocking_lock_row = blocking_lock_row;
 
@@ -794,6 +858,7 @@ locks_row_eq_lock(
 					or ULINT_UNDEFINED if the lock
 					is a table lock */
 {
+	ut_ad(i_s_locks_row_validate(row));
 #ifdef TEST_NO_LOCKS_ROW_IS_EVER_EQUAL_TO_LOCK_T
 	return(0);
 #else
@@ -851,7 +916,7 @@ search_innodb_locks(
 		/* auxiliary variable */
 		hash_chain,
 		/* assertion on every traversed item */
-		,
+		ut_ad(i_s_locks_row_validate(hash_chain->value)),
 		/* this determines if we have found the lock */
 		locks_row_eq_lock(hash_chain->value, lock, heap_no));
 
@@ -891,6 +956,7 @@ add_lock_to_cache(
 	dst_row = search_innodb_locks(cache, lock, heap_no);
 	if (dst_row != NULL) {
 
+		ut_ad(i_s_locks_row_validate(dst_row));
 		return(dst_row);
 	}
 #endif
@@ -928,6 +994,7 @@ add_lock_to_cache(
 	} /* for()-loop */
 #endif
 
+	ut_ad(i_s_locks_row_validate(dst_row));
 	return(dst_row);
 }
 
@@ -1184,17 +1251,12 @@ trx_i_s_possibly_fetch_data_into_cache(
 		return(1);
 	}
 
-	/* We are going to access trx->query in all transactions */
-	innobase_mysql_prepare_print_arbitrary_thd();
-
 	/* We need to read trx_sys and record/table lock queues */
 	mutex_enter(&kernel_mutex);
 
 	fetch_data_into_cache(cache);
 
 	mutex_exit(&kernel_mutex);
-
-	innobase_mysql_end_print_arbitrary_thd();
 
 	return(0);
 }
@@ -1249,6 +1311,22 @@ trx_i_s_cache_init(
 	cache->mem_allocd = 0;
 
 	cache->is_truncated = FALSE;
+}
+
+/*******************************************************************//**
+Free the INFORMATION SCHEMA trx related cache. */
+UNIV_INTERN
+void
+trx_i_s_cache_free(
+/*===============*/
+	trx_i_s_cache_t*	cache)	/*!< in, own: cache to free */
+{
+	hash_table_free(cache->locks_hash);
+	ha_storage_free(cache->storage);
+	table_cache_free(&cache->innodb_trx);
+	table_cache_free(&cache->innodb_locks);
+	table_cache_free(&cache->innodb_lock_waits);
+	memset(cache, 0, sizeof *cache);
 }
 
 /*******************************************************************//**

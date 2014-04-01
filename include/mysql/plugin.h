@@ -1,4 +1,5 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _my_plugin_h
 #define _my_plugin_h
@@ -396,12 +398,12 @@ struct st_mysql_plugin
   int type;             /* the plugin type (a MYSQL_XXX_PLUGIN value)   */
   void *info;           /* pointer to type-specific plugin descriptor   */
   const char *name;     /* plugin name                                  */
-  const char *author;   /* plugin author (for SHOW PLUGINS)             */
-  const char *descr;    /* general descriptive text (for SHOW PLUGINS ) */
+  const char *author;   /* plugin author (for I_S.PLUGINS)              */
+  const char *descr;    /* general descriptive text (for I_S.PLUGINS)   */
   int license;          /* the plugin license (PLUGIN_LICENSE_XXX)      */
   int (*init)(void *);  /* the function to invoke when plugin is loaded */
   int (*deinit)(void *);/* the function to invoke when plugin is unloaded */
-  unsigned int version; /* plugin version (for SHOW PLUGINS)            */
+  unsigned int version; /* plugin version (for I_S.PLUGINS)             */
   struct st_mysql_show_var *status_vars;
   struct st_mysql_sys_var **system_vars;
   void * __reserved1;   /* reserved for dependency checking             */
@@ -801,30 +803,37 @@ void mysql_query_cache_invalidate4(MYSQL_THD thd,
                                    const char *key, unsigned int key_length,
                                    int using_trx);
 
-#ifdef __cplusplus
-}
-#endif
 
-#ifdef __cplusplus
 /**
   Provide a handler data getter to simplify coding
 */
-inline
-void *
-thd_get_ha_data(const MYSQL_THD thd, const struct handlerton *hton)
-{
-  return *thd_ha_data(thd, hton);
-}
+void *thd_get_ha_data(const MYSQL_THD thd, const struct handlerton *hton);
+
 
 /**
   Provide a handler data setter to simplify coding
+
+  @details
+  Set ha_data pointer (storage engine per-connection information).
+
+  To avoid unclean deactivation (uninstall) of storage engine plugin
+  in the middle of transaction, additional storage engine plugin
+  lock is acquired.
+
+  If ha_data is not null and storage engine plugin was not locked
+  by thd_set_ha_data() in this connection before, storage engine
+  plugin gets locked.
+
+  If ha_data is null and storage engine plugin was locked by
+  thd_set_ha_data() in this connection before, storage engine
+  plugin lock gets released.
+
+  If handlerton::close_connection() didn't reset ha_data, server does
+  it immediately after calling handlerton::close_connection().
 */
-inline
-void
-thd_set_ha_data(const MYSQL_THD thd, const struct handlerton *hton,
-                const void *ha_data)
-{
-  *thd_ha_data(thd, hton)= (void*) ha_data;
+void thd_set_ha_data(MYSQL_THD thd, const struct handlerton *hton,
+                     const void *ha_data);
+#ifdef __cplusplus
 }
 #endif
 

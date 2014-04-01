@@ -1,4 +1,4 @@
-/* Copyright (C) 2006 MySQL AB
+/* Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved. 
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
    Library for providing TAP support for testing C and C++ was written
    by Mats Kindahl <mats@mysql.com>.
@@ -72,10 +72,9 @@ extern "C" {
 /**
    Set number of tests that is planned to execute.
 
-   The function also accepts the predefined constant
-   <code>NO_PLAN</code>.  If the function is not called, it is as if
-   it was called with <code>NO_PLAN</code>, i.e., the test plan will
-   be printed after all the test lines.
+   The function also accepts the predefined constant <code>NO_PLAN</code>.
+   If invoked with this constant -- or not invoked at all --
+   the test plan will be printed after all the test lines.
 
    The plan() function will install signal handlers for all signals
    that generate a core, so if you want to override these signals, do
@@ -84,7 +83,7 @@ extern "C" {
    @param count The planned number of tests to run. 
 */
 
-void plan(int count);
+void plan(int const count);
 
 
 /**
@@ -99,12 +98,23 @@ void plan(int count);
    @endcode
 
    @param pass Zero if the test failed, non-zero if it passed.
-   @param fmt  Format string in printf() format. NULL is allowed, in
-               which case nothing is printed.
+   @param fmt  Format string in printf() format. NULL is not allowed,
+               use ok1() in this case.
 */
 
-void ok(int pass, char const *fmt, ...)
+void ok(int const pass, char const *fmt, ...)
   __attribute__((format(printf,2,3)));
+
+
+/**
+   Report test result as a TAP line.
+
+   Same as ok() but does not take a message to be printed.
+
+   @param pass Zero if the test failed, non-zero if it passed.
+*/
+
+void ok1(int const pass);
 
 
 /**

@@ -14,15 +14,14 @@
 
 @SET_MAKE@
 
-# Copyright (C) 2000-2004 MySQL AB
+# Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 GNU General Public License as
 # published by the Free Software Foundation.
 #
 # There are special exceptions to the terms and conditions of the GPL as it
-# is applied to this software. View the full text of the exception in file
-# EXCEPTIONS-CLIENT in the directory of this software distribution.
+# is applied to this software.
 # 
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -31,20 +30,19 @@
 # 
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-# MA 02111-1307, USA
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
 #
 # This file is public domain and comes with NO WARRANTY of any kind
 
-# Copyright (C) 2000-2004 MySQL AB
+# Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 GNU General Public License as
 # published by the Free Software Foundation.
 #
 # There are special exceptions to the terms and conditions of the GPL as it
-# is applied to this software. View the full text of the exception in file
-# EXCEPTIONS-CLIENT in the directory of this software distribution.
+# is applied to this software.
 # 
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -53,8 +51,8 @@
 # 
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-# MA 02111-1307, USA
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
 #
 # This file is public domain and comes with NO WARRANTY of any kind
 
@@ -89,7 +87,8 @@ DIST_COMMON = $(noinst_HEADERS) $(srcdir)/Makefile.am \
 noinst_PROGRAMS = conf_to_src$(EXEEXT)
 subdir = libmysql
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/alloca.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ac-macros/maintainer.m4 \
+	$(top_srcdir)/config/ac-macros/alloca.m4 \
 	$(top_srcdir)/config/ac-macros/check_cpu.m4 \
 	$(top_srcdir)/config/ac-macros/character_sets.m4 \
 	$(top_srcdir)/config/ac-macros/compiler_flag.m4 \
@@ -127,15 +126,15 @@ am__DEPENDENCIES_1 = my_init.lo my_static.lo my_malloc.lo \
 	default_modify.lo my_compress.lo array.lo my_once.lo list.lo \
 	my_net.lo charset.lo charset-def.lo hash.lo mf_iocache.lo \
 	mf_iocache2.lo my_seek.lo my_sleep.lo my_pread.lo mf_cache.lo \
-	md5.lo sha1.lo my_getopt.lo my_gethostbyname.lo my_port.lo \
-	my_rename.lo my_chsize.lo my_sync.lo my_getsystime.lo
+	md5.lo sha1.lo my_getopt.lo my_rename.lo my_chsize.lo \
+	my_sync.lo my_getsystime.lo
 am__DEPENDENCIES_2 = my_lib.lo mf_qsort.lo
 am__DEPENDENCIES_3 = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_2)
 am__DEPENDENCIES_4 = strmov.lo strxmov.lo strxnmov.lo strnmov.lo \
 	strmake.lo strend.lo strtod.lo strnlen.lo strfill.lo \
 	is_prefix.lo int2str.lo str2int.lo strinstr.lo strcont.lo \
-	strcend.lo bcmp.lo ctype-latin1.lo bchange.lo bmove.lo \
-	bmove_upp.lo longlong2str.lo strtoull.lo strtoll.lo llstr.lo \
+	strcend.lo ctype-latin1.lo bchange.lo bmove.lo bmove_upp.lo \
+	longlong2str.lo strtoull.lo strtoll.lo llstr.lo \
 	my_vsnprintf.lo ctype.lo ctype-simple.lo ctype-bin.lo \
 	ctype-mb.lo ctype-big5.lo ctype-czech.lo ctype-cp932.lo \
 	ctype-eucjpms.lo ctype-euc_kr.lo ctype-win1250ch.lo \
@@ -185,6 +184,8 @@ ALLOCA = @ALLOCA@
 AMDEP_FALSE = @AMDEP_FALSE@
 AMDEP_TRUE = @AMDEP_TRUE@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 AS = @AS@
@@ -296,6 +297,7 @@ MYSQL_SERVER_SUFFIX = @MYSQL_SERVER_SUFFIX@
 MYSQL_TCP_PORT = @MYSQL_TCP_PORT@
 MYSQL_TCP_PORT_DEFAULT = @MYSQL_TCP_PORT_DEFAULT@
 MYSQL_UNIX_ADDR = @MYSQL_UNIX_ADDR@
+MYSQL_U_SCORE_VERSION = @MYSQL_U_SCORE_VERSION@
 MYSQL_VERSION_ID = @MYSQL_VERSION_ID@
 NDB_DEFS = @NDB_DEFS@
 NDB_LD_VERSION_SCRIPT = @NDB_LD_VERSION_SCRIPT@
@@ -313,6 +315,8 @@ NDB_VERSION_BUILD = @NDB_VERSION_BUILD@
 NDB_VERSION_MAJOR = @NDB_VERSION_MAJOR@
 NDB_VERSION_MINOR = @NDB_VERSION_MINOR@
 NDB_VERSION_STATUS = @NDB_VERSION_STATUS@
+NEED_THREAD_FALSE = @NEED_THREAD_FALSE@
+NEED_THREAD_TRUE = @NEED_THREAD_TRUE@
 NM = @NM@
 NOINST_LDFLAGS = @NOINST_LDFLAGS@
 NON_THREADED_LIBS = @NON_THREADED_LIBS@
@@ -357,6 +361,7 @@ THREAD_SAFE_CLIENT_TRUE = @THREAD_SAFE_CLIENT_TRUE@
 VERSION = @VERSION@
 WRAPLIBS = @WRAPLIBS@
 YACC = @YACC@
+YACC_HEXT = @YACC_HEXT@
 ZLIB_DEPS = @ZLIB_DEPS@
 ZLIB_INCLUDES = @ZLIB_INCLUDES@
 ZLIB_LIBS = @ZLIB_LIBS@
@@ -443,8 +448,6 @@ plugin_federated_shared_target = @plugin_federated_shared_target@
 plugin_federated_static_target = @plugin_federated_static_target@
 plugin_heap_shared_target = @plugin_heap_shared_target@
 plugin_heap_static_target = @plugin_heap_static_target@
-plugin_ibmdb2i_shared_target = @plugin_ibmdb2i_shared_target@
-plugin_ibmdb2i_static_target = @plugin_ibmdb2i_static_target@
 plugin_innobase_shared_target = @plugin_innobase_shared_target@
 plugin_innobase_static_target = @plugin_innobase_static_target@
 plugin_innodb_plugin_shared_target = @plugin_innodb_plugin_shared_target@
@@ -459,8 +462,6 @@ plugin_partition_shared_target = @plugin_partition_shared_target@
 plugin_partition_static_target = @plugin_partition_static_target@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
-pstack_dir = @pstack_dir@
-pstack_libs = @pstack_libs@
 readline_basedir = @readline_basedir@
 readline_dir = @readline_dir@
 readline_h_ln_cmd = @readline_h_ln_cmd@
@@ -485,6 +486,7 @@ yassl_dir = @yassl_dir@
 yassl_h_ln_cmd = @yassl_h_ln_cmd@
 yassl_libs = @yassl_libs@
 yassl_taocrypt_extra_cxxflags = @yassl_taocrypt_extra_cxxflags@
+yassl_thread_cxxflags = @yassl_thread_cxxflags@
 zlib_dir = @zlib_dir@
 target_defs = -DMYSQL_CLIENT_NO_THREADS -DDONT_USE_RAID @LIB_EXTRA_CCFLAGS@
 INCLUDES = -I$(top_builddir)/include -I$(top_srcdir)/include \
@@ -502,7 +504,7 @@ mystringsobjects = strmov.lo strxmov.lo strxnmov.lo strnmov.lo \
 			strmake.lo strend.lo strtod.lo \
 			strnlen.lo strfill.lo is_prefix.lo \
 			int2str.lo str2int.lo strinstr.lo strcont.lo \
-			strcend.lo bcmp.lo ctype-latin1.lo \
+			strcend.lo ctype-latin1.lo \
 			bchange.lo bmove.lo bmove_upp.lo longlong2str.lo \
 			strtoull.lo strtoll.lo llstr.lo my_vsnprintf.lo \
 			ctype.lo ctype-simple.lo ctype-bin.lo ctype-mb.lo \
@@ -531,7 +533,7 @@ mysysobjects1 = my_init.lo my_static.lo my_malloc.lo my_realloc.lo \
                         charset.lo charset-def.lo hash.lo mf_iocache.lo \
                         mf_iocache2.lo my_seek.lo my_sleep.lo \
 			my_pread.lo mf_cache.lo md5.lo sha1.lo \
-			my_getopt.lo my_gethostbyname.lo my_port.lo \
+			my_getopt.lo \
                         my_rename.lo my_chsize.lo my_sync.lo my_getsystime.lo
 
 sqlobjects = net.lo

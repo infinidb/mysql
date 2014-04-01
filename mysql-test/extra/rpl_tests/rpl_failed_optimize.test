@@ -22,3 +22,5 @@ connection master;
 select * from t1;
 commit;
 drop table t1;
+
+--source include/rpl_end.inc

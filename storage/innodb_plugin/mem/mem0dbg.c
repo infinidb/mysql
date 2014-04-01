@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -169,6 +169,21 @@ mem_init(
 	}
 
 	mem_comm_pool = mem_pool_create(size);
+}
+
+/******************************************************************//**
+Closes the memory system. */
+UNIV_INTERN
+void
+mem_close(void)
+/*===========*/
+{
+	mem_pool_free(mem_comm_pool);
+	mem_comm_pool = NULL;
+#ifdef UNIV_MEM_DEBUG
+	mutex_free(&mem_hash_mutex);
+	mem_hash_initialized = FALSE;
+#endif /* UNIV_MEM_DEBUG */
 }
 #endif /* !UNIV_HOTBACKUP */
 

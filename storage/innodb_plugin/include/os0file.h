@@ -1,23 +1,6 @@
-/*****************************************************************************
-
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
-
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
-
-*****************************************************************************/
 /***********************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
@@ -38,7 +21,7 @@ Public License for more details.
 
 You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 ***********************************************************************/
 
@@ -157,6 +140,8 @@ log. */
 						to become available again */
 #define	OS_FILE_SHARING_VIOLATION	76
 #define	OS_FILE_ERROR_NOT_SPECIFIED	77
+#define	OS_FILE_INSUFFICIENT_RESOURCE	78
+#define	OS_FILE_OPERATION_ABORTED	79
 /* @} */
 
 /** Types for aio operations @{ */
@@ -619,6 +604,13 @@ os_aio_init(
 	ulint	n_write_segs,	/*<! in: number of writer threads */
 	ulint	n_slots_sync);	/*<! in: number of slots in the sync aio
 				array */
+/***********************************************************************
+Frees the asynchronous io system. */
+UNIV_INTERN
+void
+os_aio_free(void);
+/*=============*/
+
 /*******************************************************************//**
 Requests an asynchronous i/o operation.
 @return	TRUE if request was queued successfully, FALSE if fail */

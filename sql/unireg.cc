@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Functions to create a unireg form-file from a FIELD and a fieldname-fieldinfo
@@ -108,7 +109,6 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   File file;
   ulong filepos, data_offset;
   uchar fileinfo[64],forminfo[288],*keybuff;
-  TYPELIB formnames;
   uchar *screen_buff;
   char buff[128];
 #ifdef WITH_PARTITION_STORAGE_ENGINE
@@ -119,7 +119,7 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   DBUG_ENTER("mysql_create_frm");
 
   DBUG_ASSERT(*fn_rext((char*)file_name)); // Check .frm extension
-  formnames.type_names=0;
+
   if (!(screen_buff=pack_screens(create_fields,&info_length,&screens,0)))
     DBUG_RETURN(1);
   DBUG_ASSERT(db_file != NULL);
@@ -194,8 +194,15 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   key_buff_length= uint4korr(fileinfo+47);
   keybuff=(uchar*) my_malloc(key_buff_length, MYF(0));
   key_info_length= pack_keys(keybuff, keys, key_info, data_offset);
-  VOID(get_form_pos(file,fileinfo,&formnames));
-  if (!(filepos=make_new_entry(file,fileinfo,&formnames,"")))
+
+  /*
+    Ensure that there are no forms in this newly created form file.
+    Even if the form file exists, create_frm must truncate it to
+    ensure one form per form file.
+  */
+  DBUG_ASSERT(uint2korr(fileinfo+8) == 0);
+
+  if (!(filepos= make_new_entry(file, fileinfo, NULL, "")))
     goto err;
   maxlength=(uint) next_io_size((ulong) (uint2korr(forminfo)+1000));
   int2store(forminfo+2,maxlength);
@@ -231,13 +238,14 @@ bool mysql_create_frm(THD *thd, const char *file_name,
     if ((thd->variables.sql_mode &
          (MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES)))
     {
-      my_error(ER_TOO_LONG_TABLE_COMMENT, MYF(0), table, tmp_len);
+      my_error(ER_TOO_LONG_TABLE_COMMENT, MYF(0), table,
+               static_cast<ulong>(tmp_len));
       goto err;
     }
     push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
                         ER_TOO_LONG_TABLE_COMMENT,
                         ER(ER_TOO_LONG_TABLE_COMMENT),
-                        table, tmp_len);
+                        table, static_cast<ulong>(tmp_len));
     create_info->comment.length= tmp_len;
   }
 
@@ -412,10 +420,10 @@ int rea_create_table(THD *thd, const char *path,
   DBUG_ASSERT(*fn_rext(frm_name));
   if (thd->variables.keep_files_on_create)
     create_info->options|= HA_CREATE_KEEP_FILES;
-  if (file->ha_create_handler_files(path, NULL, CHF_CREATE_FLAG, create_info))
-    goto err_handler;
-  if (!create_info->frm_only && ha_create_table(thd, path, db, table_name,
-                                                create_info,0))
+  if (!create_info->frm_only &&
+      (file->ha_create_handler_files(path, NULL, CHF_CREATE_FLAG,
+                                     create_info) ||
+       ha_create_table(thd, path, db, table_name, create_info, 0)))
     goto err_handler;
   DBUG_RETURN(0);
 
@@ -615,13 +623,14 @@ static bool pack_header(uchar *forminfo, enum legacy_db_type table_type,
       if ((current_thd->variables.sql_mode &
 	   (MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES)))
       {
-        my_error(ER_TOO_LONG_FIELD_COMMENT, MYF(0), field->field_name, tmp_len);
+        my_error(ER_TOO_LONG_FIELD_COMMENT, MYF(0), field->field_name,
+                 static_cast<ulong>(tmp_len));
 	DBUG_RETURN(1);
       }
       push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
                           ER_TOO_LONG_FIELD_COMMENT,
                           ER(ER_TOO_LONG_FIELD_COMMENT),
-                          field->field_name, tmp_len);
+                          field->field_name, static_cast<ulong>(tmp_len));
       field->comment.length= tmp_len;
     }
 
@@ -705,7 +714,7 @@ static bool pack_header(uchar *forminfo, enum legacy_db_type table_type,
 
   if (reclength > (ulong) file->max_record_length())
   {
-    my_error(ER_TOO_BIG_ROWSIZE, MYF(0), (uint) file->max_record_length());
+    my_error(ER_TOO_BIG_ROWSIZE, MYF(0), static_cast<long>(file->max_record_length()));
     DBUG_RETURN(1);
   }
   /* Hack to avoid bugs with small static rows in MySQL */

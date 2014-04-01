@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqlslap\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 11/04/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYSQLSLAP\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLSLAP\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -67,7 +76,7 @@ runs in three stages:
 .sp -1
 .IP "  1." 4.2
 .\}
-Create schema, table, and optionally any stored programs or data you want to using for the test\&. This stage uses a single client connection\&.
+Create schema, table, and optionally any stored programs or data to use for the test\&. This stage uses a single client connection\&.
 .RE
 .sp
 .RS 4
@@ -94,14 +103,14 @@ Clean up (disconnect, drop table if specified)\&. This stage uses a single clien
 .PP
 Examples:
 .PP
-Supply your own create and query SQL statements, with 50 clients querying and 200 selects for each:
+Supply your own create and query SQL statements, with 50 clients querying and 200 selects for each (enter the command on a single line):
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-mysqlslap \-\-delimiter=";" \e
-  \-\-create="CREATE TABLE a (b int);INSERT INTO a VALUES (23)" \e
+mysqlslap \-\-delimiter=";"
+  \-\-create="CREATE TABLE a (b int);INSERT INTO a VALUES (23)"
   \-\-query="SELECT * FROM a" \-\-concurrency=50 \-\-iterations=200
 .fi
 .if n \{\
@@ -114,14 +123,14 @@ build the query SQL statement with a table of two
 INT
 columns and three
 VARCHAR
-columns\&. Use five clients querying 20 times each\&. Do not create the table or insert the data (that is, use the previous test\'s schema and data):
+columns\&. Use five clients querying 20 times each\&. Do not create the table or insert the data (that is, use the previous test\*(Aqs schema and data):
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-mysqlslap \-\-concurrency=5 \-\-iterations=20 \e
-  \-\-number\-int\-cols=2 \-\-number\-char\-cols=3 \e
+mysqlslap \-\-concurrency=5 \-\-iterations=20
+  \-\-number\-int\-cols=2 \-\-number\-char\-cols=3
   \-\-auto\-generate\-sql
 .fi
 .if n \{\
@@ -131,19 +140,19 @@ mysqlslap \-\-concurrency=5 \-\-iterations=20 \e
 Tell the program to load the create, insert, and query SQL statements from the specified files, where the
 create\&.sql
 file has multiple table creation statements delimited by
-\';\'
+\*(Aq;\*(Aq
 and multiple insert statements delimited by
-\';\'\&. The
+\*(Aq;\*(Aq\&. The
 \fB\-\-query\fR
 file will have multiple queries delimited by
-\';\'\&. Run all the load statements, then run all the queries in the query file with five clients (five times each):
+\*(Aq;\*(Aq\&. Run all the load statements, then run all the queries in the query file with five clients (five times each):
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-mysqlslap \-\-concurrency=5 \e
-  \-\-iterations=5 \-\-query=query\&.sql \-\-create=create\&.sql \e
+mysqlslap \-\-concurrency=5
+  \-\-iterations=5 \-\-query=query\&.sql \-\-create=create\&.sql
   \-\-delimiter=";"
 .fi
 .if n \{\
@@ -151,8 +160,14 @@ mysqlslap \-\-concurrency=5 \e
 .\}
 .PP
 \fBmysqlslap\fR
-supports the options in the following list\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+supports the following options, which can be specified on the command line or in the
+[mysqlslap]
+and
+[client]
+groups of an option file\&.
+\fBmysqlslap\fR
+also supports the options for processing option files described at
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .sp
 .RS 4
 .ie n \{\
@@ -183,7 +198,7 @@ Display a help message and exit\&.
 \fB\-\-auto\-generate\-sql\fR,
 \fB\-a\fR
 .sp
-Generate SQL statements automatically when they are not supplied in files or via command options\&.
+Generate SQL statements automatically when they are not supplied in files or using command options\&.
 .RE
 .sp
 .RS 4
@@ -245,7 +260,7 @@ Add a GUID\-based primary key to automatically generated tables\&. This option w
 .\" auto-generate-sql-load-type option: mysqlslap
 \fB\-\-auto\-generate\-sql\-load\-type=\fR\fB\fItype\fR\fR
 .sp
-Specify the test load type\&. The allowable values are
+Specify the test load type\&. The permissible values are
 read
 (scan tables),
 write
@@ -399,6 +414,27 @@ The file or string containing the statement to use for creating the table\&.
 \fB\-\-create\-schema=\fR\fB\fIvalue\fR\fR
 .sp
 The schema in which to run the tests\&. This option was added in MySQL 5\&.1\&.5\&.
+.if n \{\
+.sp
+.\}
+.RS 4
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.ps +1
+\fBNote\fR
+.ps -1
+.br
+If the
+\fB\-\-auto\-generate\-sql\fR
+option is also given,
+\fBmysqlslap\fR
+drops the schema at the end of the test run\&. To avoid this, use the
+\fB\-\-no\-drop\fR
+option as well\&.
+.sp .5v
+.RE
 .RE
 .sp
 .RS 4
@@ -432,8 +468,8 @@ Generate output in comma\-separated values format\&. The output goes to the name
 Write a debugging log\&. A typical
 \fIdebug_options\fR
 string is
-\'d:t:o,\fIfile_name\fR\'\&. The default is
-\'d:t:o,/tmp/mysqlslap\&.trace\'\&.
+\*(Aqd:t:o,\fIfile_name\fR\*(Aq\&. The default is
+\*(Aqd:t:o,/tmp/mysqlslap\&.trace\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -480,7 +516,7 @@ Print debugging information and memory and CPU usage statistics when the program
 \fB\-\-delimiter=\fR\fB\fIstr\fR\fR,
 \fB\-F \fR\fB\fIstr\fR\fR
 .sp
-The delimiter to use in SQL statements supplied in files or via command options\&.
+The delimiter to use in SQL statements supplied in files or using command options\&.
 .RE
 .sp
 .RS 4
@@ -571,6 +607,23 @@ The directory to use for storing locks\&. This option was added in MySQL 5\&.1\&
 .sp -1
 .IP \(bu 2.3
 .\}
+.\" mysqlslap: no-drop option
+.\" no-drop option: mysqlslap
+\fB\-\-no\-drop\fR
+.sp
+Prevent
+\fBmysqlslap\fR
+from dropping any schema it creates during the test run\&. This option was added in MySQL 5\&.1\&.57\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 .\" mysqlslap: number-char-cols option
 .\" number-char-cols option: mysqlslap
 \fB\-\-number\-char\-cols=\fR\fB\fIN\fR\fR,
@@ -615,7 +668,24 @@ is specified\&.
 .\" number-of-queries option: mysqlslap
 \fB\-\-number\-of\-queries=\fR\fB\fIN\fR\fR
 .sp
-Limit each client to approximately this number of queries\&. This option was added in MySQL 5\&.1\&.5\&.
+Limit each client to approximately this many queries\&. Query counting takes into account the statement delimiter\&. For example, if you invoke
+\fBmysqlslap\fR
+as follows, the
+;
+delimiter is recognized so that each instance of the query string counts as two queries\&. As a result, 5 rows (not 10) are inserted\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+shell> \fBmysqlslap \-\-delimiter=";" \-\-number\-of\-queries=10\fR
+         \fB\-\-query="use test;insert into t values(null)"\fR
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+This option was added in MySQL 5\&.1\&.5\&.
 .RE
 .sp
 .RS 4
@@ -653,15 +723,15 @@ The password to use when connecting to the server\&. If you use the short option
 have a space between the option and the password\&. If you omit the
 \fIpassword\fR
 value following the
-.\" mysqlslap: password option
-.\" password option: mysqlslap
 \fB\-\-password\fR
 or
 \fB\-p\fR
-option on the command line, you are prompted for one\&.
+option on the command line,
+\fBmysqlslap\fR
+prompts for one\&.
 .sp
 Specifying a password on the command line should be considered insecure\&. See
-Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
+Section\ \&6.1.2.1, \(lqEnd-User Guidelines for Password Security\(rq\&. You can use an option file to avoid giving the password on the command line\&.
 .RE
 .sp
 .RS 4
@@ -677,7 +747,7 @@ Section\ \&5.5.6.2, \(lqEnd-User Guidelines for Password Security\(rq\&.
 \fB\-\-pipe\fR,
 \fB\-W\fR
 .sp
-On Windows, connect to the server via a named pipe\&. This option applies only for connections to a local server, and only if the server supports named\-pipe connections\&.
+On Windows, connect to the server using a named pipe\&. This option applies only if the server supports named\-pipe connections\&.
 .RE
 .sp
 .RS 4
@@ -723,7 +793,7 @@ The file or string containing the statement to execute after the tests have comp
 .\" shared-memory-base-name option: mysqlslap
 \fB\-\-shared\-memory\-base\-name=\fR\fB\fIname\fR\fR
 .sp
-On Windows, the shared\-memory name to use, for connections made via shared memory to a local server\&. This option applies only if the server supports shared\-memory connections\&.
+On Windows, the shared\-memory name to use, for connections made using shared memory to a local server\&. This option applies only if the server supports shared\-memory connections\&.
 .RE
 .sp
 .RS 4
@@ -738,7 +808,7 @@ On Windows, the shared\-memory name to use, for connections made via shared memo
 .\" post-system option: mysqlslap
 \fB\-\-post\-system=\fR\fB\fIstr\fR\fR
 .sp
-The string to execute via
+The string to execute using
 system()
 after the tests have completed\&. This execution is not counted for timing purposes\&. This option was added in MySQL 5\&.1\&.21\&.
 .RE
@@ -770,7 +840,7 @@ The file or string containing the statement to execute before running the tests\
 .\" pre-system option: mysqlslap
 \fB\-\-pre\-system=\fR\fB\fIstr\fR\fR
 .sp
-The string to execute via
+The string to execute using
 system()
 before running the tests\&. This execution is not counted for timing purposes\&. This option was added in MySQL 5\&.1\&.21\&.
 .RE
@@ -808,7 +878,7 @@ options disable this option\&. This option was added in MySQL 5\&.1\&.5 and remo
 .\" protocol option: mysqlslap
 \fB\-\-protocol={TCP|SOCKET|PIPE|MEMORY}\fR
 .sp
-The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the allowable values, see
+The connection protocol to use for connecting to the server\&. It is useful when the other connection parameters normally would cause a protocol to be used other than the one you want\&. For details on the permissible values, see
 Section\ \&4.2.2, \(lqConnecting to the MySQL Server\(rq\&.
 .RE
 .sp
@@ -896,8 +966,8 @@ localhost, the Unix socket file to use, or, on Windows, the name of the named pi
 .sp
 Options that begin with
 \fB\-\-ssl\fR
-specify whether to connect to the server via SSL and indicate where to find SSL keys and certificates\&. See
-Section\ \&5.5.7.3, \(lqSSL Command Options\(rq\&.
+specify whether to connect to the server using SSL and indicate where to find SSL keys and certificates\&. See
+Section\ \&6.3.6.4, \(lqSSL Command Options\(rq\&.
 .RE
 .sp
 .RS 4
@@ -971,7 +1041,7 @@ Display version information and exit\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -984,4 +1054,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

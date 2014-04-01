@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -85,15 +87,18 @@ enum enum_ha_read_modes { RFIRST, RNEXT, RPREV, RLAST, RKEY, RNEXT_SAME };
 enum enum_duplicates { DUP_ERROR, DUP_REPLACE, DUP_UPDATE };
 enum enum_delay_key_write { DELAY_KEY_WRITE_NONE, DELAY_KEY_WRITE_ON,
 			    DELAY_KEY_WRITE_ALL };
-enum enum_slave_exec_mode { SLAVE_EXEC_MODE_STRICT,
-                            SLAVE_EXEC_MODE_IDEMPOTENT,
-                            SLAVE_EXEC_MODE_LAST_BIT};
+
+#define SLAVE_EXEC_MODE_STRICT      (1U << 0)
+#define SLAVE_EXEC_MODE_IDEMPOTENT  (1U << 1)
+
 enum enum_mark_columns
 { MARK_COLUMNS_NONE, MARK_COLUMNS_READ, MARK_COLUMNS_WRITE};
 
 extern char internal_table_name[2];
 extern char empty_c_string[1];
 extern MYSQL_PLUGIN_IMPORT const char **errmesg;
+
+extern bool volatile shutdown_in_progress;
 
 #define TC_LOG_PAGE_SIZE   8192
 #define TC_LOG_MIN_SIZE    (3*TC_LOG_PAGE_SIZE)
@@ -340,6 +345,7 @@ struct system_variables
   ulong infinidb_stringtable_threshold;
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
+  ulong infinidb_local_query;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
@@ -364,6 +370,7 @@ struct system_variables
   ulong ndb_index_stat_cache_entries;
   ulong ndb_index_stat_update_freq;
   ulong binlog_format; // binlog format for this thd (see enum_binlog_format)
+  my_bool binlog_direct_non_trans_update;
   /*
     In slave thread we need to know in behalf of which
     thread the query is being run to replicate temp tables properly
@@ -414,12 +421,14 @@ struct system_variables
 };
 
 
-/* per thread status variables */
+/**
+  Per thread status variables.
+  Must be long/ulong up to last_system_status_var so that
+  add_to_status/add_diff_to_status can work.
+*/
 
 typedef struct system_status_var
 {
-  ulonglong bytes_received;
-  ulonglong bytes_sent;
   ulong com_other;
   ulong com_stat[(uint) SQLCOM_END];
   ulong created_tmp_disk_tables;
@@ -475,13 +484,14 @@ typedef struct system_status_var
     Number of statements sent from the client
   */
   ulong questions;
+
+  ulonglong bytes_received;
+  ulonglong bytes_sent;
   /*
     IMPORTANT!
     SEE last_system_status_var DEFINITION BELOW.
-    Below 'last_system_status_var' are all variables which doesn't make any
-    sense to add to the /global/ status variable counter.
-    Status variables which it does not make sense to add to
-    global status variable counter
+    Below 'last_system_status_var' are all variables that cannot be handled
+    automatically by add_to_status()/add_diff_to_status().
   */
   double last_query_cost;
 } STATUS_VAR;
@@ -559,6 +569,8 @@ public:
   { return state == INITIALIZED_FOR_SP; }
   inline bool is_stmt_prepare_or_first_sp_execute() const
   { return (int)state < (int)PREPARED; }
+  inline bool is_stmt_prepare_or_first_stmt_execute() const
+  { return (int)state <= (int)PREPARED; }
   inline bool is_first_stmt_execute() const { return state == PREPARED; }
   inline bool is_stmt_execute() const
   { return state == PREPARED || state == EXECUTED; }
@@ -655,9 +667,12 @@ public:
     This printing is needed at least in SHOW PROCESSLIST and SHOW
     ENGINE INNODB STATUS.
   */
-  char *query;
-  uint32 query_length;                          // current query length
+  LEX_STRING query_string;
   Server_side_cursor *cursor;
+
+  inline char *query() { return query_string.str; }
+  inline uint32 query_length() { return query_string.length; }
+  void set_query_inner(char *query_arg, uint32 query_length_arg);
 
   /**
     Name of the current (default) database.
@@ -1000,6 +1015,7 @@ public:
   bool enable_slow_log;
   bool last_insert_id_used;
   SAVEPOINT *savepoints;
+  enum enum_check_fields count_cuted_fields;
 };
 
 
@@ -1101,6 +1117,31 @@ public:
     /* Ignore error */
     return TRUE;
   }
+};
+
+
+/**
+  This class is an internal error handler implementation for 
+  DROP TABLE statements. The thing is that there may be warnings during
+  execution of these statements, which should not be exposed to the user.
+  This class is intended to silence such warnings.
+*/
+
+class Drop_table_error_handler : public Internal_error_handler
+{
+public:
+  Drop_table_error_handler(Internal_error_handler *err_handler)
+    :m_err_handler(err_handler)
+  { }
+
+public:
+  bool handle_error(uint sql_errno,
+                    const char *message,
+                    MYSQL_ERROR::enum_warning_level level,
+                    THD *thd);
+
+private:
+  Internal_error_handler *m_err_handler;
 };
 
 
@@ -1243,7 +1284,11 @@ struct Ha_data
     @sa trans_register_ha()
   */
   Ha_trx_info ha_info[2];
-
+  /**
+    NULL: engine is not bound to this thread
+    non-NULL: engine is bound to this thread, engine shutdown forbidden
+  */
+  plugin_ref lock;
   Ha_data() :ha_ptr(NULL) {}
 };
 
@@ -1263,6 +1308,8 @@ public:
 	
   /* Used to execute base64 coded binlog events in MySQL server */
   Relay_log_info* rli_fake;
+  /* Slave applier execution context */
+  Relay_log_info* rli_slave;
 
   /*
     Constant for THD::where initialization in the beginning of every query.
@@ -1312,10 +1359,22 @@ public:
     Protects THD data accessed from other threads:
     - thd->query and thd->query_length (used by SHOW ENGINE
       INNODB STATUS and SHOW PROCESSLIST
-    - thd->mysys_var (used by KILL statement and shutdown).
-    Is locked when THD is deleted.
   */
   pthread_mutex_t LOCK_thd_data;
+
+  /**
+    - Protects thd->mysys_var (used during KILL statement and shutdown).
+    - Is Locked when THD is deleted.
+
+    Note: This responsibility was earlier handled by LOCK_thd_data.
+    This lock is introduced to solve a deadlock issue waiting for
+    LOCK_thd_data. As this lock reduces responsibility of LOCK_thd_data
+    the deadlock issues is solved.
+    Caution: LOCK_thd_kill should not be taken while holding LOCK_thd_data.
+             THD::awake() currently takes LOCK_thd_data after holding
+             LOCK_thd_kill.
+  */
+  pthread_mutex_t LOCK_thd_kill;
 
   /* all prepared statements and cursors of this connection */
   Statement_map stmt_map;
@@ -1401,6 +1460,17 @@ public:
 
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
+
+  /** 
+    Used by fill_status() to avoid acquiring LOCK_status mutex twice
+    when this function is called recursively (e.g. queries 
+    that contains SELECT on I_S.GLOBAL_STATUS with subquery on the 
+    same I_S table).
+    Incremented each time fill_status() function is entered and 
+    decremented each time before it returns from the function.
+  */
+  uint fill_status_recursion_level;
+
   /* TRUE when the current top has SQL_LOG_BIN ON */
   bool sql_log_bin_toplevel;
 
@@ -1694,18 +1764,18 @@ public:
   */
   ha_rows    sent_row_count;
 
-  /*
-    number of rows we read, sent or not, including in create_sort_index()
+  /**
+    Number of rows read and/or evaluated for a statement. Used for
+    slow log reporting.
+
+    An examined row is defined as a row that is read and/or evaluated
+    according to a statement condition, including in
+    create_sort_index(). Rows may be counted more than once, e.g., a
+    statement including ORDER BY could possibly evaluate the row in
+    filesort() before reading it for e.g. update.
   */
   ha_rows    examined_row_count;
 
-  /*
-    The set of those tables whose fields are referenced in all subqueries
-    of the query.
-    TODO: possibly this it is incorrect to have used tables in THD because
-    with more than one subquery, it is not clear what does the field mean.
-  */
-  table_map  used_tables;
   USER_CONN *user_connect;
   CHARSET_INFO *db_charset;
   /*
@@ -1772,7 +1842,7 @@ public:
   	
   enum infinidb_state
   {
-  	INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
+    INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
     INFINIDB_INIT,
     INFINIDB_CREATE_VTABLE,
     INFINIDB_ALTER_VTABLE,
@@ -1807,6 +1877,7 @@ public:
   	bool isInsertSelect;
   	bool isUpdateWithDerive;
 	bool isInfiniDBDML; // default false
+  	bool hasInfiniDBTable; // default false
   };
    
   INFINIDB_VTABLE infinidb_vtable;					// Calpont InfiniDB custom structure
@@ -1933,6 +2004,11 @@ public:
   partition_info *work_part_info;
 #endif
 
+#if defined(ENABLED_DEBUG_SYNC)
+  /* Debug Sync facility. See debug_sync.cc. */
+  struct st_debug_sync_control *debug_sync_control;
+#endif /* defined(ENABLED_DEBUG_SYNC) */
+
   THD();
   ~THD();
 
@@ -1951,6 +2027,7 @@ public:
   void cleanup(void);
   void cleanup_after_query();
   bool store_globals();
+  bool restore_globals();
 #ifdef SIGNAL_WITH_VIO_CLOSE
   inline void set_active_vio(Vio* vio)
   {
@@ -2041,6 +2118,11 @@ public:
     start_time= user_time= t;
     start_utime= utime_after_lock= my_micro_time();
   }
+  /*TODO: this will be obsolete when we have support for 64 bit my_time_t */
+  inline bool	is_valid_time() 
+  { 
+    return (IS_TIME_T_VALID_FOR_TIMESTAMP(start_time));
+  }
   void set_time_after_lock()  { utime_after_lock= my_micro_time(); }
   ulonglong current_utime()  { return my_micro_time(); }
   inline ulonglong found_rows(void)
@@ -2082,7 +2164,6 @@ public:
   void add_changed_table(const char *key, long key_length);
   CHANGED_TABLE_LIST * changed_table_dup(const char *key, long key_length);
   int send_explain_fields(select_result *result);
-#ifndef EMBEDDED_LIBRARY
   /**
     Clear the current error, if any.
     We do not clear is_fatal_error or is_fatal_sub_stmt_error since we
@@ -2098,9 +2179,9 @@ public:
     is_slave_error= 0;
     DBUG_VOID_RETURN;
   }
+#ifndef EMBEDDED_LIBRARY
   inline bool vio_ok() const { return net.vio != 0; }
 #else
-  void clear_error();
   inline bool vio_ok() const { return true; }
 #endif
   /**
@@ -2169,7 +2250,11 @@ public:
   {
     int err= killed_errno();
     if (err)
+    {
+      if ((err == KILL_CONNECTION) && !shutdown_in_progress)
+        err = KILL_QUERY;
       my_message(err, ER(err), MYF(0));
+    }
   }
   /* return TRUE if we will abort query if we make a warning now */
   inline bool really_abort_on_warning()
@@ -2179,8 +2264,6 @@ public:
              (variables.sql_mode & MODE_STRICT_ALL_TABLES)));
   }
   void set_status_var_init();
-  bool is_context_analysis_only()
-    { return stmt_arena->is_stmt_prepare() || lex->view_prepare_mode; }
   void reset_n_backup_open_tables_state(Open_tables_state *backup);
   void restore_backup_open_tables_state(Open_tables_state *backup);
   void reset_sub_statement_state(Sub_statement_state *backup, uint new_state);
@@ -2265,6 +2348,12 @@ public:
   */
   bool set_db(const char *new_db, size_t new_db_len)
   {
+    /*
+      Acquiring mutex LOCK_thd_data as we either free the memory allocated
+      for the database and reallocate the memory for the new db or memcpy
+      the new_db to the db.
+    */
+    pthread_mutex_lock(&LOCK_thd_data);
     /* Do not reallocate memory if current chunk is big enough. */
     if (db && new_db && db_length >= new_db_len)
       memcpy(db, new_db, new_db_len+1);
@@ -2274,6 +2363,7 @@ public:
       db= new_db ? my_strndup(new_db, new_db_len, MYF(MY_WME)) : NULL;
     }
     db_length= db ? new_db_len : 0;
+    pthread_mutex_unlock(&LOCK_thd_data);
     return new_db && !db;
   }
 
@@ -2333,7 +2423,7 @@ public:
   /**
     Remove the error handler last pushed.
   */
-  void pop_internal_handler();
+  Internal_error_handler *pop_internal_handler();
 
   /** Overloaded to guard query/query_length fields */
   virtual void set_statement(Statement *stmt);
@@ -2343,6 +2433,17 @@ public:
     Protected with LOCK_thd_data mutex.
   */
   void set_query(char *query_arg, uint32 query_length_arg);
+  void binlog_invoker() { m_binlog_invoker= TRUE; }
+  bool need_binlog_invoker() { return m_binlog_invoker; }
+  void get_definer(LEX_USER *definer);
+  void set_invoker(const LEX_STRING *user, const LEX_STRING *host)
+  {
+    invoker_user= *user;
+    invoker_host= *host;
+  }
+  LEX_STRING get_invoker_user() { return invoker_user; }
+  LEX_STRING get_invoker_host() { return invoker_host; }
+  bool has_invoker() { return invoker_user.length > 0; }
 private:
   /** The current internal error handler for this thread, or NULL. */
   Internal_error_handler *m_internal_handler;
@@ -2362,6 +2463,25 @@ private:
     tree itself is reused between executions and thus is stored elsewhere.
   */
   MEM_ROOT main_mem_root;
+
+  /**
+    It will be set TURE if CURRENT_USER() is called in account management
+    statements or default definer is set in CREATE/ALTER SP, SF, Event,
+    TRIGGER or VIEW statements.
+
+    Current user will be binlogged into Query_log_event if current_user_used
+    is TRUE; It will be stored into invoker_host and invoker_user by SQL thread.
+   */
+  bool m_binlog_invoker;
+
+  /**
+    It points to the invoker in the Query_log_event.
+    SQL thread use it as the default definer in CREATE/ALTER SP, SF, Event,
+    TRIGGER or VIEW statements or current user in account management
+    statements if it is not NULL.
+   */
+  LEX_STRING invoker_user;
+  LEX_STRING invoker_host;
 };
 
 
@@ -2421,7 +2541,7 @@ class select_result :public Sql_alloc {
 protected:
   THD *thd;
   SELECT_LEX_UNIT *unit;
-  uint nest_level;
+  int nest_level;
 public:
   select_result();
   virtual ~select_result() {};
@@ -2562,7 +2682,7 @@ public:
      Creates a select_export to represent INTO OUTFILE <filename> with a
      defined level of subquery nesting.
    */
-  select_export(sql_exchange *ex, uint nest_level_arg) :select_to_file(ex) 
+  select_export(sql_exchange *ex, int nest_level_arg) :select_to_file(ex) 
   {
     nest_level= nest_level_arg;
   }
@@ -2579,7 +2699,7 @@ public:
      Creates a select_export to represent INTO DUMPFILE <filename> with a
      defined level of subquery nesting.
    */  
-  select_dump(sql_exchange *ex, uint nest_level_arg) : 
+  select_dump(sql_exchange *ex, int nest_level_arg) : 
     select_to_file(ex) 
   {
     nest_level= nest_level_arg;
@@ -2590,7 +2710,9 @@ public:
 
 
 class select_insert :public select_result_interceptor {
- public:
+protected:
+  virtual int write_to_binlog(bool is_trans, int errcode);
+public:
   TABLE_LIST *table_list;
   TABLE *table;
   List<Item> *fields;
@@ -2626,6 +2748,8 @@ class select_create: public select_insert {
   MYSQL_LOCK *m_lock;
   /* m_lock or thd->extra_lock */
   MYSQL_LOCK **m_plock;
+
+  virtual int write_to_binlog(bool is_trans, int errcode);
 public:
   select_create (TABLE_LIST *table_arg,
 		 HA_CREATE_INFO *create_info_par,
@@ -2641,7 +2765,7 @@ public:
     {}
   int prepare(List<Item> &list, SELECT_LEX_UNIT *u);
 
-  void binlog_show_create_table(TABLE **tables, uint count);
+  int binlog_show_create_table(TABLE **tables, uint count, int errcode);
   void store_values(List<Item> &values);
   void send_error(uint errcode,const char *err);
   bool send_eof();
@@ -2679,7 +2803,32 @@ public:
   MI_COLUMNDEF *recinfo,*start_recinfo;
   KEY *keyinfo;
   ha_rows end_write_records;
-  uint	field_count,sum_func_count,func_count;
+  /**
+    Number of normal fields in the query, including those referred to
+    from aggregate functions. Hence, "SELECT `field1`,
+    SUM(`field2`) from t1" sets this counter to 2.
+
+    @see count_field_types
+  */
+  uint	field_count; 
+  /**
+    Number of fields in the query that have functions. Includes both
+    aggregate functions (e.g., SUM) and non-aggregates (e.g., RAND).
+    Also counts functions referred to from aggregate functions, i.e.,
+    "SELECT SUM(RAND())" sets this counter to 2.
+
+    @see count_field_types
+  */
+  uint  func_count;  
+  /**
+    Number of fields in the query that have aggregate functions. Note
+    that the optimizer may choose to optimize away these fields by
+    replacing them with constants, in which case sum_func_count will
+    need to be updated.
+
+    @see opt_sum_query, count_field_types
+  */
+  uint  sum_func_count;   
   uint  hidden_field_count;
   uint	group_parts,group_length,group_null_parts;
   uint	quick_group;
@@ -2902,16 +3051,21 @@ public:
   bool get(TABLE *table);
   static double get_use_cost(uint *buffer, uint nkeys, uint key_size, 
                              ulonglong max_in_memory_size);
+
+  // Returns the number of bytes needed in imerge_cost_buf.
   inline static int get_cost_calc_buff_size(ulong nkeys, uint key_size, 
                                             ulonglong max_in_memory_size)
   {
     register ulonglong max_elems_in_tree=
-      (1 + max_in_memory_size / ALIGN_SIZE(sizeof(TREE_ELEMENT)+key_size));
+      (max_in_memory_size / ALIGN_SIZE(sizeof(TREE_ELEMENT)+key_size));
     return (int) (sizeof(uint)*(1 + nkeys/max_elems_in_tree));
   }
 
   void reset();
   bool walk(tree_walk_action action, void *walk_action_arg);
+
+  uint get_size() const { return size; }
+  ulonglong get_max_in_memory_size() const { return max_in_memory_size; }
 
   friend int unique_write_to_file(uchar* key, element_count count, Unique *unique);
   friend int unique_write_to_ptrs(uchar* key, element_count count, Unique *unique);
@@ -2944,7 +3098,8 @@ public:
   bool send_data(List<Item> &items);
   bool initialize_tables (JOIN *join);
   void send_error(uint errcode,const char *err);
-  int  do_deletes();
+  int do_deletes();
+  int do_table_deletes(TABLE *table, bool ignore);
   bool send_eof();
   virtual void abort();
 };
@@ -3109,7 +3264,7 @@ public:
      Creates a select_dumpvar to represent INTO <variable> with a defined 
      level of subquery nesting.
    */
-  select_dumpvar(uint nest_level_arg)
+  select_dumpvar(int nest_level_arg)
   {
     var_list.empty();
     row_count= 0;

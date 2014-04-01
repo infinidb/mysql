@@ -1,4 +1,117 @@
 drop table if exists t1, t2;
+#
+# Bug#11765667: bug#58655: ASSERTION FAILED,
+#                          SERVER CRASHES WITH MYSQLD GOT SIGNAL 6
+#
+CREATE TABLE t1 (
+id MEDIUMINT NOT NULL AUTO_INCREMENT,
+dt DATE, st VARCHAR(255), uid INT,
+id2nd LONGBLOB, filler VARCHAR(255), PRIMARY KEY(id, dt)
+);
+INSERT INTO t1 (dt, st, uid, id2nd, filler) VALUES
+('1991-03-14', 'Initial Insert', 200, 1234567, 'No Data'),
+('1991-02-26', 'Initial Insert', 201, 1234567, 'No Data'),
+('1992-03-16', 'Initial Insert', 234, 1234567, 'No Data'),
+('1992-07-02', 'Initial Insert', 287, 1234567, 'No Data'),
+('1991-05-26', 'Initial Insert', 256, 1234567, 'No Data'),
+('1991-04-25', 'Initial Insert', 222, 1234567, 'No Data'),
+('1993-03-12', 'Initial Insert', 267, 1234567, 'No Data'),
+('1993-03-14', 'Initial Insert', 291, 1234567, 'No Data'),
+('1991-12-20', 'Initial Insert', 298, 1234567, 'No Data'),
+('1994-10-31', 'Initial Insert', 220, 1234567, 'No Data');
+ALTER TABLE t1 PARTITION BY LIST (YEAR(dt)) (
+PARTITION d1 VALUES IN (1991, 1994),
+PARTITION d2 VALUES IN (1993),
+PARTITION d3 VALUES IN (1992, 1995, 1996)
+);
+INSERT INTO t1 (dt, st, uid, id2nd, filler) VALUES
+('1991-07-14', 'After Partitioning Insert', 299, 1234567, 'Insert row');
+UPDATE t1 SET filler='Updating the row' WHERE uid=298;
+DROP TABLE t1;
+#
+# Bug#59297: Can't find record in 'tablename' on update inner join
+#
+CREATE TABLE t1 (
+a char(2) NOT NULL,
+b char(2) NOT NULL,
+c int(10) unsigned NOT NULL,
+d varchar(255) DEFAULT NULL,
+e varchar(1000) DEFAULT NULL,
+PRIMARY KEY (a, b, c),
+KEY (a),
+KEY (a, b)
+)
+/*!50100 PARTITION BY KEY (a)
+PARTITIONS 20 */;
+INSERT INTO t1 (a, b, c, d, e) VALUES
+('07', '03', 343, '1', '07_03_343'),
+('01', '04', 343, '2', '01_04_343'),
+('01', '06', 343, '3', '01_06_343'),
+('01', '07', 343, '4', '01_07_343'),
+('01', '08', 343, '5', '01_08_343'),
+('01', '09', 343, '6', '01_09_343'),
+('03', '03', 343, '7', '03_03_343'),
+('03', '06', 343, '8', '03_06_343'),
+('03', '07', 343, '9', '03_07_343'),
+('04', '03', 343, '10', '04_03_343'),
+('04', '06', 343, '11', '04_06_343'),
+('05', '03', 343, '12', '05_03_343'),
+('11', '03', 343, '13', '11_03_343'),
+('11', '04', 343, '14', '11_04_343')
+;
+UPDATE t1 AS A,
+(SELECT '03' AS a, '06' AS b, 343 AS c, 'last' AS d) AS B
+SET A.e = B.d  
+WHERE A.a = '03'  
+AND A.b = '06' 
+AND A.c = 343;
+DROP TABLE t1;
+#
+# Bug#57113: ha_partition::extra(ha_extra_function):
+#            Assertion `m_extra_cache' failed
+CREATE TABLE t1
+(id INT NOT NULL PRIMARY KEY,
+name VARCHAR(16) NOT NULL,
+year YEAR,
+INDEX name (name(8))
+)
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO t1 VALUES ( 1, 'FooBar', '1924' );
+CREATE TABLE t2 (id INT);
+INSERT INTO t2 VALUES (1),(2);
+UPDATE t1, t2 SET t1.year = '1955' WHERE t1.name = 'FooBar';
+DROP TABLE t1, t2;
+#
+# Bug#55458: Partitioned MyISAM table gets crashed by multi-table update 
+#
+CREATE TABLE t1 (
+`id` int NOT NULL,
+`user_num` int DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=MyISAM CHARSET=latin1;
+INSERT INTO t1 VALUES (1,8601);
+INSERT INTO t1 VALUES (2,8601);
+INSERT INTO t1 VALUES (3,8601);
+INSERT INTO t1 VALUES (4,8601);
+CREATE TABLE t2 (
+`id` int(11) NOT NULL,
+`user_num` int DEFAULT NULL,
+`name` varchar(64) NOT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=MyISAM CHARSET=latin1
+PARTITION BY HASH (id)
+PARTITIONS 2;
+INSERT INTO t2 VALUES (1,8601,'John');
+INSERT INTO t2 VALUES (2,8601,'JS');
+INSERT INTO t2 VALUES (3,8601,'John S');
+UPDATE t1, t2 SET t2.name = 'John Smith' WHERE t1.user_num = t2.user_num;
+DROP TABLE t1, t2;
+CREATE TABLE t1 (a INT, b INT)
+PARTITION BY LIST (a)
+SUBPARTITION BY HASH (b)
+(PARTITION p1 VALUES IN (1));
+ALTER TABLE t1 ADD COLUMN c INT;
+DROP TABLE t1;
 CREATE TABLE t1 (
 a int NOT NULL,
 b int NOT NULL);
@@ -18,8 +131,8 @@ a timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 b varchar(10),
 PRIMARY KEY (a)
 )
-PARTITION BY RANGE (to_days(a)) (
-PARTITION p1 VALUES LESS THAN (733407),
+PARTITION BY RANGE (UNIX_TIMESTAMP(a)) (
+PARTITION p1 VALUES LESS THAN (1199134800),
 PARTITION pmax VALUES LESS THAN MAXVALUE
 );
 INSERT INTO t1 VALUES ('2007-07-30 17:35:48', 'p1');
@@ -31,7 +144,7 @@ a	b
 2009-07-14 17:35:55	pmax
 2009-09-21 17:31:42	pmax
 ALTER TABLE t1 REORGANIZE PARTITION pmax INTO (
-PARTITION p3 VALUES LESS THAN (733969),
+PARTITION p3 VALUES LESS THAN (1247688000),
 PARTITION pmax VALUES LESS THAN MAXVALUE);
 SELECT * FROM t1;
 a	b
@@ -45,11 +158,33 @@ t1	CREATE TABLE `t1` (
   `b` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`a`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (to_days(a))
-(PARTITION p1 VALUES LESS THAN (733407) ENGINE = MyISAM,
- PARTITION p3 VALUES LESS THAN (733969) ENGINE = MyISAM,
+/*!50100 PARTITION BY RANGE (UNIX_TIMESTAMP(a))
+(PARTITION p1 VALUES LESS THAN (1199134800) ENGINE = MyISAM,
+ PARTITION p3 VALUES LESS THAN (1247688000) ENGINE = MyISAM,
  PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
 DROP TABLE t1;
+create table t1 (a int NOT NULL, b varchar(5) NOT NULL)
+default charset=utf8
+partition by list (a)
+subpartition by key (b)
+(partition p0 values in (1),
+partition p1 values in (2));
+drop table t1;
+create table t1 (a int, b int, key(a))
+partition by list (a)
+( partition p0 values in (1),
+partition p1 values in (2));
+insert into t1 values (1,1),(2,1),(2,2),(2,3);
+show indexes from t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment
+t1	1	a	1	a	A	NULL	NULL	NULL	YES	BTREE	
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+show indexes from t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment
+t1	1	a	1	a	A	1	NULL	NULL	YES	BTREE	
+drop table t1;
 CREATE TABLE t1 (a INT, FOREIGN KEY (a) REFERENCES t0 (a))
 ENGINE=MyISAM
 PARTITION BY HASH (a);
@@ -1354,7 +1489,7 @@ NULL
 2
 explain partitions select * from t1 where a is null or a < 0 or a > 1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	pn,p2	ALL	NULL	NULL	NULL	NULL	4	Using where
+1	SIMPLE	t1	pn,p2	ALL	NULL	NULL	NULL	NULL	2	Using where
 drop table t1;
 CREATE TABLE t1 (id INT NOT NULL PRIMARY KEY, name VARCHAR(20)) 
 ENGINE=MyISAM DEFAULT CHARSET=latin1
@@ -1710,7 +1845,7 @@ c1 bigint,
 c2 set('sweet'),
 key (c2,c1,c0), 
 key(c0)
-) engine=myisam partition by hash (month(c0)) partitions 5;
+) engine=myisam partition by hash (c0) partitions 5;
 insert ignore into t1 set c0 = -6502262, c1 = 3992917, c2 = 35019;
 insert ignore into t1 set c0 = 241221, c1 = -6862346, c2 = 56644;
 select c1 from t1 group by (select c0 from t1 limit 1);
@@ -2030,10 +2165,15 @@ DROP TABLE t1;
 #
 # Bug #45807: crash accessing partitioned table and sql_mode 
 #   contains ONLY_FULL_GROUP_BY
+# Bug#46923: select count(*) from partitioned table fails with
+# ONLY_FULL_GROUP_BY
 #
 SET SESSION SQL_MODE='ONLY_FULL_GROUP_BY';
 CREATE TABLE t1(id INT,KEY(id)) ENGINE=MYISAM 
 PARTITION BY HASH(id) PARTITIONS 2;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+0
 DROP TABLE t1;
 SET SESSION SQL_MODE=DEFAULT;
 #
@@ -2053,6 +2193,57 @@ SELECT  1 FROM t1 JOIN t1 AS t2 USING (a) FOR UPDATE;
 1
 1
 1
+1
+DROP TABLE t1;
+#
+# BUG#51868 - crash with myisam_use_mmap and partitioned myisam tables
+#
+SET GLOBAL myisam_use_mmap=1;
+CREATE TABLE t1(a INT) PARTITION BY HASH(a) PARTITIONS 1;
+INSERT INTO t1 VALUES(0);
+FLUSH TABLE t1;
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES(0);
+DROP TABLE t1;
+SET GLOBAL myisam_use_mmap=default;
+#
+# Bug#13580775 ASSERTION FAILED: RECORD_LENGTH == M_RECORD_LENGTH,
+# FILE FILESORT_UTILS.CC
+#
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b INT,
+c CHAR(1),
+d INT,
+KEY (c,d)
+) PARTITION BY KEY () PARTITIONS 1;
+INSERT INTO t1 VALUES (1,1,'a',1), (2,2,'a',1);
+SELECT 1 FROM t1 WHERE 1 IN
+(SELECT  group_concat(b)
+FROM t1
+WHERE c > geomfromtext('point(1 1)')
+GROUP BY b
+);
+1
+1
+1
+DROP TABLE t1;
+#
+# Bug#13011410 CRASH IN FILESORT CODE WITH GROUP BY/ROLLUP
+#
+CREATE TABLE t1 (
+a INT,
+b MEDIUMINT,
+c VARCHAR(300) CHARACTER SET hp8 COLLATE hp8_bin,
+PRIMARY KEY (a,c(299))) 
+ENGINE=myisam
+PARTITION BY LINEAR KEY () PARTITIONS 2;
+INSERT INTO t1 VALUES (1,2,'test'), (2,3,'hi'), (4,5,'bye');
+SELECT 1 FROM t1 WHERE b < SOME
+( SELECT 1 FROM t1 WHERE a >= 1
+GROUP BY b WITH ROLLUP
+HAVING b > geomfromtext("")
+);
 1
 DROP TABLE t1;
 End of 5.1 tests

@@ -1,5 +1,6 @@
 /* -*- C++ -*- */
-/* Copyright (C) 2002 MySQL AB
+/*
+   Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -291,10 +293,6 @@ public:
 
   virtual ~sp_head();
 
-  /// Free memory
-  void
-  destroy();
-
   bool
   execute_trigger(THD *thd,
                   const LEX_STRING *db_name,
@@ -342,7 +340,7 @@ public:
 
     @todo Conflicting comment in sp_head.cc
   */
-  void
+  bool
   restore_lex(THD *thd);
 
   /// Put the instruction on the backpatch list, associated with the label.
@@ -473,7 +471,7 @@ public:
 
 	// InfiniDB adds accessor
 	sp_pcontext* context() { return m_pcont; }
-	const uint sp_elements() {return m_instr.elements;}
+	uint sp_elements() {return m_instr.elements;}
 
 private:
 
@@ -1007,7 +1005,7 @@ class sp_instr_hpush_jump : public sp_instr_jump
 public:
 
   sp_instr_hpush_jump(uint ip, sp_pcontext *ctx, int htype, uint fp)
-    : sp_instr_jump(ip, ctx), m_type(htype), m_frame(fp)
+    : sp_instr_jump(ip, ctx), m_type(htype), m_frame(fp), m_opt_hpop(0)
   {
     m_cond.empty();
   }
@@ -1029,6 +1027,15 @@ public:
     return m_ip;
   }
 
+  virtual void backpatch(uint dest, sp_pcontext *dst_ctx)
+  {
+    DBUG_ASSERT(!m_dest || !m_opt_hpop);
+    if (!m_dest)
+      m_dest= dest;
+    else
+      m_opt_hpop= dest;
+  }
+
   inline void add_condition(struct sp_cond_type *cond)
   {
     m_cond.push_front(cond);
@@ -1038,6 +1045,7 @@ private:
 
   int m_type;			///< Handler type
   uint m_frame;
+  uint m_opt_hpop;              // hpop marking end of handler scope.
   List<struct sp_cond_type> m_cond;
 
 }; // class sp_instr_hpush_jump : public sp_instr_jump

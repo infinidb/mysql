@@ -409,10 +409,51 @@ SELECT a, b FROM t1 WHERE a=2 AND b=3 GROUP BY a, b;
 a	b
 2	3
 DROP TABLE t1;
+CREATE TABLE t1 (f1 int(11) default NULL, f2 int(11) default NULL);
+CREATE TABLE t2 (f1 int(11) default NULL, f2 int(11) default NULL, foo int(11));
+CREATE TABLE t3 (f1 int(11) default NULL, f2 int(11) default NULL);
+INSERT INTO t1 VALUES(10, 10);
+INSERT INTO t1 VALUES(10, 10);
+INSERT INTO t2 VALUES(10, 10, 10);
+INSERT INTO t2 VALUES(10, 10, 10);
+INSERT INTO t3 VALUES(10, 10);
+INSERT INTO t3 VALUES(10, 10);
+SELECT MIN(t2.f1),
+@bar:= (SELECT MIN(t3.f2) FROM t3 WHERE t3.f2 > foo)
+FROM t1,t2 WHERE t1.f1 = t2.f1 ORDER BY t2.f1;
+MIN(t2.f1)	@bar:= (SELECT MIN(t3.f2) FROM t3 WHERE t3.f2 > foo)
+10	NULL
+DROP TABLE t1, t2, t3;
 End of 5.0 tests
 CREATE TABLE t1 (i INT);
 CREATE TRIGGER t_after_insert AFTER INSERT ON t1 FOR EACH ROW SET @bug42188 = 10;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t1 VALUES (1);
+DROP TABLE t1;
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES (0),(0);
+# BUG#55615 : should not crash
+SELECT (@a:=(SELECT @a:=1 FROM t1 LIMIT 1)) AND COUNT(1) FROM t1 GROUP BY @a;
+(@a:=(SELECT @a:=1 FROM t1 LIMIT 1)) AND COUNT(1)
+1
+1
+# BUG#55564 : should not crash
+SELECT IF(
+@v:=LEAST((SELECT 1 FROM t1 t2 LEFT JOIN t1 ON (@v) GROUP BY t1.a), a),
+count(*), 1) 
+FROM t1 GROUP BY a LIMIT 1;
+IF(
+@v:=LEAST((SELECT 1 FROM t1 t2 LEFT JOIN t1 ON (@v) GROUP BY t1.a), a),
+count(*), 1)
+1
+DROP TABLE t1;
+select @v:=@v:=sum(1) from dual;
+@v:=@v:=sum(1)
+1
+CREATE TABLE t1(a DECIMAL(31,21));
+INSERT INTO t1 VALUES (0);
+SELECT (@v:=a) <> (@v:=1) FROM t1;
+(@v:=a) <> (@v:=1)
+1
 DROP TABLE t1;
 End of 5.1 tests

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -164,7 +164,7 @@ dict_print(void)
 	monitor printout */
 
 	mutex_enter(&kernel_mutex);
-	srv_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
+	srv_fatal_semaphore_wait_threshold += SRV_SEMAPHORE_WAIT_EXTENSION;
 	mutex_exit(&kernel_mutex);
 
 	mutex_enter(&(dict_sys->mutex));
@@ -192,7 +192,7 @@ loop:
 		/* Restore the fatal semaphore wait timeout */
 
 		mutex_enter(&kernel_mutex);
-		srv_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
+		srv_fatal_semaphore_wait_threshold -= SRV_SEMAPHORE_WAIT_EXTENSION;
 		mutex_exit(&kernel_mutex);
 
 		return;
@@ -222,7 +222,8 @@ loop:
 			is no index */
 
 			if (dict_table_get_first_index(table)) {
-				dict_update_statistics_low(table, TRUE);
+				dict_update_statistics(table, FALSE /* update
+						       even if initialized */);
 			}
 
 			dict_table_print_low(table);
@@ -260,7 +261,7 @@ dict_sys_tables_get_flags(
 		return(0);
 	}
 
-	field = rec_get_nth_field_old(rec, 4, &len);
+	field = rec_get_nth_field_old(rec, 4/*N_COLS*/, &len);
 	n_cols = mach_read_from_4(field);
 
 	if (UNIV_UNLIKELY(!(n_cols & 0x80000000UL))) {
@@ -316,7 +317,7 @@ dict_check_tablespaces_and_store_max_id(
 	dict_index_t*	sys_index;
 	btr_pcur_t	pcur;
 	const rec_t*	rec;
-	ulint		max_space_id	= 0;
+	ulint		max_space_id;
 	mtr_t		mtr;
 
 	mutex_enter(&(dict_sys->mutex));
@@ -326,6 +327,11 @@ dict_check_tablespaces_and_store_max_id(
 	sys_tables = dict_table_get_low("SYS_TABLES");
 	sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
 	ut_a(!dict_table_is_comp(sys_tables));
+
+	max_space_id = mtr_read_ulint(dict_hdr_get(&mtr)
+				      + DICT_HDR_MAX_SPACE_ID,
+				      MLOG_4BYTES, &mtr);
+	fil_set_max_space_id_if_bigger(max_space_id);
 
 	btr_pcur_open_at_index_side(TRUE, sys_index, BTR_SEARCH_LEAF, &pcur,
 				    TRUE, &mtr);
@@ -390,15 +396,35 @@ loop:
 
 		mtr_commit(&mtr);
 
-		if (space_id != 0 && in_crash_recovery) {
+		if (space_id == 0) {
+			/* The system tablespace always exists. */
+		} else if (in_crash_recovery) {
 			/* Check that the tablespace (the .ibd file) really
-			exists; print a warning to the .err log if not */
+			exists; print a warning to the .err log if not.
+			Do not print warnings for temporary tables. */
+			ibool	is_temp;
 
-			fil_space_for_table_exists_in_mem(space_id, name,
-							  FALSE, TRUE, TRUE);
-		}
+			field = rec_get_nth_field_old(rec, 4, &len);
+			if (0x80000000UL &  mach_read_from_4(field)) {
+				/* ROW_FORMAT=COMPACT: read the is_temp
+				flag from SYS_TABLES.MIX_LEN. */
+				field = rec_get_nth_field_old(rec, 7, &len);
+				is_temp = mach_read_from_4(field)
+					& DICT_TF2_TEMPORARY;
+			} else {
+				/* For tables created with old versions
+				of InnoDB, SYS_TABLES.MIX_LEN may contain
+				garbage.  Such tables would always be
+				in ROW_FORMAT=REDUNDANT.  Pretend that
+				all such tables are non-temporary.  That is,
+				do not suppress error printouts about
+				temporary tables not being found. */
+				is_temp = FALSE;
+			}
 
-		if (space_id != 0 && !in_crash_recovery) {
+			fil_space_for_table_exists_in_mem(
+				space_id, name, is_temp, TRUE, !is_temp);
+		} else {
 			/* It is a normal database startup: create the space
 			object and check that the .ibd file exists. */
 
@@ -527,9 +553,10 @@ dict_load_columns(
 }
 
 /********************************************************************//**
-Loads definitions for index fields. */
+Loads definitions for index fields.
+@return DB_SUCCESS if ok, DB_CORRUPTION if failed */
 static
-void
+ulint
 dict_load_fields(
 /*=============*/
 	dict_index_t*	index,	/*!< in: index whose fields to load */
@@ -548,6 +575,7 @@ dict_load_fields(
 	byte*		buf;
 	ulint		i;
 	mtr_t		mtr;
+	ulint		error = DB_SUCCESS;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -614,6 +642,26 @@ dict_load_fields(
 
 		field = rec_get_nth_field_old(rec, 4, &len);
 
+		if (prefix_len >= DICT_MAX_INDEX_COL_LEN) {
+			fprintf(stderr, "InnoDB: Error: load index"
+					" '%s' failed.\n"
+					"InnoDB: index field '%s' has a prefix"
+					" length of %lu bytes,\n"
+					"InnoDB: which exceeds the"
+					" maximum limit of %lu bytes.\n"
+					"InnoDB: Please use server that"
+					" supports long index prefix\n"
+					"InnoDB: or turn on"
+					" innodb_force_recovery to load"
+					" the table\n",
+				index->name, mem_heap_strdupl(
+						heap, (char*) field, len),
+		    		(ulong) prefix_len,
+				(ulong) (DICT_MAX_INDEX_COL_LEN - 1));
+			error = DB_CORRUPTION;
+			goto func_exit;
+		}
+
 		dict_mem_index_add_field(index,
 					 mem_heap_strdupl(heap,
 							  (char*) field, len),
@@ -623,8 +671,10 @@ next_rec:
 		btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 	}
 
+func_exit:
 	btr_pcur_close(&pcur);
 	mtr_commit(&mtr);
+	return(error);
 }
 
 /********************************************************************//**
@@ -775,7 +825,25 @@ dict_load_indexes(
 						      space, type, n_fields);
 			index->id = id;
 
-			dict_load_fields(index, heap);
+			error = dict_load_fields(index, heap);
+
+			if (error != DB_SUCCESS) {
+				fprintf(stderr, "InnoDB: Error: load index '%s'"
+					" for table '%s' failed\n",
+					index->name, table->name);
+
+				/* If the force recovery flag is set, and
+				if the failed index is not the primary index, we
+				will continue and open other indexes */
+				if (srv_force_recovery
+				    && !(index->type & DICT_CLUSTERED)) {
+					error = DB_SUCCESS;
+					goto next_rec;
+				} else {
+					goto func_exit;
+				}
+			}
+
 			error = dict_index_add_to_cache(table, index, page_no,
 							FALSE);
 			/* The data dictionary tables should never contain
@@ -894,31 +962,6 @@ err_exit:
 				(ulong) flags);
 			goto err_exit;
 		}
-
-		if (fil_space_for_table_exists_in_mem(space, name, FALSE,
-						      FALSE, FALSE)) {
-			/* Ok; (if we did a crash recovery then the tablespace
-			can already be in the memory cache) */
-		} else {
-			/* In >= 4.1.9, InnoDB scans the data dictionary also
-			at a normal mysqld startup. It is an error if the
-			space object does not exist in memory. */
-
-			ut_print_timestamp(stderr);
-			fprintf(stderr,
-				"  InnoDB: error: space object of table %s,\n"
-				"InnoDB: space id %lu did not exist in memory."
-				" Retrying an open.\n",
-				name, (ulong)space);
-			/* Try to open the tablespace */
-			if (!fil_open_single_table_tablespace(
-				    TRUE, space, flags, name)) {
-				/* We failed to find a sensible tablespace
-				file */
-
-				ibd_file_missing = TRUE;
-			}
-		}
 	} else {
 		flags = 0;
 	}
@@ -928,9 +971,64 @@ err_exit:
 	field = rec_get_nth_field_old(rec, 4, &len);
 	n_cols = mach_read_from_4(field);
 
-	/* The high-order bit of N_COLS is the "compact format" flag. */
+	/* The high-order bit of N_COLS is the "compact format" flag.
+	For tables in that format, MIX_LEN may hold additional flags. */
 	if (n_cols & 0x80000000UL) {
+		ulint	flags2;
+
 		flags |= DICT_TF_COMPACT;
+
+		ut_a(name_of_col_is(sys_tables, sys_index, 7, "MIX_LEN"));
+		field = rec_get_nth_field_old(rec, 7, &len);
+
+		flags2 = mach_read_from_4(field);
+
+		if (flags2 & (~0 << (DICT_TF2_BITS - DICT_TF2_SHIFT))) {
+			ut_print_timestamp(stderr);
+			fputs("  InnoDB: Warning: table ", stderr);
+			ut_print_filename(stderr, name);
+			fprintf(stderr, "\n"
+				"InnoDB: in InnoDB data dictionary"
+				" has unknown flags %lx.\n",
+				(ulong) flags2);
+
+			flags2 &= ~(~0 << (DICT_TF2_BITS - DICT_TF2_SHIFT));
+		}
+
+		flags |= flags2 << DICT_TF2_SHIFT;
+	}
+
+	/* See if the tablespace is available. */
+	if (space == 0) {
+		/* The system tablespace is always available. */
+	} else if (!fil_space_for_table_exists_in_mem(
+			   space, name,
+			   (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY,
+			   FALSE, FALSE)) {
+
+		if ((flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY) {
+			/* Do not bother to retry opening temporary tables. */
+			ibd_file_missing = TRUE;
+		} else {
+			ut_print_timestamp(stderr);
+			fprintf(stderr,
+				"  InnoDB: error: space object of table");
+			ut_print_filename(stderr, name);
+			fprintf(stderr, ",\n"
+				"InnoDB: space id %lu did not exist in memory."
+				" Retrying an open.\n",
+				(ulong) space);
+			/* Try to open the tablespace */
+			if (!fil_open_single_table_tablespace(
+				    TRUE, space,
+				    flags == DICT_TF_COMPACT ? 0 :
+				    flags & ~(~0 << DICT_TF_BITS), name)) {
+				/* We failed to find a sensible
+				tablespace file */
+
+				ibd_file_missing = TRUE;
+			}
+		}
 	}
 
 	table = dict_mem_table_create(name, space, n_cols & ~0x80000000UL,
@@ -954,15 +1052,35 @@ err_exit:
 
 	err = dict_load_indexes(table, heap);
 
+	/* Initialize table foreign_child value. Its value could be
+	changed when dict_load_foreigns() is called below */
+	table->fk_max_recusive_level = 0;
+
 	/* If the force recovery flag is set, we open the table irrespective
 	of the error condition, since the user may want to dump data from the
 	clustered index. However we load the foreign key information only if
 	all indexes were loaded. */
 	if (err == DB_SUCCESS) {
-		err = dict_load_foreigns(table->name, TRUE);
-	} else if (!srv_force_recovery) {
-		dict_table_remove_from_cache(table);
-		table = NULL;
+		err = dict_load_foreigns(table->name, TRUE, TRUE);
+
+		if (err != DB_SUCCESS) {
+			dict_table_remove_from_cache(table);
+			table = NULL;
+		} else {
+			table->fk_max_recusive_level = 0;
+		}
+	} else {
+		dict_index_t*	index;
+
+		/* Make sure that at least the clustered index was loaded.
+		Otherwise refuse to load the table */
+		index = dict_table_get_first_index(table);
+
+		if (!srv_force_recovery || !index
+		     || !(index->type & DICT_CLUSTERED)) {
+			dict_table_remove_from_cache(table);
+			table = NULL;
+		}
 	}
 #if 0
 	if (err != DB_SUCCESS && table != NULL) {
@@ -1017,6 +1135,8 @@ dict_load_table_on_id(
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
 
+	table = NULL;
+
 	/* NOTE that the operation of this function is protected by
 	the dictionary mutex, and therefore no deadlocks can occur
 	with other dictionary operations. */
@@ -1043,15 +1163,17 @@ dict_load_table_on_id(
 				  BTR_SEARCH_LEAF, &pcur, &mtr);
 	rec = btr_pcur_get_rec(&pcur);
 
-	if (!btr_pcur_is_on_user_rec(&pcur)
-	    || rec_get_deleted_flag(rec, 0)) {
+	if (!btr_pcur_is_on_user_rec(&pcur)) {
 		/* Not found */
+		goto func_exit;
+	}
 
-		btr_pcur_close(&pcur);
-		mtr_commit(&mtr);
-		mem_heap_free(heap);
-
-		return(NULL);
+	/* Find the first record that is not delete marked */
+	while (rec_get_deleted_flag(rec, 0)) {
+		if (!btr_pcur_move_to_next_user_rec(&pcur, &mtr)) {
+			goto func_exit;
+		}
+		rec = btr_pcur_get_rec(&pcur);
 	}
 
 	/*---------------------------------------------------*/
@@ -1064,19 +1186,14 @@ dict_load_table_on_id(
 
 	/* Check if the table id in record is the one searched for */
 	if (ut_dulint_cmp(table_id, mach_read_from_8(field)) != 0) {
-
-		btr_pcur_close(&pcur);
-		mtr_commit(&mtr);
-		mem_heap_free(heap);
-
-		return(NULL);
+		goto func_exit;
 	}
 
 	/* Now we get the table name from the record */
 	field = rec_get_nth_field_old(rec, 1, &len);
 	/* Load the table definition to memory */
 	table = dict_load_table(mem_heap_strdupl(heap, (char*) field, len));
-
+func_exit:
 	btr_pcur_close(&pcur);
 	mtr_commit(&mtr);
 	mem_heap_free(heap);
@@ -1186,8 +1303,12 @@ dict_load_foreign(
 /*==============*/
 	const char*	id,	/*!< in: foreign constraint id as a
 				null-terminated string */
-	ibool		check_charsets)
+	ibool		check_charsets,
 				/*!< in: TRUE=check charset compatibility */
+	ibool		check_recursive)
+				/*!< in: Whether to record the foreign table
+				parent count to avoid unlimited recursive
+				load of chained foreign tables */
 {
 	dict_foreign_t*	foreign;
 	dict_table_t*	sys_foreign;
@@ -1201,6 +1322,8 @@ dict_load_foreign(
 	ulint		len;
 	ulint		n_fields_and_type;
 	mtr_t		mtr;
+	dict_table_t*	for_table;
+	dict_table_t*	ref_table;
 
 	ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -1285,11 +1408,54 @@ dict_load_foreign(
 
 	dict_load_foreign_cols(id, foreign);
 
-	/* If the foreign table is not yet in the dictionary cache, we
-	have to load it so that we are able to make type comparisons
-	in the next function call. */
+	ref_table = dict_table_check_if_in_cache_low(
+			foreign->referenced_table_name);
 
-	dict_table_get_low(foreign->foreign_table_name);
+	/* We could possibly wind up in a deep recursive calls if
+	we call dict_table_get_low() again here if there
+	is a chain of tables concatenated together with
+	foreign constraints. In such case, each table is
+	both a parent and child of the other tables, and
+	act as a "link" in such table chains.
+	To avoid such scenario, we would need to check the
+	number of ancesters the current table has. If that
+	exceeds DICT_FK_MAX_CHAIN_LEN, we will stop loading
+	the child table.
+	Foreign constraints are loaded in a Breath First fashion,
+	that is, the index on FOR_NAME is scanned first, and then
+	index on REF_NAME. So foreign constrains in which
+	current table is a child (foreign table) are loaded first,
+	and then those constraints where current table is a
+	parent (referenced) table.
+	Thus we could check the parent (ref_table) table's
+	reference count (fk_max_recusive_level) to know how deep the
+	recursive call is. If the parent table (ref_table) is already
+	loaded, and its fk_max_recusive_level is larger than
+	DICT_FK_MAX_CHAIN_LEN, we will stop the recursive loading
+	by skipping loading the child table. It will not affect foreign
+	constraint check for DMLs since child table will be loaded
+	at that time for the constraint check. */
+	if (!ref_table
+	    || ref_table->fk_max_recusive_level < DICT_FK_MAX_RECURSIVE_LOAD) {
+
+		/* If the foreign table is not yet in the dictionary cache, we
+		have to load it so that we are able to make type comparisons
+		in the next function call. */
+
+		for_table = dict_table_get_low(foreign->foreign_table_name);
+
+		if (for_table && ref_table && check_recursive) {
+			/* This is to record the longest chain of ancesters
+			this table has, if the parent has more ancesters
+			than this table has, record it after add 1 (for this
+			parent */
+			if (ref_table->fk_max_recusive_level
+			    >= for_table->fk_max_recusive_level) {
+				for_table->fk_max_recusive_level =
+					 ref_table->fk_max_recusive_level + 1;
+			}
+		}
+	}
 
 	/* Note that there may already be a foreign constraint object in
 	the dictionary cache for this constraint: then the following
@@ -1314,6 +1480,8 @@ ulint
 dict_load_foreigns(
 /*===============*/
 	const char*	table_name,	/*!< in: table name */
+	ibool		check_recursive,/*!< in: Whether to check recursive
+					load of tables chained by FK */
 	ibool		check_charsets)	/*!< in: TRUE=check charset
 					compatibility */
 {
@@ -1415,7 +1583,7 @@ loop:
 
 	/* Load the foreign constraint definition to the dictionary cache */
 
-	err = dict_load_foreign(id, check_charsets);
+	err = dict_load_foreign(id, check_charsets, check_recursive);
 
 	if (err != DB_SUCCESS) {
 		btr_pcur_close(&pcur);
@@ -1442,6 +1610,11 @@ load_next_index:
 	if (sec_index != NULL) {
 
 		mtr_start(&mtr);
+
+		/* Switch to scan index on REF_NAME, fk_max_recusive_level
+		already been updated when scanning FOR_NAME index, no need to
+		update again */
+		check_recursive = FALSE;
 
 		goto start_load;
 	}

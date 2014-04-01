@@ -1,4 +1,5 @@
-/* Copyright (C) 2006 MySQL AB
+/*
+   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Some general useful functions */
 
@@ -103,8 +105,8 @@ char *partition_info::create_default_partition_names(uint part_no,
   {
     do
     {
-      my_sprintf(move_ptr, (move_ptr,"p%u", (start_no + i)));
-      move_ptr+=MAX_PART_NAME_SIZE;
+      sprintf(move_ptr, "p%u", (start_no + i));
+      move_ptr+= MAX_PART_NAME_SIZE;
     } while (++i < no_parts_arg);
   }
   else
@@ -135,7 +137,7 @@ char *partition_info::create_subpartition_name(uint subpart_no,
 
   if (likely(ptr != NULL))
   {
-    my_sprintf(ptr, (ptr, "%ssp%u", part_name, subpart_no));
+    my_snprintf(ptr, size_alloc, "%ssp%u", part_name, subpart_no);
   }
   else
   {
@@ -483,10 +485,8 @@ static bool check_engine_condition(partition_element *p_elem,
   {
     DBUG_RETURN(TRUE);
   }
-  else
-  {
-    DBUG_RETURN(FALSE);
-  }
+
+  DBUG_RETURN(FALSE);
 }
 
 
@@ -974,7 +974,7 @@ bool partition_info::check_partition_info(THD *thd, handlerton **eng_type,
           part_elem->engine_type= default_engine_type;
         }
         if (check_table_name(part_elem->partition_name,
-                             strlen(part_elem->partition_name)))
+                             strlen(part_elem->partition_name), FALSE))
         {
           my_error(ER_WRONG_PARTITION_NAME, MYF(0));
           goto end;
@@ -992,7 +992,7 @@ bool partition_info::check_partition_info(THD *thd, handlerton **eng_type,
         {
           sub_elem= sub_it++;
           if (check_table_name(sub_elem->partition_name,
-                               strlen(sub_elem->partition_name)))
+                               strlen(sub_elem->partition_name), FALSE))
           {
             my_error(ER_WRONG_PARTITION_NAME, MYF(0));
             goto end;
@@ -1208,13 +1208,11 @@ bool partition_info::set_up_charset_field_preps()
     i= 0;
     while ((field= *(ptr++)))
     {
-      CHARSET_INFO *cs;
       uchar *field_buf;
       LINT_INIT(field_buf);
 
       if (!field_is_partition_charset(field))
         continue;
-      cs= ((Field_str*)field)->charset();
       size= field->pack_length();
       if (!(field_buf= (uchar*) sql_calloc(size)))
         goto error;

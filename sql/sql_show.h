@@ -1,4 +1,5 @@
-/* Copyright 2006-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef SQL_SHOW_H
 #define SQL_SHOW_H
@@ -37,5 +39,6 @@ int store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
 int view_store_create_info(THD *thd, TABLE_LIST *table, String *buff);
 
 int copy_event_to_schema_table(THD *thd, TABLE *sch_table, TABLE *event_table);
+int get_quote_char_for_identifier(THD *thd, const char *name, uint length);
 
 #endif /* SQL_SHOW_H */

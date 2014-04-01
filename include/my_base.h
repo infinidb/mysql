@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Copyright (C) 2013 Calpont Corp. */
 
@@ -444,11 +446,11 @@ enum ha_base_keytype {
 #define HA_ERR_FILE_TOO_SHORT	  175	 /* File too short */
 #define HA_ERR_WRONG_CRC	  176	 /* Wrong CRC on page */
 #define HA_ERR_TOO_MANY_CONCURRENT_TRXS 177 /*Too many active concurrent transactions */
+
 /* The error codes from 178 to 180 is not used, because we need to
 maintain forward compatibility with higher versions. */
-//@InfiniDB @bug4585 for InnoDB upgrade
-#define HA_ERR_TABLE_IN_FK_CHECK  181	 /* Table being used in foreign key check */
 
+#define HA_ERR_TABLE_IN_FK_CHECK  181	 /* Table being used in foreign key check */
 #define HA_ERR_LAST               181    /* Copy of last error nr */
 
 /* Number of different errors */

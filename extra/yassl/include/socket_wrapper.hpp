@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2000-2007 MySQL AB
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #ifndef yaSSL_SOCKET_WRAPPER_HPP
 #define yaSSL_SOCKET_WRAPPER_HPP
 
-#include <assert.h>
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -73,7 +72,8 @@ public:
     uint     get_ready() const;
     socket_t get_fd()    const;
 
-    uint send(const byte* buf, unsigned int len, int flags = 0) const;
+    uint send(const byte* buf, unsigned int len, unsigned int& sent,
+              int flags = 0);
     uint receive(byte* buf, unsigned int len, int flags = 0);
 
     bool wait();

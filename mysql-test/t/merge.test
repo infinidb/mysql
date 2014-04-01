@@ -7,6 +7,8 @@ drop table if exists t1,t2,t3,t4,t5,t6;
 drop database if exists mysqltest;
 --enable_warnings
 
+let $MYSQLD_DATADIR= `select @@datadir`;
+
 create table t1 (a int not null primary key auto_increment, message char(20));
 create table t2 (a int not null primary key auto_increment, message char(20));
 INSERT INTO t1 (message) VALUES ("Testing"),("table"),("t1");
@@ -1632,5 +1634,202 @@ CREATE TRIGGER tr1 AFTER INSERT ON t3 FOR EACH ROW CALL foo();
 SHOW CREATE TRIGGER tr1;
 DROP TRIGGER tr1;
 DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # BUG#48265 - MRG_MYISAM problem (works in 5.0.85, does't work in 5.1.40)
+--echo #
+CREATE DATABASE `test/1`;
+
+CREATE TABLE `test/1`.`t/1`(a INT);
+CREATE TABLE m1(a INT) ENGINE=MERGE UNION=(`test/1`.`t/1`);
+SELECT * FROM m1;
+SHOW CREATE TABLE m1;
+DROP TABLE m1;
+
+CREATE TABLE `test/1`.m1(a INT) ENGINE=MERGE UNION=(`test/1`.`t/1`);
+SELECT * FROM `test/1`.m1;
+SHOW CREATE TABLE `test/1`.m1;
+DROP TABLE `test/1`.m1;
+DROP TABLE `test/1`.`t/1`;
+
+CREATE TEMPORARY TABLE `test/1`.`t/1`(a INT);
+CREATE TEMPORARY TABLE m1(a INT) ENGINE=MERGE UNION=(`test/1`.`t/1`);
+SELECT * FROM m1;
+SHOW CREATE TABLE m1;
+DROP TABLE m1;
+
+CREATE TEMPORARY TABLE `test/1`.m1(a INT) ENGINE=MERGE UNION=(`test/1`.`t/1`);
+SELECT * FROM `test/1`.m1;
+SHOW CREATE TABLE `test/1`.m1;
+DROP TABLE `test/1`.m1;
+DROP TABLE `test/1`.`t/1`;
+
+DROP DATABASE `test/1`;
+
+# Test compatibility. Use '@' instead of '/' (was not allowed in 5.0)
+
+CREATE TABLE `t@1`(a INT);
+copy_file std_data/bug48265.frm $MYSQLD_DATADIR/test/m1.frm;
+write_file $MYSQLD_DATADIR/test/m1.MRG;
+t@1
+EOF
+SELECT * FROM m1;
+SHOW CREATE TABLE m1;
+DROP TABLE `t@1`;
+
+CREATE DATABASE `test@1`;
+CREATE TABLE `test@1`.`t@1`(a INT);
+FLUSH TABLE m1;
+remove_file $MYSQLD_DATADIR/test/m1.MRG;
+write_file $MYSQLD_DATADIR/test/m1.MRG;
+./test@1/t@1
+EOF
+SELECT * FROM m1;
+SHOW CREATE TABLE m1;
+DROP TABLE m1;
+DROP TABLE `test@1`.`t@1`;
+DROP DATABASE `test@1`;
+
+--echo #
+--echo # Bug#51494c rash with join, explain and 'sounds like' operator
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=MYISAM;
+INSERT INTO t1 VALUES(1);
+
+CREATE TABLE t2 (b INT NOT NULL,c INT,d INT,e BLOB NOT NULL,
+KEY idx0 (d, c)) ENGINE=MERGE;
+
+EXPLAIN SELECT * FROM t1 NATURAL RIGHT JOIN
+t2 WHERE b SOUNDS LIKE e AND d = 1;
+
+DROP TABLE t2, t1;
+
+--echo #
+--echo # Bug#46339 - crash on REPAIR TABLE merge table USE_FRM
+--echo #
+--disable_warnings
+DROP TABLE IF EXISTS m1, t1;
+--enable_warnings
+#
+# Test derived from a proposal of Shane Bester.
+#
+CREATE TABLE t1 (c1 INT) ENGINE=MYISAM;
+CREATE TABLE m1 (c1 INT) ENGINE=MRG_MyISAM UNION=(t1) INSERT_METHOD=LAST;
+#
+# REPAIR ... USE_FRM with LOCK TABLES.
+#
+LOCK TABLE m1 READ;
+REPAIR TABLE m1 USE_FRM;
+UNLOCK TABLES;
+#
+# REPAIR ... USE_FRM without LOCK TABLES.
+#
+# This statement crashed the server (Bug#46339).
+#
+REPAIR TABLE m1 USE_FRM;
+#
+DROP TABLE m1,t1;
+#
+# Test derived from a proposal of Matthias Leich.
+#
+# Base table is missing.
+#
+CREATE TABLE m1 (f1 BIGINT) ENGINE=MRG_MyISAM UNION(t1);
+#
+# This statement crashed the server (Bug#46339).
+#
+REPAIR TABLE m1 USE_FRM;
+#
+# Create base table.
+#
+CREATE TABLE t1 (f1 BIGINT) ENGINE = MyISAM;
+#
+# This statement crashed the server (Bug#46339).
+#
+REPAIR TABLE m1 USE_FRM;
+#
+# Normal repair as reference.
+#
+REPAIR TABLE m1;
+#
+# Cleanup.
+#
+DROP TABLE m1, t1;
+#
+# Same with temporary tables.
+#
+# Base table is missing.
+#
+CREATE TEMPORARY TABLE m1 (f1 BIGINT) ENGINE=MRG_MyISAM UNION(t1);
+#
+# This statement crashed the server (Bug#46339).
+#
+REPAIR TABLE m1 USE_FRM;
+#
+# Create base table.
+#
+CREATE TEMPORARY TABLE t1 (f1 BIGINT) ENGINE=MyISAM;
+#
+# This statement crashed the server (Bug#46339).
+#
+REPAIR TABLE m1 USE_FRM;
+#
+# Normal repair as reference.
+#
+REPAIR TABLE m1;
+#
+# Cleanup.
+#
+DROP TABLE m1, t1;
+
+
+--echo #
+--echo # BUG#11763712 - 56458: KILLING A FLUSH TABLE FOR A MERGE/CHILD
+--echo #                       CRASHES SERVER
+--echo #
+CREATE TABLE t1(a INT);
+CREATE TABLE t2(a INT);
+CREATE TABLE t3(a INT, b INT);
+CREATE TABLE m1(a INT) ENGINE=MERGE UNION=(t1, t2);
+
+--echo # Test reopen merge parent failure
+LOCK TABLES m1 READ;
+--echo # Remove 'm1' table using file operations.
+remove_file $MYSQLD_DATADIR/test/m1.MRG;
+remove_file $MYSQLD_DATADIR/test/m1.frm;
+--error ER_NO_SUCH_TABLE
+FLUSH TABLES;
+UNLOCK TABLES;
+CREATE TABLE m1(a INT) ENGINE=MERGE UNION=(t1, t2);
+
+--echo # Test reopen merge child failure
+LOCK TABLES m1 READ;
+--echo # Remove 't1' table using file operations.
+remove_file $MYSQLD_DATADIR/test/t1.frm;
+remove_file $MYSQLD_DATADIR/test/t1.MYI;
+remove_file $MYSQLD_DATADIR/test/t1.MYD;
+--error ER_NO_SUCH_TABLE
+FLUSH TABLES;
+UNLOCK TABLES;
+CREATE TABLE t1(a INT);
+
+--echo # Test reattach merge failure
+LOCK TABLES m1 READ;
+--echo # Replace 't1' with 't3' table using file operations.
+# move + remove is a work around for windows.
+move_file $MYSQLD_DATADIR/test/t1.frm $MYSQLD_DATADIR/test/oldt1.frm;
+move_file $MYSQLD_DATADIR/test/t1.MYI $MYSQLD_DATADIR/test/oldt1.MYI;
+move_file $MYSQLD_DATADIR/test/t1.MYD $MYSQLD_DATADIR/test/oldt1.MYD;
+remove_file $MYSQLD_DATADIR/test/oldt1.frm;
+remove_file $MYSQLD_DATADIR/test/oldt1.MYI;
+remove_file $MYSQLD_DATADIR/test/oldt1.MYD;
+copy_file $MYSQLD_DATADIR/test/t3.frm $MYSQLD_DATADIR/test/t1.frm;
+copy_file $MYSQLD_DATADIR/test/t3.MYI $MYSQLD_DATADIR/test/t1.MYI;
+copy_file $MYSQLD_DATADIR/test/t3.MYD $MYSQLD_DATADIR/test/t1.MYD;
+--error ER_CANT_REOPEN_TABLE
+FLUSH TABLES;
+UNLOCK TABLES;
+DROP TABLE t1, t2, t3, m1;
 
 --echo End of 5.1 tests

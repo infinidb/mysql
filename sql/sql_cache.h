@@ -1,4 +1,6 @@
-/* Copyright (C) 2001-2006 MySQL AB
+/*
+   Copyright (c) 2001-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _SQL_CACHE_H
 #define _SQL_CACHE_H
@@ -485,7 +488,7 @@ protected:
 			const char *name);
   my_bool in_blocks(Query_cache_block * point);
 
-  bool try_lock(void);
+  bool try_lock(bool use_timeout= FALSE);
   void lock(void);
   void lock_and_suspend(void);
   void unlock(void);

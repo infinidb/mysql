@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2001, 2003, 2005 MySQL AB
+/*
+   Copyright (c) 2000, 2003, 2005, 2006 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 
@@ -28,14 +31,7 @@
 
 #include "mysql_priv.h"
 
-SQL_CRYPT::SQL_CRYPT(const char *password, uint length)
-{
-  ulong rand_nr[2];
-  hash_password(rand_nr,password, length);
-  crypt_init(rand_nr);
-}
-
-void SQL_CRYPT::crypt_init(ulong *rand_nr)
+void SQL_CRYPT::init(ulong *rand_nr)
 {
   uint i;
   randominit(&rand,rand_nr[0],rand_nr[1]);

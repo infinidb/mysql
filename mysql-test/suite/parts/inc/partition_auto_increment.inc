@@ -42,6 +42,15 @@ if ($mysql_errno)
 INSERT INTO t1 VALUES (NULL);
 SET INSERT_ID = 30;
 INSERT INTO t1 VALUES (NULL);
+SET INSERT_ID = 29;
+-- error 0, ER_DUP_ENTRY, ER_DUP_KEY
+INSERT INTO t1 VALUES (NULL), (NULL), (NULL);
+if (!$mysql_errno)
+{
+  echo # ERROR (only OK if Blackhole) should give ER_DUP_KEY or ER_DUP_ENTRY;
+  echo # mysql_errno: $mysql_errno;
+}
+INSERT INTO t1 VALUES (NULL);
 if (!$skip_update)
 {
 # InnoDB Does not handle this correctly, see bug#14793, bug#21641
@@ -95,6 +104,30 @@ DELETE FROM t1 WHERE c1 >= 100;
 OPTIMIZE TABLE t1;
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
+
+if (!$skip_update)
+{
+eval CREATE TABLE t1
+(a INT NULL AUTO_INCREMENT,
+ UNIQUE KEY (a))
+ENGINE=$engine;
+SET LAST_INSERT_ID = 999;
+SET INSERT_ID = 0;
+INSERT INTO t1 SET a = 1 ON DUPLICATE KEY UPDATE a = NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+INSERT INTO t1 SET a = 1 ON DUPLICATE KEY UPDATE a = NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+UPDATE t1 SET a = 1 WHERE a IS NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+UPDATE t1 SET a = NULL WHERE a = 1;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+DROP TABLE t1;
+SET INSERT_ID = 1;
+}
 
 -- echo # Simple test with NULL
 eval CREATE TABLE t1 (
@@ -601,6 +634,15 @@ SET INSERT_ID = 23;
 SHOW CREATE TABLE t1;
 INSERT INTO t1 (c1) VALUES (NULL);
 SHOW CREATE TABLE t1;
+SET INSERT_ID = 22;
+-- error 0, ER_DUP_ENTRY, ER_DUP_KEY
+INSERT INTO t1 VALUES (NULL), (NULL), (NULL);
+if (!$mysql_errno)
+{
+  echo # ERROR (only OK if Blackhole) should give ER_DUP_KEY or ER_DUP_ENTRY;
+  echo # mysql_errno: $mysql_errno;
+}
+INSERT INTO t1 VALUES (NULL);
 SELECT * FROM t1 ORDER BY c1;
 DROP TABLE t1;
 
@@ -623,3 +665,220 @@ SHOW CREATE TABLE t1;
 SELECT * FROM t1 ORDER BY c1;
 DROP TABLE t1;
 
+if (!$skip_negative_auto_inc)
+{
+--echo #############################################################################
+--echo # Bug #45823 - Assertion failure in file row/row0mysql.c line 1386
+--echo # Bug #43988 - AUTO_INCREMENT errors with partitioned InnoDB tables in 5.1.31
+--echo ##############################################################################
+
+--echo # Inserting negative autoincrement values into a partition table (partitions >= 4)
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (-1,-10);
+INSERT INTO t(c2) VALUES (30);
+INSERT INTO t(c2) VALUES (40);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Reading from a partition table (partitions >= 2 ) after inserting a negative
+--echo # value into the auto increment column
+
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 2;
+
+INSERT INTO t VALUES (-2,-20);
+INSERT INTO t(c2) VALUES (30);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Inserting negative auto increment value into a partition table (partitions >= 2)
+--echo # auto increment value > 2.
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 2;
+
+INSERT INTO t VALUES (-4,-20);
+INSERT INTO t(c2) VALUES (30);
+INSERT INTO t(c2) VALUES (40);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Inserting -1 into autoincrement column of a partition table (partition >= 4)
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (-1,-10);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+INSERT INTO t(c2) VALUES (30);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Deleting from an auto increment table after inserting negative values
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4; 
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (-1,-10);
+INSERT INTO t(c2) VALUES (30);
+INSERT INTO t VALUES (-3,-20);
+INSERT INTO t(c2) VALUES (40);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+if (!$skip_delete)
+{ 
+DELETE FROM t WHERE c1 > 1;
+}
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Inserting a positive value that exceeds maximum allowed value for an
+--echo # Auto Increment column (positive maximum)
+
+eval CREATE TABLE t (c1 TINYINT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (126,30);
+INSERT INTO t VALUES (127,40);
+
+--error ER_DUP_ENTRY
+INSERT INTO t VALUES (128,50);
+--error ER_DUP_ENTRY 
+INSERT INTO t VALUES (129,60);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Inserting a negative value that goes below minimum allowed value for an
+--echo # Auto Increment column (negative minimum)
+
+eval CREATE TABLE t (c1 TINYINT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (-127,30);
+INSERT INTO t VALUES (-128,40);
+
+--error ER_DUP_ENTRY
+INSERT INTO t VALUES (-129,50);
+--error ER_DUP_ENTRY
+INSERT INTO t VALUES (-130,60);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Updating the partition table with a negative Auto Increment value
+
+eval CREATE TABLE t (c1 INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (-1,-10);
+INSERT INTO t(c2) VALUES (30);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+if (!$skip_update)
+{ 
+UPDATE t SET c1 = -6 WHERE c1 = 2;
+}
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+INSERT INTO t(c2) VALUES (40);
+INSERT INTO t(c2) VALUES (50);
+
+if (!$skip_update)
+{ 
+UPDATE t SET c1 = -6 WHERE c1 = 2;
+}
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+--echo # Updating the partition table with a value that crosses the upper limits
+--echo # on both the positive and the negative side.
+
+eval CREATE TABLE t (c1 TINYINT NOT NULL AUTO_INCREMENT, PRIMARY KEY(c1),
+  c2 INT) ENGINE=$engine PARTITION BY HASH(c1) PARTITIONS 4;
+
+INSERT INTO t(c2) VALUES (10);
+INSERT INTO t(c2) VALUES (20);
+INSERT INTO t VALUES (126,30);
+INSERT INTO t VALUES (127,40);
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+if (!$skip_update)
+{ 
+UPDATE t SET c1 = 130 where c1 = 127;
+}
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+if (!$skip_update)
+{ 
+UPDATE t SET c1 = -140 where c1 = 126;
+}
+
+SELECT * FROM t ORDER BY c1 ASC;
+
+DROP TABLE t;
+
+if (!$skip_update)
+{ 
+eval CREATE TABLE t1
+(a INT NULL AUTO_INCREMENT,
+ UNIQUE KEY (a))
+ENGINE=$engine
+PARTITION BY KEY(a) PARTITIONS 2;
+SET LAST_INSERT_ID = 999;
+SET INSERT_ID = 0;
+INSERT INTO t1 SET a = 1 ON DUPLICATE KEY UPDATE a = NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+INSERT INTO t1 SET a = 1 ON DUPLICATE KEY UPDATE a = NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+UPDATE t1 SET a = 1 WHERE a IS NULL;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+UPDATE t1 SET a = NULL WHERE a = 1;
+SELECT LAST_INSERT_ID();
+SELECT * FROM t1;
+DROP TABLE t1;
+}
+
+
+--echo ##############################################################################
+}

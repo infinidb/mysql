@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2001, 2003-2004 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* Mallocs for used in threads */
@@ -21,8 +23,6 @@
 extern "C" {
   void sql_alloc_error_handler(void)
   {
-    sql_print_error("%s", ER(ER_OUT_OF_RESOURCES));
-
     THD *thd= current_thd;
     if (thd)
     {
@@ -49,6 +49,12 @@ extern "C" {
                                       ER(ER_OUT_OF_RESOURCES));
       }
     }
+
+    /* Skip writing to the error log to avoid mtr complaints */
+    DBUG_EXECUTE_IF("simulate_out_of_memory", return;);
+
+    sql_print_error("%s", ER(ER_OUT_OF_RESOURCES));
+
   }
 }
 

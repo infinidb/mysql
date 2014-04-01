@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* This file should be included when using myisam_funktions */
 
@@ -30,8 +32,30 @@ extern "C" {
 #ifndef _keycache_h
 #include "keycache.h"
 #endif
-#include "my_handler.h"
 #include <mysql/plugin.h>
+#include "my_compare.h"
+
+/*
+  There is a hard limit for the maximum number of keys as there are only
+  8 bits in the index file header for the number of keys in a table.
+  This means that 0..255 keys can exist for a table. The idea of
+  HA_MAX_POSSIBLE_KEY is to ensure that one can use myisamchk & tools on
+  a MyISAM table for which one has more keys than MyISAM is normally
+  compiled for. If you don't have this, you will get a core dump when
+  running myisamchk compiled for 128 keys on a table with 255 keys.
+*/
+
+#define HA_MAX_POSSIBLE_KEY         255         /* For myisamchk */
+/*
+  The following defines can be increased if necessary.
+  But beware the dependency of MI_MAX_POSSIBLE_KEY_BUFF and HA_MAX_KEY_LENGTH.
+*/
+
+#define HA_MAX_KEY_LENGTH           1000        /* Max length in bytes */
+#define HA_MAX_KEY_SEG              16          /* Max segments for key */
+
+#define HA_MAX_POSSIBLE_KEY_BUFF    (HA_MAX_KEY_LENGTH + 24+ 6+6)
+#define HA_MAX_KEY_BUFF  (HA_MAX_KEY_LENGTH+HA_MAX_KEY_SEG*6+8+8)
 
 /*
   Limit max keys according to HA_MAX_POSSIBLE_KEY
@@ -55,8 +79,6 @@ extern "C" {
 #define MI_MAX_MSG_BUF      1024 /* used in CHECK TABLE, REPAIR TABLE */
 #define MI_NAME_IEXT	".MYI"
 #define MI_NAME_DEXT	".MYD"
-/* Max extra space to use when sorting keys */
-#define MI_MAX_TEMP_LENGTH	2*1024L*1024L*1024L
 
 /* Possible values for myisam_block_size (must be power of 2) */
 #define MI_KEY_BLOCK_LENGTH	1024	/* default key block length */
@@ -259,6 +281,8 @@ extern ulong myisam_bulk_insert_tree_size, myisam_data_pointer_size;
 /* usually used to check if a symlink points into the mysql data home */
 /* which is normally forbidden                                        */
 extern int (*myisam_test_invalid_symlink)(const char *filename);
+extern ulonglong myisam_mmap_size, myisam_mmap_used;
+extern pthread_mutex_t THR_LOCK_myisam_mmap;
 
 	/* Prototypes for myisam-functions */
 
@@ -304,6 +328,7 @@ extern int mi_delete_all_rows(struct st_myisam_info *info);
 extern ulong _mi_calc_blob_length(uint length , const uchar *pos);
 extern uint mi_get_pointer_length(ulonglong file_length, uint def);
 
+#define MEMMAP_EXTRA_MARGIN     7       /* Write this as a suffix for mmap file */
 /* this is used to pass to mysql_myisamchk_table */
 
 #define   MYISAMCHK_REPAIR 1  /* equivalent to myisamchk -r */
@@ -432,6 +457,10 @@ typedef struct st_mi_check_param
   const char *db_name, *table_name;
   const char *op_name;
   enum_mi_stats_method stats_method;
+#ifdef THREAD
+  pthread_mutex_t print_msg_mutex;
+  my_bool need_print_msg_lock;
+#endif
 } MI_CHECK;
 
 typedef struct st_sort_ft_buf

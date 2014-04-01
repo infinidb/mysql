@@ -1,7 +1,22 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-#
+# Copyright (c) 2008-2010 Sun Microsystems, Inc.
+# Use is subject to license terms.
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+
 ##############################################################################
 #
 #  mysql-test-run.pl
@@ -905,6 +920,11 @@ sub command_line_setup () {
   mtr_report("Using default engine '$used_default_engine'")
     if defined $used_default_engine;
 
+  if ($glob_win32 and defined $opt_mem) {
+    mtr_report("--mem not supported on Windows, ignored");
+    $opt_mem= undef;
+  }
+
   # --------------------------------------------------------------------------
   # Check if we should speed up tests by trying to run on tmpfs
   # --------------------------------------------------------------------------
@@ -1102,14 +1122,16 @@ sub command_line_setup () {
 
   if ( ! $opt_testcase_timeout )
   {
-    $opt_testcase_timeout= $default_testcase_timeout;
+    $opt_testcase_timeout=
+      $ENV{MTR_TESTCASE_TIMEOUT} || $default_testcase_timeout;
     $opt_testcase_timeout*= 10 if $opt_valgrind;
     $opt_testcase_timeout*= 10 if ($opt_debug and $glob_win32);
   }
 
   if ( ! $opt_suite_timeout )
   {
-    $opt_suite_timeout= $default_suite_timeout;
+    $opt_suite_timeout=
+      $ENV{MTR_SUITE_TIMEOUT} || $default_suite_timeout;
     $opt_suite_timeout*= 6 if $opt_valgrind;
     $opt_suite_timeout*= 6 if ($opt_debug and $glob_win32);
   }
@@ -4066,7 +4088,7 @@ sub mysqld_arguments ($$$$) {
   }
 
   mtr_add_arg($args, "%s--key_buffer_size=1M", $prefix);
-  mtr_add_arg($args, "%s--sort_buffer=256K", $prefix);
+  mtr_add_arg($args, "%s--sort_buffer_size=256K", $prefix);
   mtr_add_arg($args, "%s--max_heap_table_size=1M", $prefix);
 
   if ( $opt_ssl_supported )

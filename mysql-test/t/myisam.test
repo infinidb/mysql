@@ -1184,6 +1184,31 @@ SELECT a FROM t1;
 CHECK TABLE t1;
 DROP TABLE t1; 
 
+
+--echo #
+--echo # Bug #49465: valgrind warnings and incorrect live checksum...
+--echo #
+CREATE TABLE t1(
+a VARCHAR(1), b VARCHAR(1), c VARCHAR(1),
+f VARCHAR(1), g VARCHAR(1), h VARCHAR(1),
+i VARCHAR(1), j VARCHAR(1), k VARCHAR(1)) CHECKSUM=1;
+INSERT INTO t1 VALUES('', '', '', '', '', '', '', '', '');
+CHECKSUM TABLE t1 QUICK;
+CHECKSUM TABLE t1 EXTENDED;
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#48438 - crash with error in unioned query against merge table and view...
+--echo #
+SET GLOBAL table_open_cache=3;
+CREATE TABLE t1(a INT);
+SELECT 1 FROM t1 AS a1, t1 AS a2, t1 AS a3, t1 AS a4 FOR UPDATE;
+SELECT TABLE_ROWS, DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1';
+DROP TABLE t1;
+SET GLOBAL table_open_cache=DEFAULT;
+
 --echo End of 5.0 tests
 
 
@@ -1503,5 +1528,153 @@ SELECT h+0, d + 0, e, g + 0 FROM t1;
 
 DROP TABLE t1;
 
---echo End of 5.1 tests
+--echo #
+--echo # Test of BUG#35570 CHECKSUM TABLE unreliable if LINESTRING field
+--echo # (same content / differen checksum)
+--echo #
 
+CREATE TABLE t1 (line LINESTRING NOT NULL) engine=myisam;
+INSERT INTO t1 VALUES (GeomFromText("POINT(0 0)"));
+checksum table t1;
+CREATE TABLE t2 (line LINESTRING NOT NULL) engine=myisam;
+INSERT INTO t2 VALUES (GeomFromText("POINT(0 0)"));
+checksum table t2;
+CREATE TABLE t3 select * from t1;
+checksum table t3;
+drop table t1,t2,t3;
+
+
+#
+# BUG#47073 - valgrind errs, corruption,failed repair of partition,
+#             low myisam_sort_buffer_size
+#
+CREATE TABLE t1(a INT, b CHAR(10), KEY(a), KEY(b));
+INSERT INTO t1 VALUES(1,'0'),(2,'0'),(3,'0'),(4,'0'),(5,'0'),
+                     (6,'0'),(7,'0');
+INSERT INTO t1 SELECT a+10,b FROM t1;
+INSERT INTO t1 SELECT a+20,b FROM t1;
+INSERT INTO t1 SELECT a+40,b FROM t1;
+INSERT INTO t1 SELECT a+80,b FROM t1;
+INSERT INTO t1 SELECT a+160,b FROM t1;
+INSERT INTO t1 SELECT a+320,b FROM t1;
+INSERT INTO t1 SELECT a+640,b FROM t1;
+INSERT INTO t1 SELECT a+1280,b FROM t1;
+INSERT INTO t1 SELECT a+2560,b FROM t1;
+INSERT INTO t1 SELECT a+5120,b FROM t1;
+SET myisam_sort_buffer_size=4;
+REPAIR TABLE t1;
+
+SET myisam_repair_threads=2;
+# May report different values depending on threads activity.
+--disable_result_log
+REPAIR TABLE t1;
+--enable_result_log
+SET myisam_repair_threads=@@global.myisam_repair_threads;
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+CHECK TABLE t1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#49628 - corrupt table after legal SQL, LONGTEXT column
+--echo #
+CREATE TABLE t1(a INT, b LONGTEXT, UNIQUE(a));
+REPLACE INTO t1 VALUES
+(1, REPEAT('a', 129015)),(1, NULL),
+(2, NULL),(3, NULL),(4, NULL),(5, NULL),(6, NULL),(7, NULL),
+(1, REPEAT('b', 129016)),(1, NULL),
+(1, REPEAT('c', 129015)),(1, REPEAT('d', 129015));
+CHECK TABLE t1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug#51304: checksum table gives different results
+--echo # for same data when using bit fields
+--echo #
+CREATE TABLE t1(a INT, b BIT(1));
+INSERT INTO t1 VALUES(1, 0), (2, 1);
+CREATE TABLE t2 SELECT * FROM t1;
+--copy_file $MYSQLD_DATADIR/test/t1.frm $MYSQLD_DATADIR/test/t3.frm
+--copy_file $MYSQLD_DATADIR/test/t1.MYD $MYSQLD_DATADIR/test/t3.MYD
+--copy_file $MYSQLD_DATADIR/test/t1.MYI $MYSQLD_DATADIR/test/t3.MYI
+CHECKSUM TABLE t1 EXTENDED;
+CHECKSUM TABLE t2 EXTENDED;
+CHECKSUM TABLE t3 EXTENDED;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # BUG#51307 - widespread corruption with partitions and insert...select
+--echo #
+CREATE TABLE t1(a CHAR(255), KEY(a));
+SELECT * FROM t1, t1 AS a1;
+SET myisam_sort_buffer_size=4;
+INSERT INTO t1 VALUES
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),('0'),
+('0'),('0'),('0'),('0'),('0'),('0'),('0');
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+INSERT INTO t1 VALUES('1');
+SELECT * FROM t1, t1 AS a1 WHERE t1.a=1 AND a1.a=1;
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#47444 - --myisam_repair_threads>1can result in all index
+--echo #             cardinalities=1
+--echo #
+SET myisam_repair_threads=2;
+SET myisam_sort_buffer_size=4096;
+CREATE TABLE t1(a CHAR(255), KEY(a), KEY(a), KEY(a));
+INSERT INTO t1 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0),(1),(2),(3);
+REPAIR TABLE t1;
+SELECT CARDINALITY FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1';
+DROP TABLE t1;
+SET myisam_sort_buffer_size=@@global.myisam_sort_buffer_size;
+SET myisam_repair_threads=@@global.myisam_repair_threads;
+
+--echo #
+--echo # BUG#11757032 - 49030: OPTIMIZE TABLE BREAKS MYISAM TABLE WHEN
+--echo #                USING MYISAM_USE_MMAP ON WINDOWS
+--echo #
+SET GLOBAL myisam_use_mmap=1;
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(1),(2);
+DELETE FROM t1 WHERE a=1;
+FLUSH TABLE t1;
+LOCK TABLE t1 WRITE;
+OPTIMIZE TABLE t1;
+INSERT INTO t1 VALUES(3);
+UNLOCK TABLES;
+SELECT * FROM t1;
+CHECK TABLE t1;
+DROP TABLE t1;
+SET GLOBAL myisam_use_mmap=default;
+
+--echo #
+--echo # BUG 11756869 - 48848: MYISAMCHK DOING SORT RECOVER IN CERTAIN
+--echo #                       CASES RESETS DATA POINTER TO SMAL
+--echo #
+CREATE TABLE t1(a INT, KEY(a));
+ALTER TABLE t1 DISABLE KEYS;
+let $MYSQLD_DATADIR= `select @@datadir`;
+SET @before:= (SELECT MAX_DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test');
+FLUSH TABLES;
+--replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
+--exec $MYISAMCHK -sn $MYSQLD_DATADIR/test/t1
+SET @after:= (SELECT MAX_DATA_LENGTH FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test');
+SELECT @before=@after;
+DROP TABLE t1;
+--echo End of 5.1 tests

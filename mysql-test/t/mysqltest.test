@@ -326,6 +326,23 @@ eval select $mysql_errno as "after_!errno_masked_error" ;
 --exec echo "disable_abort_on_error; error 1000; select 3 from t1; error 1000; select 3 from t1;" | $MYSQL_TEST  2>&1
 
 # ----------------------------------------------------------------------------
+# Check some non-query statements that would fail
+# ----------------------------------------------------------------------------
+--exec illegal_command
+--cat_file does_not_exist
+--perl
+  exit(2);
+EOF
+
+# ----------------------------------------------------------------------------
+# Check backtick and query_get_value, result should be empty
+# ----------------------------------------------------------------------------
+let $empty= `garbage`;
+echo $empty is empty;
+let $empty= query_get_value(nonsense, blabla, 1);
+echo $empty is empty;
+
+# ----------------------------------------------------------------------------
 # Switch the abort on error on and check the effect on $mysql_errno
 # ----------------------------------------------------------------------------
 --error ER_PARSE_ERROR
@@ -354,6 +371,23 @@ select 3 from t1 ;
 --error 1
 --exec echo "disable_abort_on_error; enable_abort_on_error; error 1064; select 3 from t1; select 3 from t1;" | $MYSQL_TEST  2>&1
 
+
+# ----------------------------------------------------------------------------
+# Test --error with backtick operator or query_get_value
+# ----------------------------------------------------------------------------
+
+--error 0,ER_NO_SUCH_TABLE
+let $empty= `SELECT foo from bar`;
+echo $empty is empty;
+
+--error 0,ER_BAD_FIELD_ERROR
+let $empty= query_get_value(SELECT bar as foo, baz, 1);
+echo $empty is empty;
+
+--error 0,ER_NO_SUCH_TABLE
+if (!`SELECT foo from bar`) {
+  echo "Yes it's empty";
+}
 
 # ----------------------------------------------------------------------------
 # Test comments
@@ -485,6 +519,32 @@ remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
 --error 1
 --exec echo "--disable_query_log;" | $MYSQL_TEST 2>&1
 
+#
+# Extra text after ``
+#
+# Cannot use exec echo here as ` may or may not need to be escaped
+--write_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql
+let $x= `select 1` BOO ;
+EOF
+--error 1
+--exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/mysqltest.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
+--write_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql
+--let $x= `select 1`;
+EOF
+--error 1
+--exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/mysqltest.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
+--write_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql
+# Missing ; in next line should be detected and cause failure
+let $x= `select 1`
+let $x= 2;
+echo $x;
+EOF
+--error 1
+--exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/mysqltest.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
+
 
 # Allow trailing # comment
 --sleep 1 # Wait for insert delayed to be executed.
@@ -605,6 +665,15 @@ echo ;
 --error 1
 --exec echo "--exec " | $MYSQL_TEST 2>&1
 
+# Multi-line exec
+exec $MYSQL
+    test -e "select 1";
+exec $MYSQL test -e "select
+    2";
+let $query = select 3
+    as X;
+exec $MYSQL test -e "$query";
+
 # ----------------------------------------------------------------------------
 # Test let command
 # ----------------------------------------------------------------------------
@@ -683,6 +752,16 @@ echo banana = $cat;
 let $cat=ba\\\$cat\\\$cat;
 echo Not a banana: $cat;
 
+# Bug #55413 would cause this to fail
+let $escape= with\`some\"escaped\'quotes;
+echo $escape;
+
+--let $escape= with\`some\"escaped\'quotes
+echo $escape;
+
+# This only works with "--let" syntax
+--let $tick= single'tick`backtick
+echo $tick;
 
 # Test illegal uses of let
 
@@ -800,6 +879,19 @@ let $var2= `failing query`;
 echo $var2;
 EOF
 
+create table t1 (a varchar(100));
+insert into t1 values ('`select 42`');
+let $a= `select * from t1`;
+# This should output `select 42`, not evaluate it again to 42
+echo $a;
+insert into t1 values ('$dollar');
+# These should also output the string without evaluating it.
+let $a= query_get_value(select * from t1 order by a, a, 1);
+echo $a;
+let $a= query_get_value(select * from t1 order by a, a, 2);
+echo $a;
+drop table t1;
+
 --error 1
 --exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/let.sql 2>&1
 
@@ -853,16 +945,25 @@ while ($outer)
   eval SELECT '$outer = outer loop variable after dec' AS "";
 }
 
+# Test source in an if in a while which is false on 1st iteration
+# Also test --error and --disable_abort_on_error in same context
 let $outer= 2; # Number of outer loops
+let $ifval= 0; # false 1st time
 while ($outer)
 {
-  eval SELECT '$outer = outer loop variable after while' AS "";
+  echo outer=$outer ifval=$ifval;
 
-  echo here is the sourced script;
-
-  eval SELECT '$outer = outer loop variable before dec' AS "";
+  if ($ifval) {
+    --source $MYSQLTEST_VARDIR/tmp/sourced.inc
+    --error ER_NO_SUCH_TABLE
+    SELECT * from nowhere;
+    --disable_abort_on_error
+# Statement giving a different error, to make sure we don't mask it
+    SELECT * FROM nowhere else;
+    --enable_abort_on_error
+  }
   dec $outer;
-  eval SELECT '$outer = outer loop variable after dec' AS "";
+  inc $ifval;
 }
 
 
@@ -905,6 +1006,28 @@ source $x/tmp/sourced.inc;
 sleep 0.5;
 sleep 1;
 real_sleep 1;
+
+# Parameter from variable, legal and illegal
+let $sleep_var= 0.1;
+sleep $sleep_var;
+let $sleep_var= 1;
+--real_sleep $sleep_var
+
+--write_file $MYSQL_TMP_DIR/sleep.inc
+let $sleep_var= xyz;
+--sleep $sleep_var
+EOF
+--error 1
+--exec $MYSQL_TEST < $MYSQL_TMP_DIR/sleep.inc 2>&1
+--remove_file $MYSQL_TMP_DIR/sleep.inc
+
+--write_file $MYSQL_TMP_DIR/sleep.inc
+let $sleep_var= xyz;
+real_sleep $sleep_var;
+EOF
+--error 1
+--exec $MYSQL_TEST < $MYSQL_TMP_DIR/sleep.inc 2>&1
+--remove_file $MYSQL_TMP_DIR/sleep.inc
 
 # Missing parameter
 --error 1
@@ -1001,6 +1124,37 @@ echo test3stop
 --delimiter ;
 echo test4;
 
+# ----------------------------------------------------------------------------
+# Test that delimiter within if() works in in various combinations
+# ----------------------------------------------------------------------------
+
+if (0)
+{
+  delimiter ||;
+  echo false-inner||
+  if (0)
+  {
+    delimiter *||
+    echo false-innerer*
+    delimiter ||*
+  }
+  echo false-inner again||
+}
+echo outer;
+if (1)
+{
+  delimiter /;
+  echo true-inner/
+  if (0)
+  {
+    delimiter %/
+    echo true-innerer%
+  }
+  echo true-inner again/
+}
+echo true-outer/
+delimiter ;/
+
 
 # ----------------------------------------------------------------------------
 # Test if
@@ -1015,6 +1169,11 @@ if (!$counter)
 {
   echo Counter is not 0, (counter=10);
 }
+if (! $counter)
+{
+  let $counter=5;
+}
+echo Counter should still be 10, is $counter;
 let $counter=0;
 if($counter)
 {
@@ -1023,6 +1182,40 @@ if($counter)
 if (!$counter)
 {
   echo Counter is not 0, (counter=0);
+}
+if (! $counter)
+{
+  echo Not space var works;
+}
+
+# ----------------------------------------------------------------------------
+# Test if with some non-numerics
+# ----------------------------------------------------------------------------
+
+let $counter=alpha;
+if ($counter)
+{
+  echo Counter is true, (counter=alpha);
+}
+let $counter=   ;
+if ($counter)
+{
+  echo oops, space is true;
+}
+let $counter=-0;
+if ($counter)
+{
+  echo oops, -0 is true;
+}
+if (beta)
+{
+  echo Beta is true;
+}
+let $counter=gamma;
+while ($counter)
+{
+  echo while with string, only once;
+  let $counter=000;
 }
 
 # ----------------------------------------------------------------------------
@@ -1280,6 +1473,17 @@ select "a" as col1, "c" as col2;
 --error 1
 --exec echo "--replace_column 1 b c " | $MYSQL_TEST 2>&1
 
+let $long_rep= 1234567890123456789012345678901234567890;
+let $long_rep= $long_rep,$long_rep;
+let $long_rep= $long_rep,$long_rep;
+let $long_rep= $long_rep,$long_rep;
+let $long_rep= $long_rep,$long_rep;
+let $long_rep= $long_rep,$long_rep;
+
+# This tests from strings > 1024 (here 1311)
+
+--replace_result $long_rep LONG_STRING
+eval select "$long_rep" as x;
 
 # ----------------------------------------------------------------------------
 # Test sync_with_master
@@ -1310,19 +1514,6 @@ select "a" as col1, "c" as col2;
 
 # Repeat connect/disconnect
 --write_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql
-let $i=100;
-while ($i)
-{
-  connect (test_con1,localhost,root,,);
-  disconnect test_con1;
-  dec $i;
-}
-EOF
---exec echo "source $MYSQLTEST_VARDIR/tmp/mysqltest.sql; echo OK; exit;" | $MYSQL_TEST 2>&1
-remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
-
-# Repeat connect/disconnect
---write_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql
 let $i=200;
 while ($i)
 {
@@ -1330,9 +1521,8 @@ while ($i)
  disconnect test_con1;
  dec $i;
 }
+echo 200 connects succeeded;
 EOF
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---error 1
 --exec echo "source $MYSQLTEST_VARDIR/tmp/mysqltest.sql;" | $MYSQL_TEST 2>&1
 remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
 
@@ -1359,7 +1549,6 @@ EOF
 remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.sql;
 
 # connect when "disable_abort_on_error" caused "connection not found"
---replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --disable_abort_on_error
 connect (con1,localhost,root,,);
 connection default;
@@ -1373,6 +1562,22 @@ connect (con2,localhost,root,,*NO-ONE*);
 show tables;
 disconnect con2;
 connection default;
+
+# Test enable_connect_log
+--enable_connect_log
+connect (con1,localhost,root,,);
+connection default;
+connection con1;
+--disable_query_log
+# These should not be logged
+connect (con2,localhost,root,,*NO-ONE*);
+connection con2;
+disconnect con2;
+connection con1;
+--enable_query_log
+disconnect con1;
+connection default;
+--disable_connect_log
 
 # ----------------------------------------------------------------------------
 # Test mysqltest arguments
@@ -1601,6 +1806,66 @@ select * from t1;
 drop table t1;
 
 # ----------------------------------------------------------------------------
+# Tests of send
+# ----------------------------------------------------------------------------
+
+create table t1 ( f1 char(10));
+insert into t1 values ("Abcd");
+
+# 1. Basic test
+
+send select * from t1;
+reap;
+
+# 2. Test with error
+
+--send select * from t2;
+--error ER_NO_SUCH_TABLE
+--reap
+
+# 3. test send of next stmt
+
+--send
+select * from t1;
+--reap
+
+# 4. Non-query stmt betwen send and reap allowed
+
+--send select * from t1;
+--sleep 0.05
+--echo Result coming up
+--reap
+
+# 5. Test of send_eval
+
+--let $my_stmt= select * from t1;
+--send_eval $my_stmt
+--reap
+
+# 6. Test that mysqltest does not allow query stmt between send and reap
+# Untestable directly as it causes mysqltest to fail
+
+--write_file $MYSQLTEST_VARDIR/tmp/mysqltest.in
+--send select * from t1;
+select 1;
+--reap
+EOF
+--error 1
+# Must filter unpredictable extra warning from output
+--exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/mysqltest.in > $MYSQL_TMP_DIR/mysqltest.out 2>&1
+--perl
+  my $dir= $ENV{'MYSQL_TMP_DIR'};
+  open (FILE, "$dir/mysqltest.out");
+  while (<FILE>) {
+    print unless /Note: net_clear/; # This shows up on rare occations
+  }
+EOF
+remove_file $MYSQL_TMP_DIR/mysqltest.out;
+remove_file $MYSQLTEST_VARDIR/tmp/mysqltest.in;
+
+drop table t1;
+
+# ----------------------------------------------------------------------------
 # test for remove_file
 # ----------------------------------------------------------------------------
 
@@ -1609,6 +1874,19 @@ drop table t1;
 
 --error 1
 remove_file non_existing_file;
+
+# ----------------------------------------------------------------------------
+# test for remove_files_wildcard
+# ----------------------------------------------------------------------------
+
+--error 1
+--exec echo "remove_files_wildcard ;" | $MYSQL_TEST 2>&1
+
+--error 1
+remove_files_wildcard non_existing_dir;
+
+--error 1
+remove_files_wildcard non_existing_dir non_existing_file;
 
 # ----------------------------------------------------------------------------
 # test for write_file
@@ -1663,6 +1941,20 @@ EOF
 
 remove_file $MYSQLTEST_VARDIR/tmp/test_file1.tmp;
 
+# Test append_file within while
+let $outer= 2; # Number of outer loops
+while ($outer)
+{
+  append_file $MYSQLTEST_VARDIR/tmp/app_while.tmp;
+These lines should be repeated,
+if things work as expected
+EOF
+  dec $outer;
+}
+
+cat_file $MYSQLTEST_VARDIR/tmp/app_while.tmp;
+remove_file $MYSQLTEST_VARDIR/tmp/app_while.tmp;
+
 # ----------------------------------------------------------------------------
 # test for cat_file
 # ----------------------------------------------------------------------------
@@ -1675,6 +1967,7 @@ EOF
 cat_file $MYSQLTEST_VARDIR/tmp/test_file1.tmp;
 remove_file $MYSQLTEST_VARDIR/tmp/test_file1.tmp;
 
+--replace_regex /my_errno=[0-9]*/(my_errno)/
 --error 1
 --exec echo "cat_file non_existing_file;" | $MYSQL_TEST 2>&1
 
@@ -1710,10 +2003,6 @@ EOF
 --diff_files $MYSQLTEST_VARDIR/tmp/diff1.tmp $MYSQLTEST_VARDIR/tmp/diff2.tmp
 --diff_files $MYSQLTEST_VARDIR/tmp/diff2.tmp $MYSQLTEST_VARDIR/tmp/diff1.tmp
 
-# Write the below commands to a intermediary file and execute them with
-# mysqltest in --exec, since the output will vary depending on what "diff"
-# is available it is sent to /dev/null
---write_file $MYSQLTEST_VARDIR/tmp/diff.test
 # Compare files that differ in size
 --error 2
 --diff_files $MYSQLTEST_VARDIR/tmp/diff1.tmp $MYSQLTEST_VARDIR/tmp/diff3.tmp
@@ -1725,13 +2014,6 @@ EOF
 --diff_files $MYSQLTEST_VARDIR/tmp/diff1.tmp $MYSQLTEST_VARDIR/tmp/diff4.tmp
 --error 1
 --diff_files $MYSQLTEST_VARDIR/tmp/diff4.tmp $MYSQLTEST_VARDIR/tmp/diff1.tmp
-exit;
-EOF
-
-# Execute the above diffs, and send their output to /dev/null - only
-# interesting to see that it returns correct error codes
---exec $MYSQL_TEST < $MYSQLTEST_VARDIR/tmp/diff.test > /dev/null 2>&1
-
 
 # Compare equal files, again...
 --diff_files $MYSQLTEST_VARDIR/tmp/diff1.tmp $MYSQLTEST_VARDIR/tmp/diff2.tmp
@@ -1740,7 +2022,6 @@ EOF
 --remove_file $MYSQLTEST_VARDIR/tmp/diff2.tmp
 --remove_file $MYSQLTEST_VARDIR/tmp/diff3.tmp
 --remove_file $MYSQLTEST_VARDIR/tmp/diff4.tmp
---remove_file $MYSQLTEST_VARDIR/tmp/diff.test
 
 
 # ----------------------------------------------------------------------------
@@ -1898,6 +2179,20 @@ perl;
   print "hello\n";
 EOF
 
+# Test perl within while, also with if being false first iteration
+let $outer= 3;
+let $ifval= 0;
+while ($outer) {
+  if ($ifval) {
+    perl UNTIL;
+      my $val= 5;
+      print "val is $val\n";
+UNTIL
+  }
+  inc $ifval;
+  dec $outer;
+}
+
 # ----------------------------------------------------------------------------
 # test for die
 # ----------------------------------------------------------------------------
@@ -2038,6 +2333,44 @@ INSERT INTO t1 SELECT f1 - 512 FROM t1;
 SELECT * FROM t1;
 --enable_result_log
 DROP TABLE t1;
+
+# ----------------------------------------------------------------------------
+# test for lowercase_result
+# ----------------------------------------------------------------------------
+
+# 1. Basic test
+--lowercase_result
+SELECT "500g BLÅBÆRSYLTETØY" AS "WILL BE lower cased";
+
+# 2. test that it does not apply to next statement
+SELECT "UPPER" AS "WILL NOT BE lower cased";
+
+# 3. test that it does not affect non-SQL or the following statement
+--lowercase_result
+--echo UP
+SELECT 0 as "UP AGAIN";
+
+# 4. test that it works with eval and variables
+let $lower_stmt=SELECT "ABCdef" AS "uvwXYZ";
+--lowercase_result
+eval $lower_stmt;
+
+# 5. test that it works in combination with sort
+sorted_result;
+lowercase_result;
+SELECT "Xyz" AS Name UNION SELECT "Abc" as Name ORDER BY Name DESC;
+
+# 6. Test combination with replace, and that lower casing is done first
+--lowercase_result
+--replace_result old new
+SELECT 1 as "SOME OLD TEXT";
+
+# 7. Test missing lower casing of "unknown" characters
+--character_set utf8
+--lowercase_result
+SELECT 0 as "WILL NOT lower case ÄËÐ";
+--character_set latin1
+
 # ----------------------------------------------------------------------------
 # Some coverage tests
 # ----------------------------------------------------------------------------
@@ -2211,6 +2544,8 @@ write_file $MYSQLTEST_VARDIR/tmp/testdir/file1.txt;
 hello
 EOF
 
+# Verify that --replace_result also work on list_files
+--replace_result file REPLACED_FILE
 list_files $MYSQLTEST_VARDIR/tmp/testdir;
 # list_files gets the directory list before creating the new file
 list_files_write_file $MYSQLTEST_VARDIR/tmp/testdir/file2.txt $MYSQLTEST_VARDIR/tmp/testdir *;
@@ -2223,9 +2558,14 @@ rmdir $MYSQLTEST_VARDIR/tmp/testdir;
 
 cat_file $MYSQLTEST_VARDIR/tmp/testdir/file3.txt;
 
-remove_file $MYSQLTEST_VARDIR/tmp/testdir/file1.txt;
-remove_file $MYSQLTEST_VARDIR/tmp/testdir/file2.txt;
-remove_file $MYSQLTEST_VARDIR/tmp/testdir/file3.txt;
+list_files_write_file $MYSQLTEST_VARDIR/tmp/testdir/file11.txt $MYSQLTEST_VARDIR/tmp/testdir file?.txt;
+remove_files_wildcard $MYSQLTEST_VARDIR/tmp/testdir file?.txt;
+list_files_write_file $MYSQLTEST_VARDIR/tmp/testdir/dir-list.txt $MYSQLTEST_VARDIR/tmp/testdir file*.txt;
+cat_file $MYSQLTEST_VARDIR/tmp/testdir/dir-list.txt;
+remove_files_wildcard $MYSQLTEST_VARDIR/tmp/testdir file*.txt;
+list_files $MYSQLTEST_VARDIR/tmp/testdir;
+remove_files_wildcard $MYSQLTEST_VARDIR/tmp/testdir;
+list_files $MYSQLTEST_VARDIR/tmp/testdir;
 rmdir $MYSQLTEST_VARDIR/tmp/testdir;
 
 #

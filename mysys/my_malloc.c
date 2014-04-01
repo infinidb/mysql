@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifdef SAFEMALLOC			/* We don't need SAFEMALLOC here */
 #undef SAFEMALLOC
@@ -31,13 +33,23 @@ void *my_malloc(size_t size, myf my_flags)
 
   if (!size)
     size=1;					/* Safety */
-  if ((point = (char*)malloc(size)) == NULL)
+
+  point= (char *) malloc(size);
+  DBUG_EXECUTE_IF("simulate_out_of_memory",
+                  {
+                    free(point);
+                    point= NULL;
+                  });
+
+  if (point == NULL)
   {
     my_errno=errno;
     if (my_flags & MY_FAE)
       error_handler_hook=fatal_error_handler_hook;
     if (my_flags & (MY_FAE+MY_WME))
       my_error(EE_OUTOFMEMORY, MYF(ME_BELL+ME_WAITTANG+ME_NOREFRESH),size);
+    DBUG_EXECUTE_IF("simulate_out_of_memory",
+                    DBUG_SET("-d,simulate_out_of_memory"););
     if (my_flags & MY_FAE)
       exit(1);
   }

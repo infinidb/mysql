@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -110,6 +110,8 @@ struct i_s_trx_row_struct {
 						/*!< thd_get_thread_id() */
 	const char*		trx_query;	/*!< MySQL statement being
 						executed in the transaction */
+	struct charset_info_st*	trx_query_cs;	/*!< charset encode the MySQL
+						statement */
 };
 
 /** This structure represents INFORMATION_SCHEMA.innodb_lock_waits row */
@@ -141,6 +143,13 @@ void
 trx_i_s_cache_init(
 /*===============*/
 	trx_i_s_cache_t*	cache);	/*!< out: cache to init */
+/*******************************************************************//**
+Free the INFORMATION SCHEMA trx related cache. */
+UNIV_INTERN
+void
+trx_i_s_cache_free(
+/*===============*/
+	trx_i_s_cache_t*	cache);	/*!< in/out: cache to free */
 
 /*******************************************************************//**
 Issue a shared/read lock on the tables cache. */

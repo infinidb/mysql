@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -110,9 +110,10 @@ extern fil_addr_t	fil_addr_null;
 					contents of this field is valid
 					for all uncompressed pages. */
 #define FIL_PAGE_FILE_FLUSH_LSN	26	/*!< this is only defined for the
-					first page in a data file: the file
-					has been flushed to disk at least up
-					to this lsn */
+					first page in a system tablespace
+					data file (ibdata*, not *.ibd):
+					the file has been flushed to disk
+					at least up to this lsn */
 #define FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID  34 /*!< starting from 4.1.x this
 					contains the space id of the page */
 #define FIL_PAGE_DATA		38	/*!< start of the data on the page */
@@ -140,6 +141,8 @@ extern fil_addr_t	fil_addr_null;
 #define FIL_PAGE_TYPE_BLOB	10	/*!< Uncompressed BLOB page */
 #define FIL_PAGE_TYPE_ZBLOB	11	/*!< First compressed BLOB page */
 #define FIL_PAGE_TYPE_ZBLOB2	12	/*!< Subsequent compressed BLOB page */
+#define FIL_PAGE_TYPE_LAST	FIL_PAGE_TYPE_ZBLOB2
+					/*!< Last page type */
 /* @} */
 
 /** Space types @{ */
@@ -224,14 +227,15 @@ fil_space_create(
 				0 for uncompressed tablespaces */
 	ulint		purpose);/*!< in: FIL_TABLESPACE, or FIL_LOG if log */
 /*******************************************************************//**
-Frees a space object from a the tablespace memory cache. Closes the files in
-the chain but does not delete them.
-@return	TRUE if success */
+Assigns a new space id for a new single-table tablespace. This works simply by
+incrementing the global counter. If 4 billion id's is not enough, we may need
+to recycle id's.
+@return	TRUE if assigned, FALSE if not */
 UNIV_INTERN
 ibool
-fil_space_free(
-/*===========*/
-	ulint	id);	/*!< in: space id */
+fil_assign_new_space_id(
+/*====================*/
+	ulint*	space_id);	/*!< in/out: space id */
 /*******************************************************************//**
 Returns the size of the space in pages. The tablespace must be cached in the
 memory cache.
@@ -277,6 +281,12 @@ fil_init(
 /*=====*/
 	ulint	hash_size,	/*!< in: hash table size */
 	ulint	max_n_open);	/*!< in: max number of open files */
+/*******************************************************************//**
+Initializes the tablespace memory cache. */
+UNIV_INTERN
+void
+fil_close(void);
+/*===========*/
 /*******************************************************************//**
 Opens all log files and system tablespace data files. They stay open until the
 database server shutdown. This should be called at a server startup after the
@@ -332,20 +342,19 @@ fil_read_flushed_lsn_and_arch_log_no(
 	ib_uint64_t*	min_flushed_lsn,	/*!< in/out: */
 	ib_uint64_t*	max_flushed_lsn);	/*!< in/out: */
 /*******************************************************************//**
-Increments the count of pending insert buffer page merges, if space is not
-being deleted.
-@return	TRUE if being deleted, and ibuf merges should be skipped */
+Increments the count of pending operation, if space is not being deleted.
+@return	TRUE if being deleted, and operation should be skipped */
 UNIV_INTERN
 ibool
-fil_inc_pending_ibuf_merges(
-/*========================*/
+fil_inc_pending_ops(
+/*================*/
 	ulint	id);	/*!< in: space id */
 /*******************************************************************//**
-Decrements the count of pending insert buffer page merges. */
+Decrements the count of pending operations. */
 UNIV_INTERN
 void
-fil_decr_pending_ibuf_merges(
-/*=========================*/
+fil_decr_pending_ops(
+/*=================*/
 	ulint	id);	/*!< in: space id */
 #endif /* !UNIV_HOTBACKUP */
 /*******************************************************************//**
@@ -429,9 +438,7 @@ UNIV_INTERN
 ulint
 fil_create_new_single_table_tablespace(
 /*===================================*/
-	ulint*		space_id,	/*!< in/out: space id; if this is != 0,
-					then this is an input parameter,
-					otherwise output */
+	ulint		space_id,	/*!< in: space id */
 	const char*	tablename,	/*!< in: the table name in the usual
 					databasename/tablename format
 					of InnoDB, or a dir path to a temp
@@ -500,16 +507,6 @@ UNIV_INTERN
 ulint
 fil_load_single_table_tablespaces(void);
 /*===================================*/
-/********************************************************************//**
-If we need crash recovery, and we have called
-fil_load_single_table_tablespaces() and dict_load_single_table_tablespaces(),
-we can call this function to print an error message of orphaned .ibd files
-for which there is not a data dictionary entry with a matching table name
-and space id. */
-UNIV_INTERN
-void
-fil_print_orphaned_tablespaces(void);
-/*================================*/
 /*******************************************************************//**
 Returns TRUE if a single-table tablespace does not exist in the memory cache,
 or is being deleted there.
@@ -720,6 +717,29 @@ fil_page_get_type(
 /*==============*/
 	const byte*	page);	/*!< in: file page */
 
+/*******************************************************************//**
+Returns TRUE if a single-table tablespace is being deleted.
+@return TRUE if being deleted */
+UNIV_INTERN
+ibool
+fil_tablespace_is_being_deleted(
+/*============================*/
+	ulint		id);	/*!< in: space id */
+
+/****************************************************************//**
+Generate redo logs for swapping two .ibd files */
+UNIV_INTERN
+void
+fil_mtr_rename_log(
+/*===============*/
+	ulint		old_space_id,	/*!< in: tablespace id of the old
+					table. */
+	const char*	old_name,	/*!< in: old table name */
+	ulint		new_space_id,	/*!< in: tablespace id of the new
+					table */
+	const char*	new_name,	/*!< in: new table name */
+	const char*	tmp_name);	/*!< in: temp table name used while
+					swapping */
 
 typedef	struct fil_space_struct	fil_space_t;
 

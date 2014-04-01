@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -127,8 +127,12 @@ page_zip_decompress(
 /*================*/
 	page_zip_des_t*	page_zip,/*!< in: data, ssize;
 				out: m_start, m_end, m_nonempty, n_blobs */
-	page_t*		page)	/*!< out: uncompressed page, may be trashed */
-	__attribute__((nonnull));
+	page_t*		page,	/*!< out: uncompressed page, may be trashed */
+	ibool		all)	/*!< in: TRUE=decompress the whole page;
+				FALSE=verify but do not copy some
+				page header fields that should not change
+				after page creation */
+	__attribute__((nonnull(1,2)));
 
 #ifdef UNIV_DEBUG
 /**********************************************************************//**
@@ -152,9 +156,10 @@ page_zip_validate_low(
 /*==================*/
 	const page_zip_des_t*	page_zip,/*!< in: compressed page */
 	const page_t*		page,	/*!< in: uncompressed page */
+	const dict_index_t*	index,	/*!< in: index of the page, if known */
 	ibool			sloppy)	/*!< in: FALSE=strict,
 					TRUE=ignore the MIN_REC_FLAG */
-	__attribute__((nonnull));
+	__attribute__((nonnull(1,2)));
 /**********************************************************************//**
 Check that the compressed and decompressed pages match. */
 UNIV_INTERN
@@ -162,8 +167,9 @@ ibool
 page_zip_validate(
 /*==============*/
 	const page_zip_des_t*	page_zip,/*!< in: compressed page */
-	const page_t*		page)	/*!< in: uncompressed page */
-	__attribute__((nonnull));
+	const page_t*		page,	/*!< in: uncompressed page */
+	const dict_index_t*	index)	/*!< in: index of the page, if known */
+	__attribute__((nonnull(1,2)));
 #endif /* UNIV_ZIP_DEBUG */
 
 /**********************************************************************//**
@@ -385,8 +391,8 @@ IMPORTANT: if page_zip_reorganize() is invoked on a leaf page of a
 non-clustered index, the caller must update the insert buffer free
 bits in the same mini-transaction in such a way that the modification
 will be redo-logged.
-@return TRUE on success, FALSE on failure; page and page_zip will be
-left intact on failure. */
+@return TRUE on success, FALSE on failure; page_zip will be left
+intact on failure, but page will be overwritten. */
 UNIV_INTERN
 ibool
 page_zip_reorganize(
@@ -416,7 +422,7 @@ page_zip_copy_recs(
 	const page_t*		src,		/*!< in: page */
 	dict_index_t*		index,		/*!< in: index of the B-tree */
 	mtr_t*			mtr)		/*!< in: mini-transaction */
-	__attribute__((nonnull(1,2,3,4)));
+	__attribute__((nonnull));
 #endif /* !UNIV_HOTBACKUP */
 
 /**********************************************************************//**

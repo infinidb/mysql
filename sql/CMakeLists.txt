@@ -1,4 +1,4 @@
-# Copyright (C) 2006 MySQL AB
+# Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ SET (SQL_SOURCE
                item_create.cc item_func.cc item_geofunc.cc item_row.cc 
                item_strfunc.cc item_subselect.cc item_sum.cc item_timefunc.cc 
                item_window_function.cc item_create_window_function.cc
-               key.cc log.cc lock.cc message.rc 
+               key.cc log.cc lock.cc  
                log_event.cc rpl_record.cc rpl_reporting.cc
                log_event_old.cc rpl_record_old.cc
                message.h mf_iocache.cc my_decimal.cc ../sql-common/my_time.c
@@ -68,6 +68,8 @@ SET (SQL_SOURCE
                sql_error.cc sql_handler.cc sql_help.cc sql_insert.cc sql_lex.cc 
                sql_list.cc sql_load.cc sql_manager.cc sql_map.cc sql_parse.cc 
                sql_partition.cc sql_plugin.cc sql_prepare.cc sql_rename.cc 
+               debug_sync.cc debug_sync.h
+               signal_handler.cc
                sql_repl.cc sql_select.cc sql_show.cc sql_state.c sql_string.cc 
                sql_table.cc sql_test.cc sql_trigger.cc sql_udf.cc sql_union.cc
                sql_update.cc sql_view.cc strfunc.cc table.cc thr_malloc.cc 
@@ -92,7 +94,7 @@ ADD_LIBRARY(sql ${SQL_SOURCE})
 IF (NOT EXISTS cmake_dummy.cc)
   FILE (WRITE cmake_dummy.cc "")
 ENDIF (NOT EXISTS cmake_dummy.cc)
-ADD_EXECUTABLE(mysqld cmake_dummy.cc)
+ADD_EXECUTABLE(mysqld cmake_dummy.cc message.rc)
 
 SET_TARGET_PROPERTIES(mysqld PROPERTIES OUTPUT_NAME mysqld${MYSQLD_EXE_SUFFIX})
 SET_TARGET_PROPERTIES(mysqld PROPERTIES ENABLE_EXPORTS TRUE)
@@ -116,7 +118,7 @@ IF(MSVC AND NOT WITHOUT_DYNAMIC_PLUGINS)
   ADD_CUSTOM_COMMAND(TARGET mysqld PRE_LINK
     COMMAND cscript ARGS //nologo ${PROJECT_SOURCE_DIR}/win/create_def_file.js
                   ${PLATFORM}  ${LIB_LOCATIONS} > mysqld.def 
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/sql)
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 ENDIF(MSVC AND NOT WITHOUT_DYNAMIC_PLUGINS)
 
 ADD_DEPENDENCIES(sql GenError)

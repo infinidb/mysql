@@ -116,8 +116,10 @@ SET @@session.sql_select_limit=10, @@session.sql_log_bin=0;
 SELECT @@session.sql_select_limit = @save_select_limit; #shouldn't have changed
 # Now as root, to be sure it works
 connection con2;
+SET @save_conn_id= connection_id();
 SET @@session.pseudo_thread_id=100;
 SET @@session.pseudo_thread_id=connection_id();
+SET @@session.pseudo_thread_id=@save_conn_id;
 SET @@session.sql_log_bin=0;
 SET @@session.sql_log_bin=1;
 
@@ -289,10 +291,15 @@ select * from t1;
 connection master; 
 drop table t1;
 --remove_file $MYSQLTEST_VARDIR/tmp/bug14157.sql
+--sync_slave_with_master
 
-# Delete the anonymous users
+# Delete the anonymous users.
+--source include/stop_slave.inc
 source include/delete_anonymous_users.inc;
-
+--connection master
+source include/delete_anonymous_users.inc;
+--let $rpl_only_running_threads= 1
+--source include/rpl_reset.inc
 
 
 #
@@ -324,9 +331,7 @@ connection slave;
 
 DROP USER user43748@127.0.0.1;
 
---echo -- done. back to master.
-connection master;
-
-
 
 --echo End of 5.1 tests
+--let $rpl_only_running_threads= 1
+--source include/rpl_end.inc

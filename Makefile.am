@@ -1,4 +1,4 @@
-# Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 # Process this file with automake to create Makefile.in
 
@@ -19,12 +19,11 @@ AUTOMAKE_OPTIONS =	foreign
 
 # These are built from source in the Docs directory
 EXTRA_DIST =		INSTALL-SOURCE INSTALL-WIN-SOURCE \
-			README COPYING EXCEPTIONS-CLIENT CMakeLists.txt
+			README COPYING CMakeLists.txt
 
 SUBDIRS =		. include @docs_dirs@ @zlib_dir@ \
 			@readline_topdir@ sql-common scripts \
-			@pstack_dir@ \
-			@sql_union_dirs@ unittest storage plugin \
+			@sql_union_dirs@ unittest \
 			@sql_server@ @man_dirs@ tests \
 			netware @libmysqld_dirs@ \
 			mysql-test support-files sql-bench @tools_dirs@ \
@@ -32,7 +31,6 @@ SUBDIRS =		. include @docs_dirs@ @zlib_dir@ \
 
 DIST_SUBDIRS =		. include Docs zlib \
 			cmd-line-utils sql-common scripts \
-			pstack \
 			strings mysys dbug extra regex libmysql libmysql_r client unittest storage plugin \
 			vio sql man tests \
 			netware libmysqld \
@@ -147,8 +145,8 @@ test-bt:
 	-if [ -e bin/ndbd -o -e storage/ndb/src/kernel/ndbd ] ; then \
 	  cd mysql-test ; \
 	    MTR_BUILD_THREAD=auto \
-	      @PERL@ ./mysql-test-run.pl --comment=ndb+rpl_ndb+ps --force --timer \
-	          --ps-protocol --mysqld=--binlog-format=row --suite=ndb,rpl_ndb ; \
+	      @PERL@ ./mysql-test-run.pl --comment=ndb+ps --force --timer \
+	          --ps-protocol --mysqld=--binlog-format=row --suite=ndb ; \
 	    MTR_BUILD_THREAD=auto \
 	      @PERL@ ./mysql-test-run.pl --comment=ndb --force --timer \
 	          --with-ndbcluster-only ; \
@@ -200,6 +198,8 @@ test-bt-debug:
 	-cd mysql-test ; MTR_BUILD_THREAD=auto \
 	    @PERL@ ./mysql-test-run.pl --comment=debug  --force --timer \
 	        --skip-ndbcluster --skip-rpl --report-features
+
+test-bt-debug-fast:
 
 test-bt-debug-fast:
 
@@ -310,11 +310,9 @@ abi_check_all:	$(TEST_PREPROCESSOR_HEADER)
 	$(MAKE) abi_headers="$^" do_abi_check
 
 do_abi_check:
-
-xxx_do_abi_check:
 	set -ex; \
 	for file in $(abi_headers); do \
-	         @CC@ -E -nostdinc -dI \
+	         @CC@ -E -nostdinc -dI -DMYSQL_ABI_CHECK \
 	                  -I$(top_srcdir)/include \
 	                  -I$(top_srcdir)/include/mysql \
 	                  -I$(top_srcdir)/sql \

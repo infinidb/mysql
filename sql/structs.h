@@ -1,4 +1,6 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /* The old structures from unireg */
@@ -115,16 +118,22 @@ typedef struct st_reginfo {		/* Extra info about reg */
 } REGINFO;
 
 
-struct st_read_record;				/* For referense later */
 class SQL_SELECT;
 class THD;
 class handler;
+struct st_join_table;
 
-typedef struct st_read_record {			/* Parameter to read_record */
+void rr_unlock_row(st_join_table *tab);
+
+struct READ_RECORD {			/* Parameter to read_record */
+  typedef int (*Read_func)(READ_RECORD*);
+  typedef void (*Unlock_row_func)(st_join_table *);
   struct st_table *table;			/* Head-form */
   handler *file;
   struct st_table **forms;			/* head and ref forms */
-  int (*read_record)(struct st_read_record *);
+
+  Read_func read_record;
+  Unlock_row_func unlock_row;
   THD *thd;
   SQL_SELECT *select;
   uint cache_records;
@@ -136,7 +145,7 @@ typedef struct st_read_record {			/* Parameter to read_record */
   uchar	*cache,*cache_pos,*cache_end,*read_positions;
   IO_CACHE *io_cache;
   bool print_error, ignore_not_found_rows;
-} READ_RECORD;
+};
 
 
 /*

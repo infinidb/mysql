@@ -1,4 +1,5 @@
-/* Copyright (C) 2002-2006 MySQL AB
+/*
+   Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _spatial_h
 #define _spatial_h
@@ -20,7 +22,7 @@
 
 const uint SRID_SIZE= 4;
 const uint SIZEOF_STORED_DOUBLE= 8;
-const uint POINT_DATA_SIZE= SIZEOF_STORED_DOUBLE*2; 
+const uint POINT_DATA_SIZE= (SIZEOF_STORED_DOUBLE * 2); 
 const uint WKB_HEADER_SIZE= 1+4;
 const uint32 GET_SIZE_ERROR= ((uint32) -1);
 
@@ -225,15 +227,18 @@ public:
   {
     wkb_xdr= 0,    /* Big Endian */
     wkb_ndr= 1     /* Little Endian */
-  };                                    
+  };
+
+  /** Callback which creates Geometry objects on top of a given placement. */
+  typedef Geometry *(*create_geom_t)(char *);
 
   class Class_info
   {
   public:
     LEX_STRING m_name;
     int m_type_id;
-    void (*m_create_func)(void *);
-    Class_info(const char *name, int type_id, void(*create_func)(void *));
+    create_geom_t m_create_func;
+    Class_info(const char *name, int type_id, create_geom_t create_func);
   };
 
   virtual const Class_info *get_class_info() const=0;
@@ -263,15 +268,7 @@ public:
   virtual int geometry_n(uint32 num, String *result) const { return -1; }
 
 public:
-  static Geometry *create_by_typeid(Geometry_buffer *buffer, int type_id)
-  {
-    Class_info *ci;
-    if (!(ci= find_class((int) type_id)))
-      return NULL;
-    (*ci->m_create_func)((void *)buffer);
-    return my_reinterpret_cast(Geometry *)(buffer);
-  }
-
+  static Geometry *create_by_typeid(Geometry_buffer *buffer, int type_id);
   static Geometry *construct(Geometry_buffer *buffer,
                              const char *data, uint32 data_len);
   static Geometry *create_from_wkt(Geometry_buffer *buffer,
@@ -320,9 +317,35 @@ protected:
   const char *get_mbr_for_points(MBR *mbr, const char *data, uint offset)
     const;
 
-  inline bool no_data(const char *cur_data, uint32 data_amount) const
+  /**
+     Check if there're enough data remaining as requested
+
+     @arg cur_data     pointer to the position in the binary form
+     @arg data_amount  number of points expected
+     @return           true if not enough data
+  */
+  inline bool no_data(const char *cur_data, size_t data_amount) const
   {
     return (cur_data + data_amount > m_data_end);
+  }
+
+  /**
+     Check if there're enough points remaining as requested
+
+     Need to perform the calculation in logical units, since multiplication
+     can overflow the size data type.
+
+     @arg data              pointer to the begining of the points array
+     @arg expected_points   number of points expected
+     @arg extra_point_space extra space for each point element in the array
+     @return               true if there are not enough points
+  */
+  inline bool not_enough_points(const char *data, uint32 expected_points,
+                                uint32 extra_point_space = 0) const
+  {
+    return (m_data_end < data ||
+            (expected_points > ((m_data_end - data) /
+                                (POINT_DATA_SIZE + extra_point_space))));
   }
   const char *m_data;
   const char *m_data_end;
@@ -382,6 +405,10 @@ public:
 
 class Gis_line_string: public Geometry
 {
+  // Maximum number of points in LineString that can fit into String
+  static const uint32 max_n_points=
+    (uint32) (UINT_MAX32 - WKB_HEADER_SIZE - 4 /* n_points */) /
+    POINT_DATA_SIZE;
 public:
   Gis_line_string() {}                        /* Remove gcc warning */
   virtual ~Gis_line_string() {}               /* Remove gcc warning */
@@ -438,6 +465,10 @@ public:
 
 class Gis_multi_point: public Geometry
 {
+  // Maximum number of points in MultiPoint that can fit into String
+  static const uint32 max_n_points=
+    (uint32) (UINT_MAX32 - WKB_HEADER_SIZE - 4 /* n_points */) /
+    (WKB_HEADER_SIZE + POINT_DATA_SIZE);
 public:
   Gis_multi_point() {}                        /* Remove gcc warning */
   virtual ~Gis_multi_point() {}               /* Remove gcc warning */
@@ -528,11 +559,8 @@ public:
   const Class_info *get_class_info() const;
 };
 
-const int geometry_buffer_size= sizeof(Gis_point);
-struct Geometry_buffer
-{
-  void *arr[(geometry_buffer_size - 1)/sizeof(void *) + 1];
-};
+struct Geometry_buffer : public
+  my_aligned_storage<sizeof(Gis_point), MY_ALIGNOF(Gis_point)> {};
 
 #endif /*HAVE_SPATAIAL*/
 #endif

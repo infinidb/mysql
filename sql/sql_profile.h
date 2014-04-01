@@ -1,4 +1,5 @@
-/* Copyright (C) 2007 MySQL AB
+/*
+   Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef _SQL_PROFILE_H
 #define _SQL_PROFILE_H
@@ -179,6 +181,7 @@ private:
   char *file;
   unsigned int line;
 
+  ulong m_seq;
   double time_usecs;
   char *allocated_status_memory;
 
@@ -210,8 +213,9 @@ private:
   query_id_t profiling_query_id;        /* Session-specific id. */
   char *query_source;
 
-  PROF_MEASUREMENT *profile_start;
-  PROF_MEASUREMENT *profile_end;
+  double m_start_time_usecs;
+  double m_end_time_usecs;
+  ulong m_seq_counter;
   Queue<PROF_MEASUREMENT> entries;
 
 

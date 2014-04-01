@@ -1,4 +1,5 @@
-/* Copyright (C) 2006 MySQL AB
+/*
+   Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #include "rpl_utility.h"
 #include "rpl_rli.h"
@@ -206,7 +208,7 @@ table_def::compatible_with(Relay_log_info const *rli_arg, TABLE *table)
       Check the slave's field size against that of the master.
     */
     if (!error &&
-        !field->compatible_field_size(field_metadata(col), rli_arg))
+        !field->compatible_field_size(field_metadata(col), rli_arg, m_flags))
     {
       error= 1;
       char buf[256];
@@ -224,3 +226,65 @@ table_def::compatible_with(Relay_log_info const *rli_arg, TABLE *table)
 
   return error;
 }
+
+#ifndef MYSQL_CLIENT
+Deferred_log_events::Deferred_log_events(Relay_log_info *rli) : last_added(NULL)
+{
+  my_init_dynamic_array(&array, sizeof(Log_event *), 32, 16);
+}
+
+Deferred_log_events::~Deferred_log_events() 
+{
+  delete_dynamic(&array);
+}
+
+int Deferred_log_events::add(Log_event *ev)
+{
+  last_added= ev;
+  insert_dynamic(&array, (uchar*) &ev);
+  return 0;
+}
+
+bool Deferred_log_events::is_empty()
+{  
+  return array.elements == 0;
+}
+
+bool Deferred_log_events::execute(Relay_log_info *rli)
+{
+  bool res= false;
+
+  DBUG_ASSERT(rli->deferred_events_collecting);
+
+  rli->deferred_events_collecting= false;
+  for (uint i=  0; !res && i < array.elements; i++)
+  {
+    Log_event *ev= (* (Log_event **)
+                    dynamic_array_ptr(&array, i));
+    res= ev->apply_event(rli);
+  }
+  rli->deferred_events_collecting= true;
+  return res;
+}
+
+void Deferred_log_events::rewind()
+{
+  /*
+    Reset preceeding Query log event events which execution was
+    deferred because of slave side filtering.
+  */
+  if (!is_empty())
+  {
+    for (uint i=  0; i < array.elements; i++)
+    {
+      Log_event *ev= *(Log_event **) dynamic_array_ptr(&array, i);
+      delete ev;
+    }
+    last_added= NULL;
+    if (array.elements > array.max_element)
+      freeze_size(&array);
+    reset_dynamic(&array);
+  }
+}
+
+#endif

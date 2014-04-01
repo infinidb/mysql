@@ -1,4 +1,6 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Static variables for mysys library. All definied here for easy making of
@@ -91,6 +94,14 @@ int (*error_handler_hook)(uint error,const char *str,myf MyFlags)=
     my_message_no_curses;
 int (*fatal_error_handler_hook)(uint error,const char *str,myf MyFlags)=
   my_message_no_curses;
+
+#if defined(ENABLED_DEBUG_SYNC)
+/**
+  Global pointer to be set if callback function is defined
+  (e.g. in mysqld). See sql/debug_sync.cc.
+*/
+void (*debug_sync_C_callback_ptr)(const char *, size_t);
+#endif /* defined(ENABLED_DEBUG_SYNC) */
 
 #ifdef __WIN__
 /* from my_getsystime.c */

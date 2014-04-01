@@ -1,3 +1,18 @@
+/* Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; version 2 of the License.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
 #include "azlib.h"
 #include <string.h>
 #include <assert.h>
@@ -355,15 +370,14 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"set-auto-increment", 'A',
    "Force auto_increment to start at this or higher value. If no value is given, then sets the next auto_increment value to the highest used value for the auto key + 1.",
-   (uchar**) &new_auto_increment,
-   (uchar**) &new_auto_increment,
+   &new_auto_increment, &new_auto_increment,
    0, GET_ULL, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"silent", 's',
    "Only print errors. One can use two -s to make archive_reader very silent.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"tmpdir", 't',
    "Path for temporary files.",
-   (uchar**) &opt_tmpdir,
+   &opt_tmpdir,
    0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V',
    "Print version and exit.",

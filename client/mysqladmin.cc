@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* maintaince of mysql databases */
 
@@ -23,6 +25,7 @@
 #include <sys/stat.h>
 #include <mysql.h>
 #include <sql_common.h>
+#include <welcome_copyright_notice.h>           /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 #define ADMIN_VERSION "8.42"
 #define MAX_MYSQL_VAR 512
@@ -117,42 +120,42 @@ static TYPELIB command_typelib=
 static struct my_option my_long_options[] =
 {
 #ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Auto close the screen on exit for Netware.",
+  {"autoclose", OPT_AUTO_CLOSE, "Automatically close the screen on exit for Netware.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"count", 'c',
    "Number of iterations to make. This works with -i (--sleep) only.",
-   (uchar**) &nr_iterations, (uchar**) &nr_iterations, 0, GET_UINT,
+   &nr_iterations, &nr_iterations, 0, GET_UINT,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #ifndef DBUG_OFF
   {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"debug-check", OPT_DEBUG_CHECK, "Check memory and open file usage at exit .",
-   (uchar**) &debug_check_flag, (uchar**) &debug_check_flag, 0,
+  {"debug-check", OPT_DEBUG_CHECK, "Check memory and open file usage at exit.",
+   &debug_check_flag, &debug_check_flag, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"debug-info", OPT_DEBUG_INFO, "Print some debug info at exit.",
-   (uchar**) &debug_info_flag, (uchar**) &debug_info_flag,
+   &debug_info_flag, &debug_info_flag,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"force", 'f',
    "Don't ask for confirmation on drop database; with multiple commands, continue even if an error occurs.",
-   (uchar**) &option_force, (uchar**) &option_force, 0, GET_BOOL, NO_ARG, 0, 0,
+   &option_force, &option_force, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"compress", 'C', "Use compression in server/client protocol.",
-   (uchar**) &opt_compress, (uchar**) &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   &opt_compress, &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
    0, 0, 0},
   {"character-sets-dir", OPT_CHARSETS_DIR,
-   "Directory where character sets are.", (uchar**) &charsets_dir,
-   (uchar**) &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   "Directory for character set files.", &charsets_dir,
+   &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"default-character-set", OPT_DEFAULT_CHARSET,
-   "Set the default character set.", (uchar**) &default_charset,
-   (uchar**) &default_charset, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   "Set the default character set.", &default_charset,
+   &default_charset, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"help", '?', "Display this help and exit.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"host", 'h', "Connect to host.", (uchar**) &host, (uchar**) &host, 0, GET_STR,
+  {"host", 'h', "Connect to host.", &host, &host, 0, GET_STR,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"no-beep", 'b', "Turn off beep on error.", (uchar**) &opt_nobeep,
-   (uchar**) &opt_nobeep, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0}, 
+  {"no-beep", 'b', "Turn off beep on error.", &opt_nobeep,
+   &opt_nobeep, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0}, 
   {"password", 'p',
    "Password to use when connecting to server. If password is not given it's asked from the tty.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
@@ -166,50 +169,52 @@ static struct my_option my_long_options[] =
    "/etc/services, "
 #endif
    "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
-   (uchar**) &tcp_port,
-   (uchar**) &tcp_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"protocol", OPT_MYSQL_PROTOCOL, "The protocol of connection (tcp,socket,pipe,memory).",
+   &tcp_port,
+   &tcp_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"protocol", OPT_MYSQL_PROTOCOL, "The protocol to use for connection (tcp, socket, pipe, memory).",
     0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"relative", 'r',
-   "Show difference between current and previous values when used with -i. Currently works only with extended-status.",
-   (uchar**) &opt_relative, (uchar**) &opt_relative, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   "Show difference between current and previous values when used with -i. "
+   "Currently only works with extended-status.",
+   &opt_relative, &opt_relative, 0, GET_BOOL, NO_ARG, 0, 0, 0,
   0, 0, 0},
   {"set-variable", 'O',
-   "Change the value of a variable. Please note that this option is deprecated; you can set variables directly with --variable-name=value.",
+   "Change the value of a variable. Please note that this option is "
+   "deprecated; you can set variables directly with --variable-name=value.",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
-   "Base name of shared memory.", (uchar**) &shared_memory_base_name, (uchar**) &shared_memory_base_name,
+   "Base name of shared memory.", &shared_memory_base_name, &shared_memory_base_name,
    0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
   {"silent", 's', "Silently exit if one can't connect to server.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"socket", 'S', "Socket file to use for connection.",
-   (uchar**) &unix_port, (uchar**) &unix_port, 0, GET_STR, REQUIRED_ARG, 0, 0, 0,
+  {"socket", 'S', "The socket file to use for connection.",
+   &unix_port, &unix_port, 0, GET_STR, REQUIRED_ARG, 0, 0, 0,
    0, 0, 0},
-  {"sleep", 'i', "Execute commands again and again with a sleep between.",
-   (uchar**) &interval, (uchar**) &interval, 0, GET_INT, REQUIRED_ARG, 0, 0, 0, 0,
+  {"sleep", 'i', "Execute commands repeatedly with a sleep between.",
+   &interval, &interval, 0, GET_INT, REQUIRED_ARG, 0, 0, 0, 0,
    0, 0},
 #include <sslopt-longopts.h>
 #ifndef DONT_ALLOW_USER_CHANGE
-  {"user", 'u', "User for login if not current user.", (uchar**) &user,
-   (uchar**) &user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"user", 'u', "User for login if not current user.", &user,
+   &user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-  {"verbose", 'v', "Write more information.", (uchar**) &opt_verbose,
-   (uchar**) &opt_verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"verbose", 'v', "Write more information.", &opt_verbose,
+   &opt_verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
   {"vertical", 'E',
    "Print output vertically. Is similar to --relative, but prints output vertically.",
-   (uchar**) &opt_vertical, (uchar**) &opt_vertical, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   &opt_vertical, &opt_vertical, 0, GET_BOOL, NO_ARG, 0, 0, 0,
    0, 0, 0},
   {"wait", 'w', "Wait and retry if connection is down.", 0, 0, 0, GET_UINT,
    OPT_ARG, 0, 0, 0, 0, 0, 0},
-  {"connect_timeout", OPT_CONNECT_TIMEOUT, "", (uchar**) &opt_connect_timeout,
-   (uchar**) &opt_connect_timeout, 0, GET_ULONG, REQUIRED_ARG, 3600*12, 0,
+  {"connect_timeout", OPT_CONNECT_TIMEOUT, "", &opt_connect_timeout,
+   &opt_connect_timeout, 0, GET_ULONG, REQUIRED_ARG, 3600*12, 0,
    3600*12, 0, 1, 0},
-  {"shutdown_timeout", OPT_SHUTDOWN_TIMEOUT, "", (uchar**) &opt_shutdown_timeout,
-   (uchar**) &opt_shutdown_timeout, 0, GET_ULONG, REQUIRED_ARG,
+  {"shutdown_timeout", OPT_SHUTDOWN_TIMEOUT, "", &opt_shutdown_timeout,
+   &opt_shutdown_timeout, 0, GET_ULONG, REQUIRED_ARG,
    SHUTDOWN_DEF_TIMEOUT, 0, 3600*12, 0, 1, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
@@ -281,6 +286,9 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
 #if MYSQL_VERSION_ID > 32300
     charsets_dir = argument;
 #endif
+    break;
+  case 'O':
+    WARN_DEPRECATED(VER_CELOSIA, "--set-variable", "--variable-name=value");
     break;
   case OPT_MYSQL_PROTOCOL:
     opt_protocol= find_type_or_exit(argument, &sql_protocol_typelib,
@@ -411,6 +419,9 @@ int main(int argc,char *argv[])
 
       if (interval)                             /* --sleep=interval given */
       {
+        if (opt_count_iterations && --nr_iterations == 0)
+          break;
+
         /*
           If connection was dropped (unintentionally, or due to SHUTDOWN),
           re-establish it if --wait ("retry-connect") was given and user
@@ -682,8 +693,7 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
     case ADMIN_VER:
       new_line=1;
       print_version();
-      puts("Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.");
-      puts("This software comes with ABSOLUTELY NO WARRANTY. This is free software,\nand you are welcome to modify and redistribute it under the GPL license\n");
+      puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
       printf("Server version\t\t%s\n", mysql_get_server_info(mysql));
       printf("Protocol version\t%d\n", mysql_get_proto_info(mysql));
       printf("Connection\t\t%s\n",mysql_get_host_info(mysql));
@@ -1062,8 +1072,7 @@ static void print_version(void)
 static void usage(void)
 {
   print_version();
-  puts("Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.");
-  puts("This software comes with ABSOLUTELY NO WARRANTY. This is free software,\nand you are welcome to modify and redistribute it under the GPL license\n");
+  puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts("Administration program for the mysqld daemon.");
   printf("Usage: %s [OPTIONS] command command....\n", my_progname);
   my_print_help(my_long_options);

@@ -1,4 +1,5 @@
-/* Copyright (C) 2000 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   More functions to be used with IO_CACHE files
@@ -64,6 +66,8 @@ my_b_copy_to_file(IO_CACHE *cache, FILE *file)
       DBUG_RETURN(1);
     cache->read_pos= cache->read_end;
   } while ((bytes_in_cache= my_b_fill(cache)));
+  if(cache->error == -1)
+    DBUG_RETURN(1);
   DBUG_RETURN(0);
 }
 
@@ -213,6 +217,8 @@ size_t my_b_fill(IO_CACHE *info)
     info->error= 0;
     return 0;					/* EOF */
   }
+  DBUG_EXECUTE_IF ("simulate_my_b_fill_error",
+                   {DBUG_SET("+d,simulate_file_read_error");});
   if ((length= my_read(info->file,info->buffer,max_length,
                        info->myflags)) == (size_t) -1)
   {
@@ -409,7 +415,7 @@ process_flags:
     {
       register int iarg;
       size_t length2;
-      char buff[17];
+      char buff[32];
 
       iarg = va_arg(args, int);
       if (*fmt == 'd')
@@ -427,7 +433,11 @@ process_flags:
           memset(buffz, '0', minimum_width - length2);
         else
           memset(buffz, ' ', minimum_width - length2);
-        my_b_write(info, buffz, minimum_width - length2);
+        if (my_b_write(info, buffz, minimum_width - length2))
+        {
+          my_afree(buffz);
+          goto err;
+        }
         my_afree(buffz);
       }
 
@@ -440,7 +450,7 @@ process_flags:
     {
       register long iarg;
       size_t length2;
-      char buff[17];
+      char buff[32];
 
       iarg = va_arg(args, long);
       if (*++fmt == 'd')

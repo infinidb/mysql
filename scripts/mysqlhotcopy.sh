@@ -1,5 +1,22 @@
 #!/usr/bin/perl
 
+# Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; version 2
+# of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the Free
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA
+
 use strict;
 use Getopt::Long;
 use Data::Dumper;
@@ -266,6 +283,14 @@ my $num_files = 0;
 foreach my $rdb ( @db_desc ) {
     my $db = $rdb->{src};
     my @dbh_tables = get_list_of_tables( $db );
+
+    ## filter out certain system non-lockable tables. 
+    ## keep in sync with mysqldump.
+    if ($db =~ m/^mysql$/i)
+    {
+      @dbh_tables = grep 
+        { !/^(apply_status|schema|general_log|slow_log)$/ } @dbh_tables
+    }
 
     ## generate regex for tables/files
     my $t_regex;

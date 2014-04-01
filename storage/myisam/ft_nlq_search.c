@@ -1,4 +1,5 @@
-/* Copyright (C) 2001-2005 MySQL AB
+/*
+   Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
@@ -63,16 +65,17 @@ static int FT_SUPERDOC_cmp(void* cmp_arg __attribute__((unused)),
 
 static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
 {
-  int	       subkeys, r;
+  int	       UNINIT_VAR(subkeys), r;
   uint	       keylen, doc_cnt;
   FT_SUPERDOC  sdoc, *sptr;
   TREE_ELEMENT *selem;
   double       gweight=1;
   MI_INFO      *info=aio->info;
+  MYISAM_SHARE *share= info->s;
   uchar        *keybuff=aio->keybuff;
   MI_KEYDEF    *keyinfo=info->s->keyinfo+aio->keynr;
-  my_off_t     key_root=info->s->state.key_root[aio->keynr];
-  uint         extra=HA_FT_WLEN+info->s->base.rec_reflength;
+  my_off_t     key_root;
+  uint         extra= HA_FT_WLEN + info->s->rec_reflength;
 #if HA_FT_WTYPE == HA_KEYTYPE_FLOAT
   float tmp_weight;
 #else
@@ -87,6 +90,11 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
   keylen-=HA_FT_WLEN;
   doc_cnt=0;
 
+  if (share->concurrent_insert)
+    rw_rdlock(&share->key_root_lock[aio->keynr]);
+
+  key_root= share->state.key_root[aio->keynr];
+
   /* Skip rows inserted by current inserted */
   for (r=_mi_search(info, keyinfo, keybuff, keylen, SEARCH_FIND, key_root) ;
        !r &&
@@ -95,6 +103,9 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
        r= _mi_search_next(info, keyinfo, info->lastkey,
                           info->lastkey_length, SEARCH_BIGGER, key_root))
     ;
+
+  if (share->concurrent_insert)
+    rw_unlock(&share->key_root_lock[aio->keynr]);
 
   info->update|= HA_STATE_AKTIV;              /* for _mi_test_if_changed() */
 
@@ -119,11 +130,13 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
       keyinfo=& info->s->ft2_keyinfo;
       key_root=info->lastpos;
       keylen=0;
+      if (share->concurrent_insert)
+        rw_rdlock(&share->key_root_lock[aio->keynr]);
       r=_mi_search_first(info, keyinfo, key_root);
       goto do_skip;
     }
 #if HA_FT_WTYPE == HA_KEYTYPE_FLOAT
-    tmp_weight=*(float*)&subkeys;
+    ft_floatXget(tmp_weight, info->lastkey+info->lastkey_length-extra);
 #else
 #error
 #endif
@@ -153,6 +166,9 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
     if (gweight < 0 || doc_cnt > 2000000)
       gweight=0;
 
+    if (share->concurrent_insert)
+      rw_rdlock(&share->key_root_lock[aio->keynr]);
+
     if (_mi_test_if_changed(info) == 0)
 	r=_mi_search_next(info, keyinfo, info->lastkey, info->lastkey_length,
                           SEARCH_BIGGER, key_root);
@@ -165,6 +181,8 @@ do_skip:
       r= _mi_search_next(info, keyinfo, info->lastkey, info->lastkey_length,
                          SEARCH_BIGGER, key_root);
 
+    if (share->concurrent_insert)
+      rw_unlock(&share->key_root_lock[aio->keynr]);
   }
   word->weight=gweight;
 

@@ -120,6 +120,9 @@ show grants for rpl_do_grant2@localhost;
 # BUG42217  mysql.procs_priv does not get replicated
 #####################################################
 connection master; 
+call mtr.add_suppression("Slave: Operation DROP USER failed for 'create_rout_db'@'localhost' Error_code: 1396");
+sync_slave_with_master;
+connection master;
 
 --disable_warnings
 DROP DATABASE IF EXISTS bug42217_db;
@@ -128,6 +131,9 @@ CREATE DATABASE  bug42217_db;
 
 GRANT CREATE ROUTINE ON bug42217_db.* TO 'create_rout_db'@'localhost'
         IDENTIFIED BY 'create_rout_db' WITH GRANT OPTION;
+
+-- sync_slave_with_master
+-- connection master
 
 connect (create_rout_db_master, localhost, create_rout_db, create_rout_db, bug42217_db,$MASTER_MYPORT,);
 connect (create_rout_db_slave, localhost, create_rout_db, create_rout_db, bug42217_db, $SLAVE_MYPORT,);
@@ -206,6 +212,164 @@ USE bug42217_db;
 DROP FUNCTION upgrade_del_func;
 DROP FUNCTION upgrade_alter_func;
 DROP DATABASE bug42217_db;
+-- sync_slave_with_master
+-- connection master
+
+# user was already dropped in the slave before
+# so we should not replicate this statement.
+SET SQL_LOG_BIN= 0;
 DROP USER 'create_rout_db'@'localhost';
- 
+SET SQL_LOG_BIN= 1;
+
+# finish entire clean up (remove binlogs)
+# so that we leave a pristine environment for the
+# following tests
+--let $rpl_only_running_threads= 1
+-- source include/rpl_reset.inc
+USE test;
+
+# BUG#49119: Master crashes when executing 'REVOKE ... ON
+# {PROCEDURE|FUNCTION} FROM ...'
+# 
+# The tests are divided into two test cases:
+#
+#  i) a test case that mimics the one in the bug report.
+#
+#     - We show that, despite the fact, that a revoke command fails
+#       when binlogging is active, the master will not hit an
+#       assertion.
+#
+# ii) a test case that partially succeeds on the master will also
+#      partially succeed on the slave.
+#
+#     - The revoke statement that partially succeeds tries to revoke
+#       an EXECUTE grant for two users, and only one of the user has
+#       the specific grant. This will cause mysql to drop one of the
+#       grants and report error for the statement. The slave should
+#       also drop the grants that the master succeed and the SQL
+#       thread should not stop on statement failure.
+
+-- echo ######## BUG#49119 #######
+-- echo ### i) test case from the 'how to repeat section'
+
+-- connection master
+
+CREATE TABLE t1(c1 INT);
+DELIMITER |;
+CREATE PROCEDURE p1() SELECT * FROM t1 |
+DELIMITER ;|
+-- error ER_NONEXISTING_PROC_GRANT
+REVOKE EXECUTE ON PROCEDURE p1 FROM 'root'@'localhost';
+
+-- sync_slave_with_master
+
+-- connection master
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+-- sync_slave_with_master
+
+-- echo ### ii) Test case in which REVOKE partially succeeds
+
+-- connection master
+-- source include/rpl_reset.inc
+-- connection master
+
+CREATE TABLE t1(c1 INT);
+DELIMITER |;
+CREATE PROCEDURE p1() SELECT * FROM t1 |
+DELIMITER ;|
+
+CREATE USER 'user49119'@'localhost';
+GRANT EXECUTE ON PROCEDURE p1 TO 'user49119'@'localhost';
+
+-- echo ##############################################################
+-- echo ### Showing grants for both users: root and user49119 (master)
+SHOW GRANTS FOR 'user49119'@'localhost';
+SHOW GRANTS FOR CURRENT_USER;
+-- echo ##############################################################
+
+-- sync_slave_with_master
+
+-- echo ##############################################################
+-- echo ### Showing grants for both users: root and user49119 (master)
+SHOW GRANTS FOR 'user49119'@'localhost';
+SHOW GRANTS FOR CURRENT_USER;
+-- echo ##############################################################
+
+-- connection master
+
+-- echo ## This statement will make the revoke fail because root has no
+-- echo ## execute grant. However, it will still revoke the grant for
+-- echo ## user49119.
+-- error ER_NONEXISTING_PROC_GRANT
+REVOKE EXECUTE ON PROCEDURE p1 FROM 'user49119'@'localhost', 'root'@'localhost';
+
+-- echo ##############################################################
+-- echo ### Showing grants for both users: root and user49119 (master)
+-- echo ### after revoke statement failure
+SHOW GRANTS FOR 'user49119'@'localhost';
+SHOW GRANTS FOR CURRENT_USER;
+-- echo ##############################################################
+
+-- sync_slave_with_master
+
+-- echo #############################################################
+-- echo ### Showing grants for both users: root and user49119 (slave)
+-- echo ### after revoke statement failure (should match 
+SHOW GRANTS FOR 'user49119'@'localhost';
+SHOW GRANTS FOR CURRENT_USER;
+-- echo ##############################################################
+
+-- connection master
+DROP TABLE t1;
+DROP PROCEDURE p1;
+DROP USER 'user49119'@'localhost';
+
+-- sync_slave_with_master
+
+#
+# Bug #51987  	revoke privileges logs wrong error code
+#
+
+-- source include/rpl_reset.inc
+-- connection master
+
+grant all on *.* to foo@"1.2.3.4";
+-- error ER_REVOKE_GRANTS
+revoke all privileges, grant option from "foo";
+
+## assertion: revoke is logged
+-- source include/show_binlog_events.inc
+
+-- sync_slave_with_master
+
+## assertion: slave replicates revoke and does not fail because master
+##            logged revoke with correct expected error code
+--source include/check_slave_no_error.inc
+
+-- connection master
+DROP USER foo@"1.2.3.4";
+-- sync_slave_with_master
+
+--echo 
+--echo # Bug#27606 GRANT statement should be replicated with DEFINER information
+--source include/rpl_reset.inc
+--connection master
+GRANT SELECT, INSERT ON mysql.user TO user_bug27606@localhost;
+
+SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
+sync_slave_with_master;
+SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
+
+--connection master
+REVOKE SELECT ON mysql.user FROM user_bug27606@localhost;
+SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
+sync_slave_with_master;
+SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
+
+--connection master
+DROP USER user_bug27606@localhost;
+
 --echo "End of test"
+--source include/rpl_end.inc

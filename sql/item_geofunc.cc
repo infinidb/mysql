@@ -1,4 +1,6 @@
-/* Copyright (C) 2003-2006 MySQL AB
+/*
+   Copyright (c) 2003-2007 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /**
@@ -84,7 +87,9 @@ String *Item_func_geometry_from_wkb::val_str(String *str)
 
   if (args[0]->field_type() == MYSQL_TYPE_GEOMETRY)
   {
-    return args[0]->val_str(str);
+    String *str_ret= args[0]->val_str(str);
+    null_value= args[0]->null_value;
+    return str_ret;
   }
 
   wkb= args[0]->val_str(&arg_val);
@@ -94,7 +99,10 @@ String *Item_func_geometry_from_wkb::val_str(String *str)
 
   str->set_charset(&my_charset_bin);
   if (str->reserve(SRID_SIZE, 512))
-    return 0;
+  {
+    null_value= TRUE;                           /* purecov: inspected */
+    return 0;                                   /* purecov: inspected */
+  }
   str->length(0);
   str->q_append(srid);
   if ((null_value= 
@@ -506,8 +514,8 @@ err:
 longlong Item_func_spatial_rel::val_int()
 {
   DBUG_ASSERT(fixed == 1);
-  String *res1= args[0]->val_str(&tmp_value1);
-  String *res2= args[1]->val_str(&tmp_value2);
+  String *res1= args[0]->val_str(&cmp.value1);
+  String *res2= args[1]->val_str(&cmp.value2);
   Geometry_buffer buffer1, buffer2;
   Geometry *g1, *g2;
   MBR mbr1, mbr2;

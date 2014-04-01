@@ -1,4 +1,4 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 /*
@@ -144,20 +145,19 @@ void
 st_select_lex_unit::init_prepare_fake_select_lex(THD *thd_arg) 
 {
   thd_arg->lex->current_select= fake_select_lex;
-  fake_select_lex->table_list.link_in_list((uchar *)&result_table_list,
-					   (uchar **)
-					   &result_table_list.next_local);
+  fake_select_lex->table_list.link_in_list(&result_table_list,
+                                           &result_table_list.next_local);
   fake_select_lex->context.table_list= 
     fake_select_lex->context.first_name_resolution_table= 
     fake_select_lex->get_table_list();
   if (!fake_select_lex->first_execution)
   {
-    for (ORDER *order= (ORDER *) global_parameters->order_list.first;
+    for (ORDER *order= global_parameters->order_list.first;
          order;
          order= order->next)
       order->item= &order->item_ptr;
   }
-  for (ORDER *order= (ORDER *)global_parameters->order_list.first;
+  for (ORDER *order= global_parameters->order_list.first;
        order;
        order=order->next)
   {
@@ -174,7 +174,6 @@ bool st_select_lex_unit::prepare(THD *thd_arg, select_result *sel_result,
   SELECT_LEX *sl, *first_sl= first_select();
   select_result *tmp_result;
   bool is_union_select;
-  TABLE *empty_table= 0;
   DBUG_ENTER("st_select_lex_unit::prepare");
 
   describe= test(additional_options & SELECT_DESCRIBE);
@@ -249,18 +248,18 @@ bool st_select_lex_unit::prepare(THD *thd_arg, select_result *sel_result,
     can_skip_order_by= is_union_select && !(sl->braces && sl->explicit_limit);
 
     saved_error= join->prepare(&sl->ref_pointer_array,
-                               (TABLE_LIST*) sl->table_list.first,
+                               sl->table_list.first,
                                sl->with_wild,
                                sl->where,
                                (can_skip_order_by ? 0 :
                                 sl->order_list.elements) +
                                sl->group_list.elements,
                                can_skip_order_by ?
-                               (ORDER*) 0 : (ORDER *)sl->order_list.first,
-                               (ORDER*) sl->group_list.first,
+                               NULL : sl->order_list.first,
+                               sl->group_list.first,
                                sl->having,
-                               (is_union_select ? (ORDER*) 0 :
-                                (ORDER*) thd_arg->lex->proc_list.first),
+                               (is_union_select ? NULL :
+                                thd_arg->lex->proc_list.first),
                                sl, this);
     /* There are no * in the statement anymore (for PS) */
     sl->with_wild= 0;
@@ -276,14 +275,6 @@ bool st_select_lex_unit::prepare(THD *thd_arg, select_result *sel_result,
       types= first_sl->item_list;
     else if (sl == first_sl)
     {
-      /*
-        We need to create an empty table object. It is used
-        to create tmp_table fields in Item_type_holder.
-        The main reason of this is that we can't create
-        field object without table.
-      */
-      DBUG_ASSERT(!empty_table);
-      empty_table= (TABLE*) thd->calloc(sizeof(TABLE));
       types.empty();
       List_iterator_fast<Item> it(sl->item_list);
       Item *item_tmp;
@@ -335,6 +326,35 @@ bool st_select_lex_unit::prepare(THD *thd_arg, select_result *sel_result,
       }
     }
     
+    /*
+      Disable the usage of fulltext searches in the last union branch.
+      This is a temporary 5.x limitation because of the way the fulltext
+      search functions are handled by the optimizer.
+      This is manifestation of the more general problems of "taking away"
+      parts of a SELECT statement post-fix_fields(). This is generally not
+      doable since various flags are collected in various places (e.g. 
+      SELECT_LEX) that carry information about the presence of certain 
+      expressions or constructs in the parts of the query.
+      When part of the query is taken away it's not clear how to "divide" 
+      the meaning of these accumulated flags and what to carry over to the
+      recipient query (SELECT_LEX).
+    */
+    if (global_parameters->ftfunc_list->elements && 
+        global_parameters->order_list.elements &&
+        global_parameters != fake_select_lex)
+    {
+      ORDER *ord;
+      Item_func::Functype ft=  Item_func::FT_FUNC;
+      for (ord= global_parameters->order_list.first; ord; ord= ord->next)
+        if ((*ord->item)->walk (&Item::find_function_processor, FALSE, 
+                                (uchar *) &ft))
+        {
+          my_error (ER_CANT_USE_OPTION_HERE, MYF(0), "MATCH()");
+          goto err;
+        }
+    }
+
+
     create_options= (first_sl->options | thd_arg->options |
                      TMP_TABLE_ALL_COLUMNS);
     /*
@@ -382,17 +402,28 @@ bool st_select_lex_unit::prepare(THD *thd_arg, select_result *sel_result,
 	  fake_select_lex->table_list.empty();
 	  DBUG_RETURN(TRUE);
 	}
+
+        /*
+          Fake st_select_lex should have item list for correct ref_array
+          allocation.
+        */
 	fake_select_lex->item_list= item_list;
 
 	thd_arg->lex->current_select= fake_select_lex;
+
+        /*
+          We need to add up n_sum_items in order to make the correct
+          allocation in setup_ref_array().
+        */
+        fake_select_lex->n_child_sum_items+= global_parameters->n_sum_items;
+
 	saved_error= fake_select_lex->join->
 	  prepare(&fake_select_lex->ref_pointer_array,
-		  (TABLE_LIST*) fake_select_lex->table_list.first,
+		  fake_select_lex->table_list.first,
 		  0, 0,
-		  fake_select_lex->order_list.elements,
-		  (ORDER*) fake_select_lex->order_list.first,
-		  (ORDER*) NULL, NULL,
-                  (ORDER*) NULL,
+                  global_parameters->order_list.elements, // og_num
+                  global_parameters->order_list.first,    // order
+		  NULL, NULL, NULL,
 		  fake_select_lex, this);
 	fake_select_lex->table_list.empty();
       }
@@ -559,17 +590,27 @@ bool st_select_lex_unit::exec()
 	}
         fake_select_lex->join->no_const_tables= TRUE;
 
-	/*
-	  Fake st_select_lex should have item list for correctref_array
-	  allocation.
-	*/
-	fake_select_lex->item_list= item_list;
+        /*
+          Fake st_select_lex should have item list for correct ref_array
+          allocation.
+        */
+        fake_select_lex->item_list= item_list;
+
+        /*
+          We need to add up n_sum_items in order to make the correct
+          allocation in setup_ref_array().
+          Don't add more sum_items if we have already done JOIN::prepare
+          for this (with a different join object)
+        */
+        if (!fake_select_lex->ref_pointer_array)
+          fake_select_lex->n_child_sum_items+= global_parameters->n_sum_items;
+
         saved_error= mysql_select(thd, &fake_select_lex->ref_pointer_array,
                               &result_table_list,
                               0, item_list, NULL,
                               global_parameters->order_list.elements,
-                              (ORDER*)global_parameters->order_list.first,
-                              (ORDER*) NULL, NULL, (ORDER*) NULL,
+                              global_parameters->order_list.first,
+                              NULL, NULL, NULL,
                               fake_select_lex->options | SELECT_NO_UNLOCK,
                               result, this, fake_select_lex);
       }
@@ -591,8 +632,8 @@ bool st_select_lex_unit::exec()
                                 &result_table_list,
                                 0, item_list, NULL,
                                 global_parameters->order_list.elements,
-                                (ORDER*)global_parameters->order_list.first,
-                                (ORDER*) NULL, NULL, (ORDER*) NULL,
+                                global_parameters->order_list.first,
+                                NULL, NULL, NULL,
                                 fake_select_lex->options | SELECT_NO_UNLOCK,
                                 result, this, fake_select_lex);
         }
@@ -668,8 +709,8 @@ bool st_select_lex_unit::cleanup()
     if (global_parameters->order_list.elements)
     {
       ORDER *ord;
-      for (ord= (ORDER*)global_parameters->order_list.first; ord; ord= ord->next)
-        (*ord->item)->cleanup();
+      for (ord= global_parameters->order_list.first; ord; ord= ord->next)
+        (*ord->item)->walk (&Item::cleanup_processor, 0, 0);
     }
   }
 

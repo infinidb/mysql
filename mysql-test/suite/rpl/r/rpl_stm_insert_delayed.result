@@ -1,9 +1,5 @@
-stop slave;
-drop table if exists t1,t2,t3,t4,t5,t6,t7,t8,t9;
-reset master;
-reset slave;
-drop table if exists t1,t2,t3,t4,t5,t6,t7,t8,t9;
-start slave;
+include/master-slave.inc
+[connection master]
 set @old_global_binlog_format = @@global.binlog_format;
 set @@global.binlog_format = statement;
 CREATE SCHEMA IF NOT EXISTS mysqlslap;
@@ -52,18 +48,18 @@ CREATE TABLE t1(a int, UNIQUE(a));
 INSERT DELAYED IGNORE INTO t1 VALUES(1);
 INSERT DELAYED IGNORE INTO t1 VALUES(1);
 flush table t1;
-show binlog events in 'master-bin.000002' LIMIT 2,2;
+show binlog events in 'master-bin.000002' from <binlog_start> limit 1,2;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
+master-bin.000002	#	Query	#	#	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
+master-bin.000002	#	Query	#	#	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
 select * from t1;
 a
 1
 On slave
-show binlog events in 'slave-bin.000002' LIMIT 2,2;
+show binlog events in 'slave-bin.000002' from <binlog_start> limit 1,2;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
+slave-bin.000002	#	Query	#	#	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
+slave-bin.000002	#	Query	#	#	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
 select * from t1;
 a
 1
@@ -112,24 +108,14 @@ id	name
 USE test;
 DROP SCHEMA mysqlslap;
 use test;
-FLUSH LOGS;
-FLUSH LOGS;
 CREATE TABLE t1(a int, UNIQUE(a));
 INSERT DELAYED IGNORE INTO t1 VALUES(1);
 INSERT DELAYED IGNORE INTO t1 VALUES(1);
 flush table t1;
-show binlog events in 'master-bin.000002' LIMIT 2,2;
-Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
 select * from t1;
 a
 1
 On slave
-show binlog events in 'slave-bin.000002' LIMIT 2,2;
-Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
-x	x	x	x	x	use `test`; INSERT DELAYED IGNORE INTO t1 VALUES(1)
 select * from t1;
 a
 1
@@ -138,3 +124,4 @@ FLUSH LOGS;
 FLUSH LOGS;
 End of 5.0 tests
 set @@global.binlog_format = @old_global_binlog_format;
+include/rpl_end.inc

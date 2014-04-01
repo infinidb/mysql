@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -89,7 +89,7 @@ cmp_dfield_dfield(
 /*************************************************************//**
 This function is used to compare a data tuple to a physical record.
 Only dtuple->n_fields_cmp first fields are taken into account for
-the the data tuple! If we denote by n = n_fields_cmp, then rec must
+the data tuple! If we denote by n = n_fields_cmp, then rec must
 have either m >= n fields, or it must differ from dtuple in some of
 the m fields rec has. If rec has an externally stored field we do not
 compare it but return with value 0 if such a comparison should be
@@ -148,7 +148,9 @@ cmp_rec_rec_simple(
 	const rec_t*		rec2,	/*!< in: physical record */
 	const ulint*		offsets1,/*!< in: rec_get_offsets(rec1, ...) */
 	const ulint*		offsets2,/*!< in: rec_get_offsets(rec2, ...) */
-	const dict_index_t*	index);	/*!< in: data dictionary index */
+	const dict_index_t*	index,	/*!< in: data dictionary index */
+	ibool*			null_eq);/*!< out: set to TRUE if
+					found matching null values */
 /*************************************************************//**
 This function is used to compare two physical records. Only the common
 first fields are compared, and if an externally stored field is
@@ -163,6 +165,10 @@ cmp_rec_rec_with_match(
 	const ulint*	offsets1,/*!< in: rec_get_offsets(rec1, index) */
 	const ulint*	offsets2,/*!< in: rec_get_offsets(rec2, index) */
 	dict_index_t*	index,	/*!< in: data dictionary index */
+	ibool		nulls_unequal,
+				/* in: TRUE if this is for index statistics
+				cardinality estimation, and innodb_stats_method
+				is "nulls_unequal" or "nulls_ignored" */
 	ulint*		matched_fields, /*!< in/out: number of already completely
 				matched fields; when the function returns,
 				contains the value the for current

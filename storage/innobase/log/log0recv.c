@@ -167,7 +167,7 @@ recv_sys_init(
 	recv_sys->len = 0;
 	recv_sys->recovered_offset = 0;
 
-	recv_sys->addr_hash = hash_create(available_memory / 64);
+	recv_sys->addr_hash = hash_create(available_memory / 512);
 	recv_sys->n_addrs = 0;
 
 	recv_sys->apply_log_recs = FALSE;
@@ -207,7 +207,7 @@ recv_sys_empty_hash(void)
 	hash_table_free(recv_sys->addr_hash);
 	mem_heap_empty(recv_sys->heap);
 
-	recv_sys->addr_hash = hash_create(buf_pool_get_curr_size() / 256);
+	recv_sys->addr_hash = hash_create(buf_pool_get_curr_size() / 512);
 }
 
 #ifndef UNIV_LOG_DEBUG
@@ -400,10 +400,8 @@ recv_synchronize_groups(
 	dulint		start_lsn;
 	dulint		end_lsn;
 	dulint		recovered_lsn;
-	dulint		limit_lsn;
 
 	recovered_lsn = recv_sys->recovered_lsn;
-	limit_lsn = recv_sys->limit_lsn;
 
 	/* Read the last recovered log block to the recovery system buffer:
 	the block is always incomplete */
@@ -939,8 +937,7 @@ recv_parse_or_apply_log_rec_body(
 	case MLOG_FILE_CREATE:
 	case MLOG_FILE_RENAME:
 	case MLOG_FILE_DELETE:
-		ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type, FALSE,
-						 ULINT_UNDEFINED);
+		ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
 		break;
 	default:
 		ptr = NULL;
@@ -1304,6 +1301,19 @@ recv_recover_page(
 		recv = UT_LIST_GET_NEXT(rec_list, recv);
 	}
 
+	if (!recover_backup && modification_to_page) {
+		ut_a(block);
+
+		buf_flush_recv_note_modification(block, start_lsn, end_lsn);
+	}
+
+	/* Make sure that committing mtr does not change the modification
+	lsn values of page */
+
+	mtr.modifications = FALSE;
+
+	mtr_commit(&mtr);
+
 	mutex_enter(&(recv_sys->mutex));
 
 	if (ut_dulint_cmp(recv_max_page_lsn, page_lsn) < 0) {
@@ -1317,18 +1327,6 @@ recv_recover_page(
 
 	mutex_exit(&(recv_sys->mutex));
 
-	if (!recover_backup && modification_to_page) {
-		ut_a(block);
-
-		buf_flush_recv_note_modification(block, start_lsn, end_lsn);
-	}
-
-	/* Make sure that committing mtr does not change the modification
-	lsn values of page */
-
-	mtr.modifications = FALSE;
-
-	mtr_commit(&mtr);
 }
 
 /***********************************************************************
@@ -1829,7 +1827,7 @@ recv_report_corrupt_log(
 	      "InnoDB: on your InnoDB tables to check that they are ok!\n"
 	      "InnoDB: If mysqld crashes after this recovery, look at\n"
 	      "InnoDB: http://dev.mysql.com/doc/refman/5.1/en/"
-	      "forcing-recovery.html\n"
+	      "forcing-innodb-recovery.html\n"
 	      "InnoDB: about forcing recovery.\n", stderr);
 
 	fflush(stderr);
@@ -1938,8 +1936,8 @@ loop:
 				point to the datadir we should use there */
 
 				if (NULL == fil_op_log_parse_or_replay(
-					    body, end_ptr, type, TRUE,
-					    space)) {
+					    body, end_ptr, type,
+					    space, page_no)) {
 					fprintf(stderr,
 						"InnoDB: Error: file op"
 						" log record of type %lu"
@@ -2507,7 +2505,9 @@ recv_recovery_from_checkpoint_start(
 	dulint		old_scanned_lsn;
 	dulint		group_scanned_lsn;
 	dulint		contiguous_lsn;
+#ifdef UNIV_LOG_ARCHIVE
 	dulint		archived_lsn;
+#endif /* UNIV_LOG_ARCHIVE */
 	ulint		capacity;
 	byte*		buf;
 	byte		log_hdr_buf[LOG_FILE_HDR_SIZE];
@@ -2553,7 +2553,9 @@ recv_recovery_from_checkpoint_start(
 
 	checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
 	checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
+#ifdef UNIV_LOG_ARCHIVE
 	archived_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_ARCHIVED_LSN);
+#endif /* UNIV_LOG_ARCHIVE */
 
 	/* Read the first log file header to print a note if this is
 	a recovery from a restored InnoDB Hot Backup */

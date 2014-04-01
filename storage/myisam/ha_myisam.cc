@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 
 #ifdef USE_PRAGMA_IMPLEMENTATION
@@ -115,6 +117,10 @@ static void mi_check_print_msg(MI_CHECK *param,	const char* msg_type,
     Also we likely need to lock mutex here (in both cases with protocol and
     push_warning).
   */
+#ifdef THREAD
+  if (param->need_print_msg_lock)
+    pthread_mutex_lock(&param->print_msg_mutex);
+#endif
   protocol->prepare_for_resend();
   protocol->store(name, length, system_charset_info);
   protocol->store(param->op_name, system_charset_info);
@@ -123,6 +129,10 @@ static void mi_check_print_msg(MI_CHECK *param,	const char* msg_type,
   if (protocol->write())
     sql_print_error("Failed on my_net_write, writing to stderr instead: %s\n",
 		    msgbuf);
+#ifdef THREAD
+  if (param->need_print_msg_lock)
+    pthread_mutex_unlock(&param->print_msg_mutex);
+#endif
   return;
 }
 
@@ -544,9 +554,10 @@ ha_myisam::ha_myisam(handlerton *hton, TABLE_SHARE *table_arg)
    can_enable_indexes(1)
 {}
 
-handler *ha_myisam::clone(MEM_ROOT *mem_root)
+handler *ha_myisam::clone(const char *name, MEM_ROOT *mem_root)
 {
-  ha_myisam *new_handler= static_cast <ha_myisam *>(handler::clone(mem_root));
+  ha_myisam *new_handler= static_cast <ha_myisam *>(handler::clone(name,
+                                                                   mem_root));
   if (new_handler)
     new_handler->file->state= file->state;
   return new_handler;
@@ -582,7 +593,11 @@ int ha_myisam::net_read_dump(NET* net)
   int data_fd = file->dfile;
   int error = 0;
 
-  my_seek(data_fd, 0L, MY_SEEK_SET, MYF(MY_WME));
+  if (my_seek(data_fd, 0L, MY_SEEK_SET, MYF(MY_WME)) == MY_FILEPOS_ERROR)
+  {
+    error= my_errno;
+    goto err;
+  }
   for (;;)
   {
     ulong packet_len = my_net_read(net);
@@ -618,7 +633,11 @@ int ha_myisam::dump(THD* thd, int fd)
     return ENOMEM;
 
   int error = 0;
-  my_seek(data_fd, 0L, MY_SEEK_SET, MYF(MY_WME));
+  if (my_seek(data_fd, 0L, MY_SEEK_SET, MYF(MY_WME)) == MY_FILEPOS_ERROR)
+  {
+    error= my_errno;
+    goto err;
+  }
   for (; bytes_to_read > 0;)
   {
     size_t bytes = my_read(data_fd, buf, blocksize, MYF(MY_WME));
@@ -1087,22 +1106,6 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize)
   ha_rows rows= file->state->records;
   DBUG_ENTER("ha_myisam::repair");
 
-  /*
-    Normally this method is entered with a properly opened table. If the
-    repair fails, it can be repeated with more elaborate options. Under
-    special circumstances it can happen that a repair fails so that it
-    closed the data file and cannot re-open it. In this case file->dfile
-    is set to -1. We must not try another repair without an open data
-    file. (Bug #25289)
-  */
-  if (file->dfile == -1)
-  {
-    sql_print_information("Retrying repair of: '%s' failed. "
-                          "Please try REPAIR EXTENDED or myisamchk",
-                          table->s->path.str);
-    DBUG_RETURN(HA_ADMIN_FAILED);
-  }
-
   param.db_name=    table->s->db.str;
   param.table_name= table->alias;
   param.tmpfile_createflag = O_RDWR | O_TRUNC;
@@ -1132,6 +1135,18 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize)
 			mi_get_mask_all_keys_active(share->base.keys) :
 			share->state.key_map);
     uint testflag=param.testflag;
+#ifdef HAVE_MMAP
+    bool remap= test(share->file_map);
+    /*
+      mi_repair*() functions family use file I/O even if memory
+      mapping is available.
+
+      Since mixing mmap I/O and file I/O may cause various artifacts,
+      memory mapping must be disabled.
+    */
+    if (remap)
+      mi_munmap_file(file);
+#endif
     if (mi_test_if_sort_rep(file,file->state->records,key_map,0) &&
 	(local_testflag & T_REP_BY_SORT))
     {
@@ -1163,6 +1178,10 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize)
       error=  mi_repair(&param, file, fixed_name,
 			param.testflag & T_QUICK);
     }
+#ifdef HAVE_MMAP
+    if (remap)
+      mi_dynmap_file(file, file->state->data_file_length);
+#endif
     param.testflag=testflag;
     optimize_done=1;
   }
@@ -1456,9 +1475,17 @@ int ha_myisam::enable_indexes(uint mode)
     {
       sql_print_warning("Warning: Enabling keys got errno %d on %s.%s, retrying",
                         my_errno, param.db_name, param.table_name);
-      /* Repairing by sort failed. Now try standard repair method. */
-      param.testflag&= ~(T_REP_BY_SORT | T_QUICK);
-      error= (repair(thd,param,0) != HA_ADMIN_OK);
+      /*
+        Repairing by sort failed. Now try standard repair method.
+        Still we want to fix only index file. If data file corruption
+        was detected (T_RETRY_WITHOUT_QUICK), we shouldn't do much here.
+        Let implicit repair do this job.
+      */
+      if (!(param.testflag & T_RETRY_WITHOUT_QUICK))
+      {
+        param.testflag&= ~T_REP_BY_SORT;
+        error= (repair(thd,param,0) != HA_ADMIN_OK);
+      }
       /*
         If the standard repair succeeded, clear all error messages which
         might have been set by the first repair. They can still be seen
@@ -1610,8 +1637,8 @@ bool ha_myisam::check_and_repair(THD *thd)
     check_opt.flags|=T_QUICK;
   sql_print_warning("Checking table:   '%s'",table->s->path.str);
 
-  old_query= thd->query;
-  old_query_length= thd->query_length;
+  old_query= thd->query();
+  old_query_length= thd->query_length();
   thd->set_query(table->s->table_name.str,
                  (uint) table->s->table_name.length);
 

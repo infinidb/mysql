@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -82,6 +82,13 @@ void
 mem_init(
 /*=====*/
 	ulint	size);	/*!< in: common pool size in bytes */
+/******************************************************************//**
+Closes the memory system. */
+UNIV_INTERN
+void
+mem_close(void);
+/*===========*/
+
 /**************************************************************//**
 Use this macro instead of the corresponding function! Macro for memory
 heap creation. */
@@ -352,6 +359,9 @@ struct mem_block_info_struct {
 			to the heap is also the first block in this list,
 			though it also contains the base node of the list. */
 	ulint	len;	/*!< physical length of this block in bytes */
+	ulint	total_size; /* physical length in bytes of all blocks
+			in the heap. This is defined only in the base
+			node and is set to ULINT_UNDEFINED in others. */
 	ulint	type;	/*!< type of heap: MEM_HEAP_DYNAMIC, or
 			MEM_HEAP_BUF possibly ORed to MEM_HEAP_BTR_SEARCH */
 	ulint	free;	/*!< offset in bytes of the first free position for

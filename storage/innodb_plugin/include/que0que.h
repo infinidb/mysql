@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -30,6 +30,7 @@ Created 5/27/1996 Heikki Tuuri
 #include "data0data.h"
 #include "dict0types.h"
 #include "trx0trx.h"
+#include "trx0roll.h"
 #include "srv0srv.h"
 #include "usr0types.h"
 #include "que0types.h"
@@ -215,6 +216,16 @@ trx_t*
 thr_get_trx(
 /*========*/
 	que_thr_t*	thr);	/*!< in: query thread */
+/*******************************************************************//**
+Determines if this thread is rolling back an incomplete transaction
+in crash recovery.
+@return TRUE if thr is rolling back an incomplete transaction in crash
+recovery */
+UNIV_INLINE
+ibool
+thr_is_recv(
+/*========*/
+	const que_thr_t*	thr);	/*!< in: query thread */
 /***********************************************************************//**
 Gets the type of a graph node. */
 UNIV_INLINE
@@ -370,6 +381,9 @@ struct que_thr_struct{
 					thus far */
 	ulint		lock_state;	/*!< lock state of thread (table or
 					row) */
+	ulint		fk_cascade_depth; /*!< maximum cascading call depth
+					supported for foreign key constraint
+					related delete/updates */
 };
 
 #define QUE_THR_MAGIC_N		8476583

@@ -1,4 +1,6 @@
-/* Copyright (C) 2005 MySQL AB
+/*
+   Copyright (c) 2006 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +13,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   The beginnings of locale(7) support.
@@ -1309,9 +1312,9 @@ static const char *my_locale_month_names_ro_RO[13] =
 static const char *my_locale_ab_month_names_ro_RO[13] = 
  {"ian","feb","mar","apr","mai","iun","iul","aug","sep","oct","nov","dec", NullS };
 static const char *my_locale_day_names_ro_RO[8] = 
- {"Luni","Marţi","Miercuri","Joi","Vineri","SîmbĂtĂ","DuminicĂ", NullS };
+ {"Luni","Marţi","Miercuri","Joi","Vineri","Sâmbătă","Duminică", NullS };
 static const char *my_locale_ab_day_names_ro_RO[8] = 
- {"Lu","Ma","Mi","Jo","Vi","Sî","Du", NullS };
+ {"Lu","Ma","Mi","Jo","Vi","Sâ","Du", NullS };
 static TYPELIB my_locale_typelib_month_names_ro_RO = 
  { array_elements(my_locale_month_names_ro_RO)-1, "", my_locale_month_names_ro_RO, NULL };
 static TYPELIB my_locale_typelib_ab_month_names_ro_RO = 

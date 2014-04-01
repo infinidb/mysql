@@ -1834,7 +1834,6 @@ CREATE PROCEDURE sp11() insert into mysql.t1 values('a');
 SELECT security_type from mysql.proc where specific_name='sp11';
 security_type
 DEFINER
-connect(localhost,user_1,,db_storedproc,MYSQL_PORT,MYSQL_SOCK);
 	
 user_1@localhost	db_storedproc
 CALL sp11();
@@ -7527,9 +7526,13 @@ BEGIN
 declare x, y, z year(3) default 2005;
 SELECT x, y, z;
 END//
+Warnings:
+Note	1287	'YEAR(3)' is deprecated and will be removed in a future release. Please use YEAR(4) instead
 CALL sp1();
 x	y	z
 2005	2005	2005
+Warnings:
+Note	1287	'YEAR(3)' is deprecated and will be removed in a future release. Please use YEAR(4) instead
 DROP PROCEDURE IF EXISTS sp1;
 CREATE PROCEDURE sp1( )
 BEGIN

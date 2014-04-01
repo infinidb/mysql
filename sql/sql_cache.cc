@@ -1,4 +1,5 @@
-/* Copyright 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+/*
+   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /*
   Description of the query cache:
@@ -383,7 +385,7 @@ static void debug_wait_for_kill(const char *info)
   thd= current_thd;
   prev_info= thd->proc_info;
   thd->proc_info= info;
-  sql_print_information(info);
+  sql_print_information("%s", info);
   while(!thd->killed)
     my_sleep(1000);
   thd->killed= THD::NOT_KILLED;
@@ -421,12 +423,16 @@ TYPELIB query_cache_type_typelib=
   effect by another thread. This enables a quick path in execution to skip waits
   when the outcome is known.
 
+  @param use_timeout TRUE if the lock can abort because of a timeout.
+
+  @note use_timeout is optional and default value is FALSE.
+
   @return
    @retval FALSE An exclusive lock was taken
    @retval TRUE The locking attempt failed
 */
 
-bool Query_cache::try_lock(void)
+bool Query_cache::try_lock(bool use_timeout)
 {
   bool interrupt= FALSE;
   DBUG_ENTER("Query_cache::try_lock");
@@ -456,7 +462,26 @@ bool Query_cache::try_lock(void)
     else
     {
       DBUG_ASSERT(m_cache_lock_status == Query_cache::LOCKED);
-      pthread_cond_wait(&COND_cache_status_changed, &structure_guard_mutex);
+      /*
+        To prevent send_result_to_client() and query_cache_insert() from
+        blocking execution for too long a timeout is put on the lock.
+      */
+      if (use_timeout)
+      {
+        struct timespec waittime;
+        set_timespec_nsec(waittime,(ulong)(50000000L));  /* Wait for 50 msec */
+        int res= pthread_cond_timedwait(&COND_cache_status_changed,
+                                        &structure_guard_mutex,&waittime);
+        if (res == ETIMEDOUT)
+        {
+          interrupt= TRUE;
+          break;
+        }
+      }
+      else
+      {
+        pthread_cond_wait(&COND_cache_status_changed, &structure_guard_mutex);
+      }
     }
   }
   pthread_mutex_unlock(&structure_guard_mutex);
@@ -1119,8 +1144,8 @@ void Query_cache::store_query(THD *thd, TABLE_LIST *tables_used)
     DBUG_VOID_RETURN;
   uint8 tables_type= 0;
 
-  if ((local_tables= is_cacheable(thd, thd->query_length,
-				  thd->query, thd->lex, tables_used,
+  if ((local_tables= is_cacheable(thd, thd->query_length(),
+				  thd->query(), thd->lex, tables_used,
 				  &tables_type)))
   {
     NET *net= &thd->net;
@@ -1190,8 +1215,14 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
       A table- or a full flush operation can potentially take a long time to
       finish. We choose not to wait for them and skip caching statements
       instead.
+
+      In case the wait time can't be determined there is an upper limit which
+      causes try_lock() to abort with a time out.
+
+      The 'TRUE' parameter indicate that the lock is allowed to timeout
+
     */
-    if (try_lock())
+    if (try_lock(TRUE))
       DBUG_VOID_RETURN;
     if (query_cache_size == 0)
     {
@@ -1210,7 +1241,8 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
     /* Key is query + database + flag */
     if (thd->db_length)
     {
-      memcpy(thd->query+thd->query_length+1, thd->db, thd->db_length);
+      memcpy(thd->query() + thd->query_length() + 1 + sizeof(size_t), 
+             thd->db, thd->db_length);
       DBUG_PRINT("qcache", ("database: %s  length: %u",
 			    thd->db, (unsigned) thd->db_length)); 
     }
@@ -1218,24 +1250,24 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
     {
       DBUG_PRINT("qcache", ("No active database"));
     }
-    tot_length= thd->query_length + thd->db_length + 1 +
-      QUERY_CACHE_FLAGS_SIZE;
+    tot_length= thd->query_length() + thd->db_length + 1 +
+      sizeof(size_t) + QUERY_CACHE_FLAGS_SIZE;
     /*
       We should only copy structure (don't use it location directly)
       because of alignment issue
     */
-    memcpy((void *)(thd->query + (tot_length - QUERY_CACHE_FLAGS_SIZE)),
+    memcpy((void*) (thd->query() + (tot_length - QUERY_CACHE_FLAGS_SIZE)),
 	   &flags, QUERY_CACHE_FLAGS_SIZE);
 
     /* Check if another thread is processing the same query? */
     Query_cache_block *competitor = (Query_cache_block *)
-      hash_search(&queries, (uchar*) thd->query, tot_length);
+      hash_search(&queries, (uchar*) thd->query(), tot_length);
     DBUG_PRINT("qcache", ("competitor 0x%lx", (ulong) competitor));
     if (competitor == 0)
     {
       /* Query is not in cache and no one is working with it; Store it */
       Query_cache_block *query_block;
-      query_block= write_block_data(tot_length, (uchar*) thd->query,
+      query_block= write_block_data(tot_length, (uchar*) thd->query(),
 				    ALIGN_SIZE(sizeof(Query_cache_query)),
 				    Query_cache_block::QUERY, local_tables);
       if (query_block != 0)
@@ -1298,6 +1330,57 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
 end:
   DBUG_VOID_RETURN;
 }
+
+
+#ifndef EMBEDDED_LIBRARY
+/**
+  Send a single memory block from the query cache.
+
+  Respects the client/server protocol limits for the
+  size of the network packet, and splits a large block
+  in pieces to ensure that individual piece doesn't exceed
+  the maximal allowed size of the network packet (16M).
+
+  @param[in] net NET handler
+  @param[in] packet packet to send
+  @param[in] len packet length
+
+  @return Operation status
+    @retval FALSE On success
+    @retval TRUE On error
+*/
+static bool
+send_data_in_chunks(NET *net, const uchar *packet, ulong len)
+{
+  /*
+    On the client we may require more memory than max_allowed_packet
+    to keep, both, the truncated last logical packet, and the
+    compressed next packet.  This never (or in practice never)
+    happens without compression, since without compression it's very
+    unlikely that a) a truncated logical packet would remain on the
+    client when it's time to read the next packet b) a subsequent
+    logical packet that is being read would be so large that
+    size-of-new-packet + size-of-old-packet-tail >
+    max_allowed_packet.  To remedy this issue, we send data in 1MB
+    sized packets, that's below the current client default of 16MB
+    for max_allowed_packet, but large enough to ensure there is no
+    unnecessary overhead from too many syscalls per result set.
+  */
+  static const ulong MAX_CHUNK_LENGTH= 1024*1024;
+
+  while (len > MAX_CHUNK_LENGTH)
+  {
+    if (net_real_write(net, packet, MAX_CHUNK_LENGTH))
+      return TRUE;
+    packet+= MAX_CHUNK_LENGTH;
+    len-= MAX_CHUNK_LENGTH;
+  }
+  if (len && net_real_write(net, packet, len))
+    return TRUE;
+
+  return FALSE;
+}
+#endif
 
 
 /*
@@ -1379,13 +1462,37 @@ Query_cache::send_result_to_client(THD *thd, char *sql, uint query_length)
       goto err;
     }
   }
+  {
+    /*
+      We have allocated buffer space (in alloc_query) to hold the
+      SQL statement(s) + the current database name + a flags struct.
+      If the database name has changed during execution, which might
+      happen if there are multiple statements, we need to make
+      sure the new current database has a name with the same length
+      as the previous one.
+    */
+    size_t db_len;
+    memcpy((char *) &db_len, (sql + query_length + 1), sizeof(size_t));
+    if (thd->db_length != db_len)
+    {
+      /*
+        We should probably reallocate the buffer in this case,
+        but for now we just leave it uncached
+      */
 
+      DBUG_PRINT("qcache", 
+                 ("Current database has changed since start of query"));
+      goto err;
+    }
+  }
   /*
     Try to obtain an exclusive lock on the query cache. If the cache is
     disabled or if a full cache flush is in progress, the attempt to
     get the lock is aborted.
+
+    The 'TRUE' parameter indicate that the lock is allowed to timeout
   */
-  if (try_lock())
+  if (try_lock(TRUE))
     goto err;
 
   if (query_cache_size == 0)
@@ -1399,10 +1506,12 @@ Query_cache::send_result_to_client(THD *thd, char *sql, uint query_length)
 
   Query_cache_block *query_block;
 
-  tot_length= query_length + thd->db_length + 1 + QUERY_CACHE_FLAGS_SIZE;
+  tot_length= query_length + 1 + sizeof(size_t) + 
+              thd->db_length + QUERY_CACHE_FLAGS_SIZE;
+
   if (thd->db_length)
   {
-    memcpy(sql+query_length+1, thd->db, thd->db_length);
+    memcpy(sql + query_length + 1 + sizeof(size_t), thd->db, thd->db_length);
     DBUG_PRINT("qcache", ("database: '%s'  length: %u",
 			  thd->db, (unsigned)thd->db_length));
   }
@@ -1603,11 +1712,11 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
                                    ALIGN_SIZE(sizeof(Query_cache_result)))));
     
     Query_cache_result *result = result_block->result();
-    if (net_real_write(&thd->net, result->data(),
-		       result_block->used -
-		       result_block->headers_len() -
-		       ALIGN_SIZE(sizeof(Query_cache_result))))
-      break;					// Client aborted
+    if (send_data_in_chunks(&thd->net, result->data(),
+                            result_block->used -
+                            result_block->headers_len() -
+                            ALIGN_SIZE(sizeof(Query_cache_result))))
+      break;                                    // Client aborted
     result_block = result_block->next;
     thd->net.pkt_nr= query->last_pkt_nr; // Keep packet number updated
   } while (result_block != first_result_block);
@@ -1621,7 +1730,8 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
 
   thd->limit_found_rows = query->found_rows();
   thd->status_var.last_query_cost= 0.0;
-  thd->main_da.disable_status();
+  if (!thd->main_da.is_set())
+    thd->main_da.disable_status();
 
   BLOCK_UNLOCK_RD(query_block);
   DBUG_RETURN(1);				// Result sent to client
@@ -2598,8 +2708,8 @@ void Query_cache::invalidate_table(THD *thd, TABLE_LIST *table_list)
     char key[MAX_DBKEY_LENGTH];
     uint key_length;
 
-    key_length=(uint) (strmov(strmov(key,table_list->db)+1,
-			      table_list->table_name) -key)+ 1;
+    key_length= create_table_def_key(key, table_list->db,
+                                     table_list->table_name);
 
     // We don't store temporary tables => no key_length+=4 ...
     invalidate_table(thd, (uchar *)key, key_length);
@@ -2720,8 +2830,8 @@ Query_cache::register_tables_from_list(TABLE_LIST *tables_used,
       DBUG_PRINT("qcache", ("view: %s  db: %s",
                             tables_used->view_name.str,
                             tables_used->view_db.str));
-      key_length= (uint) (strmov(strmov(key, tables_used->view_db.str) + 1,
-                                 tables_used->view_name.str) - key) + 1;
+      key_length= create_table_def_key(key, tables_used->view_db.str,
+                                       tables_used->view_name.str);
       /*
         There are not callback function for for VIEWs
       */
@@ -3783,14 +3893,13 @@ my_bool Query_cache::move_by_type(uchar **border,
   case Query_cache_block::RESULT:
   {
     DBUG_PRINT("qcache", ("block 0x%lx RES* (%d)", (ulong) block,
-			(int) block->type));
+               (int) block->type));
     if (*border == 0)
       break;
-    Query_cache_block *query_block = block->result()->parent(),
-		      *next = block->next,
-		      *prev = block->prev;
-    Query_cache_block::block_type type = block->type;
+    Query_cache_block *query_block= block->result()->parent();
     BLOCK_LOCK_WR(query_block);
+    Query_cache_block *next= block->next, *prev= block->prev;
+    Query_cache_block::block_type type= block->type;
     ulong len = block->length, used = block->used;
     Query_cache_block *pprev = block->pprev,
 		      *pnext = block->pnext,
@@ -3952,8 +4061,9 @@ uint Query_cache::filename_2_table_key (char *key, const char *path,
   *db_length= (filename - dbname) - 1;
   DBUG_PRINT("qcache", ("table '%-.*s.%s'", *db_length, dbname, filename));
 
-  DBUG_RETURN((uint) (strmov(strmake(key, dbname, *db_length) + 1,
-			     filename) -key) + 1);
+  DBUG_RETURN((uint) (strmake(strmake(key, dbname,
+                                      min(*db_length, NAME_LEN)) + 1,
+                              filename, NAME_LEN) - key) + 1);
 }
 
 /****************************************************************************

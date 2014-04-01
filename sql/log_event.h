@@ -1,4 +1,5 @@
-/* Copyright (C) 2000-2006 MySQL AB
+/*
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @addtogroup Replication
@@ -263,13 +265,22 @@ struct sql_ex_info
                                    1 + 1 + 255    /* type, length, time_zone */ + \
                                    1 + 2          /* type, lc_time_names_number */ + \
                                    1 + 2          /* type, charset_database_number */ + \
-                                   1 + 8          /* type, table_map_for_update */)
+                                   1 + 8          /* type, table_map_for_update */ + \
+                                   1 + 4          /* type, master_data_written */ + \
+                                   1 + 16 + 1 + 60/* type, user_len, user, host_len, host */)
 #define MAX_LOG_EVENT_HEADER   ( /* in order of Query_log_event::write */ \
   LOG_EVENT_HEADER_LEN + /* write_header */ \
   QUERY_HEADER_LEN     + /* write_data */   \
   EXECUTE_LOAD_QUERY_EXTRA_HEADER_LEN + /*write_post_header_for_derived */ \
   MAX_SIZE_LOG_EVENT_STATUS + /* status */ \
   NAME_LEN + 1)
+
+/*
+  The new option is added to handle large packets that are sent from the master 
+  to the slave. It is used to increase the thd(max_allowed) for both the
+  DUMP thread on the master and the SQL/IO thread on the slave. 
+*/
+#define MAX_MAX_ALLOWED_PACKET 1024*1024*1024
 
 /* 
    Event header offsets; 
@@ -329,6 +340,12 @@ struct sql_ex_info
 #define Q_CHARSET_DATABASE_CODE 8
 
 #define Q_TABLE_MAP_FOR_UPDATE_CODE 9
+
+#define Q_MASTER_DATA_WRITTEN_CODE 10
+
+#define Q_INVOKER 11
+
+/* Intvar event post-header */
 
 /* Intvar event data */
 #define I_TYPE_OFFSET        0
@@ -458,10 +475,10 @@ struct sql_ex_info
 #define LOG_EVENT_SUPPRESS_USE_F    0x8
 
 /*
-  The table map version internal to the log should be increased after
-  the event has been written to the binary log.
+  Note: this is a place holder for the flag
+  LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F (0x10), which is not used any
+  more, please do not reused this value for other flags.
  */
-#define LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F 0x10
 
 /**
    @def LOG_EVENT_ARTIFICIAL_F
@@ -928,8 +945,34 @@ public:
 				   pthread_mutex_t* log_lock,
                                    const Format_description_log_event
                                    *description_event);
+
+  /**
+    Reads an event from a binlog or relay log. Used by the dump thread
+    this method reads the event into a raw buffer without parsing it.
+
+    @Note If mutex is 0, the read will proceed without mutex.
+
+    @Note If a log name is given than the method will check if the
+    given binlog is still active.
+
+    @param[in]  file                log file to be read
+    @param[out] packet              packet to hold the event
+    @param[in]  lock                the lock to be used upon read
+    @param[in]  log_file_name_arg   the log's file name
+    @param[out] is_binlog_active    is the current log still active
+
+    @retval 0                   success
+    @retval LOG_READ_EOF        end of file, nothing was read
+    @retval LOG_READ_BOGUS      malformed event
+    @retval LOG_READ_IO         io error while reading
+    @retval LOG_READ_MEM        packet memory allocation failed
+    @retval LOG_READ_TRUNC      only a partial event could be read
+    @retval LOG_READ_TOO_LARGE  event too large
+   */
   static int read_log_event(IO_CACHE* file, String* packet,
-			    pthread_mutex_t* log_lock);
+                            pthread_mutex_t* log_lock,
+                            const char *log_file_name_arg= NULL,
+                            bool* is_binlog_active= NULL);
   /*
     init_show_field_list() prepares the column names and types for the
     output of SHOW BINLOG EVENTS; it is used only by SHOW BINLOG
@@ -952,7 +995,7 @@ public:
     return thd ? thd->db : 0;
   }
 #else
-  Log_event() : temp_buf(0) {}
+  Log_event() : temp_buf(0), flags(0) {}
     /* avoid having to link mysqlbinlog against libpthread */
   static Log_event* read_log_event(IO_CACHE* file,
                                    const Format_description_log_event
@@ -971,9 +1014,9 @@ public:
     return (void*) my_malloc((uint)size, MYF(MY_WME|MY_FAE));
   }
 
-  static void operator delete(void *ptr, size_t size)
+  static void operator delete(void *ptr, size_t)
   {
-    my_free((uchar*) ptr, MYF(MY_WME|MY_ALLOW_ZERO_PTR));
+    my_free(ptr, MYF(MY_WME|MY_ALLOW_ZERO_PTR));
   }
 
   /* Placement version of the above operators */
@@ -1541,6 +1584,8 @@ protected:
 */
 class Query_log_event: public Log_event
 {
+  LEX_STRING user;
+  LEX_STRING host;
 protected:
   Log_event::Byte* data_buf;
 public:
@@ -1620,6 +1665,16 @@ public:
     statement, for other query statements, this will be zero.
   */
   ulonglong table_map_for_update;
+  /*
+    Holds the original length of a Query_log_event that comes from a
+    master of version < 5.0 (i.e., binlog_version < 4). When the IO
+    thread writes the relay log, it augments the Query_log_event with a
+    Q_MASTER_DATA_WRITTEN_CODE status_var that holds the original event
+    length. This field is initialized to non-zero in the SQL thread when
+    it reads this augmented event. SQL thread does not write 
+    Q_MASTER_DATA_WRITTEN_CODE to the slave's server binlog.
+  */
+  uint32 master_data_written;
 
 #ifndef MYSQL_CLIENT
 
@@ -1667,6 +1722,28 @@ public:        /* !!! Public in this patch to allow old usage */
                        const char *query_arg,
                        uint32 q_len_arg);
 #endif /* HAVE_REPLICATION */
+  /*
+    If true, the event always be applied by slave SQL thread or be printed by
+    mysqlbinlog
+   */
+  bool is_trans_keyword()
+  {
+    /*
+      Before the patch for bug#50407, The 'SAVEPOINT and ROLLBACK TO'
+      queries input by user was written into log events directly.
+      So the keywords can be written in both upper case and lower case
+      together, strncasecmp is used to check both cases. they also could be
+      binlogged with comments in the front of these keywords. for examples:
+        / * bla bla * / SAVEPOINT a;
+        / * bla bla * / ROLLBACK TO a;
+      but we don't handle these cases and after the patch, both quiries are
+      binlogged in upper case with no comments.
+     */
+    return !strncmp(query, "BEGIN", q_len) ||
+      !strncmp(query, "COMMIT", q_len) ||
+      !strncasecmp(query, "SAVEPOINT", 9) ||
+      !strncasecmp(query, "ROLLBACK", 8);
+  }
 };
 
 
@@ -1740,7 +1817,9 @@ public:
   void print(FILE* file, PRINT_EVENT_INFO* print_event_info);
 #endif
 
-  Slave_log_event(const char* buf, uint event_len);
+  Slave_log_event(const char* buf,
+                  uint event_len,
+                  const Format_description_log_event *description_event);
   ~Slave_log_event();
   int get_data_size();
   bool is_valid() const { return master_host != 0; }
@@ -1766,7 +1845,7 @@ private:
 
   @verbatim
    (1)    USE db;
-   (2)    LOAD DATA [LOCAL] INFILE 'file_name'
+   (2)    LOAD DATA [CONCURRENT] [LOCAL] INFILE 'file_name'
    (3)    [REPLACE | IGNORE]
    (4)    INTO TABLE 'table_name'
    (5)    [FIELDS
@@ -1960,15 +2039,15 @@ private:
 class Load_log_event: public Log_event
 {
 private:
-  uint get_query_buffer_length();
-  void print_query(bool need_db, char *buf, char **end,
-                   char **fn_start, char **fn_end);
 protected:
   int copy_log_event(const char *buf, ulong event_len,
                      int body_offset,
                      const Format_description_log_event* description_event);
 
 public:
+  uint get_query_buffer_length();
+  void print_query(bool need_db, const char *cs, char *buf, char **end,
+                   char **fn_start, char **fn_end);
   ulong thread_id;
   ulong slave_proxy_id;
   uint32 table_name_len;
@@ -2191,12 +2270,26 @@ public:
 #ifndef MYSQL_CLIENT
   bool write(IO_CACHE* file);
 #endif
-  bool is_valid() const
+  bool header_is_valid() const
   {
     return ((common_header_len >= ((binlog_version==1) ? OLD_HEADER_LEN :
                                    LOG_EVENT_MINIMAL_HEADER_LEN)) &&
             (post_header_len != NULL));
   }
+
+  bool version_is_valid() const
+  {
+    /* It is invalid only when all version numbers are 0 */
+    return !(server_version_split[0] == 0 &&
+             server_version_split[1] == 0 &&
+             server_version_split[2] == 0);
+  }
+
+  bool is_valid() const
+  {
+    return header_is_valid() && version_is_valid();
+  }
+
   int get_data_size()
   {
     /*
@@ -2430,25 +2523,39 @@ public:
   uint charset_number;
   bool is_null;
 #ifndef MYSQL_CLIENT
+  bool deferred;
+  query_id_t query_id;
   User_var_log_event(THD* thd_arg, char *name_arg, uint name_len_arg,
                      char *val_arg, ulong val_len_arg, Item_result type_arg,
 		     uint charset_number_arg)
-    :Log_event(), name(name_arg), name_len(name_len_arg), val(val_arg),
-    val_len(val_len_arg), type(type_arg), charset_number(charset_number_arg)
+    :Log_event(thd_arg,0,0), name(name_arg), name_len(name_len_arg), val(val_arg),
+    val_len(val_len_arg), type(type_arg), charset_number(charset_number_arg),
+    deferred(false)
     { is_null= !val; }
   void pack_info(Protocol* protocol);
 #else
   void print(FILE* file, PRINT_EVENT_INFO* print_event_info);
 #endif
 
-  User_var_log_event(const char* buf,
+  User_var_log_event(const char* buf, uint event_len,
                      const Format_description_log_event *description_event);
   ~User_var_log_event() {}
   Log_event_type get_type_code() { return USER_VAR_EVENT;}
 #ifndef MYSQL_CLIENT
   bool write(IO_CACHE* file);
+  /* 
+     Getter and setter for deferred User-event. 
+     Returns true if the event is not applied directly 
+     and which case the applier adjusts execution path.
+  */
+  bool is_deferred() { return deferred; }
+  /*
+    In case of the deffered applying the variable instance is flagged
+    and the parsing time query id is stored to be used at applying time.
+  */
+  void set_deferred(query_id_t qid) { deferred= true; query_id= qid; }
 #endif
-  bool is_valid() const { return 1; }
+  bool is_valid() const { return name != 0; }
 
 private:
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
@@ -3283,16 +3390,14 @@ public:
   /* Special constants representing sets of flags */
   enum 
   {
-    TM_NO_FLAGS = 0U
+    TM_NO_FLAGS = 0U,
+    TM_BIT_LEN_EXACT_F = (1U << 0)
   };
 
-  void set_flags(flag_set flag) { m_flags |= flag; }
-  void clear_flags(flag_set flag) { m_flags &= ~flag; }
   flag_set get_flags(flag_set flag) const { return m_flags & flag; }
 
 #ifndef MYSQL_CLIENT
-  Table_map_log_event(THD *thd, TABLE *tbl, ulong tid, 
-		      bool is_transactional, uint16 flags);
+  Table_map_log_event(THD *thd, TABLE *tbl, ulong tid, bool is_transactional);
 #endif
 #ifdef HAVE_REPLICATION
   Table_map_log_event(const char *buf, uint event_len, 
@@ -3305,7 +3410,7 @@ public:
   table_def *create_table_def()
   {
     return new table_def(m_coltype, m_colcnt, m_field_metadata,
-                         m_field_metadata_size, m_null_bits);
+                         m_field_metadata_size, m_null_bits, m_flags);
   }
   ulong get_table_id() const        { return m_table_id; }
   const char *get_table_name() const { return m_tblnam; }
@@ -3542,8 +3647,9 @@ protected:
 
   // Unpack the current row into m_table->record[0]
   int unpack_current_row(const Relay_log_info *const rli)
-  { 
+  {
     DBUG_ASSERT(m_table);
+
     ASSERT_OR_RETURN_ERROR(m_curr_row < m_rows_end, HA_ERR_CORRUPT_EVENT);
     int const result= ::unpack_row(rli, m_table, m_width, m_curr_row, &m_cols,
                                    &m_curr_row_end, &m_master_reclength);
@@ -3915,6 +4021,32 @@ static inline bool copy_event_cache_to_file_and_reinit(IO_CACHE *cache,
     my_b_copy_to_file(cache, file) ||
     reinit_io_cache(cache, WRITE_CACHE, 0, FALSE, TRUE);
 }
+
+#ifndef MYSQL_CLIENT
+/**
+   The function is called by slave applier in case there are
+   active table filtering rules to force gathering events associated
+   with Query-log-event into an array to execute
+   them once the fate of the Query is determined for execution.
+*/
+bool slave_execute_deferred_events(THD *thd);
+#endif
+
+#ifdef MYSQL_SERVER
+/**
+  This is an utility function that adds a quoted identifier into the a buffer.
+  This also escapes any existance of the quote string inside the identifier.
+ */
+size_t my_strmov_quoted_identifier(THD *thd, char *buffer,
+                                   const char* identifier,
+                                   uint length);
+#else
+size_t my_strmov_quoted_identifier(char *buffer, const char* identifier);
+#endif
+size_t my_strmov_quoted_identifier_helper(int q, char *buffer,
+                                          const char* identifier,
+                                          uint length);
+
 
 /**
   @} (end of group Replication)

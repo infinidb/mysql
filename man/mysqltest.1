@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqltest\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/03/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 11/04/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL
 .\"  Language: English
 .\"
-.TH "\FBMYSQLTEST\FR" "1" "09/03/2009" "MySQL" "MySQL Database System"
+.TH "\FBMYSQLTEST\FR" "1" "11/04/2013" "MySQL" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -35,7 +44,7 @@ The
 \fBmysqltest\fR
 program runs a test case against a MySQL server and optionally compares the output with a result file\&. This program reads input written in a special test language\&. Typically, you invoke
 \fBmysqltest\fR
-via
+using
 \fBmysql\-test\-run\&.pl\fR
 rather than invoking it directly\&.
 .PP
@@ -175,31 +184,11 @@ The base directory for tests\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-.\" mysqltest: big-test option
-.\" big-test option: mysqltest
-\fB\-\-big\-test\fR,
-\fB\-B\fR
-.sp
-Define the
-\fBmysqltest\fR
-variable
-$BIG_TEST
-as 1\&. This option was removed in MySQL 4\&.1\&.23, 5\&.0\&.30, and 5\&.1\&.13\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
 .\" mysqltest: character-sets-dir option
 .\" character-sets-dir option: mysqltest
 \fB\-\-character\-sets\-dir=\fR\fB\fIpath\fR\fR
 .sp
-The directory where character sets are installed\&. This option was added in MySQL 4\&.1\&.23, 5\&.0\&.32, and 5\&.1\&.13\&.
+The directory where character sets are installed\&.
 .RE
 .sp
 .RS 4
@@ -226,12 +215,11 @@ Compress all information sent between the client and the server if both support 
 .sp -1
 .IP \(bu 2.3
 .\}
-.\" mysqltest: cursor-protocol option
+.\" mysqltest: currsor-protocol option
 .\" cursor-protocol option: mysqltest
 \fB\-\-cursor\-protocol\fR
 .sp
-Use cursors for prepared statements (implies
-\fB\-\-ps\-protocol\fR)\&. This option was added in MySQL 5\&.0\&.19\&.
+Use cursors for prepared statements\&.
 .RE
 .sp
 .RS 4
@@ -266,7 +254,7 @@ The default database to use\&.
 Write a debugging log if MySQL is built with debugging support\&. The default
 \fIdebug_options\fR
 value is
-\'d:t:S:i:O,/tmp/mysqltest\&.trace\'\&.
+\*(Aqd:t:S:i:O,/tmp/mysqltest\&.trace\*(Aq\&.
 .RE
 .sp
 .RS 4
@@ -281,7 +269,7 @@ value is
 .\" debug-check option: mysqltest
 \fB\-\-debug\-check\fR
 .sp
-Print some debugging information when the program exits\&. This option was added in MySQL 5\&.1\&.21\&.
+Print some debugging information when the program exits\&.
 .RE
 .sp
 .RS 4
@@ -296,7 +284,7 @@ Print some debugging information when the program exits\&. This option was added
 .\" debug-info option: mysqltest
 \fB\-\-debug\-info\fR
 .sp
-Print debugging information and memory and CPU usage statistics when the program exits\&. This option was added in MySQL 5\&.1\&.14\&.
+Print debugging information and memory and CPU usage statistics when the program exits\&.
 .RE
 .sp
 .RS 4
@@ -332,7 +320,7 @@ Include the contents of the given file before processing the contents of the tes
 \fBmysqltest\fR
 test files\&. This option has the same effect as putting a
 \-\-source \fIfile_name\fR
-command as the first line of the test file\&. This option was added in MySQL 4\&.1\&.23, 5\&.0\&.30, and 5\&.1\&.7\&.
+command as the first line of the test file\&.
 .RE
 .sp
 .RS 4
@@ -347,7 +335,7 @@ command as the first line of the test file\&. This option was added in MySQL 4\&
 .\" logdir option: mysqltest
 \fB\-\-logdir=\fR\fB\fIdir_name\fR\fR
 .sp
-The directory to use for log files\&. This option was added in MySQL 5\&.1\&.14\&.
+The directory to use for log files\&.
 .RE
 .sp
 .RS 4
@@ -363,7 +351,7 @@ The directory to use for log files\&. This option was added in MySQL 5\&.1\&.14\
 \fB\-\-mark\-progress\fR
 .sp
 Write the line number and elapsed time to
-\fItest_file\fR\&.progress\&. This option was added in MySQL 4\&.1\&.23, 5\&.0\&.30, and 5\&.1\&.12\&.
+\fItest_file\fR\&.progress\&.
 .RE
 .sp
 .RS 4
@@ -378,7 +366,24 @@ Write the line number and elapsed time to
 .\" max-connect-retries option: mysqltest
 \fB\-\-max\-connect\-retries=\fR\fB\fInum\fR\fR
 .sp
-The maximum number of connection attempts when connecting to server\&. This option was added in MySQL 4\&.1\&.23, 5\&.0\&.23, and 5\&.1\&.11\&.
+The maximum number of connection attempts when connecting to server\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" mysqltest: max-connections option
+.\" max-connections option: mysqltest
+\fB\-\-max\-connections=\fR\fB\fInum\fR\fR
+.sp
+The maximum number of simultaneous server connections per client (that is, per test)\&. If not set, the maximum is 128\&. Minimum allowed limit is 8, maximum is 5120\&.
+.sp
+This option is available from MySQL 5\&.1\&.45\&.
 .RE
 .sp
 .RS 4
@@ -393,7 +398,28 @@ The maximum number of connection attempts when connecting to server\&. This opti
 .\" no-defaults option: mysqltest
 \fB\-\-no\-defaults\fR
 .sp
-Do not read default options from any option files\&.
+Do not read default options from any option files\&. If used, this must be the first option\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" mysqltest: plugin-dir option
+.\" plugin-dir option: mysqltest
+\fB\-\-plugin\-dir=\fR\fB\fIpath\fR\fR
+.sp
+The directory in which to look for plugins\&. It may be necessary to specify this option if the
+\fIdefault_auth\fR
+argument is used for the
+connect()
+command to specify an authentication plugin but
+\fBmysqltest\fR
+does not find it\&. This option was added in MySQL 5\&.5\&.7\&.
 .RE
 .sp
 .RS 4
@@ -444,6 +470,27 @@ The TCP/IP port number to use for the connection\&.
 .sp -1
 .IP \(bu 2.3
 .\}
+.\" mysqltest: protocol option
+.\" protocol option: mysqltest
+\fB\-\-protocol=\fR\fB{TCP|SOCKET|PIPE|MEMORY}\fR
+.sp
+Choose the protocol for communication with the server\&.
+SOCKET
+is default\&.
+.sp
+The
+\fB\-\-protocol\fR
+option is available from MySQL 5\&.1\&.51\&. It is ignored if running with the embedded server\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 .\" mysqltest: ps-protocol option
 .\" ps-protocol option: mysqltest
 \fB\-\-ps\-protocol\fR
@@ -484,7 +531,8 @@ Suppress all normal output\&. This is a synonym for
 .sp
 Record the output that results from running the test file into the file named by the
 \fB\-\-result\-file\fR
-option, if that option is given\&.
+option, if that option is given\&. It is an error to use this option without also using
+\fB\-\-result\-file\fR\&.
 .RE
 .sp
 .RS 4
@@ -516,7 +564,9 @@ treats the test actual and expected results for a test case:
 .\}
 If the test produces no results,
 \fBmysqltest\fR
-exits with an error message to that effect\&.
+exits with an error message to that effect, unless
+\fB\-\-result\-file\fR
+is given and the named file is an empty file\&.
 .RE
 .sp
 .RS 4
@@ -551,7 +601,7 @@ reads the expected results from the given file and compares them with the actual
 \fBmysqltest\fR
 writes a
 \&.reject
-file in the same directory as the result file and exits with an error\&.
+file in the same directory as the result file, outputs a diff of the two files, and exits with an error\&.
 .RE
 .sp
 .RS 4
@@ -604,6 +654,35 @@ or
 \fB\-F \fR\fB\fIfile_name\fR\fR
 .sp
 Read arguments for the embedded server from the given file\&. The file should contain one argument per line\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" mysqltest: server-public-key-path option
+.\" server-public-key-path option: mysqltest
+\fB\-\-server\-public\-key\-path=\fR\fBfile_name\fR
+.sp
+The path name to a file containing the server RSA public key\&. The file must be in PEM format\&. The public key is used for RSA encryption of the client password for connections to the server made using accounts that authenticate with the
+sha256_password
+plugin\&. This option is ignored for client accounts that do not authenticate with that plugin\&. It is also ignored if password encryption is not needed, as is the case when the client connects to the server using an SSL connection\&.
+.sp
+The server sends the public key to the client as needed, so it is not necessary to use this option for RSA password encryption to occur\&. It is more efficient to do so because then the server need not send the key\&.
+.sp
+For additional discussion regarding use of the
+sha256_password
+plugin, including how to get the RSA public key, see
+\m[blue]\fBThe SHA\-256 Authentication Plugin\fR\m[]\&\s-2\u[1]\d\s+2\&.
+.sp
+This option is available only if MySQL was built using OpenSSL\&. It was added in MySQL 5\&.6\&.6 under the name
+\fB\-\-server\-public\-key\fR
+and renamed in 5\&.6\&.7 to
+\fB\-\-server\-public\-key\-path\fR\&.
 .RE
 .sp
 .RS 4
@@ -695,7 +774,22 @@ localhost
 .sp
 Execute DML statements within a stored procedure\&. For every DML statement,
 \fBmysqltest\fR
-creates and invokes a stored procedure that executes the statement rather than executing the statement directly\&. This option was added in MySQL 5\&.0\&.19\&.
+creates and invokes a stored procedure that executes the statement rather than executing the statement directly\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" mysqltest: tail-lines option
+.\" tail-lines option: mysqltest
+\fB\-\-tail\-lines=\fR\fB\fInn\fR\fR
+.sp
+Specify how many lines of the result to include in the output if the test fails because an SQL statement fails\&. The default is 0, meaning no lines of result printed\&.
 .RE
 .sp
 .RS 4
@@ -727,7 +821,9 @@ Read test input from this file\&. The default is to read from the standard input
 \fB\-\-timer\-file=\fR\fB\fIfile_name\fR\fR,
 \fB\-m \fR\fB\fIfile_name\fR\fR
 .sp
-The file where the timing in microseconds is written\&.
+If given, the number of millisecond spent running the test will be written to this file\&. This is used by
+\fBmysql\-test\-run\&.pl\fR
+for its reporting\&.
 .RE
 .sp
 .RS 4
@@ -743,7 +839,7 @@ The file where the timing in microseconds is written\&.
 \fB\-\-tmpdir=\fR\fB\fIdir_name\fR\fR,
 \fB\-t \fR\fB\fIdir_name\fR\fR
 .sp
-The temporary directory where socket files are put\&.
+The temporary directory where socket files are created\&.
 .RE
 .sp
 .RS 4
@@ -775,7 +871,7 @@ The MySQL user name to use when connecting to the server\&.
 \fB\-\-verbose\fR,
 \fB\-v\fR
 .sp
-Verbose mode\&. Print out more information what the program does\&.
+Verbose mode\&. Print out more information about what the program does\&.
 .RE
 .sp
 .RS 4
@@ -813,7 +909,7 @@ statement is wrapped inside a view\&. This option was added in MySQL 5\&.0\&.19\
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 2006, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -821,9 +917,15 @@ This documentation is distributed in the hope that it will be useful, but WITHOU
 .PP
 You should have received a copy of the GNU General Public License along with the program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or see http://www.gnu.org/licenses/.
 .sp
+.SH "NOTES"
+.IP " 1." 4
+The SHA-256 Authentication Plugin
+.RS 4
+\%http://dev.mysql.com/doc/refman/5.6/en/sha256-authentication-plugin.html
+.RE
 .SH "SEE ALSO"
 For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

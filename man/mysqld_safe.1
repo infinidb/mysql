@@ -1,13 +1,22 @@
 '\" t
 .\"     Title: \fBmysqld_safe\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
-.\"      Date: 09/04/2009
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 11/04/2013
 .\"    Manual: MySQL Database System
 .\"    Source: MySQL 5.1
 .\"  Language: English
 .\"
-.TH "\FBMYSQLD_SAFE\FR" "1" "09/04/2009" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLD_SAFE\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -76,7 +85,7 @@ Many of the options to
 \fBmysqld_safe\fR
 are the same as the options to
 \fBmysqld\fR\&. See
-Section\ \&5.1.2, \(lqServer Command Options\(rq\&.
+Section\ \&5.1.3, \(lqServer Command Options\(rq\&.
 .PP
 Options unknown to
 \fBmysqld_safe\fR
@@ -121,7 +130,7 @@ in MySQL 5\&.1 installations\&.
 .PP
 \fBmysqld_safe\fR
 supports the options in the following list\&. It also reads option files and supports the options for processing them described at
-Section\ \&4.2.3.3.1, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
+Section\ \&4.2.3.4, \(lqCommand-Line Options that Affect Option-File Handling\(rq\&.
 .sp
 .RS 4
 .ie n \{\
@@ -351,7 +360,7 @@ directory\&.
 .sp
 Use the
 nice
-program to set the server\'s scheduling priority to the given value\&.
+program to set the server\*(Aqs scheduling priority to the given value\&.
 .RE
 .sp
 .RS 4
@@ -479,6 +488,12 @@ program\&.
 \-\-skip\-syslog
 suppresses the use of
 syslog; messages are written to an error log file\&. These options were added in MySQL 5\&.1\&.20\&.
+.sp
+When
+syslog
+is used, the
+daemon\&.err
+syslog priority/facility is used for all log messages\&.
 .RE
 .sp
 .RS 4
@@ -842,7 +857,7 @@ file in the data directory\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright 2007-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -855,4 +870,4 @@ For more information, please refer to the MySQL Reference Manual,
 which may already be installed locally and which is also available
 online at http://dev.mysql.com/doc/.
 .SH AUTHOR
-Sun Microsystems, Inc. (http://www.mysql.com/).
+Oracle Corporation (http://dev.mysql.com/).

@@ -202,8 +202,10 @@ the chain but does not delete them. */
 ibool
 fil_space_free(
 /*===========*/
-			/* out: TRUE if success */
-	ulint	id);	/* in: space id */
+				/* out: TRUE if success */
+	ulint	id,		/* in: space id */
+	ibool	x_latched);	/* in: TRUE if caller has space->latch
+				in X mode */
 /***********************************************************************
 Returns the size of the space in pages. The tablespace must be cached in the
 memory cache. */
@@ -330,11 +332,11 @@ fil_op_log_parse_or_replay(
 				not fir completely between ptr and end_ptr */
 	byte*	end_ptr,	/* in: buffer end */
 	ulint	type,		/* in: the type of this log record */
-	ibool	do_replay,	/* in: TRUE if we want to replay the
-				operation, and not just parse the log record */
-	ulint	space_id);	/* in: if do_replay is TRUE, the space id of
-				the tablespace in question; otherwise
-				ignored */
+	ulint	space_id,	/* in: the space id of the tablespace in
+				question, or 0 if the log record should
+				only be parsed but not replayed */
+	ulint	log_flags);	/* in: redo log flags
+				(stored in the page number parameter) */
 /***********************************************************************
 Deletes a single-table tablespace. The tablespace must be cached in the
 memory cache. */
@@ -710,6 +712,14 @@ fil_page_get_type(
 			written to page, the return value not defined */
 	byte*	page);	/* in: file page */
 
+/***********************************************************************
+Returns TRUE if a single-table tablespace is being deleted. */
+
+ibool
+fil_tablespace_is_being_deleted(
+/*============================*/
+				/* out: TRUE if space is being deleted */
+	ulint		id);	/* in: space id */
 
 typedef	struct fil_space_struct	fil_space_t;
 

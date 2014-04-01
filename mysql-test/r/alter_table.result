@@ -1268,4 +1268,110 @@ a	b
 4	b
 5	a
 DROP TABLE t1;
+#
+# Bug#45567: Fast ALTER TABLE broken for enum and set
+#
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (a ENUM('a1','a2'));
+INSERT INTO t1 VALUES ('a1'),('a2');
+# No copy: No modification
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+# No copy: Add new enumeration to the end
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2','a3');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+# Copy: Modify and add new to the end
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2','xx','a5');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# Copy: Remove from the end
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2','xx');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# Copy: Add new enumeration
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2','a0','xx');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# No copy: Add new enumerations to the end
+ALTER TABLE t1 MODIFY COLUMN a ENUM('a1','a2','a0','xx','a5','a6');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+DROP TABLE t1;
+CREATE TABLE t1 (a SET('a1','a2'));
+INSERT INTO t1 VALUES ('a1'),('a2');
+# No copy: No modification
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+# No copy: Add new to the end
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','a3');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+# Copy: Modify and add new to the end
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','xx','a5');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# Copy: Remove from the end
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','xx');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# Copy: Add new member
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','a0','xx');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+# No copy: Add new to the end
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','a0','xx','a5','a6');
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+# Copy: Numerical incrase (pack lenght)
+ALTER TABLE t1 MODIFY COLUMN a SET('a1','a2','a0','xx','a5','a6','a7','a8','a9','a10');
+affected rows: 2
+info: Records: 2  Duplicates: 0  Warnings: 0
+DROP TABLE t1;
+CREATE TABLE t1 (f1 TIMESTAMP NULL DEFAULT NULL,
+f2 INT(11) DEFAULT NULL) ENGINE=MYISAM DEFAULT CHARSET=utf8;
+INSERT INTO t1 VALUES (NULL, NULL), ("2009-10-09 11:46:19", 2);
+this should affect no rows as there is no real change
+ALTER TABLE t1 CHANGE COLUMN f1 f1_no_real_change TIMESTAMP NULL DEFAULT NULL;
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+DROP TABLE t1;
+#
+# Bug #31145: ALTER TABLE DROP COLUMN, ADD COLUMN crashes (linux) 
+#   or freezes (win) the server
+#
+CREATE TABLE t1 (a TEXT, id INT, b INT);
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN c TEXT FIRST;
+DROP TABLE t1;
+#
+# Test for bug #12652385 - "61493: REORDERING COLUMNS TO POSITION
+#                           FIRST CAN CAUSE DATA TO BE CORRUPTED".
+#
+drop table if exists t1;
+# Use MyISAM engine as the fact that InnoDB doesn't support
+# in-place ALTER TABLE in cases when columns are being renamed
+# hides some bugs.
+create table t1 (i int, j int) engine=myisam;
+insert into t1 value (1, 2);
+# First, test for original problem described in the bug report.
+select * from t1;
+i	j
+1	2
+# Change of column order by the below ALTER TABLE statement should
+# affect both column names and column contents.
+alter table t1 modify column j int first;
+select * from t1;
+j	i
+2	1
+# Now test for similar problem with the same root.
+# The below ALTER TABLE should change not only the name but
+# also the value for the last column of the table.
+alter table t1 drop column i, add column k int default 0;
+select * from t1;
+j	k
+2	0
+# Clean-up.
+drop table t1;
 End of 5.1 tests

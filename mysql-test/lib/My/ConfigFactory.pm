@@ -1,4 +1,20 @@
 # -*- cperl -*-
+# Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; version 2
+# of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
 package My::ConfigFactory;
 
 use strict;
@@ -7,6 +23,7 @@ use Carp;
 
 use My::Config;
 use My::Find;
+use My::Platform;
 
 use File::Basename;
 
@@ -27,6 +44,13 @@ sub get_basedir {
   my $basedir= $group->if_exist('basedir') ||
     $self->{ARGS}->{basedir};
   return $basedir;
+}
+
+sub get_testdir {
+  my ($self, $group)= @_;
+  my $testdir= $group->if_exist('testdir') ||
+    $self->{ARGS}->{testdir};
+  return $testdir;
 }
 
 
@@ -117,7 +141,11 @@ sub fix_tmpdir {
 sub fix_log_error {
   my ($self, $config, $group_name, $group)= @_;
   my $dir= $self->{ARGS}->{vardir};
-  return "$dir/log/$group_name.err";
+  if ( $::opt_valgrind and $::opt_debug ) {
+    return "$dir/log/$group_name.trace";
+  } else {
+    return "$dir/log/$group_name.err";
+  }
 }
 
 sub fix_log {
@@ -141,8 +169,8 @@ sub fix_secure_file_priv {
 
 sub fix_std_data {
   my ($self, $config, $group_name, $group)= @_;
-  my $basedir= $self->get_basedir($group);
-  return "$basedir/mysql-test/std_data";
+  my $testdir= $self->get_testdir($group);
+  return "$testdir/std_data";
 }
 
 sub ssl_supported {
@@ -204,8 +232,10 @@ my @mysqld_rules=
  { 'port' => \&fix_port },
  { 'socket' => \&fix_socket },
  { '#log-error' => \&fix_log_error },
- { 'log' => \&fix_log },
- { 'log-slow-queries' => \&fix_log_slow_queries },
+ { 'general_log' => 1 },
+ { 'general_log_file' => \&fix_log },
+ { 'slow_query_log' => 1 },
+ { 'slow_query_log_file' => \&fix_log_slow_queries },
  { '#user' => sub { return shift->{ARGS}->{user} || ""; } },
  { '#password' => sub { return shift->{ARGS}->{password} || ""; } },
  { 'server-id' => \&fix_server_id, },
@@ -216,7 +246,13 @@ my @mysqld_rules=
  { 'ssl-key' => \&fix_ssl_server_key },
   );
 
-
+if (IS_WINDOWS)
+{
+  # For simplicity, we use the same names for shared memory and 
+  # named pipes.
+  push(@mysqld_rules, {'shared-memory-base-name' => \&fix_socket});
+}
+ 
 sub fix_ndb_mgmd_port {
   my ($self, $config, $group_name, $group)= @_;
   my $hostname= $group->value('HostName');
@@ -345,6 +381,19 @@ sub post_check_client_group {
     }
     $config->insert($client_group_name, $name_to, $option->value())
   }
+  
+  if (IS_WINDOWS)
+  {
+    if (! $self->{ARGS}->{embedded})
+    {
+      # Shared memory base may or may not be defined (e.g not defined in embedded)
+      my $shm = $group_to_copy_from->option("shared-memory-base-name");
+      if (defined $shm)
+      {
+        $config->insert($client_group_name,"shared-memory-base-name", $shm->value());
+      }
+    }
+  }
 }
 
 
@@ -391,6 +440,7 @@ sub post_check_embedded_group {
     (
      '#log-error', # Embedded server writes stderr to mysqltest's log file
      'slave-net-timeout', # Embedded server are not build with replication
+     'shared-memory-base-name', # No shared memory for embedded
     );
 
   foreach my $option ( $mysqld->options(), $first_mysqld->options() ) {

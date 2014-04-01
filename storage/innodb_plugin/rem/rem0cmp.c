@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -36,7 +36,7 @@ Created 7/1/1994 Heikki Tuuri
 
 The records are put into alphabetical order in the following
 way: let F be the first field where two records disagree.
-If there is a character in some position n where the the
+If there is a character in some position n where the
 records disagree, the order is determined by comparison of
 the characters at position n, possibly after
 collating transformation. If there is no such character,
@@ -76,7 +76,7 @@ cmp_debug_dtuple_rec_with_match(
 /*************************************************************//**
 This function is used to compare two data fields for which the data type
 is such that we must use MySQL code to compare them. The prototype here
-must be a copy of the the one in ha_innobase.cc!
+must be a copy of the one in ha_innobase.cc!
 @return	1, 0, -1, if a is greater, equal, less than b, respectively */
 extern
 int
@@ -399,7 +399,7 @@ next_byte:
 /*************************************************************//**
 This function is used to compare a data tuple to a physical record.
 Only dtuple->n_fields_cmp first fields are taken into account for
-the the data tuple! If we denote by n = n_fields_cmp, then rec must
+the data tuple! If we denote by n = n_fields_cmp, then rec must
 have either m >= n fields, or it must differ from dtuple in some of
 the m fields rec has. If rec has an externally stored field we do not
 compare it but return with value 0 if such a comparison should be
@@ -706,7 +706,9 @@ cmp_rec_rec_simple(
 	const rec_t*		rec2,	/*!< in: physical record */
 	const ulint*		offsets1,/*!< in: rec_get_offsets(rec1, ...) */
 	const ulint*		offsets2,/*!< in: rec_get_offsets(rec2, ...) */
-	const dict_index_t*	index)	/*!< in: data dictionary index */
+	const dict_index_t*	index,	/*!< in: data dictionary index */
+	ibool*			null_eq)/*!< out: set to TRUE if
+					found matching null values */
 {
 	ulint		rec1_f_len;	/*!< length of current field in rec1 */
 	const byte*	rec1_b_ptr;	/*!< pointer to the current byte
@@ -753,6 +755,9 @@ cmp_rec_rec_simple(
 		    || rec2_f_len == UNIV_SQL_NULL) {
 
 			if (rec1_f_len == rec2_f_len) {
+				if (null_eq) {
+					*null_eq = TRUE;
+				}
 
 				goto next_field;
 
@@ -857,6 +862,10 @@ cmp_rec_rec_with_match(
 	const ulint*	offsets1,/*!< in: rec_get_offsets(rec1, index) */
 	const ulint*	offsets2,/*!< in: rec_get_offsets(rec2, index) */
 	dict_index_t*	index,	/*!< in: data dictionary index */
+	ibool		nulls_unequal,
+				/* in: TRUE if this is for index statistics
+				cardinality estimation, and innodb_stats_method
+				is "nulls_unequal" or "nulls_ignored" */
 	ulint*		matched_fields, /*!< in/out: number of already completely
 				matched fields; when the function returns,
 				contains the value the for current
@@ -956,9 +965,13 @@ cmp_rec_rec_with_match(
 			    || rec2_f_len == UNIV_SQL_NULL) {
 
 				if (rec1_f_len == rec2_f_len) {
-
-					goto next_field;
-
+					/* This is limited to stats collection,
+					cannot use it for regular search */
+					if (nulls_unequal) {
+						ret = -1;
+					} else {
+						goto next_field;
+					}
 				} else if (rec2_f_len == UNIV_SQL_NULL) {
 
 					/* We define the SQL null to be the

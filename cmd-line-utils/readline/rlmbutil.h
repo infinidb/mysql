@@ -18,7 +18,7 @@
    The GNU General Public License is often shipped with GNU software, and
    is generally kept in a file called COPYING or LICENSE.  If you do not
    have a copy of the license, write to the Free Software Foundation,
-   59 Temple Place, Suite 330, Boston, MA 02111 USA. */
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #if !defined (_RL_MBUTIL_H_)
 #define _RL_MBUTIL_H_
@@ -109,8 +109,8 @@ extern int _rl_is_mbchar_matched PARAMS((char *, int, int, char *, int));
 extern wchar_t _rl_char_value PARAMS((char *, int));
 extern int _rl_walphabetic PARAMS((wchar_t));
 
-#define _rl_to_wupper(wc)	(iswlower (wc) ? towupper (wc) : (wc))
-#define _rl_to_wlower(wc)	(iswupper (wc) ? towlower (wc) : (wc))
+#define _rl_to_wupper(wc)	(iswlower (wc) ? (wchar_t)towupper (wc) : (wc))
+#define _rl_to_wlower(wc)	(iswupper (wc) ? (wchar_t)towlower (wc) : (wc))
 
 #define MB_NEXTCHAR(b,s,c,f) \
 	((MB_CUR_MAX > 1 && rl_byte_oriented == 0) \

@@ -11,8 +11,8 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA 02111-1307 USA
+this program; if not, write to the Free Software Foundation, Inc., 
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 *****************************************************************************/
 
@@ -97,6 +97,7 @@ os_mem_alloc_large(
 			fprintf(stderr, "InnoDB: HugeTLB: Warning: Failed to"
 				" attach shared memory segment, errno %d\n",
 				errno);
+			ptr = NULL;
 		}
 
 		/* Remove the shared memory segment so that it will be
@@ -110,9 +111,6 @@ os_mem_alloc_large(
 		os_fast_mutex_lock(&ut_list_mutex);
 		ut_total_allocated_memory += size;
 		os_fast_mutex_unlock(&ut_list_mutex);
-# ifdef UNIV_SET_MEM_TO_ZERO
-		memset(ptr, '\0', size);
-# endif
 		UNIV_MEM_ALLOC(ptr, size);
 		return(ptr);
 	}

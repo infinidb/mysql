@@ -72,19 +72,16 @@ Microsoft Visual C++ */
 /*			DEBUG VERSION CONTROL
 			===================== */
 
-/* The following flag will make InnoDB to initialize
-all memory it allocates to zero. It hides Purify
-warnings about reading unallocated memory unless
-memory is read outside the allocated blocks. */
-/*
-#define UNIV_INIT_MEM_TO_ZERO
-*/
-
 /* Make a non-inline debug version */
 
+#if defined HAVE_VALGRIND
+# define UNIV_DEBUG_VALGRIND
+#endif /* HAVE_VALGRIND */
 #if 0
 #define UNIV_DEBUG_VALGRIND			/* Enable extra
 						Valgrind instrumentation */
+#define UNIV_BLOB_LIGHT_DEBUG			/* Enable off-page column
+						debugging without UNIV_DEBUG */
 #define UNIV_DEBUG				/* Enable ut_ad() assertions */
 #define UNIV_LIST_DEBUG				/* debug UT_LIST_ macros */
 #define UNIV_MEM_DEBUG				/* detect memory leaks etc */
@@ -107,15 +104,6 @@ operations (very slow); also UNIV_DEBUG must be defined */
 #define UNIV_BTR_DEBUG				/* check B-tree links */
 #define UNIV_LIGHT_MEM_DEBUG			/* light memory debugging */
 
-#ifdef HAVE_purify
-/* The following sets all new allocated memory to zero before use:
-this can be used to eliminate unnecessary Purify warnings, but note that
-it also masks many bugs Purify could detect. For detailed Purify analysis it
-is best to remove the define below and look through the warnings one
-by one. */
-#define UNIV_SET_MEM_TO_ZERO
-#endif
-
 /*
 #define UNIV_SQL_DEBUG
 #define UNIV_LOG_DEBUG
@@ -123,11 +111,6 @@ by one. */
 			/* the above option prevents forcing of log to disk
 			at a buffer page write: it should be tested with this
 			option off; also some ibuf tests are suppressed */
-/*
-#define UNIV_BASIC_LOG_DEBUG
-*/
-			/* the above option enables basic recovery debugging:
-			new allocated file pages are reset */
 
 #if (!defined(UNIV_DEBUG) && !defined(INSIDE_HA_INNOBASE_CC) && !defined(UNIV_MUST_NOT_INLINE))
 /* Definition for inline version */
@@ -176,6 +159,24 @@ management to ensure correct alignment for doubles etc. */
 
 /* Maximum number of parallel threads in a parallelized operation */
 #define UNIV_MAX_PARALLELISM	32
+
+/** The maximum length of a table name. This is the MySQL limit and is
+defined in mysql_com.h like NAME_CHAR_LEN*SYSTEM_CHARSET_MBMAXLEN, the
+number does not include a terminating '\0'. InnoDB probably can handle
+longer names internally */
+#define MAX_TABLE_NAME_LEN	192
+
+/** The maximum length of a database name. Like MAX_TABLE_NAME_LEN this is
+the MySQL's NAME_LEN, see check_and_convert_db_name(). */
+#define MAX_DATABASE_NAME_LEN	MAX_TABLE_NAME_LEN
+
+/** MAX_FULL_NAME_LEN defines the full name path including the
+database name and table name. In addition, 14 bytes is added for:
+	2 for surrounding quotes around table name
+	1 for the separating dot (.)
+	9 for the #mysql50# prefix */
+#define MAX_FULL_NAME_LEN				\
+	(MAX_TABLE_NAME_LEN + MAX_DATABASE_NAME_LEN + 14)
 
 /*
 			UNIVERSAL TYPE DEFINITIONS
@@ -235,6 +236,12 @@ typedef unsigned long long int	ullint;
 
 /* Maximum value for a ulint */
 #define ULINT_MAX		((ulint)(-2))
+
+/* THe 'undefined' value for ullint */
+#define ULLINT_UNDEFINED        ((ullint)(-1))
+
+/* Maximum value for a ullint */
+#define ULLINT_MAX		((ullint)(-2))
 
 /* This 'ibool' type is used within Innobase. Remember that different included
 headers may define 'bool' differently. Do not assume that 'bool' is a ulint! */
