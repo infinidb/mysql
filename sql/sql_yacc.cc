@@ -4289,42 +4289,6 @@ static const yytype_uint8 yyr2[] =
        4,     2,     0,     1,     1,     0,     1,     0,     1,     2,
        1,     3,     3,     1,     1,     1,     1,     0,     2,     1,
        1,     1,     1,     1,     1,     1,     1,     1,     1,     1,
-       1,     1,     1,     1,     0,     0,     6,     0,     1,     3,
-       1,     3,     0,     2,     3,     1,     2,     1,     0,     3,
-       0,     0,     7,     2,     1,     0,     3,     6,     0,     6,
-       4,     6,     4,     4,     4,     5,     4,     4,     5,     6,
-       4,     1,     3,     1,     1,     3,     1,     0,     2,     0,
-       1,     0,     0,     8,     0,     0,     6,     0,     1,     1,
-       1,     1,     1,     2,     1,     1,     1,     3,     4,     0,
-       3,     3,     1,     2,     2,     0,     3,     0,     5,     3,
-       1,     3,     1,     3,     1,     1,     0,     1,     0,     4,
-       0,     1,     3,     1,     1,     1,     0,     0,     6,     0,
-       0,    11,     3,     1,     3,     3,     1,     3,     0,     1,
-       0,     4,     0,     6,     0,     5,     0,     6,     1,     3,
-       3,     5,     0,     2,     0,     2,     1,     1,     1,     3,
-       0,     1,     0,     1,     1,     3,     1,     1,     2,     2,
-       2,     1,     1,     1,     1,     0,     3,     0,     3,     2,
-       4,     4,     3,     4,     4,     2,     1,     3,     3,     6,
-      16,     2,     2,     0,     6,     5,     2,     2,     2,     1,
-       1,     1,     5,     5,     2,     2,     1,     4,     3,     2,
-       2,     2,     3,     2,     2,     1,     3,     4,     3,     3,
-       2,     2,     3,     3,     3,     3,     3,     3,     3,     3,
-       1,     1,     1,     1,     1,     0,     1,     0,     2,     0,
-       1,     1,     1,     0,     2,     0,     2,     0,     2,     2,
-       0,     4,     0,     4,     1,     1,     0,     1,     1,     0,
-       1,     1,     0,     4,     3,     1,     0,     3,     4,     2,
-       1,     1,     1,     1,     1,     1,     1,     1,     0,     1,
-       0,     3,     3,     1,     1,     1,     2,     0,     3,     3,
-       2,     2,     3,     0,     1,     1,     2,     0,     4,     5,
-       0,     0,     0,     0,    18,     2,     0,     1,     0,     1,
-       1,     0,     1,     1,     0,     2,     2,     1,     3,     4,
-       3,     3,     0,     2,     2,     1,     3,     3,     0,     3,
-       0,     3,     2,     3,     1,     1,     2,     0,     2,     1,
-       1,     2,     2,     1,     1,     1,     1,     1,     2,     2,
-       1,     1,     1,     1,     1,     1,     1,     2,     2,     2,
-       2,     2,     1,     1,     1,     1,     1,     1,     1,     3,
-       5,     1,     1,     1,     1,     1,     3,     4,     5,     1,
-       5,     3,     2,     1,     3,     2,     1,     1,     1,     1,
        1,     1,     1,     1,     1,     1,     1,     1,     1,     1,
        1,     1,     0,     0,     6,     0,     1,     3,     1,     3,
        0,     2,     3,     1,     2,     1,     0,     3,     0,     0,
@@ -5933,8 +5897,6 @@ static const yytype_int16 yytable[] =
        0,     0,     0,     0,   744,     0,     0,     0,   744,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-     770,     0,     0,     0,     0,     0,   771,     0,     0,     0,
-       0,     0,     0,     0,   772,     0,   740,   740,   740,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     1,     2,     0,     0,     0,     0,     0,
        0,  1859,     0,     0,     0,     0,     0,     0,     3,     0,
@@ -6100,12 +6062,6 @@ static const yytype_int16 yytable[] =
        0,     0,     0,     0,     0,     0,     0,     0,     0,  3089,
        0,     0,  3189,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,  2951,     0,     0,     0,  2955,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,  1863,     0,     0,
-       0,    49,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,  1864,     0,    50,  1865,     0,     0,    51,     0,
-       0,    52,     0,     0,     0,     0,    53,     0,     0,  2984,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,  1866,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
      744,     0,   744,     0,     0,     0,     0,     0,     0,     0,
@@ -6151,24 +6107,13 @@ static const yytype_int16 yytable[] =
        0,     0,     0,     0,     0,     0,     0,  2972,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,   740,   740,     0,
-       0,     0,     0,     0,     0,     0,   740,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-    2984,     0,  3525,     0,  3664,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,  2984,  2984,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,  2984,  3703,     0,     0,     0,     0,     0,     0,     0,
-       0,  3708,     0,  3710,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,  3734,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,   740,     0,     0,     0,
-       0,     0,   740,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-     740,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,   740,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,  3005,     0,  3561,     0,
     3713,     0,     0,     0,     0,     0,     0,     0,     0,     0,
@@ -6181,28 +6126,17 @@ static const yytype_int16 yytable[] =
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,  3787,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,  3829,     0,  3830,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,  3838,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,  2984,     0,     0,  3634,  3525,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-     740,     0,   740,  2984,   740,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,   740,   740,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,   740,     0,     0,     0,     0,     0,     0,  3937,     0,
-       0,   740,   740,     0,     0,     0,     0,     0,     0,     0,
-       0,   740,     0,   740,     0,     0,  3942,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
     3005,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,  3162,     0,     0,   740,     0,     0,     0,
-       0,     0,  3634,  3634,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,  3987,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,     0,     0,     0,     0,  3887,
        0,  3888,     0,     0,     0,     0,     0,     0,     0,     0,
@@ -10869,8 +10803,6 @@ static const yytype_int16 yycheck[] =
       -1,    -1,    -1,    -1,  2092,    -1,    -1,    -1,  2096,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-     402,    -1,    -1,    -1,    -1,    -1,   408,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,   416,    -1,  1555,  1556,  1557,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    13,    14,    -1,    -1,    -1,    -1,    -1,
       -1,   285,    -1,    -1,    -1,    -1,    -1,    -1,    28,    -1,
@@ -11036,12 +10968,6 @@ static const yytype_int16 yycheck[] =
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,   580,
       -1,    -1,  3001,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,  2601,    -1,    -1,    -1,  2605,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,   486,    -1,    -1,
-      -1,   526,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,   501,    -1,   539,   504,    -1,    -1,   543,    -1,
-      -1,   546,    -1,    -1,    -1,    -1,   551,    -1,    -1,  2648,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,   528,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
     3788,    -1,  3790,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
@@ -11087,24 +11013,13 @@ static const yytype_int16 yycheck[] =
       -1,    -1,    -1,    -1,    -1,    -1,    -1,  3446,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,  3216,  3217,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,  3225,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-    3519,    -1,  3521,    -1,  3523,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,  3533,  3534,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,  3560,  3561,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,  3570,    -1,  3572,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,  3605,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,  3335,    -1,    -1,    -1,
-      -1,    -1,  3341,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-    3359,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,  3386,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,  3555,    -1,  3557,    -1,
     3559,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
@@ -11117,28 +11032,17 @@ static const yytype_int16 yycheck[] =
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,  3645,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,  3735,    -1,  3737,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,  3747,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,  3772,    -1,    -1,  3495,  3776,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-    3519,    -1,  3521,  3802,  3523,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,  3533,  3534,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,  3550,    -1,    -1,    -1,    -1,    -1,    -1,  3837,    -1,
-      -1,  3560,  3561,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,  3570,    -1,  3572,    -1,    -1,  3855,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
     3719,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,  3882,    -1,    -1,  3605,    -1,    -1,    -1,
-      -1,    -1,  3611,  3612,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,  3931,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,  3788,
       -1,  3790,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
@@ -12521,7 +12425,7 @@ static const yytype_int16 yycheck[] =
        5,    -1,     7,     8,     9,    10,    11,   592,    -1,    -1,
       -1,    -1,    17,   598,   599,    20,    -1,    22,    23,    24,
       25,    26,    27,    28,    -1,    30,    -1,    -1,    -1,    34,
-      35,    -1,    -1,    38,    -1,    -1,    41,    42,    43,    -1,
+      -1,    -1,    -1,    38,    -1,    -1,    41,    42,    43,    -1,
       45,    -1,    47,    48,    -1,    -1,    51,    -1,    -1,    54,
       -1,    56,    57,    -1,    59,    -1,    61,    62,    63,    64,
       65,    -1,    67,    68,    -1,    70,    71,    72,    73,    74,
@@ -12985,10 +12889,10 @@ static const yytype_int16 yycheck[] =
       17,    -1,    -1,    20,   599,    22,    23,    24,    25,    26,
       27,    28,    -1,    30,    -1,    -1,    -1,    34,    -1,    -1,
       -1,    38,    -1,    -1,    41,    42,    43,    -1,    45,    -1,
-      -1,    -1,    -1,    -1,    51,    52,    -1,    54,    -1,    56,
-      -1,    -1,    -1,    -1,    61,    62,    63,    64,    65,    -1,
-      67,    68,    -1,    -1,    71,    -1,    73,    74,    75,    76,
-      -1,    78,    79,    -1,    -1,    82,    -1,    84,    -1,    -1,
+      47,    48,    -1,    -1,    51,    -1,    -1,    54,    -1,    56,
+      57,    -1,    59,    -1,    61,    62,    63,    64,    65,    -1,
+      67,    68,    -1,    70,    71,    72,    73,    74,    75,    76,
+      -1,    78,    79,    -1,    81,    82,    -1,    84,    -1,    -1,
       87,    -1,    -1,    90,    -1,    -1,    -1,    -1,    -1,    -1,
       -1,    98,    99,   100,    -1,    -1,   103,    -1,    -1,    -1,
       -1,   108,   109,    -1,    -1,    -1,    -1,   114,    -1,   116,
@@ -22543,9 +22447,11 @@ yyreduce:
   case 929:
 #line 6523 "sql_yacc.yy"
     {
-            if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (3)].table), NULL, (yyvsp[(3) - (3)].num), TL_READ,
-                                           Select->pop_index_hints()))
-              MYSQL_YYABORT;
+            LEX *lex=Lex;
+            lex->sql_command = SQLCOM_OPTIMIZE;
+            lex->no_write_to_binlog= (yyvsp[(2) - (3)].num);
+            lex->check_opt.init();
+            lex->alter_info.reset();
           }
     break;
 
@@ -22572,11 +22478,7 @@ yyreduce:
   case 934:
 #line 6542 "sql_yacc.yy"
     {
-            LEX *lex= Lex;
-            SELECT_LEX *sel= lex->current_select;
-            if (sel->linkage != UNION_TYPE)
-              mysql_init_select(lex);
-            lex->current_select->parsing_place= SELECT_LIST;
+            Lex->sql_command= SQLCOM_RENAME_TABLE;
           }
     break;
 
@@ -22588,48 +22490,45 @@ yyreduce:
   case 936:
 #line 6548 "sql_yacc.yy"
     {
-            Select->context.table_list=
-              Select->context.first_name_resolution_table=
-                (TABLE_LIST *) Select->table_list.first;
+            Lex->sql_command = SQLCOM_RENAME_USER;
           }
     break;
 
   case 937:
 #line 6555 "sql_yacc.yy"
     {
-            if (Select->options & SELECT_DISTINCT && Select->options & SELECT_ALL)
-            {
-              my_error(ER_WRONG_USAGE, MYF(0), "ALL", "DISTINCT");
+            if (Lex->users_list.push_back((yyvsp[(1) - (3)].lex_user)) || Lex->users_list.push_back((yyvsp[(3) - (3)].lex_user)))
               MYSQL_YYABORT;
-            }
           }
     break;
 
   case 938:
 #line 6560 "sql_yacc.yy"
     {
-            if (check_simple_select())
+            if (Lex->users_list.push_back((yyvsp[(3) - (5)].lex_user)) || Lex->users_list.push_back((yyvsp[(5) - (5)].lex_user)))
               MYSQL_YYABORT;
-            Lex->lock_option=  TL_READ_HIGH_PRIORITY;
-            Lex->current_select->lock_option= TL_READ_HIGH_PRIORITY;
           }
     break;
 
   case 941:
 #line 6573 "sql_yacc.yy"
     {
-            if (check_simple_select())
+            LEX *lex=Lex;
+            SELECT_LEX *sl= lex->current_select;
+            if (!sl->add_table_to_list(lex->thd, (yyvsp[(1) - (3)].table),NULL,TL_OPTION_UPDATING,
+                                       TL_IGNORE) ||
+                !sl->add_table_to_list(lex->thd, (yyvsp[(3) - (3)].table),NULL,TL_OPTION_UPDATING,
+                                       TL_IGNORE))
               MYSQL_YYABORT;
-            Select->options|= OPTION_BUFFER_RESULT;
           }
     break;
 
   case 942:
 #line 6586 "sql_yacc.yy"
     {
-            if (check_simple_select())
-              MYSQL_YYABORT;
-            Select->options|= OPTION_FOUND_ROWS;
+            LEX *lex=Lex;
+            lex->sql_command= SQLCOM_ASSIGN_TO_KEYCACHE;
+            lex->ident= (yyvsp[(5) - (5)].lex_str);
           }
     break;
 
@@ -22655,26 +22554,8 @@ yyreduce:
   case 948:
 #line 6614 "sql_yacc.yy"
     {
-            THD *thd= YYTHD;
-            DBUG_ASSERT((yyvsp[(1) - (4)].simple_string) < (yyvsp[(3) - (4)].simple_string));
-
-            if (add_item_to_list(thd, (yyvsp[(2) - (4)].item)))
-              MYSQL_YYABORT;
-            if ((yyvsp[(4) - (4)].lex_str).str)
-            {
-              if (Lex->sql_command == SQLCOM_CREATE_VIEW &&
-                  check_column_name((yyvsp[(4) - (4)].lex_str).str))
-              {
-                my_error(ER_WRONG_COLUMN_NAME, MYF(0), (yyvsp[(4) - (4)].lex_str).str);
-                MYSQL_YYABORT;
-              }
-              (yyvsp[(2) - (4)].item)->is_autogenerated_name= FALSE;
-              (yyvsp[(2) - (4)].item)->set_name((yyvsp[(4) - (4)].lex_str).str, (yyvsp[(4) - (4)].lex_str).length, system_charset_info);
-            }
-            else if (!(yyvsp[(2) - (4)].item)->name)
-            {
-              (yyvsp[(2) - (4)].item)->set_name((yyvsp[(1) - (4)].simple_string), (uint) ((yyvsp[(3) - (4)].simple_string) - (yyvsp[(1) - (4)].simple_string)), thd->charset());
-            }
+            LEX *lex=Lex;
+            lex->sql_command=SQLCOM_PRELOAD_KEYS;
           }
     break;
 
@@ -22686,7 +22567,9 @@ yyreduce:
   case 952:
 #line 6629 "sql_yacc.yy"
     {
-            (yyval.simple_string)= (char*) YYLIP->get_cpp_tok_start();
+            if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (3)].table), NULL, (yyvsp[(3) - (3)].num), TL_READ,
+                                           Select->pop_index_hints()))
+              MYSQL_YYABORT;
           }
     break;
 
@@ -22727,99 +22610,51 @@ yyreduce:
   case 962:
 #line 6679 "sql_yacc.yy"
     {
-            /*
-              Design notes:
-              Do not use a manually maintained stack like thd->lex->xxx_list,
-              but use the internal bison stack ($$, $1 and $3) instead.
-              Using the bison stack is:
-              - more robust to changes in the grammar,
-              - guaranteed to be in sync with the parser state,
-              - better for performances (no memory allocation).
-            */
-            Item_cond_or *item1;
-            Item_cond_or *item3;
-            if (is_cond_or((yyvsp[(1) - (3)].item)))
+            LEX *lex= Lex;
+            SELECT_LEX * sel= lex->current_select;
+            if (sel->set_braces(1))
             {
-              item1= (Item_cond_or*) (yyvsp[(1) - (3)].item);
-              if (is_cond_or((yyvsp[(3) - (3)].item)))
-              {
-                item3= (Item_cond_or*) (yyvsp[(3) - (3)].item);
-                /*
-                  (X1 OR X2) OR (Y1 OR Y2) ==> OR (X1, X2, Y1, Y2)
-                */
-                item3->add_at_head(item1->argument_list());
-                (yyval.item) = (yyvsp[(3) - (3)].item);
-              }
-              else
-              {
-                /*
-                  (X1 OR X2) OR Y ==> OR (X1, X2, Y)
-                */
-                item1->add((yyvsp[(3) - (3)].item));
-                (yyval.item) = (yyvsp[(1) - (3)].item);
-              }
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
             }
-            else if (is_cond_or((yyvsp[(3) - (3)].item)))
+            if (sel->linkage == UNION_TYPE &&
+                !sel->master_unit()->first_select()->braces &&
+                sel->master_unit()->first_select()->linkage ==
+                UNION_TYPE)
             {
-              item3= (Item_cond_or*) (yyvsp[(3) - (3)].item);
-              /*
-                X OR (Y1 OR Y2) ==> OR (X, Y1, Y2)
-              */
-              item3->add_at_head((yyvsp[(1) - (3)].item));
-              (yyval.item) = (yyvsp[(3) - (3)].item);
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
             }
-            else
+            if (sel->linkage == UNION_TYPE &&
+                sel->olap != UNSPECIFIED_OLAP_TYPE &&
+                sel->master_unit()->fake_select_lex)
             {
-              /* X OR Y */
-              (yyval.item) = new (YYTHD->mem_root) Item_cond_or((yyvsp[(1) - (3)].item), (yyvsp[(3) - (3)].item));
-              if ((yyval.item) == NULL)
-                MYSQL_YYABORT;
+ 	       my_error(ER_WRONG_USAGE, MYF(0),
+                        "CUBE/ROLLUP", "ORDER BY");
+               MYSQL_YYABORT;
             }
+            /* select in braces, can't contain global parameters */
+            if (sel->master_unit()->fake_select_lex)
+              sel->master_unit()->global_parameters=
+                 sel->master_unit()->fake_select_lex;
           }
     break;
 
   case 964:
 #line 6713 "sql_yacc.yy"
     {
-            /* See comments in rule expr: expr or expr */
-            Item_cond_and *item1;
-            Item_cond_and *item3;
-            if (is_cond_and((yyvsp[(1) - (3)].item)))
+            LEX *lex= Lex;
+            SELECT_LEX * sel= lex->current_select;
+            if (lex->current_select->set_braces(0))
             {
-              item1= (Item_cond_and*) (yyvsp[(1) - (3)].item);
-              if (is_cond_and((yyvsp[(3) - (3)].item)))
-              {
-                item3= (Item_cond_and*) (yyvsp[(3) - (3)].item);
-                /*
-                  (X1 AND X2) AND (Y1 AND Y2) ==> AND (X1, X2, Y1, Y2)
-                */
-                item3->add_at_head(item1->argument_list());
-                (yyval.item) = (yyvsp[(3) - (3)].item);
-              }
-              else
-              {
-                /*
-                  (X1 AND X2) AND Y ==> AND (X1, X2, Y)
-                */
-                item1->add((yyvsp[(3) - (3)].item));
-                (yyval.item) = (yyvsp[(1) - (3)].item);
-              }
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
             }
-            else if (is_cond_and((yyvsp[(3) - (3)].item)))
+            if (sel->linkage == UNION_TYPE &&
+                sel->master_unit()->first_select()->braces)
             {
-              item3= (Item_cond_and*) (yyvsp[(3) - (3)].item);
-              /*
-                X AND (Y1 AND Y2) ==> AND (X, Y1, Y2)
-              */
-              item3->add_at_head((yyvsp[(1) - (3)].item));
-              (yyval.item) = (yyvsp[(3) - (3)].item);
-            }
-            else
-            {
-              /* X AND Y */
-              (yyval.item) = new (YYTHD->mem_root) Item_cond_and((yyvsp[(1) - (3)].item), (yyvsp[(3) - (3)].item));
-              if ((yyval.item) == NULL)
-                MYSQL_YYABORT;
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
             }
           }
     break;
@@ -22827,18 +22662,18 @@ yyreduce:
   case 966:
 #line 6732 "sql_yacc.yy"
     {
-            (yyval.item)= negate_expression(YYTHD, (yyvsp[(2) - (2)].item));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            LEX *lex= Lex;
+            SELECT_LEX *sel= lex->current_select;
+            if (sel->linkage != UNION_TYPE)
+              mysql_init_select(lex);
+            lex->current_select->parsing_place= SELECT_LIST;
           }
     break;
 
   case 967:
 #line 6740 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_istrue((yyvsp[(1) - (3)].item));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            Select->parsing_place= NO_MATTER;
           }
     break;
 
@@ -22859,9 +22694,11 @@ yyreduce:
   case 977:
 #line 6772 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_isfalse((yyvsp[(1) - (3)].item));
-            if ((yyval.item) == NULL)
+            if (Select->options & SELECT_DISTINCT && Select->options & SELECT_ALL)
+            {
+              my_error(ER_WRONG_USAGE, MYF(0), "ALL", "DISTINCT");
               MYSQL_YYABORT;
+            }
           }
     break;
 
@@ -22873,9 +22710,10 @@ yyreduce:
   case 981:
 #line 6789 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_isnotfalse((yyvsp[(1) - (4)].item));
-            if ((yyval.item) == NULL)
+            if (check_simple_select())
               MYSQL_YYABORT;
+            Lex->lock_option=  TL_READ_HIGH_PRIORITY;
+            Lex->current_select->lock_option= TL_READ_HIGH_PRIORITY;
           }
     break;
 
@@ -22897,27 +22735,27 @@ yyreduce:
   case 985:
 #line 6799 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_isnotnull((yyvsp[(1) - (4)].item));
-            if ((yyval.item) == NULL)
+            if (check_simple_select())
               MYSQL_YYABORT;
+            Select->options|= OPTION_BUFFER_RESULT;
           }
     break;
 
   case 986:
 #line 6805 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_isnull((yyvsp[(1) - (3)].item));
-            if ((yyval.item) == NULL)
+            if (check_simple_select())
               MYSQL_YYABORT;
+            Select->options|= OPTION_FOUND_ROWS;
           }
     break;
 
   case 987:
 #line 6811 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_isnotnull((yyvsp[(1) - (4)].item));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            Lex->safe_to_cache_query=0;
+            Lex->select_lex.options&= ~OPTION_TO_QUERY_CACHE;
+            Lex->select_lex.sql_cache= SELECT_LEX::SQL_NO_CACHE;
           }
     break;
 
@@ -22931,9 +22769,17 @@ yyreduce:
   case 989:
 #line 6821 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_func_equal((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            /*
+             Honor this flag only if SQL_NO_CACHE wasn't specified AND
+             we are parsing the outermost SELECT in the query.
+            */
+            if (Lex->select_lex.sql_cache != SELECT_LEX::SQL_NO_CACHE &&
+                Lex->current_select == &Lex->select_lex)
+            {
+              Lex->safe_to_cache_query=1;
+              Lex->select_lex.options|= OPTION_TO_QUERY_CACHE;
+              Lex->select_lex.sql_cache= SELECT_LEX::SQL_CACHE;
+            }
           }
     break;
 
@@ -22945,18 +22791,22 @@ yyreduce:
   case 992:
 #line 6840 "sql_yacc.yy"
     {
-            (yyval.item)= all_any_subquery_creator((yyvsp[(1) - (6)].item), (yyvsp[(2) - (6)].boolfunc2creator), (yyvsp[(3) - (6)].num), (yyvsp[(5) - (6)].select_lex));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            LEX *lex=Lex;
+            lex->current_select->set_lock_for_tables(TL_WRITE);
+            lex->current_select->lock_option= TL_WRITE;
+            lex->safe_to_cache_query=0;
+            lex->protect_against_global_read_lock= TRUE;
           }
     break;
 
   case 993:
 #line 6848 "sql_yacc.yy"
     {
-            (yyval.item)= new (YYTHD->mem_root) Item_in_subselect((yyvsp[(1) - (5)].item), (yyvsp[(4) - (5)].select_lex));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            LEX *lex=Lex;
+            lex->current_select->
+              set_lock_for_tables(TL_READ_WITH_SHARED_LOCKS);
+            lex->current_select->lock_option= TL_READ_WITH_SHARED_LOCKS;
+            lex->safe_to_cache_query=0;
           }
     break;
 
@@ -22964,41 +22814,54 @@ yyreduce:
 #line 6861 "sql_yacc.yy"
     {
             THD *thd= YYTHD;
-            Item *item= new (thd->mem_root) Item_in_subselect((yyvsp[(1) - (6)].item), (yyvsp[(5) - (6)].select_lex));
+            Item *item= new (thd->mem_root)
+                          Item_field(&thd->lex->current_select->context,
+                                     NULL, NULL, "*");
             if (item == NULL)
               MYSQL_YYABORT;
-            (yyval.item)= negate_expression(thd, item);
-            if ((yyval.item) == NULL)
+            if (add_item_to_list(thd, item))
               MYSQL_YYABORT;
+            (thd->lex->current_select->with_wild)++;
           }
     break;
 
   case 997:
 #line 6876 "sql_yacc.yy"
     {
-            (yyval.item)= handle_sql2003_note184_exception(YYTHD, (yyvsp[(1) - (5)].item), true, (yyvsp[(4) - (5)].item));
-            if ((yyval.item) == NULL)
+            THD *thd= YYTHD;
+            DBUG_ASSERT((yyvsp[(1) - (4)].simple_string) < (yyvsp[(3) - (4)].simple_string));
+
+            if (add_item_to_list(thd, (yyvsp[(2) - (4)].item)))
               MYSQL_YYABORT;
+            if ((yyvsp[(4) - (4)].lex_str).str)
+            {
+              if (Lex->sql_command == SQLCOM_CREATE_VIEW &&
+                  check_column_name((yyvsp[(4) - (4)].lex_str).str))
+              {
+                my_error(ER_WRONG_COLUMN_NAME, MYF(0), (yyvsp[(4) - (4)].lex_str).str);
+                MYSQL_YYABORT;
+              }
+              (yyvsp[(2) - (4)].item)->is_autogenerated_name= FALSE;
+              (yyvsp[(2) - (4)].item)->set_name((yyvsp[(4) - (4)].lex_str).str, (yyvsp[(4) - (4)].lex_str).length, system_charset_info);
+            }
+            else if (!(yyvsp[(2) - (4)].item)->name)
+            {
+              (yyvsp[(2) - (4)].item)->set_name((yyvsp[(1) - (4)].simple_string), (uint) ((yyvsp[(3) - (4)].simple_string) - (yyvsp[(1) - (4)].simple_string)), thd->charset());
+            }
           }
     break;
 
   case 998:
 #line 6901 "sql_yacc.yy"
     {
-            (yyvsp[(6) - (7)].item_list)->push_front((yyvsp[(4) - (7)].item));
-            (yyvsp[(6) - (7)].item_list)->push_front((yyvsp[(1) - (7)].item));
-            (yyval.item)= new (YYTHD->mem_root) Item_func_in(*(yyvsp[(6) - (7)].item_list));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            (yyval.simple_string)= (char*) YYLIP->get_cpp_tok_start();
           }
     break;
 
   case 999:
 #line 6907 "sql_yacc.yy"
     {
-            (yyval.item)= handle_sql2003_note184_exception(YYTHD, (yyvsp[(1) - (6)].item), false, (yyvsp[(5) - (6)].item));
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            (yyval.simple_string)= (char*) YYLIP->get_cpp_tok_end();
           }
     break;
 
@@ -23050,13 +22913,54 @@ yyreduce:
   case 1009:
 #line 6933 "sql_yacc.yy"
     {
-            Item *item= new (YYTHD->mem_root) Item_func_like((yyvsp[(1) - (5)].item),(yyvsp[(4) - (5)].item),(yyvsp[(5) - (5)].item),
-                                                             Lex->escape_used);
-            if (item == NULL)
-              MYSQL_YYABORT;
-            (yyval.item)= new (YYTHD->mem_root) Item_func_not(item);
-            if ((yyval.item) == NULL)
-              MYSQL_YYABORT;
+            /*
+              Design notes:
+              Do not use a manually maintained stack like thd->lex->xxx_list,
+              but use the internal bison stack ($$, $1 and $3) instead.
+              Using the bison stack is:
+              - more robust to changes in the grammar,
+              - guaranteed to be in sync with the parser state,
+              - better for performances (no memory allocation).
+            */
+            Item_cond_or *item1;
+            Item_cond_or *item3;
+            if (is_cond_or((yyvsp[(1) - (3)].item)))
+            {
+              item1= (Item_cond_or*) (yyvsp[(1) - (3)].item);
+              if (is_cond_or((yyvsp[(3) - (3)].item)))
+              {
+                item3= (Item_cond_or*) (yyvsp[(3) - (3)].item);
+                /*
+                  (X1 OR X2) OR (Y1 OR Y2) ==> OR (X1, X2, Y1, Y2)
+                */
+                item3->add_at_head(item1->argument_list());
+                (yyval.item) = (yyvsp[(3) - (3)].item);
+              }
+              else
+              {
+                /*
+                  (X1 OR X2) OR Y ==> OR (X1, X2, Y)
+                */
+                item1->add((yyvsp[(3) - (3)].item));
+                (yyval.item) = (yyvsp[(1) - (3)].item);
+              }
+            }
+            else if (is_cond_or((yyvsp[(3) - (3)].item)))
+            {
+              item3= (Item_cond_or*) (yyvsp[(3) - (3)].item);
+              /*
+                X OR (Y1 OR Y2) ==> OR (X, Y1, Y2)
+              */
+              item3->add_at_head((yyvsp[(1) - (3)].item));
+              (yyval.item) = (yyvsp[(3) - (3)].item);
+            }
+            else
+            {
+              /* X OR Y */
+              (yyval.item) = new (YYTHD->mem_root) Item_cond_or((yyvsp[(1) - (3)].item), (yyvsp[(3) - (3)].item));
+              if ((yyval.item) == NULL)
+                MYSQL_YYABORT;
+            }
           }
     break;
 
@@ -23731,8 +23635,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(5) - (5)].item),(yyvsp[(2) - (5)].item),(yyvsp[(3) - (5)].interval),0);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->set_stmt_unsafe();
-            Lex->safe_to_cache_query= 0;
           }
     break;
 
@@ -23995,7 +23897,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_year((yyvsp[(3) - (4)].item));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24006,7 +23907,6 @@ yyreduce:
                                                              INTERVAL_DAY, 0);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24064,7 +23964,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (8)].item),(yyvsp[(6) - (8)].item),(yyvsp[(7) - (8)].interval),1);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24140,7 +24039,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24150,7 +24048,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24212,7 +24109,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(7) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(3) - (8)].interval_time_st),0);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24270,7 +24166,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_charset((yyvsp[(3) - (4)].item));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            Lex->safe_to_cache_query=0;
           }
     break;
 
@@ -24317,7 +24212,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_microsecond((yyvsp[(3) - (4)].item));
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-            (yyval.item)= i1;
           }
     break;
 
@@ -24387,11 +24281,6 @@ yyreduce:
             (yyval.item)= new (YYTHD->mem_root) Item_func_round((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item),1);
             if ((yyval.item) == NULL)
               MYSQL_YYABORT;
-#else
-            my_error(ER_FEATURE_DISABLED, MYF(0),
-                     sym_group_geom.name, sym_group_geom.needed_define);
-            MYSQL_YYABORT;
-#endif
           }
     break;
 
