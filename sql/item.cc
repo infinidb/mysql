@@ -4316,6 +4316,10 @@ Item_field::fix_outer_field(THD *thd, Field **from_field, Item **reference)
 bool Item_field::fix_fields(THD *thd, Item **reference)
 {
   DBUG_ASSERT(fixed == 0);
+
+  // @InfiniDB @bug5501 context is not always set in InfiniDB context
+  if (!context) return false;
+
   Field *from_field= (Field *)not_found_field;
   bool outer_fixed= false;
 
