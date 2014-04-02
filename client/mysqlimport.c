@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -23,10 +23,13 @@
 #define IMPORT_VERSION "3.7"
 
 #include "client_priv.h"
+#include "my_default.h"
 #include "mysql_version.h"
 #ifdef HAVE_LIBPTHREAD
 #include <my_pthread.h>
 #endif
+
+#include <welcome_copyright_notice.h>   /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 
 /* Global Thread counter */
@@ -36,8 +39,6 @@ pthread_mutex_t counter_mutex;
 pthread_cond_t count_threshhold;
 #endif
 
-#include <welcome_copyright_notice.h>   /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
-
 static void db_error_with_table(MYSQL *mysql, char *table);
 static void db_error(MYSQL *mysql);
 static char *field_escape(char *to,const char *from,uint length);
@@ -46,18 +47,19 @@ static char *add_load_option(char *ptr,const char *object,
 
 static my_bool	verbose=0,lock_tables=0,ignore_errors=0,opt_delete=0,
 		replace=0,silent=0,ignore=0,opt_compress=0,
-                opt_low_priority= 0, tty_password= 0;
+                opt_low_priority= 0, tty_password= 0, opt_secure_auth= 1;
 static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static uint opt_use_threads=0, opt_local_file=0, my_end_arg= 0;
 static char	*opt_password=0, *current_user=0,
 		*current_host=0, *current_db=0, *fields_terminated=0,
 		*lines_terminated=0, *enclosed=0, *opt_enclosed=0,
 		*escaped=0, *opt_columns=0, 
-		*default_charset= (char*) MYSQL_DEFAULT_CHARSET_NAME;
+		*default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME;
 static uint     opt_mysql_port= 0, opt_protocol= 0;
+static char *opt_bind_addr = NULL;
 static char * opt_mysql_unix_port=0;
+static char *opt_plugin_dir= 0, *opt_default_auth= 0;
 static longlong opt_ignore_lines= -1;
-static CHARSET_INFO *charset_info= &my_charset_latin1;
 #include <sslopt-vars.h>
 
 #ifdef HAVE_SMEM
@@ -66,10 +68,9 @@ static char *shared_memory_base_name=0;
 
 static struct my_option my_long_options[] =
 {
-#ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Automatically close the screen on exit for Netware.",
-   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#endif
+  {"bind-address", 0, "IP address to bind to.",
+   (uchar**) &opt_bind_addr, (uchar**) &opt_bind_addr, 0, GET_STR,
+   REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"character-sets-dir", OPT_CHARSETS_DIR,
    "Directory for character set files.", &charsets_dir,
    &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
@@ -91,6 +92,10 @@ static struct my_option my_long_options[] =
   {"debug-info", OPT_DEBUG_INFO, "Print some debug info at exit.",
    &debug_info_flag, &debug_info_flag,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"default_auth", OPT_DEFAULT_AUTH,
+   "Default authentication client-side plugin to use.",
+   &opt_default_auth, &opt_default_auth, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"delete", 'd', "First delete all rows from table.", &opt_delete,
    &opt_delete, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"fields-terminated-by", OPT_FTB,
@@ -135,11 +140,14 @@ static struct my_option my_long_options[] =
    &opt_low_priority, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"password", 'p',
    "Password to use when connecting to server. If password is not given it's asked from the tty.",
-   0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+   0, 0, 0, GET_PASSWORD, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef __WIN__
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
+  {"plugin_dir", OPT_PLUGIN_DIR, "Directory for client-side plugins.",
+   &opt_plugin_dir, &opt_plugin_dir, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"port", 'P', "Port number to use for connection or 0 for default to, in "
    "order of preference, my.cnf, $MYSQL_TCP_PORT, "
 #if MYSQL_PORT_DEFAULT == 0
@@ -153,6 +161,9 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"replace", 'r', "If duplicate unique key was found, replace old row.",
    &replace, &replace, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
+    " uses old (pre-4.1.1) protocol.",
+    &opt_secure_auth, &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", &shared_memory_base_name, &shared_memory_base_name,
@@ -183,13 +194,11 @@ static struct my_option my_long_options[] =
 
 static const char *load_default_groups[]= { "mysqlimport","client",0 };
 
-#include <help_start.h>
 
 static void print_version(void)
 {
   printf("%s  Ver %s Distrib %s, for %s (%s)\n" ,my_progname,
 	  IMPORT_VERSION, MYSQL_SERVER_VERSION,SYSTEM_TYPE,MACHINE_TYPE);
-  NETWARE_SET_SCREEN_MODE(1);
 }
 
 
@@ -210,25 +219,19 @@ file. The SQL command 'LOAD DATA INFILE' is used to import the rows.\n");
   my_print_variables(my_long_options);
 }
 
-#include <help_end.h>
 
 static my_bool
 get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
 	       char *argument)
 {
   switch(optid) {
-#ifdef __NETWARE__
-  case OPT_AUTO_CLOSE:
-    setscreenmode(SCR_AUTOCLOSE_ON_EXIT);
-    break;
-#endif
   case 'p':
     if (argument == disabled_my_option)
       argument= (char*) "";			/* Don't require password */
     if (argument)
     {
       char *start=argument;
-      my_free(opt_password,MYF(MY_ALLOW_ZERO_PTR));
+      my_free(opt_password);
       opt_password=my_strdup(argument,MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
       if (*start)
@@ -284,10 +287,6 @@ static int get_options(int *argc, char ***argv)
     fprintf(stderr, "You can't use --ignore (-i) and --replace (-r) at the same time.\n");
     return(1);
   }
-  if (strcmp(default_charset, charset_info->csname) &&
-      !(charset_info= get_charset_by_csname(default_charset,
-  					    MY_CS_PRIMARY, MYF(MY_WME))))
-    exit(1);
   if (*argc < 2)
   {
     usage();
@@ -431,17 +430,36 @@ static MYSQL *db_connect(char *host, char *database,
 		  (char*) &opt_local_file);
 #ifdef HAVE_OPENSSL
   if (opt_use_ssl)
+  {
     mysql_ssl_set(mysql, opt_ssl_key, opt_ssl_cert, opt_ssl_ca,
 		  opt_ssl_capath, opt_ssl_cipher);
+    mysql_options(mysql, MYSQL_OPT_SSL_CRL, opt_ssl_crl);
+    mysql_options(mysql, MYSQL_OPT_SSL_CRLPATH, opt_ssl_crlpath);
+  }
   mysql_options(mysql,MYSQL_OPT_SSL_VERIFY_SERVER_CERT,
                 (char*)&opt_ssl_verify_server_cert);
 #endif
   if (opt_protocol)
     mysql_options(mysql,MYSQL_OPT_PROTOCOL,(char*)&opt_protocol);
+  if (opt_bind_addr)
+    mysql_options(mysql,MYSQL_OPT_BIND,opt_bind_addr);
+  if (!opt_secure_auth)
+    mysql_options(mysql, MYSQL_SECURE_AUTH,(char*)&opt_secure_auth);
 #ifdef HAVE_SMEM
   if (shared_memory_base_name)
     mysql_options(mysql,MYSQL_SHARED_MEMORY_BASE_NAME,shared_memory_base_name);
 #endif
+
+  if (opt_plugin_dir && *opt_plugin_dir)
+    mysql_options(mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+
+  if (opt_default_auth && *opt_default_auth)
+    mysql_options(mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
+
+  mysql_options(mysql, MYSQL_SET_CHARSET_NAME, default_charset);
+  mysql_options(mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
+  mysql_options4(mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
+                 "program_name", "mysqlimport");
   if (!(mysql_real_connect(mysql,host,user,passwd,
                            database,opt_mysql_port,opt_mysql_unix_port,
                            0)))
@@ -598,7 +616,11 @@ int main(int argc, char **argv)
   char **argv_to_free;
   MY_INIT(argv[0]);
 
-  load_defaults("my",load_default_groups,&argc,&argv);
+  my_getopt_use_args_separator= TRUE;
+  if (load_defaults("my",load_default_groups,&argc,&argv))
+    return 1;
+  my_getopt_use_args_separator= FALSE;
+
   /* argv is changed in the program */
   argv_to_free= argv;
   if (get_options(&argc, &argv))
@@ -616,8 +638,8 @@ int main(int argc, char **argv)
     pthread_attr_setdetachstate(&attr,
                                 PTHREAD_CREATE_DETACHED);
 
-    VOID(pthread_mutex_init(&counter_mutex, NULL));
-    VOID(pthread_cond_init(&count_threshhold, NULL));
+    pthread_mutex_init(&counter_mutex, NULL);
+    pthread_cond_init(&count_threshhold, NULL);
 
     for (counter= 0; *argv != NULL; argv++) /* Loop through tables */
     {
@@ -656,8 +678,8 @@ int main(int argc, char **argv)
       pthread_cond_timedwait(&count_threshhold, &counter_mutex, &abstime);
     }
     pthread_mutex_unlock(&counter_mutex);
-    VOID(pthread_mutex_destroy(&counter_mutex));
-    VOID(pthread_cond_destroy(&count_threshhold));
+    pthread_mutex_destroy(&counter_mutex);
+    pthread_cond_destroy(&count_threshhold);
     pthread_attr_destroy(&attr);
   }
   else
@@ -684,9 +706,9 @@ int main(int argc, char **argv)
           exitcode= error;
     db_disconnect(current_host, mysql);
   }
-  my_free(opt_password,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(opt_password);
 #ifdef HAVE_SMEM
-  my_free(shared_memory_base_name,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(shared_memory_base_name);
 #endif
   free_defaults(argv_to_free);
   my_end(my_end_arg);

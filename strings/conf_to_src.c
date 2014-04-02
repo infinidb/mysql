@@ -1,5 +1,4 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include <my_global.h>
 #include <m_string.h>
@@ -25,7 +23,7 @@
 #define ROW16_LEN	8
 #define MAX_BUF		64*1024
 
-static CHARSET_INFO all_charsets[256];
+static CHARSET_INFO all_charsets[512];
 
 
 void
@@ -65,7 +63,9 @@ print_array16(FILE *f, const char *set, const char *name, uint16 *a, int n)
 static int get_charset_number(const char *charset_name)
 {
   CHARSET_INFO *cs;
-  for (cs= all_charsets; cs < all_charsets+255; ++cs)
+  for (cs= all_charsets;
+       cs < all_charsets + array_elements(all_charsets);
+       cs++)
   {
     if ( cs->name && !strcmp(cs->name, charset_name))
       return cs->number;
@@ -144,12 +144,35 @@ static int add_collation(CHARSET_INFO *cs)
 }
 
 
+static void
+default_reporter(enum loglevel level  __attribute__ ((unused)),
+                 const char *format  __attribute__ ((unused)),
+                 ...)
+{
+}
+
+
+static void
+my_charset_loader_init(MY_CHARSET_LOADER *loader)
+{
+  loader->error[0]= '\0';
+  loader->once_alloc= malloc;
+  loader->malloc= malloc;
+  loader->realloc= realloc;
+  loader->free= free;
+  loader->reporter= default_reporter;
+  loader->add_collation= add_collation;
+}
+
+
 static int my_read_charset_file(const char *filename)
 {
   char buf[MAX_BUF];
   int  fd;
   uint len;
+  MY_CHARSET_LOADER loader;
   
+  my_charset_loader_init(&loader);
   if ((fd=open(filename,O_RDONLY)) < 0)
   {
     fprintf(stderr,"Can't open '%s'\n",filename);
@@ -160,14 +183,10 @@ static int my_read_charset_file(const char *filename)
   DBUG_ASSERT(len < MAX_BUF);
   close(fd);
   
-  if (my_parse_charset_xml(buf,len,add_collation))
+  if (my_parse_charset_xml(&loader, buf, len))
   {
-#if 0
-    printf("ERROR at line %d pos %d '%s'\n",
-	   my_xml_error_lineno(&p)+1,
-	   my_xml_error_pos(&p),
-	   my_xml_error_string(&p));
-#endif
+    fprintf(stderr, "Error while parsing '%s': %s\n", filename, loader.error);
+    exit(1);
   }
   
   return FALSE;
@@ -186,11 +205,12 @@ void dispcset(FILE *f,CHARSET_INFO *cs)
 {
   fprintf(f,"{\n");
   fprintf(f,"  %d,%d,%d,\n",cs->number,0,0);
-  fprintf(f,"  MY_CS_COMPILED%s%s%s%s,\n",
+  fprintf(f,"  MY_CS_COMPILED%s%s%s%s%s,\n",
           cs->state & MY_CS_BINSORT         ? "|MY_CS_BINSORT"   : "",
           cs->state & MY_CS_PRIMARY         ? "|MY_CS_PRIMARY"   : "",
           is_case_sensitive(cs)             ? "|MY_CS_CSSORT"    : "",
-          my_charset_is_8bit_pure_ascii(cs) ? "|MY_CS_PUREASCII" : "");
+          my_charset_is_8bit_pure_ascii(cs) ? "|MY_CS_PUREASCII" : "",
+          !my_charset_is_ascii_compatible(cs) ? "|MY_CS_NONASCII": "");
   
   if (cs->name)
   {
@@ -205,8 +225,7 @@ void dispcset(FILE *f,CHARSET_INFO *cs)
       fprintf(f,"  sort_order_%s,            /* sort_order    */\n",cs->name);
     else
       fprintf(f,"  NULL,                     /* sort_order    */\n");
-    fprintf(f,"  NULL,                       /* contractions  */\n");
-    fprintf(f,"  NULL,                       /* sort_order_big*/\n");
+    fprintf(f,"  NULL,                       /* uca           */\n");
     fprintf(f,"  to_uni_%s,                  /* to_uni        */\n",cs->name);
   }
   else
@@ -219,13 +238,12 @@ void dispcset(FILE *f,CHARSET_INFO *cs)
     fprintf(f,"  NULL,                       /* lower         */\n");
     fprintf(f,"  NULL,                       /* upper         */\n");
     fprintf(f,"  NULL,                       /* sort order    */\n");
-    fprintf(f,"  NULL,                       /* contractions  */\n");
-    fprintf(f,"  NULL,                       /* sort_order_big*/\n");
+    fprintf(f,"  NULL,                       /* uca           */\n");
     fprintf(f,"  NULL,                       /* to_uni        */\n");
   }
 
   fprintf(f,"  NULL,                       /* from_uni      */\n");
-  fprintf(f,"  my_unicase_default,         /* caseinfo      */\n");
+  fprintf(f,"  &my_unicase_default,        /* caseinfo      */\n");
   fprintf(f,"  NULL,                       /* state map     */\n");
   fprintf(f,"  NULL,                       /* ident map     */\n");
   fprintf(f,"  1,                          /* strxfrm_multiply*/\n");
@@ -237,6 +255,8 @@ void dispcset(FILE *f,CHARSET_INFO *cs)
   fprintf(f,"  255,                        /* max_sort_char */\n");
   fprintf(f,"  ' ',                        /* pad_char      */\n");
   fprintf(f,"  0,                          /* escape_with_backslash_is_dangerous */\n");
+  fprintf(f,"  1,                          /* levels_for_compare */\n");
+  fprintf(f,"  1,                          /* levels_for_order   */\n");
   
   fprintf(f,"  &my_charset_8bit_handler,\n");
   if (cs->state & MY_CS_BINSORT)
@@ -283,13 +303,15 @@ main(int argc, char **argv  __attribute__((unused)))
     exit(EXIT_FAILURE);
   }
   
-  bzero((void*)&ncs,sizeof(ncs));
-  bzero((void*)&all_charsets,sizeof(all_charsets));
+  memset(&ncs, 0, sizeof(ncs));
+  memset(&all_charsets, 0, sizeof(all_charsets));
   
   sprintf(filename,"%s/%s",argv[1],"Index.xml");
   my_read_charset_file(filename);
   
-  for (cs=all_charsets; cs < all_charsets+256; cs++)
+  for (cs= all_charsets;
+       cs < all_charsets + array_elements(all_charsets);
+       cs++)
   {
     if (cs->number && !(cs->state & MY_CS_COMPILED))
     {
@@ -314,7 +336,9 @@ main(int argc, char **argv  __attribute__((unused)))
   fprintf(f,"#include <m_ctype.h>\n\n");
   
   
-  for (cs=all_charsets; cs < all_charsets+256; cs++)
+  for (cs= all_charsets;
+       cs < all_charsets + array_elements(all_charsets);
+       cs++)
   {
     if (simple_cs_is_full(cs))
     {
@@ -331,7 +355,9 @@ main(int argc, char **argv  __attribute__((unused)))
   }
   
   fprintf(f,"CHARSET_INFO compiled_charsets[] = {\n");
-  for (cs=all_charsets; cs < all_charsets+256; cs++)
+  for (cs= all_charsets;
+       cs < all_charsets + array_elements(all_charsets);
+       cs++)
   {
     if (simple_cs_is_full(cs))
     {

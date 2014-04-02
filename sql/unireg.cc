@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -24,9 +24,18 @@
     str is a (long) to record position where 0 is the first position.
 */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "sql_partition.h"                    // struct partition_info
+#include "sql_table.h"                        // validate_comment_length   
+#include "sql_class.h"                  // THD, Internal_error_handler
 #include <m_ctype.h>
 #include <assert.h>
+
+#include <algorithm>
+
+using std::min;
+using std::max;
 
 #define FCOMP			17		/* Bytes for a packed field */
 
@@ -41,12 +50,11 @@ static bool pack_header(uchar *forminfo,enum legacy_db_type table_type,
 static uint get_interval_id(uint *,List<Create_field> &, Create_field *);
 static bool pack_fields(File file, List<Create_field> &create_fields,
                         ulong data_offset);
-static bool make_empty_rec(THD *thd, int file, enum legacy_db_type table_type,
+static bool make_empty_rec(THD *thd, int file,
 			   uint table_options,
 			   List<Create_field> &create_fields,
 			   uint reclength, ulong data_offset,
                            handler *handler);
-
 /**
   An interceptor to hijack ER_TOO_MANY_FIELDS error from
   pack_screens and retry again without UNIREG screens.
@@ -56,10 +64,12 @@ static bool make_empty_rec(THD *thd, int file, enum legacy_db_type table_type,
 
 struct Pack_header_error_handler: public Internal_error_handler
 {
-  virtual bool handle_error(uint sql_errno,
-                            const char *message,
-                            MYSQL_ERROR::enum_warning_level level,
-                            THD *thd);
+  virtual bool handle_condition(THD *thd,
+                                uint sql_errno,
+                                const char* sqlstate,
+                                Sql_condition::enum_warning_level level,
+                                const char* msg,
+                                Sql_condition ** cond_hdl);
   bool is_handled;
   Pack_header_error_handler() :is_handled(FALSE) {}
 };
@@ -67,11 +77,14 @@ struct Pack_header_error_handler: public Internal_error_handler
 
 bool
 Pack_header_error_handler::
-handle_error(uint sql_errno,
-             const char * /* message */,
-             MYSQL_ERROR::enum_warning_level /* level */,
-             THD * /* thd */)
+handle_condition(THD *,
+                 uint sql_errno,
+                 const char*,
+                 Sql_condition::enum_warning_level,
+                 const char*,
+                 Sql_condition ** cond_hdl)
 {
+  *cond_hdl= NULL;
   is_handled= (sql_errno == ER_TOO_MANY_FIELDS);
   return is_handled;
 }
@@ -104,18 +117,21 @@ bool mysql_create_frm(THD *thd, const char *file_name,
 		      handler *db_file)
 {
   LEX_STRING str_db_type;
-  uint reclength, info_length, screens, key_info_length, maxlength, tmp_len, i;
+  uint reclength, info_length, screens, key_info_length, maxlength, i;
   ulong key_buff_length;
   File file;
   ulong filepos, data_offset;
-  uchar fileinfo[64],forminfo[288],*keybuff;
-  uchar *screen_buff;
+  uchar fileinfo[64],forminfo[288],*keybuff, *forminfo_p= forminfo;
+  uchar *screen_buff= NULL;
   char buff[128];
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   partition_info *part_info= thd->work_part_info;
 #endif
   Pack_header_error_handler pack_header_error_handler;
   int error;
+  const uint format_section_header_size= 8;
+  uint format_section_length;
+  uint tablespace_length= 0;
   DBUG_ENTER("mysql_create_frm");
 
   DBUG_ASSERT(*fn_rext((char*)file_name)); // Check .frm extension
@@ -140,7 +156,7 @@ bool mysql_create_frm(THD *thd, const char *file_name,
 
   if (error)
   {
-    my_free(screen_buff, MYF(0));
+    my_free(screen_buff);
     if (! pack_header_error_handler.is_handled)
       DBUG_RETURN(1);
 
@@ -151,7 +167,7 @@ bool mysql_create_frm(THD *thd, const char *file_name,
                     create_fields,info_length,
 		    screens, create_info->table_options, data_offset, db_file))
     {
-      my_free(screen_buff, MYF(0));
+      my_free(screen_buff);
       DBUG_RETURN(1);
     }
   }
@@ -183,11 +199,75 @@ bool mysql_create_frm(THD *thd, const char *file_name,
     if (key_info[i].parser_name)
       create_info->extra_size+= key_info[i].parser_name->length + 1;
   }
+  /*
+    This gives us the byte-position of the character at
+    (character-position, not byte-position) TABLE_COMMENT_MAXLEN.
+    The trick here is that character-positions start at 0, so the last
+    character in a maximum-allowed length string would be at char-pos
+    MAXLEN-1; charpos MAXLEN will be the position of the terminator.
+    Consequently, bytepos(charpos(MAXLEN)) should be equal to
+    comment[length] (which should also be the terminator, or at least
+    the first byte after the payload in the strict sense). If this is
+    not so (bytepos(charpos(MAXLEN)) comes /before/ the end of the
+    string), the string is too long.
+
+    For additional credit, realise that UTF-8 has 1-3 bytes before 6.0,
+    and 1-4 bytes in 6.0 (6.0 also has UTF-32).
+  */
+  if (create_info->comment.length > TABLE_COMMENT_MAXLEN)
+  {
+    const char *real_table_name= table;
+    List_iterator<Create_field> it(create_fields);
+    Create_field *field;
+    while ((field=it++))
+    {
+      if (field->field && field->field->table &&
+        (real_table_name= field->field->table->s->table_name.str))
+         break;
+    }
+    if (validate_comment_length(thd,
+                                create_info->comment.str,
+                                &create_info->comment.length,
+                                TABLE_COMMENT_MAXLEN,
+                                ER_TOO_LONG_TABLE_COMMENT,
+                                real_table_name))
+    {
+      my_free(screen_buff);
+      DBUG_RETURN(true);
+    }
+  }
+  /*
+    If table comment is longer than TABLE_COMMENT_INLINE_MAXLEN bytes,
+    store the comment in an extra segment (up to TABLE_COMMENT_MAXLEN bytes).
+    Pre 6.0, the limit was 60 characters, with no extra segment-handling.
+  */
+  if (create_info->comment.length > TABLE_COMMENT_INLINE_MAXLEN)
+  {
+    forminfo[46]=255;
+    create_info->extra_size+= 2 + create_info->comment.length;
+  }
+  else{
+    strmake((char*) forminfo+47, create_info->comment.str ?
+            create_info->comment.str : "", create_info->comment.length);
+    forminfo[46]=(uchar) create_info->comment.length;
+  }
+
+  /*
+    Add room in extra segment for "format section" with additional
+    table and column properties
+  */
+  if (create_info->tablespace)
+    tablespace_length= strlen(create_info->tablespace);
+  format_section_length=
+    format_section_header_size +
+    tablespace_length + 1 +
+    create_fields.elements;
+  create_info->extra_size+= format_section_length;
 
   if ((file=create_frm(thd, file_name, db, table, reclength, fileinfo,
-		       create_info, keys)) < 0)
+		       create_info, keys, key_info)) < 0)
   {
-    my_free(screen_buff, MYF(0));
+    my_free(screen_buff);
     DBUG_RETURN(1);
   }
 
@@ -204,54 +284,13 @@ bool mysql_create_frm(THD *thd, const char *file_name,
 
   if (!(filepos= make_new_entry(file, fileinfo, NULL, "")))
     goto err;
-  maxlength=(uint) next_io_size((ulong) (uint2korr(forminfo)+1000));
+  maxlength=(uint) next_io_size((ulong) (uint2korr(forminfo_p)+1000));
   int2store(forminfo+2,maxlength);
   int4store(fileinfo+10,(ulong) (filepos+maxlength));
-  fileinfo[26]= (uchar) test((create_info->max_rows == 1) &&
-			     (create_info->min_rows == 1) && (keys == 0));
+  fileinfo[26]= (uchar) MY_TEST((create_info->max_rows == 1) &&
+                                (create_info->min_rows == 1) && (keys == 0));
   int2store(fileinfo+28,key_info_length);
 
-  /*
-    This gives us the byte-position of the character at
-    (character-position, not byte-position) TABLE_COMMENT_MAXLEN.
-    The trick here is that character-positions start at 0, so the last
-    character in a maximum-allowed length string would be at char-pos
-    MAXLEN-1; charpos MAXLEN will be the position of the terminator.
-    Consequently, bytepos(charpos(MAXLEN)) should be equal to
-    comment[length] (which should also be the terminator, or at least
-    the first byte after the payload in the strict sense). If this is
-    not so (bytepos(charpos(MAXLEN)) comes /before/ the end of the
-    string), the string is too long.
-
-    For additional credit, realise that UTF-8 has 1-3 bytes before 6.0,
-    and 1-4 bytes in 6.0 (6.0 also has UTF-32). This means that the
-    inlined COMMENT supposedly does not exceed 60 character plus
-    terminator, vulgo, 181 bytes.
-  */
-
-  tmp_len= system_charset_info->cset->charpos(system_charset_info,
-                                              create_info->comment.str,
-                                              create_info->comment.str +
-                                              create_info->comment.length, 60);
-  if (tmp_len < create_info->comment.length)
-  {
-    if ((thd->variables.sql_mode &
-         (MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES)))
-    {
-      my_error(ER_TOO_LONG_TABLE_COMMENT, MYF(0), table,
-               static_cast<ulong>(tmp_len));
-      goto err;
-    }
-    push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
-                        ER_TOO_LONG_TABLE_COMMENT,
-                        ER(ER_TOO_LONG_TABLE_COMMENT),
-                        table, static_cast<ulong>(tmp_len));
-    create_info->comment.length= tmp_len;
-  }
-
-  strmake((char*) forminfo+47, create_info->comment.str ?
-          create_info->comment.str : "", create_info->comment.length);
-  forminfo[46]=(uchar) create_info->comment.length;
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   if (part_info)
   {
@@ -261,27 +300,27 @@ bool mysql_create_frm(THD *thd, const char *file_name,
 #endif
   int2store(fileinfo+59,db_file->extra_rec_buf_length());
 
-  if (my_pwrite(file, fileinfo, 64, 0L, MYF_RW) ||
-      my_pwrite(file, keybuff, key_info_length,
-		(ulong) uint2korr(fileinfo+6),MYF_RW))
+  if (mysql_file_pwrite(file, fileinfo, 64, 0L, MYF_RW) ||
+      mysql_file_pwrite(file, keybuff, key_info_length,
+                        (ulong) uint2korr(fileinfo+6), MYF_RW))
     goto err;
-  VOID(my_seek(file,
-	       (ulong) uint2korr(fileinfo+6)+ (ulong) key_buff_length,
-	       MY_SEEK_SET,MYF(0)));
-  if (make_empty_rec(thd,file,ha_legacy_type(create_info->db_type),
+  mysql_file_seek(file,
+                  (ulong) uint2korr(fileinfo+6) + (ulong) key_buff_length,
+                  MY_SEEK_SET, MYF(0));
+  if (make_empty_rec(thd,file,
                      create_info->table_options,
 		     create_fields,reclength, data_offset, db_file))
     goto err;
 
   int2store(buff, create_info->connect_string.length);
-  if (my_write(file, (const uchar*)buff, 2, MYF(MY_NABP)) ||
-      my_write(file, (const uchar*)create_info->connect_string.str,
+  if (mysql_file_write(file, (const uchar*)buff, 2, MYF(MY_NABP)) ||
+      mysql_file_write(file, (const uchar*)create_info->connect_string.str,
                create_info->connect_string.length, MYF(MY_NABP)))
       goto err;
 
   int2store(buff, str_db_type.length);
-  if (my_write(file, (const uchar*)buff, 2, MYF(MY_NABP)) ||
-      my_write(file, (const uchar*)str_db_type.str,
+  if (mysql_file_write(file, (const uchar*)buff, 2, MYF(MY_NABP)) ||
+      mysql_file_write(file, (const uchar*)str_db_type.str,
                str_db_type.length, MYF(MY_NABP)))
     goto err;
 
@@ -290,32 +329,90 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   {
     char auto_partitioned= part_info->is_auto_partitioned ? 1 : 0;
     int4store(buff, part_info->part_info_len);
-    if (my_write(file, (const uchar*)buff, 4, MYF_RW) ||
-        my_write(file, (const uchar*)part_info->part_info_string,
+    if (mysql_file_write(file, (const uchar*)buff, 4, MYF_RW) ||
+        mysql_file_write(file, (const uchar*)part_info->part_info_string,
                  part_info->part_info_len + 1, MYF_RW) ||
-        my_write(file, (const uchar*)&auto_partitioned, 1, MYF_RW))
+        mysql_file_write(file, (const uchar*)&auto_partitioned, 1, MYF_RW))
       goto err;
   }
   else
 #endif
   {
-    bzero((uchar*) buff, 6);
-    if (my_write(file, (uchar*) buff, 6, MYF_RW))
+    memset(buff, 0, 6);
+    if (mysql_file_write(file, (uchar*) buff, 6, MYF_RW))
       goto err;
   }
   for (i= 0; i < keys; i++)
   {
     if (key_info[i].parser_name)
     {
-      if (my_write(file, (const uchar*)key_info[i].parser_name->str,
-                   key_info[i].parser_name->length + 1, MYF(MY_NABP)))
+      if (mysql_file_write(file, (const uchar*)key_info[i].parser_name->str,
+                           key_info[i].parser_name->length + 1, MYF(MY_NABP)))
         goto err;
     }
   }
+  if (forminfo[46] == (uchar)255)
+  {
+    uchar comment_length_buff[2];
+    int2store(comment_length_buff,create_info->comment.length);
+    if (mysql_file_write(file, comment_length_buff, 2, MYF(MY_NABP)) ||
+        mysql_file_write(file, (uchar*) create_info->comment.str,
+                         create_info->comment.length, MYF(MY_NABP)))
+      goto err;
+  }
 
-  VOID(my_seek(file,filepos,MY_SEEK_SET,MYF(0)));
-  if (my_write(file, forminfo, 288, MYF_RW) ||
-      my_write(file, screen_buff, info_length, MYF_RW) ||
+  /* "Format section" with additional table and column properties */
+  {
+    uchar *ptr, *format_section_buff;
+    if (!(format_section_buff=(uchar*) my_malloc(format_section_length,
+                                                 MYF(MY_WME))))
+      goto err;
+    ptr= format_section_buff;
+
+    /* header */
+    const uint format_section_flags=
+      create_info->storage_media; // 3 bits
+    const uint format_section_unused= 0;
+    int2store(ptr+0, format_section_length);
+    int4store(ptr+2, format_section_flags);
+    int2store(ptr+6, format_section_unused);
+    ptr+= format_section_header_size;
+
+    /* tablespace name */
+    if (tablespace_length > 0)
+      memcpy(ptr, create_info->tablespace, tablespace_length);
+    ptr+= tablespace_length;
+    *ptr= 0; /* tablespace string terminating zero */
+    ptr++;
+
+    /* column properties  */
+    Create_field *field;
+    List_iterator<Create_field> it(create_fields);
+    while ((field=it++))
+    {
+      const uchar field_storage= field->field_storage_type();
+      const uchar field_column_format= field->column_format();
+      const uchar field_flags=
+        field_storage + (field_column_format << COLUMN_FORMAT_SHIFT);
+      *ptr= field_flags;
+      ptr++;
+    }
+    DBUG_ASSERT(format_section_buff + format_section_length == ptr);
+
+    if (mysql_file_write(file, format_section_buff,
+                         format_section_length, MYF_RW))
+    {
+      my_free(format_section_buff);
+      goto err;
+    }
+    DBUG_PRINT("info", ("wrote format section, length: %u",
+                        format_section_length));
+    my_free(format_section_buff);
+  }
+
+  mysql_file_seek(file, filepos, MY_SEEK_SET, MYF(0));
+  if (mysql_file_write(file, forminfo, 288, MYF_RW) ||
+      mysql_file_write(file, screen_buff, info_length, MYF_RW) ||
       pack_fields(file, create_fields, data_offset))
     goto err;
 
@@ -324,32 +421,32 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   {
     char tmp=2,*disk_buff=0;
     SQL_CRYPT *crypted=new SQL_CRYPT(create_info->password);
-    if (!crypted || my_pwrite(file,&tmp,1,26,MYF_RW))	// Mark crypted
+    if (!crypted || mysql_file_pwrite(file, &tmp, 1, 26, MYF_RW))// Mark crypted
       goto err;
     uint read_length=uint2korr(forminfo)-256;
-    VOID(my_seek(file,filepos+256,MY_SEEK_SET,MYF(0)));
+    mysql_file_seek(file, filepos+256, MY_SEEK_SET, MYF(0));
     if (read_string(file,(uchar**) &disk_buff,read_length))
       goto err;
     crypted->encode(disk_buff,read_length);
     delete crypted;
-    if (my_pwrite(file,disk_buff,read_length,filepos+256,MYF_RW))
+    if (mysql_file_pwrite(file, disk_buff, read_length, filepos+256, MYF_RW))
     {
-      my_free(disk_buff,MYF(0));
+      my_free(disk_buff);
       goto err;
     }
-    my_free(disk_buff,MYF(0));
+    my_free(disk_buff);
   }
 #endif
 
-  my_free(screen_buff,MYF(0));
-  my_free(keybuff, MYF(0));
+  my_free(screen_buff);
+  my_free(keybuff);
 
   if (opt_sync_frm && !(create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
-      (my_sync(file, MYF(MY_WME)) ||
+      (mysql_file_sync(file, MYF(MY_WME)) ||
        my_sync_dir_by_file(file_name, MYF(MY_WME))))
       goto err2;
 
-  if (my_close(file,MYF(MY_WME)))
+  if (mysql_file_close(file, MYF(MY_WME)))
     goto err3;
 
   {
@@ -371,41 +468,42 @@ bool mysql_create_frm(THD *thd, const char *file_name,
   DBUG_RETURN(0);
 
 err:
-  my_free(screen_buff, MYF(0));
-  my_free(keybuff, MYF(0));
+  my_free(screen_buff);
+  my_free(keybuff);
 err2:
-  VOID(my_close(file,MYF(MY_WME)));
+  (void) mysql_file_close(file, MYF(MY_WME));
 err3:
-  my_delete(file_name,MYF(0));
+  mysql_file_delete(key_file_frm, file_name, MYF(0));
   DBUG_RETURN(1);
 } /* mysql_create_frm */
 
 
-/*
+/**
   Create a frm (table definition) file and the tables
 
-  SYNOPSIS
-    rea_create_table()
-    thd			Thread handler
-    path		Name of file (including database, without .frm)
-    db			Data base name
-    table_name		Table name
-    create_info		create info parameters
-    create_fields	Fields to create
-    keys		number of keys to create
-    key_info		Keys to create
-    file		Handler to use
+  @param thd           Thread handler
+  @param path          Name of file (including database, without .frm)
+  @param db            Data base name
+  @param table_name    Table name
+  @param create_info   create info parameters
+  @param create_fields Fields to create
+  @param keys          number of keys to create
+  @param key_info      Keys to create
+  @param file          Handler to use
+  @param no_ha_table   Indicates that only .FRM file (and PAR file if table
+                       is partitioned) needs to be created and not a table
+                       in the storage engine.
 
-  RETURN
-    0  ok
-    1  error
+  @retval 0   ok
+  @retval 1   error
 */
 
 int rea_create_table(THD *thd, const char *path,
                      const char *db, const char *table_name,
                      HA_CREATE_INFO *create_info,
                      List<Create_field> &create_fields,
-                     uint keys, KEY *key_info, handler *file)
+                     uint keys, KEY *key_info, handler *file,
+                     bool no_ha_table)
 {
   DBUG_ENTER("rea_create_table");
 
@@ -420,16 +518,21 @@ int rea_create_table(THD *thd, const char *path,
   DBUG_ASSERT(*fn_rext(frm_name));
   if (thd->variables.keep_files_on_create)
     create_info->options|= HA_CREATE_KEEP_FILES;
-  if (!create_info->frm_only &&
-      (file->ha_create_handler_files(path, NULL, CHF_CREATE_FLAG,
-                                     create_info) ||
-       ha_create_table(thd, path, db, table_name, create_info, 0)))
+
+  if (file->ha_create_handler_files(path, NULL, CHF_CREATE_FLAG,
+                                    create_info))
+    goto err_handler_frm;
+
+  if (!no_ha_table &&
+       ha_create_table(thd, path, db, table_name, create_info, 0))
     goto err_handler;
   DBUG_RETURN(0);
 
 err_handler:
-  VOID(file->ha_create_handler_files(path, NULL, CHF_DELETE_FLAG, create_info));
-  my_delete(frm_name, MYF(0));
+  (void) file->ha_create_handler_files(path, NULL, CHF_DELETE_FLAG, create_info);
+
+err_handler_frm:
+  mysql_file_delete(key_file_frm, frm_name, MYF(0));
   DBUG_RETURN(1);
 } /* rea_create_table */
 
@@ -498,7 +601,7 @@ static uchar *pack_screens(List<Create_field> &create_fields,
     }
     cfield->row=(uint8) row;
     cfield->col=(uint8) (length+1);
-    cfield->sc_length=(uint8) min(cfield->length,cols-(length+2));
+    cfield->sc_length= min<uint8>(cfield->length, cols - (length + 2));
   }
   length=(uint) (pos-start_screen);
   int2store(start_screen,length);
@@ -527,15 +630,16 @@ static uint pack_keys(uchar *keybuff, uint key_count, KEY *keyinfo,
   {
     int2store(pos, (key->flags ^ HA_NOSAME));
     int2store(pos+2,key->key_length);
-    pos[4]= (uchar) key->key_parts;
+    pos[4]= (uchar) key->user_defined_key_parts;
     pos[5]= (uchar) key->algorithm;
     int2store(pos+6, key->block_size);
     pos+=8;
-    key_parts+=key->key_parts;
+    key_parts+=key->user_defined_key_parts;
     DBUG_PRINT("loop", ("flags: %lu  key_parts: %d at 0x%lx",
-                        key->flags, key->key_parts,
+                        key->flags, key->user_defined_key_parts,
                         (long) key->key_part));
-    for (key_part=key->key_part,key_part_end=key_part+key->key_parts ;
+    for (key_part=key->key_part,
+           key_part_end= key_part + key->user_defined_key_parts ;
 	 key_part != key_part_end ;
 	 key_part++)
 
@@ -564,6 +668,16 @@ static uint pack_keys(uchar *keybuff, uint key_count, KEY *keyinfo,
     pos=tmp;
   }
   *(pos++)=0;
+  for (key=keyinfo,end=keyinfo+key_count ; key != end ; key++)
+  {
+    if (key->flags & HA_USES_COMMENT)
+    {
+      int2store(pos, key->comment.length);
+      uchar *tmp= (uchar*)strnmov((char*) pos+2,key->comment.str,
+                                  key->comment.length);
+      pos= tmp;
+    }
+  }
 
   if (key_count > 127 || key_parts > 127)
   {
@@ -613,27 +727,13 @@ static bool pack_header(uchar *forminfo, enum legacy_db_type table_type,
   Create_field *field;
   while ((field=it++))
   {
-    uint tmp_len= system_charset_info->cset->charpos(system_charset_info,
-                                                     field->comment.str,
-                                                     field->comment.str +
-                                                     field->comment.length,
-                                                     255);
-    if (tmp_len < field->comment.length)
-    {
-      if ((current_thd->variables.sql_mode &
-	   (MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES)))
-      {
-        my_error(ER_TOO_LONG_FIELD_COMMENT, MYF(0), field->field_name,
-                 static_cast<ulong>(tmp_len));
-	DBUG_RETURN(1);
-      }
-      push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
-                          ER_TOO_LONG_FIELD_COMMENT,
-                          ER(ER_TOO_LONG_FIELD_COMMENT),
-                          field->field_name, static_cast<ulong>(tmp_len));
-      field->comment.length= tmp_len;
-    }
-
+    if (validate_comment_length(current_thd,
+                                field->comment.str,
+                                &field->comment.length,
+                                COLUMN_COMMENT_MAXLEN,
+                                ER_TOO_LONG_FIELD_COMMENT,
+                                (char *) field->field_name))
+      DBUG_RETURN(true);
     totlength+= field->length;
     com_length+= field->comment.length;
     if (MTYP_TYPENR(field->unireg_check) == Field::NOEMPTY ||
@@ -718,7 +818,7 @@ static bool pack_header(uchar *forminfo, enum legacy_db_type table_type,
     DBUG_RETURN(1);
   }
   /* Hack to avoid bugs with small static rows in MySQL */
-  reclength=max(file->min_record_length(table_options),reclength);
+  reclength= max<size_t>(file->min_record_length(table_options), reclength);
   if (info_length+(ulong) create_fields.elements*FCOMP+288+
       n_length+int_length+com_length > 65535L || int_count > 255)
   {
@@ -726,7 +826,7 @@ static bool pack_header(uchar *forminfo, enum legacy_db_type table_type,
     DBUG_RETURN(1);
   }
 
-  bzero((char*)forminfo,288);
+  memset(forminfo, 0, 288);
   length=(info_length+create_fields.elements*FCOMP+288+n_length+int_length+
 	  com_length);
   int2store(forminfo,length);
@@ -805,30 +905,37 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
     recpos= field->offset+1 + (uint) data_offset;
     int3store(buff+5,recpos);
     int2store(buff+8,field->pack_flag);
-    int2store(buff+10,field->unireg_check);
+    DBUG_ASSERT(field->unireg_check < 256);
+    buff[10]= (uchar) field->unireg_check;
     buff[12]= (uchar) field->interval_id;
     buff[13]= (uchar) field->sql_type; 
     if (field->sql_type == MYSQL_TYPE_GEOMETRY)
     {
+      buff[11]= 0;
       buff[14]= (uchar) field->geom_type;
 #ifndef HAVE_SPATIAL
       DBUG_ASSERT(0);                           // Should newer happen
 #endif
     }
     else if (field->charset) 
+    {
+      buff[11]= (uchar) (field->charset->number >> 8);
       buff[14]= (uchar) field->charset->number;
+    }
     else
-      buff[14]= 0;				// Numerical
+    {
+      buff[11]= buff[14]= 0;			// Numerical
+    }
     int2store(buff+15, field->comment.length);
     comment_length+= field->comment.length;
     set_if_bigger(int_count,field->interval_id);
-    if (my_write(file, buff, FCOMP, MYF_RW))
+    if (mysql_file_write(file, buff, FCOMP, MYF_RW))
       DBUG_RETURN(1);
   }
 
 	/* Write fieldnames */
   buff[0]=(uchar) NAMES_SEP_CHAR;
-  if (my_write(file, buff, 1, MYF_RW))
+  if (mysql_file_write(file, buff, 1, MYF_RW))
     DBUG_RETURN(1);
   i=0;
   it.rewind();
@@ -838,7 +945,7 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
     *pos++=NAMES_SEP_CHAR;
     if (i == create_fields.elements-1)
       *pos++=0;
-    if (my_write(file, buff, (size_t) (pos-(char*) buff),MYF_RW))
+    if (mysql_file_write(file, buff, (size_t) (pos-(char*) buff), MYF_RW))
       DBUG_RETURN(1);
     i++;
   }
@@ -859,7 +966,7 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
         uint           i;
         unsigned char *val= NULL;
 
-        bzero(occ, sizeof(occ));
+        memset(occ, 0, sizeof(occ));
 
         for (i=0; (val= (unsigned char*) field->interval->type_names[i]); i++)
           for (uint j = 0; j < field->interval->type_lengths[i]; j++)
@@ -898,7 +1005,7 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
         tmp.append('\0');                      // End of intervall
       }
     }
-    if (my_write(file,(uchar*) tmp.ptr(),tmp.length(),MYF_RW))
+    if (mysql_file_write(file, (uchar*) tmp.ptr(), tmp.length(), MYF_RW))
       DBUG_RETURN(1);
   }
   if (comment_length)
@@ -908,8 +1015,8 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
     while ((field=it++))
     {
       if (field->comment.length)
-	if (my_write(file, (uchar*) field->comment.str, field->comment.length,
-		     MYF_RW))
+        if (mysql_file_write(file, (uchar*) field->comment.str,
+                             field->comment.length, MYF_RW))
 	  DBUG_RETURN(1);
     }
   }
@@ -917,9 +1024,32 @@ static bool pack_fields(File file, List<Create_field> &create_fields,
 }
 
 
-	/* save an empty record on start of formfile */
+/**
+   Creates a record buffer consisting of default values for all columns and
+   stores it in the formfile (.frm file.)
 
-static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
+   The value stored for each column is
+
+   - The default value if the column has one.
+   - 1 if the column type is @c enum.
+   - Special messages if the unireg type is YES or NO.
+   - A buffer full of only zeroes in all other cases. This also happens if the
+     default is a function.
+
+   @param thd           The current session.
+   @param file          The .frm file.
+   @param table_options Describes how to pack the values in the buffer.
+   @param create_fields A list of column definition objects.
+   @param reclength     Length of the record buffer in bytes.
+   @param data_offset   Offset inside the buffer before the values.
+   @param handler       The storage engine.
+
+   @retval true An error occured.
+   @retval false Success.
+
+*/
+
+static bool make_empty_rec(THD *thd, File file,
 			   uint table_options,
 			   List<Create_field> &create_fields,
 			   uint reclength,
@@ -937,8 +1067,8 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
   DBUG_ENTER("make_empty_rec");
 
   /* We need a table to generate columns for default values */
-  bzero((char*) &table, sizeof(table));
-  bzero((char*) &share, sizeof(share));
+  memset(&table, 0, sizeof(table));
+  memset(&share, 0, sizeof(share));
   table.s= &share;
 
   if (!(buff=(uchar*) my_malloc((size_t) reclength,MYF(MY_WME | MY_ZEROFILL))))
@@ -948,7 +1078,6 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
 
   table.in_use= thd;
   table.s->db_low_byte_first= handler->low_byte_first();
-  table.s->blob_ptr_size= portable_sizeof_char_ptr;
 
   null_count=0;
   if (!(table_options & HA_OPTION_PACK_RECORD))
@@ -962,9 +1091,6 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
   thd->count_cuted_fields= CHECK_FIELD_WARN;    // To find wrong default values
   while ((field=it++))
   {
-    /*
-      regfield don't have to be deleted as it's allocated with sql_alloc()
-    */
     Field *regfield= make_field(&share,
                                 buff+field->offset + data_offset,
                                 field->length,
@@ -989,7 +1115,7 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
 
     if (!(field->flags & NOT_NULL_FLAG))
     {
-      *regfield->null_ptr|= regfield->null_bit;
+      regfield->set_null();
       null_count++;
     }
 
@@ -1000,13 +1126,28 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
 
     if (field->def)
     {
-      int res= field->def->save_in_field(regfield, 1);
-      /* If not ok or warning of level 'note' */
-      if (res != 0 && res != 3)
+      /*
+        Storing the value of a function is pointless as this function may not
+        be constant.
+      */
+      DBUG_ASSERT(field->def->type() != Item::FUNC_ITEM);
+      type_conversion_status res= field->def->save_in_field(regfield, 1);
+      if (res != TYPE_OK && res != TYPE_NOTE_TIME_TRUNCATED &&
+          res != TYPE_NOTE_TRUNCATED)
       {
+        /*
+          clear current error and report INVALID DEFAULT value error message
+          */
+        if (thd->is_error())
+          thd->clear_error();
+
         my_error(ER_INVALID_DEFAULT, MYF(0), regfield->field_name);
         error= 1;
-        delete regfield; //To avoid memory leak
+        /*
+          Delete to avoid memory leak for fields that allocate extra
+          memory (e.g Field_blob::value)
+        */
+        delete regfield;
         goto err;
       }
     }
@@ -1022,6 +1163,11 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
       regfield->store(ER(ER_NO), (uint) strlen(ER(ER_NO)),system_charset_info);
     else
       regfield->reset();
+    /*
+      Delete to avoid memory leak for fields that allocate extra
+      memory (e.g Field_blob::value)
+    */
+    delete regfield;
   }
   DBUG_ASSERT(data_offset == ((null_count + 7) / 8));
 
@@ -1032,10 +1178,10 @@ static bool make_empty_rec(THD *thd, File file,enum legacy_db_type table_type,
   if (null_count & 7)
     *(null_pos + null_count / 8)|= ~(((uchar) 1 << (null_count & 7)) - 1);
 
-  error= my_write(file, buff, (size_t) reclength,MYF_RW) != 0;
+  error= mysql_file_write(file, buff, (size_t) reclength, MYF_RW) != 0;
 
 err:
-  my_free(buff, MYF(MY_FAE));
+  my_free(buff);
   thd->count_cuted_fields= old_count_cuted_fields;
   DBUG_RETURN(error);
 } /* make_empty_rec */

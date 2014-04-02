@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,11 +10,17 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "sql_help.h"
+#include "sql_table.h"                          // primary_key_name
+#include "sql_base.h"               // REPORT_ALL_ERRORS, setup_tables
+#include "opt_range.h"              // SQL_SELECT
+#include "opt_trace.h"              // Opt_trace_object
+#include "records.h"          // init_read_record, end_read_record
 
 struct st_find_field
 {
@@ -184,11 +189,13 @@ int search_topics(THD *thd, TABLE *topics, struct st_find_field *find_fields,
 		  SQL_SELECT *select, List<String> *names,
 		  String *name, String *description, String *example)
 {
-  DBUG_ENTER("search_topics");
   int count= 0;
-
   READ_RECORD read_record_info;
-  init_read_record(&read_record_info, thd, topics, select, 1, 0, FALSE);
+  DBUG_ENTER("search_topics");
+
+  if (init_read_record(&read_record_info, thd, topics, select, 1, 0, FALSE))
+    DBUG_RETURN(0);
+
   while (!read_record_info.read_record(&read_record_info))
   {
     if (!select->cond->val_int())		// Doesn't match like
@@ -224,11 +231,13 @@ int search_topics(THD *thd, TABLE *topics, struct st_find_field *find_fields,
 int search_keyword(THD *thd, TABLE *keywords, struct st_find_field *find_fields,
                    SQL_SELECT *select, int *key_id)
 {
-  DBUG_ENTER("search_keyword");
   int count= 0;
-
   READ_RECORD read_record_info;
-  init_read_record(&read_record_info, thd, keywords, select, 1, 0, FALSE);
+  DBUG_ENTER("search_keyword");
+
+  if (init_read_record(&read_record_info, thd, keywords, select, 1, 0, FALSE))
+    DBUG_RETURN(0);
+
   while (!read_record_info.read_record(&read_record_info) && count<2)
   {
     if (!select->cond->val_int())		// Dosn't match like
@@ -280,10 +289,12 @@ int get_topics_for_keyword(THD *thd, TABLE *topics, TABLE *relations,
   Field *rtopic_id, *rkey_id;
   DBUG_ENTER("get_topics_for_keyword");
 
-  if ((iindex_topic= find_type((char*) primary_key_name,
-			       &topics->s->keynames, 1+2)-1)<0 ||
-      (iindex_relations= find_type((char*) primary_key_name,
-				   &relations->s->keynames, 1+2)-1)<0)
+  if ((iindex_topic=
+       find_type(primary_key_name, &topics->s->keynames,
+                 FIND_TYPE_NO_PREFIX) - 1) < 0 ||
+      (iindex_relations=
+       find_type(primary_key_name, &relations->s->keynames,
+                 FIND_TYPE_NO_PREFIX) - 1) < 0)
   {
     my_message(ER_CORRUPT_HELP_DB, ER(ER_CORRUPT_HELP_DB), MYF(0));
     DBUG_RETURN(-1);
@@ -291,18 +302,24 @@ int get_topics_for_keyword(THD *thd, TABLE *topics, TABLE *relations,
   rtopic_id= find_fields[help_relation_help_topic_id].field;
   rkey_id=   find_fields[help_relation_help_keyword_id].field;
 
-  topics->file->ha_index_init(iindex_topic,1);
-  relations->file->ha_index_init(iindex_relations,1);
+  if (topics->file->ha_index_init(iindex_topic,1) ||
+      relations->file->ha_index_init(iindex_relations,1))
+  {
+    if (topics->file->inited)
+      topics->file->ha_index_end();
+    my_message(ER_CORRUPT_HELP_DB, ER(ER_CORRUPT_HELP_DB), MYF(0));
+    DBUG_RETURN(-1);
+  }
 
   rkey_id->store((longlong) key_id, TRUE);
   rkey_id->get_key_image(buff, rkey_id->pack_length(), Field::itRAW);
-  int key_res= relations->file->index_read_map(relations->record[0],
-                                               buff, (key_part_map) 1,
-                                               HA_READ_KEY_EXACT);
+  int key_res= relations->file->ha_index_read_map(relations->record[0],
+                                                  buff, (key_part_map) 1,
+                                                  HA_READ_KEY_EXACT);
 
   for ( ;
         !key_res && key_id == (int16) rkey_id->val_int() ;
-	key_res= relations->file->index_next(relations->record[0]))
+	key_res= relations->file->ha_index_next(relations->record[0]))
   {
     uchar topic_id_buff[8];
     longlong topic_id= rtopic_id->val_int();
@@ -310,8 +327,8 @@ int get_topics_for_keyword(THD *thd, TABLE *topics, TABLE *relations,
     field->store((longlong) topic_id, TRUE);
     field->get_key_image(topic_id_buff, field->pack_length(), Field::itRAW);
 
-    if (!topics->file->index_read_map(topics->record[0], topic_id_buff,
-                                      (key_part_map)1, HA_READ_KEY_EXACT))
+    if (!topics->file->ha_index_read_map(topics->record[0], topic_id_buff,
+                                         (key_part_map)1, HA_READ_KEY_EXACT))
     {
       memorize_variant_topic(thd,topics,count,find_fields,
 			     names,name,description,example);
@@ -352,7 +369,10 @@ int search_categories(THD *thd, TABLE *categories,
 
   DBUG_ENTER("search_categories");
 
-  init_read_record(&read_record_info, thd, categories, select,1,0,FALSE);
+  if (init_read_record(&read_record_info, thd, categories, select,
+                       1, 0, FALSE))
+    DBUG_RETURN(0);
+    
   while (!read_record_info.read_record(&read_record_info))
   {
     if (select && !select->cond->val_int())
@@ -383,10 +403,12 @@ int search_categories(THD *thd, TABLE *categories,
 void get_all_items_for_category(THD *thd, TABLE *items, Field *pfname,
 				SQL_SELECT *select, List<String> *res)
 {
+  READ_RECORD read_record_info;
   DBUG_ENTER("get_all_items_for_category");
 
-  READ_RECORD read_record_info;
-  init_read_record(&read_record_info, thd, items, select,1,0,FALSE);
+  if (init_read_record(&read_record_info, thd, items, select,
+                       1, 0, FALSE))
+    DBUG_VOID_RETURN;
   while (!read_record_info.read_record(&read_record_info))
   {
     if (!select->cond->val_int())
@@ -433,7 +455,7 @@ int send_answer_1(Protocol *protocol, String *s1, String *s2, String *s3)
   field_list.push_back(new Item_empty_string("description",1000));
   field_list.push_back(new Item_empty_string("example",1000));
 
-  if (protocol->send_fields(&field_list,
+  if (protocol->send_result_set_metadata(&field_list,
                             Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     DBUG_RETURN(1);
 
@@ -465,7 +487,7 @@ int send_answer_1(Protocol *protocol, String *s1, String *s2, String *s3)
    +-                    -+
 
   RETURN VALUES
-    result of protocol->send_fields
+    result of protocol->send_result_set_metadata
 */
 
 int send_header_2(Protocol *protocol, bool for_category)
@@ -476,7 +498,7 @@ int send_header_2(Protocol *protocol, bool for_category)
     field_list.push_back(new Item_empty_string("source_category_name",64));
   field_list.push_back(new Item_empty_string("name",64));
   field_list.push_back(new Item_empty_string("is_it_category",1));
-  DBUG_RETURN(protocol->send_fields(&field_list, Protocol::SEND_NUM_ROWS |
+  DBUG_RETURN(protocol->send_result_set_metadata(&field_list, Protocol::SEND_NUM_ROWS |
                                                  Protocol::SEND_EOF));
 }
 
@@ -571,6 +593,9 @@ SQL_SELECT *prepare_simple_select(THD *thd, Item *cond,
   table->covering_keys.clear_all();
 
   SQL_SELECT *res= make_select(table, 0, 0, cond, 0, error);
+
+  // Wrapper for correct JSON in optimizer trace
+  Opt_trace_object wrapper(&thd->opt_trace);
   if (*error || (res && res->check_quick(thd, 0, HA_POS_ERROR)) ||
       (res && res->quick && res->quick->reset()))
   {
@@ -639,24 +664,31 @@ bool mysqld_help(THD *thd, const char *mask)
   MEM_ROOT *mem_root= thd->mem_root;
   DBUG_ENTER("mysqld_help");
 
-  bzero((uchar*)tables,sizeof(tables));
-  tables[0].alias= tables[0].table_name= (char*) "help_topic";
-  tables[0].lock_type= TL_READ;
+  tables[0].init_one_table(C_STRING_WITH_LEN("mysql"),
+                           C_STRING_WITH_LEN("help_topic"),
+                           "help_topic", TL_READ);
+  tables[1].init_one_table(C_STRING_WITH_LEN("mysql"),
+                           C_STRING_WITH_LEN("help_category"),
+                           "help_category", TL_READ);
+  tables[2].init_one_table(C_STRING_WITH_LEN("mysql"),
+                           C_STRING_WITH_LEN("help_relation"),
+                           "help_relation", TL_READ);
+  tables[3].init_one_table(C_STRING_WITH_LEN("mysql"),
+                           C_STRING_WITH_LEN("help_keyword"),
+                           "help_keyword", TL_READ);
   tables[0].next_global= tables[0].next_local= 
     tables[0].next_name_resolution_table= &tables[1];
-  tables[1].alias= tables[1].table_name= (char*) "help_category";
-  tables[1].lock_type= TL_READ;
   tables[1].next_global= tables[1].next_local= 
     tables[1].next_name_resolution_table= &tables[2];
-  tables[2].alias= tables[2].table_name= (char*) "help_relation";
-  tables[2].lock_type= TL_READ;
   tables[2].next_global= tables[2].next_local= 
     tables[2].next_name_resolution_table= &tables[3];
-  tables[3].alias= tables[3].table_name= (char*) "help_keyword";
-  tables[3].lock_type= TL_READ;
-  tables[0].db= tables[1].db= tables[2].db= tables[3].db= (char*) "mysql";
 
-  Open_tables_state open_tables_state_backup;
+  /*
+    HELP must be available under LOCK TABLES. 
+    Reset and backup the current open tables state to
+    make it possible.
+  */
+  Open_tables_backup open_tables_state_backup;
   if (open_system_tables_for_read(thd, tables, &open_tables_state_backup))
     goto error2;
 

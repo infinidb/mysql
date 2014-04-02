@@ -10,5 +10,7 @@
 #
 ##############################################################################
 
-# the below testcase have been reworked to avoid the bug, test contains comment, keep bug open
-rpl_ndb_2ndb   : Bug#11754374 : rpl_ndb_2ndb fails sporadically
+rpl_ndb_set_null       : bug #51100
+rpl_ndb_row_implicit_commit_binlog : BUG#12586131 - fails on SET PASSWORD
+rpl_ndb_mixed_implicit_commit_binlog : BUG#12586131 - fails on SET PASSWORD
+

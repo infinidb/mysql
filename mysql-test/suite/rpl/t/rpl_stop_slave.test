@@ -1,8 +1,12 @@
+#Want to skip this test from daily Valgrind execution
+--source include/no_valgrind_without_big.inc
+
 source include/master-slave.inc;
 source include/have_innodb.inc;
 source include/have_debug.inc;
 source include/have_debug_sync.inc;
 source include/have_binlog_format_mixed_or_statement.inc;
+source include/not_gtid_enabled.inc;
 
 --echo
 --echo # BUG#56118 STOP SLAVE does not wait till trx with CREATE TMP TABLE ends
@@ -14,7 +18,7 @@ source include/have_binlog_format_mixed_or_statement.inc;
 CREATE TABLE t1(c1 INT) ENGINE=InnoDB;
 CREATE TABLE t2(c1 INT) ENGINE=InnoDB;
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 SET DEBUG_SYNC= 'RESET';
 source include/stop_slave.inc;
 
@@ -33,28 +37,24 @@ let $tmp_table_stm= CREATE TEMPORARY TABLE tt1(c1 INT) ENGINE = InnoDB;
 source extra/rpl_tests/rpl_stop_slave.test;
 
 --echo
---echo # CREATE TEMPORARY TABLE with MyISAM engine
---echo # -----------------------------------------
-let $tmp_table_stm= CREATE TEMPORARY TABLE tt1(c1 INT) ENGINE = MyISAM;
-source extra/rpl_tests/rpl_stop_slave.test;
-
---echo
 --echo # CREATE TEMPORARY TABLE ... SELECT with InnoDB engine
 --echo # ----------------------------------------------------
 let $tmp_table_stm= CREATE TEMPORARY TABLE tt1(c1 INT) ENGINE = InnoDB
                     SELECT c1 FROM t2;
 source extra/rpl_tests/rpl_stop_slave.test;
 
---echo
---echo # CREATE TEMPORARY TABLE ... SELECT with MyISAM engine
---echo # ----------------------------------------------------
-let $tmp_table_stm= CREATE TEMPORARY TABLE tt1(c1 INT) ENGINE = MyISAM
-                    SELECT 1 AS c1;
-source extra/rpl_tests/rpl_stop_slave.test;
+# Don't need to verify 'CREATE TEMPORARY TABLE' with MyIASM engine, as it
+# never is binlogged into a transaction since 5.5.
 
+--echo
 --echo # Test end
 SET GLOBAL debug= '$debug_save';
 source include/restart_slave_sql.inc;
+
+connection slave;
+call mtr.add_suppression("Slave SQL.*Request to stop slave SQL Thread received while applying a group that has non-transactional changes; waiting for completion of the group");
+call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+connection master;
 
 --source include/rpl_connection_master.inc
 DROP TABLE t1, t2;
@@ -76,7 +76,7 @@ CREATE TABLE t1 (c1 INT KEY, c2 INT) ENGINE=InnoDB;
 CREATE TABLE t2 (c1 INT) ENGINE=MyISAM;
 INSERT INTO t1 VALUES(1, 1);
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 --source include/rpl_connection_master.inc
 

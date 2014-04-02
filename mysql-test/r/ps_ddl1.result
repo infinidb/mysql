@@ -200,8 +200,8 @@ SUCCESS
 execute stmt8;
 ERROR 21S01: Column count doesn't match value count at row 1
 call p_verify_reprepare_count(1);
-ERROR
-Expected: 1, actual: 0
+SUCCESS
+
 execute stmt7;
 ERROR 42S22: Unknown column 'b' in 'field list'
 call p_verify_reprepare_count(1);
@@ -237,13 +237,11 @@ ERROR 42S22: Unknown column 'b' in 'field list'
 call p_verify_reprepare_count(1);
 SUCCESS
 
-# Why does the INSERT ... SELECT does not get a reprepare or is
-# only the counter not incremented?
 execute stmt8;
 ERROR 21S01: Column count doesn't match value count at row 1
 call p_verify_reprepare_count(1);
-ERROR
-Expected: 1, actual: 0
+SUCCESS
+
 alter table t2 add column c int;
 execute stmt8;
 ERROR 21S01: Column count doesn't match value count at row 1
@@ -282,7 +280,7 @@ call p_verify_reprepare_count(0);
 SUCCESS
 
 alter table t1 drop index t1_unq_idx;
-# Optimizer strategy: Possible keys = NULL , Extra = 
+# Optimizer strategy: Possible keys = NULL , Extra = NULL
 execute stmt;
 avg(a)
 7.5000
@@ -420,7 +418,7 @@ call p_verify_reprepare_count(0);
 SUCCESS
 
 execute stmt;
-ERROR 42S02: Unknown table 't1'
+ERROR 42S02: Unknown table 'test.t1'
 call p_verify_reprepare_count(0);
 SUCCESS
 
@@ -460,7 +458,7 @@ create schema mysqltest;
 end|
 execute stmt;
 ERROR 42000: PROCEDURE test.p1 does not exist
-call p_verify_reprepare_count(1);
+call p_verify_reprepare_count(0);
 SUCCESS
 
 execute stmt;

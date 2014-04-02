@@ -11,12 +11,13 @@
 #   [--let $rpl_skip_start_slave= 1]
 #   [--let $rpl_debug= 1]
 #   [--let $slave_timeout= NUMBER]
+#   [--let $use_gtids= 1]
 #   --source include/master-slave.inc
 #
 # Parameters:
 #   $rpl_check_server_ids, $rpl_skip_reset_master_and_slave,
 #   $rpl_skip_change_master, $rpl_skip_start_slave, $rpl_debug,
-#   $slave_timeout
+#   $slave_timeout, $use_gtids
 #     See include/rpl_init.inc
 #
 #   $rpl_server_count
@@ -36,21 +37,7 @@ if ($rpl_server_count)
 --let $rpl_topology= 1->2
 --source include/rpl_init.inc
 
---let $rpl_connection_name= master
---let $rpl_server_number= 1
---source include/rpl_connect.inc
-
---let $rpl_connection_name= master1
---let $rpl_server_number= 1
---source include/rpl_connect.inc
-
---let $rpl_connection_name= slave
---let $rpl_server_number= 2
---source include/rpl_connect.inc
-
---let $rpl_connection_name= slave1
---let $rpl_server_number= 2
---source include/rpl_connect.inc
+--source include/rpl_default_connections.inc
 
 
 --let $include_filename= master-slave.inc

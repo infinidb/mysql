@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Routines to handle mallocing of results which will be freed the same time */
 
@@ -74,6 +72,9 @@ void init_alloc_root(MEM_ROOT *mem_root, size_t block_size,
   DBUG_VOID_RETURN;
 }
 
+/** This is a no-op unless the build is debug or for Valgrind. */
+#define TRASH_MEM(X) TRASH(((char*)(X) + ((X)->size-(X)->left)), (X)->left)
+
 
 /*
   SYNOPSIS
@@ -122,7 +123,11 @@ void reset_root_defaults(MEM_ROOT *mem_root, size_t block_size,
         {
           /* remove block from the list and free it */
           *prev= mem->next;
-          my_free(mem, MYF(0));
+          {
+            mem->left= mem->size;
+            TRASH_MEM(mem);
+            my_free(mem);
+          }
         }
         else
           prev= &mem->next;
@@ -165,7 +170,7 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
                   });
 
   length+=ALIGN_SIZE(sizeof(USED_MEM));
-  if (!(next = (USED_MEM*) my_malloc(length,MYF(MY_WME))))
+  if (!(next = (USED_MEM*) my_malloc(length,MYF(MY_WME | ME_FATALERROR))))
   {
     if (mem_root->error_handler)
       (*mem_root->error_handler)();
@@ -214,9 +219,9 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
   {						/* Time to alloc new block */
     block_size= mem_root->block_size * (mem_root->block_num >> 2);
     get_size= length+ALIGN_SIZE(sizeof(USED_MEM));
-    get_size= max(get_size, block_size);
+    get_size= MY_MAX(get_size, block_size);
 
-    if (!(next = (USED_MEM*) my_malloc(get_size,MYF(MY_WME))))
+    if (!(next = (USED_MEM*) my_malloc(get_size,MYF(MY_WME | ME_FATALERROR))))
     {
       if (mem_root->error_handler)
 	(*mem_root->error_handler)();
@@ -294,8 +299,6 @@ void *multi_alloc_root(MEM_ROOT *root, ...)
   DBUG_RETURN((void*) start);
 }
 
-#define TRASH_MEM(X) TRASH(((char*)(X) + ((X)->size-(X)->left)), (X)->left)
-
 /* Mark all data in blocks free for reusage */
 
 static inline void mark_blocks_free(MEM_ROOT* root)
@@ -342,7 +345,7 @@ static inline void mark_blocks_free(MEM_ROOT* root)
 
   NOTES
     One can call this function either with root block initialised with
-    init_alloc_root() or with a bzero()-ed block.
+    init_alloc_root() or with a zero()-ed block.
     It's also safe to call this multiple times with the same mem_root.
 */
 
@@ -364,13 +367,21 @@ void free_root(MEM_ROOT *root, myf MyFlags)
   {
     old=next; next= next->next ;
     if (old != root->pre_alloc)
-      my_free(old,MYF(0));
+    {
+      old->left= old->size;
+      TRASH_MEM(old);
+      my_free(old);
+    }
   }
   for (next=root->free ; next ;)
   {
     old=next; next= next->next;
     if (old != root->pre_alloc)
-      my_free(old,MYF(0));
+    {
+      old->left= old->size;
+      TRASH_MEM(old);
+      my_free(old);
+    }
   }
   root->used=root->free=0;
   if (root->pre_alloc)

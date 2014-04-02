@@ -1,3 +1,6 @@
+#ifndef ITEM_FUNC_INCLUDED
+#define ITEM_FUNC_INCLUDED
+
 /* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -11,17 +14,10 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
-
-/* Copyright (C) 2013 Calpont Corp. */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 
 /* Function items used by mysql */
-
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
 
 #ifdef HAVE_IEEEFP_H
 extern "C"				/* Bug in BSDI include file */
@@ -34,21 +30,24 @@ class Item_func :public Item_result_field
 {
 protected:
   Item **args, *tmp_arg[2];
+  /// Value used in calculation of result of const_item()
+  bool const_item_cache;
   /*
     Allowed numbers of columns in result (usually 1, which means scalar value)
     0 means get this number from first argument
   */
   uint allowed_arg_cols;
-  // @InfiniDB. Added for the use of some functi
-  THD* fThd; // will be assinged by fix_fields()
+  /// Value used in calculation of result of used_tables()
+  table_map used_tables_cache;
+  /// Value used in calculation of result of not_null_tables()
+  table_map not_null_tables_cache;
 public:
   uint arg_count;
-  table_map used_tables_cache, not_null_tables_cache;
-  bool const_item_cache;
+  //bool const_item_cache;
   enum Functype { UNKNOWN_FUNC,EQ_FUNC,EQUAL_FUNC,NE_FUNC,LT_FUNC,LE_FUNC,
 		  GE_FUNC,GT_FUNC,FT_FUNC,
 		  LIKE_FUNC,ISNULL_FUNC,ISNOTNULL_FUNC,
-		  COND_AND_FUNC, COND_OR_FUNC, COND_XOR_FUNC,
+		  COND_AND_FUNC, COND_OR_FUNC, XOR_FUNC,
                   BETWEEN, IN_FUNC, MULT_EQUAL_FUNC,
 		  INTERVAL_FUNC, ISNOTNULLTEST_FUNC,
 		  SP_EQUALS_FUNC, SP_DISJOINT_FUNC,SP_INTERSECTS_FUNC,
@@ -66,26 +65,26 @@ public:
   enum Type type() const { return FUNC_ITEM; }
   virtual enum Functype functype() const   { return UNKNOWN_FUNC; }
   Item_func(void):
-    allowed_arg_cols(1), fThd(0), arg_count(0)
+    allowed_arg_cols(1), arg_count(0)
   {
     with_sum_func= 0;
   }
   Item_func(Item *a):
-    allowed_arg_cols(1), fThd(0), arg_count(1)
+    allowed_arg_cols(1), arg_count(1)
   {
     args= tmp_arg;
     args[0]= a;
     with_sum_func= a->with_sum_func;
   }
   Item_func(Item *a,Item *b):
-    allowed_arg_cols(1), fThd(0), arg_count(2)
+    allowed_arg_cols(1), arg_count(2)
   {
     args= tmp_arg;
     args[0]= a; args[1]= b;
     with_sum_func= a->with_sum_func || b->with_sum_func;
   }
   Item_func(Item *a,Item *b,Item *c):
-    allowed_arg_cols(1), fThd(0)
+    allowed_arg_cols(1)
   {
     arg_count= 0;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*3)))
@@ -96,7 +95,7 @@ public:
     }
   }
   Item_func(Item *a,Item *b,Item *c,Item *d):
-    allowed_arg_cols(1), fThd(0)
+    allowed_arg_cols(1)
   {
     arg_count= 0;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*4)))
@@ -108,7 +107,7 @@ public:
     }
   }
   Item_func(Item *a,Item *b,Item *c,Item *d,Item* e):
-    allowed_arg_cols(1), fThd(0)
+    allowed_arg_cols(1)
   {
     arg_count= 5;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*5)))
@@ -122,33 +121,48 @@ public:
   // Constructor used for Item_cond_and/or (see Item comment)
   Item_func(THD *thd, Item_func *item);
   bool fix_fields(THD *, Item **ref);
+  void fix_after_pullout(st_select_lex *parent_select,
+                         st_select_lex *removed_select);
   table_map used_tables() const;
+  /**
+     Returns the pseudo tables depended upon in order to evaluate this
+     function expression. The default implementation returns the empty
+     set.
+  */
+  virtual table_map get_initial_pseudo_tables() const { return 0; }
   table_map not_null_tables() const;
   void update_used_tables();
+  void set_used_tables(table_map map) { used_tables_cache= map; }
+  void set_not_null_tables(table_map map) { not_null_tables_cache= map; }
   bool eq(const Item *item, bool binary_cmp) const;
   virtual optimize_type select_optimize() const { return OPTIMIZE_NONE; }
   virtual bool have_rev_func() const { return 0; }
   virtual Item *key_item() const { return args[0]; }
   virtual bool const_item() const { return const_item_cache; }
-  inline Item **arguments() const { return args; }
+  inline Item **arguments() const
+  { DBUG_ASSERT(argument_count() > 0); return args; }
   void set_arguments(List<Item> &list);
   inline uint argument_count() const { return arg_count; }
   inline void remove_arguments() { arg_count=0; }
-  void split_sum_func(THD *thd, Item **ref_pointer_array, List<Item> &fields);
+  void split_sum_func(THD *thd, Ref_ptr_array ref_pointer_array,
+                      List<Item> &fields);
   virtual void print(String *str, enum_query_type query_type);
   void print_op(String *str, enum_query_type query_type);
   void print_args(String *str, uint from, enum_query_type query_type);
   virtual void fix_num_length_and_dec();
-  void count_only_length();
+  void count_only_length(Item **item, uint nitems);
   void count_real_length();
   void count_decimal_length();
+  void count_datetime_length(Item **item, uint nitems);
+  bool count_string_result_length(enum_field_types field_type,
+                                  Item **item, uint nitems);
   inline bool get_arg0_date(MYSQL_TIME *ltime, uint fuzzy_date)
   {
     return (null_value=args[0]->get_date(ltime, fuzzy_date));
   }
   inline bool get_arg0_time(MYSQL_TIME *ltime)
   {
-    return (null_value=args[0]->get_time(ltime));
+    return (null_value= args[0]->get_time(ltime));
   }
   bool is_null() { 
     update_null_value();
@@ -162,22 +176,49 @@ public:
 
   my_decimal *val_decimal(my_decimal *);
 
-  bool agg_arg_collations(DTCollation &c, Item **items, uint nitems,
-                          uint flags)
-  {
-    return agg_item_collations(c, func_name(), items, nitems, flags, 1);
-  }
-  bool agg_arg_collations_for_comparison(DTCollation &c,
-                                         Item **items, uint nitems,
-                                         uint flags)
-  {
-    return agg_item_collations_for_comparison(c, func_name(),
-                                              items, nitems, flags);
-  }
   bool agg_arg_charsets(DTCollation &c, Item **items, uint nitems,
                         uint flags, int item_sep)
   {
     return agg_item_charsets(c, func_name(), items, nitems, flags, item_sep);
+  }
+  /*
+    Aggregate arguments for string result, e.g: CONCAT(a,b)
+    - convert to @@character_set_connection if all arguments are numbers
+    - allow DERIVATION_NONE
+  */
+  bool agg_arg_charsets_for_string_result(DTCollation &c,
+                                          Item **items, uint nitems,
+                                          int item_sep= 1)
+  {
+    return agg_item_charsets_for_string_result(c, func_name(),
+                                               items, nitems, item_sep);
+  }
+  /*
+    Aggregate arguments for comparison, e.g: a=b, a LIKE b, a RLIKE b
+    - don't convert to @@character_set_connection if all arguments are numbers
+    - don't allow DERIVATION_NONE
+  */
+  bool agg_arg_charsets_for_comparison(DTCollation &c,
+                                       Item **items, uint nitems,
+                                       int item_sep= 1)
+  {
+    return agg_item_charsets_for_comparison(c, func_name(),
+                                            items, nitems, item_sep);
+  }
+  /*
+    Aggregate arguments for string result, when some comparison
+    is involved internally, e.g: REPLACE(a,b,c)
+    - convert to @@character_set_connection if all arguments are numbers
+    - disallow DERIVATION_NONE
+  */
+  bool agg_arg_charsets_for_string_result_with_comparison(DTCollation &c,
+                                                          Item **items,
+                                                          uint nitems,
+                                                          int item_sep= 1)
+  {
+    return agg_item_charsets_for_string_result_with_comparison(c, func_name(),
+                                                               items, nitems,
+                                                               item_sep);
   }
   bool walk(Item_processor processor, bool walk_subquery, uchar *arg);
   Item *transform(Item_transformer transformer, uchar *arg);
@@ -185,14 +226,63 @@ public:
                 Item_transformer transformer, uchar *arg_t);
   void traverse_cond(Cond_traverser traverser,
                      void * arg, traverse_order order);
-  bool is_expensive_processor(uchar *arg);
-  virtual bool is_expensive() { return 0; }
   inline double fix_result(double value)
   {
     if (isfinite(value))
       return value;
     null_value=1;
     return 0.0;
+  }
+  inline void raise_numeric_overflow(const char *type_name)
+  {
+    char buf[256];
+    String str(buf, sizeof(buf), system_charset_info);
+    str.length(0);
+    print(&str, QT_ORDINARY);
+    my_error(ER_DATA_OUT_OF_RANGE, MYF(0), type_name, str.c_ptr_safe());
+  }
+  inline double raise_float_overflow()
+  {
+    raise_numeric_overflow("DOUBLE");
+    return 0.0;
+  }
+  inline longlong raise_integer_overflow()
+  {
+    raise_numeric_overflow(unsigned_flag ? "BIGINT UNSIGNED": "BIGINT");
+    return 0;
+  }
+  inline int raise_decimal_overflow()
+  {
+    raise_numeric_overflow("DECIMAL");
+    return E_DEC_OVERFLOW;
+  }
+  /**
+     Throw an error if the input double number is not finite, i.e. is either
+     +/-INF or NAN.
+  */
+  inline double check_float_overflow(double value)
+  {
+    return isfinite(value) ? value : raise_float_overflow();
+  }
+  /**
+    Throw an error if the input BIGINT value represented by the
+    (longlong value, bool unsigned flag) pair cannot be returned by the
+    function, i.e. is not compatible with this Item's unsigned_flag.
+  */
+  inline longlong check_integer_overflow(longlong value, bool val_unsigned)
+  {
+    if ((unsigned_flag && !val_unsigned && value < 0) ||
+        (!unsigned_flag && val_unsigned &&
+         (ulonglong) value > (ulonglong) LONGLONG_MAX))
+      return raise_integer_overflow();
+    return value;
+  }
+  /**
+     Throw an error if the error code of a DECIMAL operation is E_DEC_OVERFLOW.
+  */
+  inline int check_decimal_overflow(int error)
+  {
+    return (error == E_DEC_OVERFLOW) ? raise_decimal_overflow() : error;
   }
 
   bool has_timestamp_args()
@@ -268,14 +358,22 @@ public:
 class Item_real_func :public Item_func
 {
 public:
-  Item_real_func() :Item_func() {}
-  Item_real_func(Item *a) :Item_func(a) {}
-  Item_real_func(Item *a,Item *b) :Item_func(a,b) {}
-  Item_real_func(List<Item> &list) :Item_func(list) {}
+  Item_real_func() :Item_func() { collation.set_numeric(); }
+  Item_real_func(Item *a) :Item_func(a) { collation.set_numeric(); }
+  Item_real_func(Item *a,Item *b) :Item_func(a,b) { collation.set_numeric(); }
+  Item_real_func(List<Item> &list) :Item_func(list) { collation.set_numeric(); }
   String *val_str(String*str);
   my_decimal *val_decimal(my_decimal *decimal_value);
   longlong val_int()
     { DBUG_ASSERT(fixed == 1); return (longlong) rint(val_real()); }
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_real(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_real(ltime);
+  }
   enum Item_result result_type () const { return REAL_RESULT; }
   void fix_length_and_dec()
   { decimals= NOT_FIXED_DEC; max_length= float_length(decimals); }
@@ -288,13 +386,13 @@ protected:
   Item_result hybrid_type;
 public:
   Item_func_numhybrid(Item *a) :Item_func(a), hybrid_type(REAL_RESULT)
-  {}
+  { collation.set_numeric(); }
   Item_func_numhybrid(Item *a,Item *b)
     :Item_func(a,b), hybrid_type(REAL_RESULT)
-  {}
+  { collation.set_numeric(); }
   Item_func_numhybrid(List<Item> &list)
     :Item_func(list), hybrid_type(REAL_RESULT)
-  {}
+  { collation.set_numeric(); }
 
   enum Item_result result_type () const { return hybrid_type; }
   void fix_length_and_dec();
@@ -305,7 +403,8 @@ public:
   longlong val_int();
   my_decimal *val_decimal(my_decimal *);
   String *val_str(String*str);
-
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate);
+  bool get_time(MYSQL_TIME *ltime);
   /**
      @brief Performs the operation that this functions implements when the
      result type is INT.
@@ -341,6 +440,14 @@ public:
      @return The result of the operation.
   */
   virtual String *str_op(String *)= 0;
+  /**
+     @brief Performs the operation that this functions implements when the
+     result type is MYSQL_TYPE_DATE or MYSQL_TYPE_DATETIME.
+
+     @return The result of the operation.
+  */
+  virtual bool date_op(MYSQL_TIME *ltime, uint fuzzydate)= 0;
+  virtual bool time_op(MYSQL_TIME *ltime)= 0;
   bool is_null() { update_null_value(); return null_value; }
 };
 
@@ -354,6 +461,10 @@ public:
   void fix_num_length_and_dec();
   void find_num_type();
   String *str_op(String *str) { DBUG_ASSERT(0); return 0; }
+  bool date_op(MYSQL_TIME *ltime, uint fuzzydate)
+  { DBUG_ASSERT(0); return 0; }
+  bool time_op(MYSQL_TIME *ltime)
+  { DBUG_ASSERT(0); return 0; }
 };
 
 
@@ -371,21 +482,38 @@ class Item_num_op :public Item_func_numhybrid
 
   void find_num_type();
   String *str_op(String *str) { DBUG_ASSERT(0); return 0; }
+  bool date_op(MYSQL_TIME *ltime, uint fuzzydate)
+  { DBUG_ASSERT(0); return 0; }
+  bool time_op(MYSQL_TIME *ltime)
+  { DBUG_ASSERT(0); return 0; }
 };
 
 
 class Item_int_func :public Item_func
 {
 public:
-  Item_int_func() :Item_func() { max_length= 21; }
-  Item_int_func(Item *a) :Item_func(a) { max_length= 21; }
-  Item_int_func(Item *a,Item *b) :Item_func(a,b) { max_length= 21; }
+  Item_int_func() :Item_func()
+  { collation.set_numeric(); fix_char_length(21); }
+  Item_int_func(Item *a) :Item_func(a)
+  { collation.set_numeric(); fix_char_length(21); }
+  Item_int_func(Item *a,Item *b) :Item_func(a,b)
+  { collation.set_numeric(); fix_char_length(21); }
   Item_int_func(Item *a,Item *b,Item *c) :Item_func(a,b,c)
-  { max_length= 21; }
-  Item_int_func(List<Item> &list) :Item_func(list) { max_length= 21; }
-  Item_int_func(THD *thd, Item_int_func *item) :Item_func(thd, item) {}
+  { collation.set_numeric(); fix_char_length(21); }
+  Item_int_func(List<Item> &list) :Item_func(list)
+  { collation.set_numeric(); fix_char_length(21); }
+  Item_int_func(THD *thd, Item_int_func *item) :Item_func(thd, item)
+  { collation.set_numeric(); }
   double val_real();
   String *val_str(String*str);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_int(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_int(ltime);
+  }
   enum Item_result result_type () const { return INT_RESULT; }
   void fix_length_and_dec() {}
 };
@@ -407,7 +535,7 @@ public:
 class Item_func_signed :public Item_int_func
 {
 public:
-  Item_func_signed(Item *a) :Item_int_func(a)
+  Item_func_signed(Item *a) :Item_int_func(a) 
   {
     unsigned_flag= 0;
   }
@@ -416,7 +544,8 @@ public:
   longlong val_int_from_str(int *error);
   void fix_length_and_dec()
   {
-    max_length= min(args[0]->max_length,MY_INT64_NUM_DECIMAL_DIGITS);
+    fix_char_length(std::min<uint32>(args[0]->max_char_length(),
+                                     MY_INT64_NUM_DECIMAL_DIGITS));
   }
   virtual void print(String *str, enum_query_type query_type);
   uint decimal_precision() const { return args[0]->decimal_precision(); }
@@ -443,12 +572,21 @@ public:
   Item_decimal_typecast(Item *a, int len, int dec) :Item_func(a)
   {
     decimals= dec;
-    max_length= my_decimal_precision_to_length_no_truncation(len, dec,
-                                                             unsigned_flag);
+    collation.set_numeric();
+    fix_char_length(my_decimal_precision_to_length_no_truncation(len, dec,
+                                                                 unsigned_flag));
   }
   String *val_str(String *str);
   double val_real();
   longlong val_int();
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_decimal(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_decimal(ltime);
+  }
   my_decimal *val_decimal(my_decimal*);
   enum Item_result result_type () const { return DECIMAL_RESULT; }
   enum_field_types field_type() const { return MYSQL_TYPE_NEWDECIMAL; }
@@ -703,6 +841,14 @@ public:
   const char *func_name() const { return "tan"; }
 };
 
+class Item_func_cot :public Item_dec_func
+{
+public:
+  Item_func_cot(Item *a) :Item_dec_func(a) {}
+  double val_real();
+  const char *func_name() const { return "cot"; }
+};
+
 class Item_func_integer :public Item_int_func
 {
 public:
@@ -769,7 +915,13 @@ public:
   double val_real();
   const char *func_name() const { return "rand"; }
   bool const_item() const { return 0; }
-  void update_used_tables();
+  /**
+    This function is non-deterministic and hence depends on the
+    'RAND' pseudo-table.
+    
+    @retval RAND_TABLE_BIT
+  */
+  table_map get_initial_pseudo_tables() const { return RAND_TABLE_BIT; }
   bool fix_fields(THD *thd, Item **ref);
   void cleanup() { first_eval= TRUE; Item_real_func::cleanup(); }
 private:
@@ -812,6 +964,8 @@ class Item_func_min_max :public Item_func
   THD *thd;
 protected:
   enum_field_types cached_field_type;
+  uint cmp_datetimes(longlong *value);
+  uint cmp_times(longlong *value);
 public:
   Item_func_min_max(List<Item> &list,int cmp_sign_arg) :Item_func(list),
     cmp_type(INT_RESULT), cmp_sign(cmp_sign_arg), compare_as_dates(FALSE),
@@ -820,10 +974,29 @@ public:
   longlong val_int();
   String *val_str(String *);
   my_decimal *val_decimal(my_decimal *);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate);
+  bool get_time(MYSQL_TIME *ltime);  
   void fix_length_and_dec();
-  enum Item_result result_type () const { return cmp_type; }
-  bool result_as_longlong() { return compare_as_dates; };
-  uint cmp_datetimes(ulonglong *value);
+  enum Item_result result_type () const
+  {
+    /*
+      If we compare as dates, then:
+      - field_type is MYSQL_TYPE_VARSTRING, MYSQL_TYPE_DATETIME
+        or MYSQL_TYPE_DATE.
+      - cmp_type is INT_RESULT or DECIMAL_RESULT,
+        depending on the amount of fractional digits.
+      We need to return STRING_RESULT in this case instead of cmp_type.
+    */
+    return compare_as_dates ? STRING_RESULT : cmp_type;
+  }
+  enum Item_result cast_to_int_type () const
+  {
+    /*
+      make CAST(LEAST_OR_GREATEST(datetime_expr, varchar_expr))
+      return a number in format "YYYMMDDhhmmss".
+    */
+    return compare_as_dates ? INT_RESULT : result_type();
+  }
   enum_field_types field_type() const { return cached_field_type; }
 };
 
@@ -852,13 +1025,20 @@ class Item_func_rollup_const :public Item_func
 public:
   Item_func_rollup_const(Item *a) :Item_func(a)
   {
-    name= a->name;
-    name_length= a->name_length;
+    item_name= a->item_name;
   }
   double val_real() { return args[0]->val_real(); }
   longlong val_int() { return args[0]->val_int(); }
   String *val_str(String *str) { return args[0]->val_str(str); }
   my_decimal *val_decimal(my_decimal *dec) { return args[0]->val_decimal(dec); }
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return args[0]->get_date(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return args[0]->get_time(ltime);
+  }
   const char *func_name() const { return "rollup_const"; }
   bool const_item() const { return 0; }
   Item_result result_type() const { return args[0]->result_type(); }
@@ -870,6 +1050,7 @@ public:
     /* The item could be a NULL constant. */
     null_value= args[0]->is_null();
   }
+  enum_field_types field_type() const { return args[0]->field_type(); }
 };
 
 
@@ -923,6 +1104,17 @@ public:
   longlong val_int();
   void fix_length_and_dec();
   virtual void print(String *str, enum_query_type query_type);
+};
+
+
+class Item_func_validate_password_strength :public Item_int_func
+{
+  String value;
+public:
+  Item_func_validate_password_strength(Item *a) :Item_int_func(a) {}
+  longlong val_int();
+  const char *func_name() const { return "validate_password_strength"; }
+  void fix_length_and_dec() { max_length= 10; maybe_null= 1; }
 };
 
 
@@ -1077,11 +1269,13 @@ public:
   Item_func_sleep(Item *a) :Item_int_func(a) {}
   bool const_item() const { return 0; }
   const char *func_name() const { return "sleep"; }
-  void update_used_tables()
-  {
-    Item_int_func::update_used_tables();
-    used_tables_cache|= RAND_TABLE_BIT;
-  }
+  /**
+    This function is non-deterministic and hence depends on the
+    'RAND' pseudo-table.
+    
+    @retval RAND_TABLE_BIT
+  */
+  table_map get_initial_pseudo_tables() const { return RAND_TABLE_BIT; }
   longlong val_int();
 };
 
@@ -1093,6 +1287,7 @@ class Item_udf_func :public Item_func
 {
 protected:
   udf_handler udf;
+  bool is_expensive_processor(uchar *arg) { return TRUE; }
 
 public:
   Item_udf_func(udf_func *udf_arg)
@@ -1191,6 +1386,14 @@ class Item_func_udf_float :public Item_udf_func
   }
   double val_real();
   String *val_str(String *str);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_real(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_real(ltime);
+  }
   void fix_length_and_dec() { fix_num_length_and_dec(); }
 };
 
@@ -1206,6 +1409,14 @@ public:
   longlong val_int();
   double val_real() { return (double) Item_func_udf_int::val_int(); }
   String *val_str(String *str);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_int(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_int(ltime);
+  }
   enum Item_result result_type () const { return INT_RESULT; }
   void fix_length_and_dec() { decimals= 0; max_length= 21; }
 };
@@ -1222,6 +1433,14 @@ public:
   double val_real();
   my_decimal *val_decimal(my_decimal *);
   String *val_str(String *str);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_decimal(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_decimal(ltime);
+  }
   enum Item_result result_type () const { return DECIMAL_RESULT; }
   void fix_length_and_dec();
 };
@@ -1259,11 +1478,20 @@ public:
     string2my_decimal(E_DEC_FATAL_ERROR, res, dec_buf);
     return dec_buf;
   }
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_string(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_string(ltime);
+  }
   enum Item_result result_type () const { return STRING_RESULT; }
   void fix_length_and_dec();
 };
 
 #else /* Dummy functions to get sql_yacc.cc compiled */
+
 
 class Item_func_udf_float :public Item_real_func
 {
@@ -1357,12 +1585,57 @@ public:
   void fix_length_and_dec() { max_length=21; maybe_null=1;}
 };
 
+class Item_master_gtid_set_wait :public Item_int_func
+{
+  String value;
+public:
+  Item_master_gtid_set_wait(Item *a) :Item_int_func(a) {}
+  Item_master_gtid_set_wait(Item *a, Item *b) :Item_int_func(a,b) {}
+  longlong val_int();
+  const char *func_name() const { return "wait_until_sql_thread_after_gtids"; }
+  void fix_length_and_dec() { max_length= 21; maybe_null= 1; }
+};
+
+class Item_func_gtid_subset : public Item_int_func
+{
+  String buf1;
+  String buf2;
+public:
+  Item_func_gtid_subset(Item *a, Item *b) : Item_int_func(a, b) {}
+  longlong val_int();
+  const char *func_name() const { return "gtid_subset"; }
+  void fix_length_and_dec() { max_length= 21; maybe_null= 0; }
+};
+
+
+/**
+  Common class for:
+    Item_func_get_system_var
+    Item_func_get_user_var
+    Item_func_set_user_var
+*/
+class Item_var_func :public Item_func
+{
+public:
+  Item_var_func() :Item_func() { }
+  Item_var_func(THD *thd, Item_var_func *item) :Item_func(thd, item) { }
+  Item_var_func(Item *a) :Item_func(a) { }
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    return get_date_from_non_temporal(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    return get_time_from_non_temporal(ltime);
+  }
+};
+
 
 /* Handling of user definable variables */
 
 class user_var_entry;
 
-class Item_func_set_user_var :public Item_func
+class Item_func_set_user_var :public Item_var_func
 {
   enum Item_result cached_result_type;
   user_var_entry *entry;
@@ -1377,6 +1650,20 @@ class Item_func_set_user_var :public Item_func
        user variable it the first connection context).
   */
   my_thread_id entry_thread_id;
+  /**
+    Delayed setting of non-constness.
+
+    Normally, Item_func_get_user_var objects are tagged as not const
+    when Item_func_set_user_var::fix_fields() is called for the same
+    variable in the same query. If delayed_non_constness is set, the
+    tagging is delayed until the variable is actually set. This means
+    that Item_func_get_user_var objects will still be treated as a
+    constant by the optimizer and executor until the variable is
+    actually changed.
+
+    @see select_dumpvar::send_data().
+   */
+  bool delayed_non_constness;
   char buffer[MAX_FIELD_WIDTH];
   String value;
   my_decimal decimal_buff;
@@ -1390,19 +1677,18 @@ class Item_func_set_user_var :public Item_func
   } save_result;
 
 public:
-  LEX_STRING name; // keep it public
-  Item_func_set_user_var(LEX_STRING a,Item *b)
-    :Item_func(b), cached_result_type(INT_RESULT),
-     entry(NULL), entry_thread_id(0), name(a)
+  Name_string name; // keep it public
+  Item_func_set_user_var(Name_string a, Item *b, bool delayed)
+    :Item_var_func(b), cached_result_type(INT_RESULT),
+     entry(NULL), entry_thread_id(0), delayed_non_constness(delayed), name(a)
   {}
   Item_func_set_user_var(THD *thd, Item_func_set_user_var *item)
-    :Item_func(thd, item), cached_result_type(item->cached_result_type),
-    entry(item->entry), entry_thread_id(item->entry_thread_id),
-    value(item->value), decimal_buff(item->decimal_buff),
-    null_item(item->null_item), save_result(item->save_result),
-    name(item->name)
+    :Item_var_func(thd, item), cached_result_type(item->cached_result_type),
+     entry(item->entry), entry_thread_id(item->entry_thread_id),
+     delayed_non_constness(item->delayed_non_constness), value(item->value),
+     decimal_buff(item->decimal_buff), null_item(item->null_item),
+     save_result(item->save_result), name(item->name)
   {}
-
   enum Functype functype() const { return SUSERVAR_FUNC; }
   double val_real();
   longlong val_int();
@@ -1415,7 +1701,7 @@ public:
   my_decimal *val_decimal_result(my_decimal *);
   bool is_null_result();
   bool update_hash(void *ptr, uint length, enum Item_result type,
-  		   CHARSET_INFO *cs, Derivation dv, bool unsigned_arg);
+  		   const CHARSET_INFO *cs, Derivation dv, bool unsigned_arg);
   bool send(Protocol *protocol, String *str_arg);
   void make_field(Send_field *tmp_field);
   bool check(bool use_result_field);
@@ -1425,11 +1711,11 @@ public:
   bool fix_fields(THD *thd, Item **ref);
   void fix_length_and_dec();
   virtual void print(String *str, enum_query_type query_type);
-  void print_as_stmt(String *str, enum_query_type query_type);
+  void print_assignment(String *str, enum_query_type query_type);
   const char *func_name() const { return "set_user_var"; }
-  int save_in_field(Field *field, bool no_conversions,
-                    bool can_use_result_field);
-  int save_in_field(Field *field, bool no_conversions)
+  type_conversion_status save_in_field(Field *field, bool no_conversions,
+                                       bool can_use_result_field);
+  type_conversion_status save_in_field(Field *field, bool no_conversions)
   {
     return save_in_field(field, no_conversions, 1);
   }
@@ -1440,18 +1726,17 @@ public:
 };
 
 
-class Item_func_get_user_var :public Item_func,
+class Item_func_get_user_var :public Item_var_func,
                               private Settable_routine_parameter
 {
   user_var_entry *var_entry;
   Item_result m_cached_result_type;
 
 public:
-  LEX_STRING name; // keep it public
-  Item_func_get_user_var(LEX_STRING a):
-    Item_func(), m_cached_result_type(STRING_RESULT), name(a) {}
+  Name_string name; // keep it public
+  Item_func_get_user_var(Name_string a):
+    Item_var_func(), m_cached_result_type(STRING_RESULT), name(a) {}
   enum Functype functype() const { return GUSERVAR_FUNC; }
-  LEX_STRING get_name() { return name; }
   double val_real();
   longlong val_int();
   my_decimal *val_decimal(my_decimal*);
@@ -1490,21 +1775,33 @@ public:
 */
 class Item_user_var_as_out_param :public Item
 {
-  LEX_STRING name;
+  Name_string name;
   user_var_entry *entry;
 public:
-  Item_user_var_as_out_param(LEX_STRING a) : name(a) {}
+  Item_user_var_as_out_param(Name_string a) :name(a)
+  { item_name.copy(a); }
   /* We should return something different from FIELD_ITEM here */
   enum Type type() const { return STRING_ITEM;}
   double val_real();
   longlong val_int();
   String *val_str(String *str);
   my_decimal *val_decimal(my_decimal *decimal_buffer);
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    DBUG_ASSERT(0);
+    return true;
+  }
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    DBUG_ASSERT(0);
+    return true;
+  }
+
   /* fix_fields() binds variable name with its entry structure */
   bool fix_fields(THD *thd, Item **ref);
   virtual void print(String *str, enum_query_type query_type);
-  void set_null_value(CHARSET_INFO* cs);
-  void set_value(const char *str, uint length, CHARSET_INFO* cs);
+  void set_null_value(const CHARSET_INFO* cs);
+  void set_value(const char *str, uint length, const CHARSET_INFO* cs);
 };
 
 
@@ -1514,7 +1811,7 @@ public:
 #define GET_SYS_VAR_CACHE_DOUBLE   2
 #define GET_SYS_VAR_CACHE_STRING   4
 
-class Item_func_get_system_var :public Item_func
+class Item_func_get_system_var :public Item_var_func
 {
   sys_var *var;
   enum_var_type var_type, orig_var_type;
@@ -1541,6 +1838,8 @@ public:
   double val_real();
   longlong val_int();
   String* val_str(String*);
+  my_decimal *val_decimal(my_decimal *dec_buf)
+  { return val_decimal_from_real(dec_buf); }
   /* TODO: fix to support views */
   const char *func_name() const { return "get_system_var"; }
   /**
@@ -1555,16 +1854,6 @@ public:
   bool eq(const Item *item, bool binary_cmp) const;
 
   void cleanup();
-};
-
-
-class Item_func_inet_aton : public Item_int_func
-{
-public:
-  Item_func_inet_aton(Item *a) :Item_int_func(a) {}
-  longlong val_int();
-  const char *func_name() const { return "inet_aton"; }
-  void fix_length_and_dec() { decimals= 0; max_length= 21; maybe_null= 1; unsigned_flag= 1;}
 };
 
 
@@ -1610,8 +1899,127 @@ public:
 
   bool fix_index();
   void init_search(bool no_order);
+
+  /**
+     Get number of matching rows from FT handler.
+
+     @note Requires that FT handler supports the extended API
+
+     @return Number of matching rows in result 
+   */
+  ulonglong get_count()
+  {
+    DBUG_ASSERT(ft_handler);
+    DBUG_ASSERT(table->file->ha_table_flags() & HA_CAN_FULLTEXT_EXT);
+
+    return ((FT_INFO_EXT *)ft_handler)->could_you->
+      count_matches((FT_INFO_EXT *)ft_handler);
+  }
+
+  /**
+     Check whether FT result is ordered on rank
+
+     @return true if result is ordered
+     @return false otherwise
+   */
+  bool ordered_result()
+  {
+    if (flags & FT_SORTED)
+      return true;
+
+    if ((table->file->ha_table_flags() & HA_CAN_FULLTEXT_EXT) == 0)
+      return false;
+
+    DBUG_ASSERT(ft_handler);
+    return ((FT_INFO_EXT *)ft_handler)->could_you->get_flags() & 
+      FTS_ORDERED_RESULT;
+  }
+
+  /**
+     Check whether FT result contains the document ID
+
+     @return true if document ID is available
+     @return false otherwise
+   */
+  bool docid_in_result()
+  {
+    DBUG_ASSERT(ft_handler);
+
+    if ((table->file->ha_table_flags() & HA_CAN_FULLTEXT_EXT) == 0)
+      return false;
+
+    return ((FT_INFO_EXT *)ft_handler)->could_you->get_flags() & 
+      FTS_DOCID_IN_RESULT;
+  }
+
+private:
+  /**
+     Check whether storage engine for given table, 
+     allows FTS Boolean search on non-indexed columns.
+
+     @todo A flag should be added to the extended fulltext API so that 
+           it may be checked whether search on non-indexed columns are 
+           supported. Currently, it is not possible to check for such a 
+           flag since @c this->ft_handler is not yet set when this function is 
+           called.  The current hack is to assume that search on non-indexed
+           columns are supported for engines that does not support the extended
+           fulltext API (e.g., MyISAM), while it is not supported for other 
+           engines (e.g., InnoDB)
+
+     @param table_arg Table for which storage engine to check
+
+     @retval true if BOOLEAN search on non-indexed columns is supported
+     @retval false otherwise
+   */
+  bool allows_search_on_non_indexed_columns(TABLE* table_arg)
+  {
+    // Only Boolean search may support non_indexed columns
+    if (!(flags & FT_BOOL))
+      return false;
+
+    DBUG_ASSERT(table_arg && table_arg->file);
+
+    // Assume that if extended fulltext API is not supported,
+    // non-indexed columns are allowed.  This will be true for MyISAM.
+    if ((table_arg->file->ha_table_flags() & HA_CAN_FULLTEXT_EXT) == 0)
+      return true;
+
+    return false;
+  }
+
 };
 
+/**
+   Item_func class used to fetch document ID from FTS result.  This
+   class is used to replace Item_field objects in order to fetch
+   document ID from FTS result instead of table.
+ */
+class Item_func_docid : public Item_int_func
+{
+  FT_INFO_EXT *ft_handler;
+public:
+  Item_func_docid(FT_INFO_EXT *handler) : ft_handler(handler) 
+  { 
+    max_length= 21;
+    maybe_null= false; 
+    unsigned_flag= true;
+  } 
+
+  const char *func_name() const { return "docid"; }
+
+  void update_used_tables()
+  {
+    Item_int_func::update_used_tables();
+    used_tables_cache|= RAND_TABLE_BIT;
+    const_item_cache= false;
+  }
+
+  longlong val_int() 
+  { 
+    DBUG_ASSERT(ft_handler);
+    return ft_handler->could_you->get_docid(ft_handler);
+  }
+};
 
 class Item_func_bit_xor : public Item_func_bit
 {
@@ -1688,6 +2096,9 @@ private:
   bool execute_impl(THD *thd);
   bool init_result_field(THD *thd);
   
+protected:
+  bool is_expensive_processor(uchar *arg) { return TRUE; }
+
 public:
 
   Item_func_sp(Name_resolution_context *context_arg, sp_name *name);
@@ -1698,6 +2109,11 @@ public:
   virtual ~Item_func_sp()
   {}
 
+  /**
+    Must not be called before the procedure is resolved,
+    i.e. ::init_result_field().
+  */
+  table_map get_initial_pseudo_tables() const;
   void update_used_tables();
 
   void cleanup();
@@ -1724,6 +2140,20 @@ public:
     if (execute())
       return 0.0;
     return sp_result_field->val_real();
+  }
+
+  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  {
+    if (execute())
+      return true;
+    return sp_result_field->get_date(ltime, fuzzydate);
+  }
+
+  bool get_time(MYSQL_TIME *ltime)
+  {
+    if (execute())
+      return true;
+    return sp_result_field->get_time(ltime);
   }
 
   my_decimal *val_decimal(my_decimal *dec_buf)
@@ -1766,6 +2196,8 @@ public:
   {
     return sp_result_field;
   }
+
+  virtual void update_null_value();
 };
 
 
@@ -1792,3 +2224,14 @@ public:
   bool check_partition_func_processor(uchar *int_arg) {return FALSE;}
 };
 
+Item *get_system_var(THD *thd, enum_var_type var_type, LEX_STRING name,
+                     LEX_STRING component);
+extern bool check_reserved_words(LEX_STRING *name);
+extern enum_field_types agg_field_type(Item **items, uint nitems);
+double my_double_round(double value, longlong dec, bool dec_unsigned,
+                       bool truncate);
+bool eval_const_cond(Item *cond);
+
+extern bool volatile  mqh_used;
+
+#endif /* ITEM_FUNC_INCLUDED */

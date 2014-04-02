@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* close a isam-database */
 /*
@@ -33,7 +31,8 @@ int mi_close(register MI_INFO *info)
 		      (long) info, (uint) share->reopen,
                       (uint) share->tot_locks));
 
-  pthread_mutex_lock(&THR_LOCK_myisam);
+  if (info->open_list.data)
+    mysql_mutex_lock(&THR_LOCK_myisam);
   if (info->lock_type == F_EXTRA_LCK)
     info->lock_type=F_UNLCK;			/* HA_EXTRA_NO_USER_CHANGE */
 
@@ -42,7 +41,7 @@ int mi_close(register MI_INFO *info)
     if (mi_lock_database(info,F_UNLCK))
       error=my_errno;
   }
-  pthread_mutex_lock(&share->intern_lock);
+  mysql_mutex_lock(&share->intern_lock);
 
   if (share->options & HA_OPTION_READ_ONLY_DATA)
   {
@@ -56,10 +55,11 @@ int mi_close(register MI_INFO *info)
     info->opt_flag&= ~(READ_CACHE_USED | WRITE_CACHE_USED);
   }
   flag= !--share->reopen;
-  myisam_open_list=list_delete(myisam_open_list,&info->open_list);
-  pthread_mutex_unlock(&share->intern_lock);
+  if (info->open_list.data)
+    myisam_open_list= list_delete(myisam_open_list, &info->open_list);
+  mysql_mutex_unlock(&share->intern_lock);
 
-  my_free(mi_get_rec_buff_ptr(info, info->rec_buff), MYF(MY_ALLOW_ZERO_PTR));
+  my_free(mi_get_rec_buff_ptr(info, info->rec_buff));
   if (flag)
   {
     DBUG_EXECUTE_IF("crash_before_flush_keys",
@@ -81,7 +81,7 @@ int mi_close(register MI_INFO *info)
 	mi_state_info_write(share->kfile, &share->state, 1);
       /* Decrement open count must be last I/O on this file. */
       _mi_decrement_open_count(info);
-      if (my_close(share->kfile,MYF(0)))
+      if (mysql_file_close(share->kfile, MYF(0)))
         error = my_errno;
     }
 #ifdef HAVE_MMAP
@@ -95,34 +95,33 @@ int mi_close(register MI_INFO *info)
 #endif
     if (share->decode_trees)
     {
-      my_free((uchar*) share->decode_trees,MYF(0));
-      my_free((uchar*) share->decode_tables,MYF(0));
+      my_free(share->decode_trees);
+      my_free(share->decode_tables);
     }
-#ifdef THREAD
     thr_lock_delete(&share->lock);
-    VOID(pthread_mutex_destroy(&share->intern_lock));
+    mysql_mutex_destroy(&share->intern_lock);
     {
       int i,keys;
       keys = share->state.header.keys;
-      VOID(rwlock_destroy(&share->mmap_lock));
+      mysql_rwlock_destroy(&share->mmap_lock);
       for(i=0; i<keys; i++) {
-	VOID(rwlock_destroy(&share->key_root_lock[i]));
+        mysql_rwlock_destroy(&share->key_root_lock[i]);
       }
     }
-#endif
-    my_free((uchar*) info->s,MYF(0));
+    my_free(info->s);
   }
-  pthread_mutex_unlock(&THR_LOCK_myisam);
+  if (info->open_list.data)
+    mysql_mutex_unlock(&THR_LOCK_myisam);
   if (info->ftparser_param)
   {
-    my_free((uchar*)info->ftparser_param, MYF(0));
+    my_free(info->ftparser_param);
     info->ftparser_param= 0;
   }
-  if (info->dfile >= 0 && my_close(info->dfile,MYF(0)))
+  if (info->dfile >= 0 && mysql_file_close(info->dfile, MYF(0)))
     error = my_errno;
 
   myisam_log_command(MI_LOG_CLOSE,info,NULL,0,error);
-  my_free((uchar*) info,MYF(0));
+  my_free(info);
 
   if (error)
   {

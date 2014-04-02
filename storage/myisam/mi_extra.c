@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "myisamdef.h"
 #ifdef HAVE_SYS_MMAN_H
@@ -57,7 +55,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     {
       reinit_io_cache(&info->rec_cache,READ_CACHE,0,
 		      (pbool) (info->lock_type != F_UNLCK),
-		      (pbool) test(info->update & HA_STATE_ROW_CHANGED)
+		      (pbool) MY_TEST(info->update & HA_STATE_ROW_CHANGED)
 		      );
     }
     info->update= ((info->update & HA_STATE_CHANGED) | HA_STATE_NEXT_FOUND |
@@ -76,17 +74,17 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
 #if defined(HAVE_MMAP) && defined(HAVE_MADVISE)
     if ((share->options & HA_OPTION_COMPRESS_RECORD))
     {
-      pthread_mutex_lock(&share->intern_lock);
+      mysql_mutex_lock(&share->intern_lock);
       if (_mi_memmap_file(info))
       {
 	/* We don't nead MADV_SEQUENTIAL if small file */
 	madvise((char*) share->file_map, share->state.state.data_file_length,
 		share->state.state.data_file_length <= RECORD_CACHE_SIZE*16 ?
 		MADV_RANDOM : MADV_SEQUENTIAL);
-	pthread_mutex_unlock(&share->intern_lock);
+        mysql_mutex_unlock(&share->intern_lock);
 	break;
       }
-      pthread_mutex_unlock(&share->intern_lock);
+      mysql_mutex_unlock(&share->intern_lock);
     }
 #endif
     if (info->opt_flag & WRITE_CACHE_USED)
@@ -101,8 +99,8 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
       cache_size= (extra_arg ? *(ulong*) extra_arg :
 		   my_default_record_cache_size);
       if (!(init_io_cache(&info->rec_cache,info->dfile,
-			 (uint) min(info->state->data_file_length+1,
-				    cache_size),
+			 (uint) MY_MIN(info->state->data_file_length + 1,
+                                       cache_size),
 			  READ_CACHE,0L,(pbool) (info->lock_type != F_UNLCK),
 			  MYF(share->write_flag & MY_WAIT_IF_FULL))))
       {
@@ -118,7 +116,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     {
       reinit_io_cache(&info->rec_cache,READ_CACHE,info->nextpos,
 		      (pbool) (info->lock_type != F_UNLCK),
-		      (pbool) test(info->update & HA_STATE_ROW_CHANGED));
+		      (pbool) MY_TEST(info->update & HA_STATE_ROW_CHANGED));
       info->update&= ~HA_STATE_ROW_CHANGED;
       if (share->concurrent_insert)
 	info->rec_cache.end_of_file=info->state->data_file_length;
@@ -254,16 +252,16 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     }
     break;
   case HA_EXTRA_FORCE_REOPEN:
-    pthread_mutex_lock(&THR_LOCK_myisam);
+    mysql_mutex_lock(&THR_LOCK_myisam);
     share->last_version= 0L;			/* Impossible version */
-    pthread_mutex_unlock(&THR_LOCK_myisam);
+    mysql_mutex_unlock(&THR_LOCK_myisam);
     break;
   case HA_EXTRA_PREPARE_FOR_DROP:
-    pthread_mutex_lock(&THR_LOCK_myisam);
+    mysql_mutex_lock(&THR_LOCK_myisam);
     share->last_version= 0L;			/* Impossible version */
 #ifdef __WIN__REMOVE_OBSOLETE_WORKAROUND
     /* Close the isam and data files as Win32 can't drop an open table */
-    pthread_mutex_lock(&share->intern_lock);
+    mysql_mutex_lock(&share->intern_lock);
     if (flush_key_blocks(share->key_cache, share->kfile,
 			 (function == HA_EXTRA_FORCE_REOPEN ?
 			  FLUSH_RELEASE : FLUSH_IGNORE_CHANGED)))
@@ -287,7 +285,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     }
     if (share->kfile >= 0)
       _mi_decrement_open_count(info);
-    if (share->kfile >= 0 && my_close(share->kfile,MYF(0)))
+    if (share->kfile >= 0 && mysql_file_close(share->kfile, MYF(0)))
       error=my_errno;
     {
       LIST *list_element ;
@@ -298,16 +296,16 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
 	MI_INFO *tmpinfo=(MI_INFO*) list_element->data;
 	if (tmpinfo->s == info->s)
 	{
-	  if (tmpinfo->dfile >= 0 && my_close(tmpinfo->dfile,MYF(0)))
+          if (tmpinfo->dfile >= 0 && mysql_file_close(tmpinfo->dfile, MYF(0)))
 	    error = my_errno;
 	  tmpinfo->dfile= -1;
 	}
       }
     }
     share->kfile= -1;				/* Files aren't open anymore */
-    pthread_mutex_unlock(&share->intern_lock);
+    mysql_mutex_unlock(&share->intern_lock);
 #endif
-    pthread_mutex_unlock(&THR_LOCK_myisam);
+    mysql_mutex_unlock(&THR_LOCK_myisam);
     break;
   case HA_EXTRA_FLUSH:
     if (!share->temporary)
@@ -318,9 +316,9 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     if (share->not_flushed)
     {
       share->not_flushed=0;
-      if (my_sync(share->kfile, MYF(0)))
+      if (mysql_file_sync(share->kfile, MYF(0)))
 	error= my_errno;
-      if (my_sync(info->dfile, MYF(0)))
+      if (mysql_file_sync(info->dfile, MYF(0)))
 	error= my_errno;
       if (error)
       {
@@ -351,7 +349,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     break;
   case HA_EXTRA_MMAP:
 #ifdef HAVE_MMAP
-    pthread_mutex_lock(&share->intern_lock);
+    mysql_mutex_lock(&share->intern_lock);
     /*
       Memory map the data file if it is not already mapped. It is safe
       to memory map a file while other threads are using file I/O on it.
@@ -367,13 +365,13 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
         error= my_errno= errno;
       }
     }
-    pthread_mutex_unlock(&share->intern_lock);
+    mysql_mutex_unlock(&share->intern_lock);
 #endif
     break;
   case HA_EXTRA_MARK_AS_LOG_TABLE:
-    pthread_mutex_lock(&share->intern_lock);
+    mysql_mutex_lock(&share->intern_lock);
     share->is_log_table= TRUE;
-    pthread_mutex_unlock(&share->intern_lock);
+    mysql_mutex_unlock(&share->intern_lock);
     break;
   case HA_EXTRA_KEY_CACHE:
   case HA_EXTRA_NO_KEY_CACHE:
@@ -388,6 +386,13 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
   DBUG_RETURN(error);
 } /* mi_extra */
 
+
+void mi_set_index_cond_func(MI_INFO *info, index_cond_func_t func,
+                            void *func_arg)
+{
+  info->index_cond_func= func;
+  info->index_cond_func_arg= func_arg;
+}
 
 /*
     Start/Stop Inserting Duplicates Into a Table, WL#1648.

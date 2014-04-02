@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2004, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,9 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /*
    Most of the following code and structures were derived from
@@ -22,17 +20,20 @@
 */
 
 /*
-  We should not include mysql_priv.h in mysql_tzinfo_to_sql utility since
+  We should not include sql_priv.h in mysql_tzinfo_to_sql utility since
   it creates unsolved link dependencies on some platforms.
 */
 
-#ifdef USE_PRAGMA_IMPLEMENTATION
-#pragma implementation				// gcc: Class implementation
-#endif
-
 #include <my_global.h>
+#include <algorithm>
+
 #if !defined(TZINFO2SQL) && !defined(TESTTIME)
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "tztime.h"
+#include "sql_time.h"                           // localtime_to_TIME
+#include "sql_base.h"                           // open_system_tables_for_read,
+                                                // close_system_tables
 #else
 #include <my_time.h>
 #include "tztime.h"
@@ -42,6 +43,10 @@
 #include "tzfile.h"
 #include <m_string.h>
 #include <my_dir.h>
+#include <mysql/psi/mysql_file.h>
+#include "debug_sync.h"
+
+using std::min;
 
 /*
   Now we don't use abbreviations in server but we will do this in future.
@@ -158,9 +163,9 @@ tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage)
   uchar *p;
   int read_from_file;
   uint i;
-  FILE *file;
+  MYSQL_FILE *file;
 
-  if (!(file= my_fopen(name, O_RDONLY|O_BINARY, MYF(MY_WME))))
+  if (!(file= mysql_file_fopen(0, name, O_RDONLY|O_BINARY, MYF(MY_WME))))
     return 1;
   {
     union
@@ -169,7 +174,7 @@ tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage)
       uchar buf[sizeof(struct tzhead) + sizeof(my_time_t) * TZ_MAX_TIMES +
                 TZ_MAX_TIMES + sizeof(TRAN_TYPE_INFO) * TZ_MAX_TYPES +
 #ifdef ABBR_ARE_USED
-               max(TZ_MAX_CHARS + 1, (2 * (MY_TZNAME_MAX + 1))) +
+               MY_MAX(TZ_MAX_CHARS + 1, (2 * (MY_TZNAME_MAX + 1))) +
 #endif
                sizeof(LS_INFO) * TZ_MAX_LEAPS];
     } u;
@@ -177,9 +182,9 @@ tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage)
     uint ttisgmtcnt;
     char *tzinfo_buf;
 
-    read_from_file= my_fread(file, u.buf, sizeof(u.buf), MYF(MY_WME));
+    read_from_file= mysql_file_fread(file, u.buf, sizeof(u.buf), MYF(MY_WME));
 
-    if (my_fclose(file, MYF(MY_WME)) != 0)
+    if (mysql_file_fclose(file, MYF(MY_WME)) != 0)
       return 1;
 
     if (read_from_file < (int)sizeof(struct tzhead))
@@ -1434,7 +1439,7 @@ static MEM_ROOT tz_storage;
   time zone in offset_tzs or creating if it didn't existed before in
   tz_storage. So contention is low.
 */
-static pthread_mutex_t tz_LOCK;
+static mysql_mutex_t tz_LOCK;
 static bool tz_inited= 0;
 
 /*
@@ -1517,7 +1522,7 @@ my_offset_tzs_get_key(Time_zone_offset *entry,
 static void
 tz_init_table_list(TABLE_LIST *tz_tabs)
 {
-  bzero(tz_tabs, sizeof(TABLE_LIST) * MY_TZ_TABLES_COUNT);
+  memset(tz_tabs, 0, sizeof(TABLE_LIST) * MY_TZ_TABLES_COUNT);
 
   for (int i= 0; i < MY_TZ_TABLES_COUNT; i++)
   {
@@ -1533,6 +1538,24 @@ tz_init_table_list(TABLE_LIST *tz_tabs)
       tz_tabs[i].prev_global= &tz_tabs[i-1].next_global;
   }
 }
+
+#ifdef HAVE_PSI_INTERFACE
+static PSI_mutex_key key_tz_LOCK;
+
+static PSI_mutex_info all_tz_mutexes[]=
+{
+  { & key_tz_LOCK, "tz_LOCK", PSI_FLAG_GLOBAL}
+};
+
+static void init_tz_psi_keys(void)
+{
+  const char* category= "sql";
+  int count;
+
+  count= array_elements(all_tz_mutexes);
+  mysql_mutex_register(category, all_tz_mutexes, count);
+}
+#endif /* HAVE_PSI_INTERFACE */
 
 
 /*
@@ -1565,13 +1588,16 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
 {
   THD *thd;
   TABLE_LIST tz_tables[1+MY_TZ_TABLES_COUNT];
-  Open_tables_state open_tables_state_backup;
   TABLE *table;
   Tz_names_entry *tmp_tzname;
   my_bool return_val= 1;
   char db[]= "mysql";
   int res;
   DBUG_ENTER("my_tz_init");
+
+#ifdef HAVE_PSI_INTERFACE
+  init_tz_psi_keys();
+#endif
 
   /*
     To be able to run this from boot, we allocate a temporary THD
@@ -1580,24 +1606,23 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
     DBUG_RETURN(1);
   thd->thread_stack= (char*) &thd;
   thd->store_globals();
-  lex_start(thd);
 
   /* Init all memory structures that require explicit destruction */
-  if (hash_init(&tz_names, &my_charset_latin1, 20,
-                0, 0, (hash_get_key) my_tz_names_get_key, 0, 0))
+  if (my_hash_init(&tz_names, &my_charset_latin1, 20,
+                   0, 0, (my_hash_get_key) my_tz_names_get_key, 0, 0))
   {
     sql_print_error("Fatal error: OOM while initializing time zones");
     goto end;
   }
-  if (hash_init(&offset_tzs, &my_charset_latin1, 26, 0, 0,
-                (hash_get_key)my_offset_tzs_get_key, 0, 0))
+  if (my_hash_init(&offset_tzs, &my_charset_latin1, 26, 0, 0,
+                   (my_hash_get_key)my_offset_tzs_get_key, 0, 0))
   {
     sql_print_error("Fatal error: OOM while initializing time zones");
-    hash_free(&tz_names);
+    my_hash_free(&tz_names);
     goto end;
   }
-  init_alloc_root(&tz_storage, 32 * 1024, 0);
-  VOID(pthread_mutex_init(&tz_LOCK, MY_MUTEX_INIT_FAST));
+  init_sql_alloc(&tz_storage, 32 * 1024, 0);
+  mysql_mutex_init(key_tz_LOCK, &tz_LOCK, MY_MUTEX_INIT_FAST);
   tz_inited= 1;
 
   /* Add 'SYSTEM' time zone to tz_names hash */
@@ -1628,7 +1653,7 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
   */
 
   thd->set_db(db, sizeof(db)-1);
-  bzero((char*) &tz_tables[0], sizeof(TABLE_LIST));
+  memset(&tz_tables[0], 0, sizeof(TABLE_LIST));
   tz_tables[0].alias= tz_tables[0].table_name=
     (char*)"time_zone_leap_second";
   tz_tables[0].table_name_length= 21;
@@ -1639,18 +1664,27 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
   tz_init_table_list(tz_tables+1);
   tz_tables[0].next_global= tz_tables[0].next_local= &tz_tables[1];
   tz_tables[1].prev_global= &tz_tables[0].next_global;
+  init_mdl_requests(tz_tables);
 
   /*
     We need to open only mysql.time_zone_leap_second, but we try to
     open all time zone tables to see if they exist.
   */
-  if (open_system_tables_for_read(thd, tz_tables, &open_tables_state_backup))
+  if (open_and_lock_tables(thd, tz_tables, FALSE,
+                           MYSQL_OPEN_IGNORE_FLUSH | MYSQL_LOCK_IGNORE_TIMEOUT))
   {
     sql_print_warning("Can't open and lock time zone table: %s "
-                      "trying to live without them", thd->main_da.message());
+                      "trying to live without them", thd->get_stmt_da()->message());
     /* We will try emulate that everything is ok */
     return_val= time_zone_tables_exist= 0;
     goto end_with_setting_default_tz;
+  }
+
+  for (TABLE_LIST *tl= tz_tables; tl; tl= tl->next_global)
+  {
+    tl->table->use_all_columns();
+    /* Force close at the end of the function to free memory. */
+    tl->table->m_needs_reopen= TRUE;
   }
 
   /*
@@ -1668,17 +1702,14 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
   }
 
   table= tz_tables[0].table;
-  /*
-    It is OK to ignore ha_index_init()/ha_index_end() return values since
-    mysql.time_zone* tables are MyISAM and these operations always succeed
-    for MyISAM.
-  */
-  (void)table->file->ha_index_init(0, 1);
+
+  if (table->file->ha_index_init(0, 1))
+    goto end_with_close;
   table->use_all_columns();
 
   tz_leapcnt= 0;
 
-  res= table->file->index_first(table->record[0]);
+  res= table->file->ha_index_first(table->record[0]);
 
   while (!res)
   {
@@ -1700,7 +1731,7 @@ my_tz_init(THD *org_thd, const char *default_tzname, my_bool bootstrap)
                 tz_leapcnt, (ulong) tz_lsis[tz_leapcnt-1].ls_trans,
                 tz_lsis[tz_leapcnt-1].ls_corr));
 
-    res= table->file->index_next(table->record[0]);
+    res= table->file->ha_index_next(table->record[0]);
   }
 
   (void)table->file->ha_index_end();
@@ -1739,10 +1770,7 @@ end_with_setting_default_tz:
 
 end_with_close:
   if (time_zone_tables_exist)
-  {
-    thd->version--; /* Force close to free memory */
-    close_system_tables(thd, &open_tables_state_backup);
-  }
+    close_mysql_tables(thd);
 
 end_with_cleanup:
 
@@ -1759,6 +1787,10 @@ end:
     my_pthread_setspecific_ptr(THR_THD,  0);
     my_pthread_setspecific_ptr(THR_MALLOC,  0);
   }
+  
+  default_tz= default_tz_name ? global_system_variables.time_zone
+                              : my_tz_SYSTEM;
+
   DBUG_RETURN(return_val);
 }
 
@@ -1775,9 +1807,9 @@ void my_tz_free()
   if (tz_inited)
   {
     tz_inited= 0;
-    VOID(pthread_mutex_destroy(&tz_LOCK));
-    hash_free(&offset_tzs);
-    hash_free(&tz_names);
+    mysql_mutex_destroy(&tz_LOCK);
+    my_hash_free(&offset_tzs);
+    my_hash_free(&tz_names);
     free_root(&tz_storage, MYF(0));
   }
 }
@@ -1826,7 +1858,7 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   uchar types[TZ_MAX_TIMES];
   TRAN_TYPE_INFO ttis[TZ_MAX_TYPES];
 #ifdef ABBR_ARE_USED
-  char chars[max(TZ_MAX_CHARS + 1, (2 * (MY_TZNAME_MAX + 1)))];
+  char chars[MY_MAX(TZ_MAX_CHARS + 1, (2 * (MY_TZNAME_MAX + 1)))];
 #endif
   /* 
     Used as a temporary tz_info until we decide that we actually want to
@@ -1845,15 +1877,12 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   tz_tables= tz_tables->next_local;
   table->field[0]->store(tz_name->ptr(), tz_name->length(),
                          &my_charset_latin1);
-  /*
-    It is OK to ignore ha_index_init()/ha_index_end() return values since
-    mysql.time_zone* tables are MyISAM and these operations always succeed
-    for MyISAM.
-  */
-  (void)table->file->ha_index_init(0, 1);
 
-  if (table->file->index_read_map(table->record[0], table->field[0]->ptr,
-                                  HA_WHOLE_KEY, HA_READ_KEY_EXACT))
+  if (table->file->ha_index_init(0, 1))
+    goto end;
+
+  if (table->file->ha_index_read_map(table->record[0], table->field[0]->ptr,
+                                     HA_WHOLE_KEY, HA_READ_KEY_EXACT))
   {
 #ifdef EXTRA_DEBUG
     /*
@@ -1878,10 +1907,11 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   table= tz_tables->table;
   tz_tables= tz_tables->next_local;
   table->field[0]->store((longlong) tzid, TRUE);
-  (void)table->file->ha_index_init(0, 1);
+  if (table->file->ha_index_init(0, 1))
+    goto end;
 
-  if (table->file->index_read_map(table->record[0], table->field[0]->ptr,
-                                  HA_WHOLE_KEY, HA_READ_KEY_EXACT))
+  if (table->file->ha_index_read_map(table->record[0], table->field[0]->ptr,
+                                     HA_WHOLE_KEY, HA_READ_KEY_EXACT))
   {
     sql_print_error("Can't find description of time zone '%u'", tzid);
     goto end;
@@ -1905,10 +1935,11 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   table= tz_tables->table;
   tz_tables= tz_tables->next_local;
   table->field[0]->store((longlong) tzid, TRUE);
-  (void)table->file->ha_index_init(0, 1);
+  if (table->file->ha_index_init(0, 1))
+    goto end;
 
-  res= table->file->index_read_map(table->record[0], table->field[0]->ptr,
-                                   (key_part_map)1, HA_READ_KEY_EXACT);
+  res= table->file->ha_index_read_map(table->record[0], table->field[0]->ptr,
+                                      (key_part_map)1, HA_READ_KEY_EXACT);
   while (!res)
   {
     ttid= (uint)table->field[1]->val_int();
@@ -1955,8 +1986,8 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
 
     tmp_tz_info.typecnt= ttid + 1;
 
-    res= table->file->index_next_same(table->record[0],
-                                      table->field[0]->ptr, 4);
+    res= table->file->ha_index_next_same(table->record[0],
+                                         table->field[0]->ptr, 4);
   }
 
   if (res != HA_ERR_END_OF_FILE)
@@ -1976,10 +2007,11 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
   */
   table= tz_tables->table; 
   table->field[0]->store((longlong) tzid, TRUE);
-  (void)table->file->ha_index_init(0, 1);
+  if (table->file->ha_index_init(0, 1))
+    goto end;
 
-  res= table->file->index_read_map(table->record[0], table->field[0]->ptr,
-                                   (key_part_map)1, HA_READ_KEY_EXACT);
+  res= table->file->ha_index_read_map(table->record[0], table->field[0]->ptr,
+                                      (key_part_map)1, HA_READ_KEY_EXACT);
   while (!res)
   {
     ttime= (my_time_t)table->field[1]->val_int();
@@ -2008,8 +2040,8 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
       ("time_zone_transition table: tz_id: %u  tt_time: %lu  tt_id: %u",
        tzid, (ulong) ttime, ttid));
 
-    res= table->file->index_next_same(table->record[0],
-                                      table->field[0]->ptr, 4);
+    res= table->file->ha_index_next_same(table->record[0],
+                                         table->field[0]->ptr, 4);
   }
 
   /*
@@ -2111,8 +2143,8 @@ tz_load_from_open_tables(const String *tz_name, TABLE_LIST *tz_tables)
 
 end:
 
-  if (table)
-    (void)table->file->ha_index_end();
+  if (table && table->file->inited)
+    (void) table->file->ha_index_end();
 
   DBUG_RETURN(return_val);
 }
@@ -2249,14 +2281,14 @@ my_tz_find(THD *thd, const String *name)
   if (!name || name->is_empty())
     DBUG_RETURN(0);
 
-  VOID(pthread_mutex_lock(&tz_LOCK));
+  mysql_mutex_lock(&tz_LOCK);
 
   if (!str_to_offset(name->ptr(), name->length(), &offset))
   {
 
-    if (!(result_tz= (Time_zone_offset *)hash_search(&offset_tzs,
-                                                     (const uchar *)&offset,
-                                                     sizeof(long))))
+    if (!(result_tz= (Time_zone_offset *)my_hash_search(&offset_tzs,
+                                                        (const uchar *)&offset,
+                                                        sizeof(long))))
     {
       DBUG_PRINT("info", ("Creating new Time_zone_offset object"));
 
@@ -2272,16 +2304,19 @@ my_tz_find(THD *thd, const String *name)
   else
   {
     result_tz= 0;
-    if ((tmp_tzname= (Tz_names_entry *)hash_search(&tz_names,
-                                                   (const uchar *)name->ptr(),
-                                                   name->length())))
+    if ((tmp_tzname= (Tz_names_entry *)my_hash_search(&tz_names,
+                                                      (const uchar *)
+                                                      name->ptr(),
+                                                      name->length())))
       result_tz= tmp_tzname->tz;
     else if (time_zone_tables_exist)
     {
       TABLE_LIST tz_tables[MY_TZ_TABLES_COUNT];
-      Open_tables_state open_tables_state_backup;
+      Open_tables_backup open_tables_state_backup;
 
       tz_init_table_list(tz_tables);
+      init_mdl_requests(tz_tables);
+      DEBUG_SYNC(thd, "my_tz_find");
       if (!open_system_tables_for_read(thd, tz_tables,
                                        &open_tables_state_backup))
       {
@@ -2291,7 +2326,7 @@ my_tz_find(THD *thd, const String *name)
     }
   }
 
-  VOID(pthread_mutex_unlock(&tz_LOCK));
+  mysql_mutex_unlock(&tz_LOCK);
 
   DBUG_RETURN(result_tz);
 }
@@ -2485,7 +2520,6 @@ scan_tz_dir(char * name_end)
 int
 main(int argc, char **argv)
 {
-#ifndef __NETWARE__
   MY_INIT(argv[0]);
 
   if (argc != 2 && argc != 3)
@@ -2543,10 +2577,6 @@ main(int argc, char **argv)
 
     free_root(&tz_storage, MYF(0));
   }
-
-#else
-  fprintf(stderr, "This tool has not been ported to NetWare\n");
-#endif /* __NETWARE__ */
 
   return 0;
 }
@@ -2613,7 +2643,7 @@ main(int argc, char **argv)
   if (TYPE_SIGNED(time_t))
   {
     t= -100;
-    localtime_negative= test(localtime_r(&t, &tmp) != 0);
+    localtime_negative= MY_TEST(localtime_r(&t, &tmp) != 0);
     printf("localtime_r %s negative params \
            (time_t=%d is %d-%d-%d %d:%d:%d)\n",
            (localtime_negative ? "supports" : "doesn't support"), (int)t,

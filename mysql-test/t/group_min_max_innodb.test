@@ -92,7 +92,8 @@ drop table t1;
 #
 # Bug #13293 Wrongly used index results in endless loop.
 #
-create table t1 (f1 int, f2 char(1), primary key(f1,f2)) engine=innodb;
+create table t1 (f1 int, f2 char(1), primary key(f1,f2)) engine=innodb
+stats_persistent=0;
 insert into t1 values ( 1,"e"),(2,"a"),( 3,"c"),(4,"d");
 alter table t1 drop primary key, add primary key (f2, f1);
 explain select distinct f1 a, f1 b from t1;
@@ -117,3 +118,23 @@ drop view v1;
 drop table t1;
 
 --echo End of 5.1 tests
+
+--echo #
+--echo # Bug#12540545 61101: ASSERTION FAILURE IN THREAD 1256741184 IN
+--echo # FILE /BUILDDIR/BUILD/BUILD/MYSQ
+--echo #
+
+CREATE TABLE t1 (a CHAR(1), b CHAR(1), PRIMARY KEY (a,b)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES ('a', 'b'), ('c', 'd');
+EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 WHERE b = 'b';
+SELECT COUNT(DISTINCT a) FROM t1 WHERE b = 'b';
+DROP TABLE t1;
+
+CREATE TABLE t1 (a CHAR(1) NOT NULL, b CHAR(1) NOT NULL, UNIQUE KEY (a,b))
+ENGINE=InnoDB;
+INSERT INTO t1 VALUES ('a', 'b'), ('c', 'd');
+EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 WHERE b = 'b';
+SELECT COUNT(DISTINCT a) FROM t1 WHERE b = 'b';
+DROP TABLE t1;
+
+--echo End of 5.5 tests

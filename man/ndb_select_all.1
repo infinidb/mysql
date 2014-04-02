@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBndb_select_all\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDB_SELECT_ALL\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBNDB_SELECT_ALL\FR" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -61,7 +61,7 @@ Options Common to MySQL Cluster Programs(1)\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.24.\ \&ndb_select_all Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.24.\ \&ndb_select_all Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -85,6 +85,7 @@ l l l
 l l l
 l l l
 l l l
+l l l
 l l l.
 T{
 .PP
@@ -95,7 +96,7 @@ T}:T{
 Name of the database in which the table is found
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -106,7 +107,7 @@ T}:T{
 Degree of parallelism
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -117,7 +118,7 @@ T}:T{
 Lock type
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -128,7 +129,7 @@ T}:T{
 Sort resultset according to index whose name is supplied
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -139,7 +140,7 @@ T}:T{
 Sort resultset in descending order (requires order flag)
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -150,7 +151,7 @@ T}:T{
 Print header (set to 0|FALSE to disable headers in output)
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -161,7 +162,7 @@ T}:T{
 Output numbers in hexadecimal format
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -172,7 +173,7 @@ T}:T{
 Set a column delimiter
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -182,7 +183,7 @@ Print disk references (useful only for Disk Data tables having
             nonindexed columns)
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -191,7 +192,7 @@ T}:T{
 Print rowid
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -200,7 +201,16 @@ T}:T{
 Include GCI in output
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
+T}
+T{
+.PP
+--gci64
+T}:T{
+Include GCI and row epoch in output
+T}:T{
+.PP
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -211,7 +221,7 @@ T}:T{
 Scan in tup order
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -220,7 +230,7 @@ T}:T{
 Do not print table column data
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 .TE
 .sp 1
@@ -441,9 +451,28 @@ column providing information about the fragments in which rows are stored\&.
 .\" gci option: ndb_select_all
 \fB\-\-gci\fR
 .sp
-Adds a column to the output showing the global checkpoint at which each row was last updated\&. See
+Adds a
+GCI
+column to the output showing the global checkpoint at which each row was last updated\&. See
 Section\ \&17.1, \(lqMySQL Cluster Overview\(rq, and
 Section\ \&17.5.6.2, \(lqMySQL Cluster Log Events\(rq, for more information about checkpoints\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" ndb_select_all: gci64 option
+.\" gci64 option: ndb_select_all
+\fB\-\-gci64\fR
+.sp
+Adds a
+ROW$GCI64
+column to the output showing the global checkpoint at which each row was last updated, as well as the number of the epoch in which this update occurred\&.
 .RE
 .sp
 .RS 4
@@ -571,30 +600,10 @@ NDBT_ProgramExit: 0 \- OK
 .if n \{\
 .RE
 .\}
-.if n \{\
-.sp
-.\}
-.RS 4
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.ps +1
-\fBNote\fR
-.ps -1
-.br
-.PP
-In earlier MySQL Cluster NDB 7\&.0 and 7\&.1 releases,
-\fBndb_select_all\fR
-did not print any output for
-NULL
-values as it did in MySQL Cluster NDB 6\&.3 and earlier release series\&. This issue was fixed in MySQL Cluster NDB 7\&.0\&.22 and MySQL Cluster NDB 7\&.1\&.11\&. (Bug #60045)
-.sp .5v
-.RE
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

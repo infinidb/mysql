@@ -1,5 +1,4 @@
-# Copyright (c) 2006-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,75 +11,83 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-INCLUDE("${PROJECT_SOURCE_DIR}/win/mysql_manifest.cmake")
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-# We use the "mysqlclient_notls" library here just as safety, in case
-# any of the clients here would go beyond the client API and access the
-# Thread Local Storage directly.
+INCLUDE_DIRECTORIES(
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/mysys_ssl
+  ${ZLIB_INCLUDE_DIR}
+  ${SSL_INCLUDE_DIRS}
+  ${CMAKE_SOURCE_DIR}/libmysql
+  ${CMAKE_SOURCE_DIR}/regex
+  ${CMAKE_SOURCE_DIR}/sql
+  ${CMAKE_SOURCE_DIR}/strings
+  ${EDITLINE_INCLUDE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
 
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include
-                    ${CMAKE_SOURCE_DIR}/zlib
-                    ${CMAKE_SOURCE_DIR}/extra/yassl/include
-                    ${CMAKE_SOURCE_DIR}/libmysql
-                    ${CMAKE_SOURCE_DIR}/regex
-                    ${CMAKE_SOURCE_DIR}/sql
-                    ${CMAKE_SOURCE_DIR}/strings)
+## We will need libeay32.dll and ssleay32.dll when running client executables.
+COPY_OPENSSL_DLLS(copy_openssl_client)
 
-ADD_EXECUTABLE(mysql completion_hash.cc mysql.cc readline.cc sql_string.cc ../mysys/my_conio.c)
-TARGET_LINK_LIBRARIES(mysql mysqlclient_notls wsock32)
+ADD_DEFINITIONS(${SSL_DEFINES})
+MYSQL_ADD_EXECUTABLE(mysql completion_hash.cc mysql.cc readline.cc sql_string.cc)
+TARGET_LINK_LIBRARIES(mysql mysqlclient)
+IF(UNIX)
+  TARGET_LINK_LIBRARIES(mysql ${EDITLINE_LIBRARY})
+ENDIF(UNIX)
 
-ADD_EXECUTABLE(mysqltest mysqltest.cc)
+MYSQL_ADD_EXECUTABLE(mysqltest mysqltest.cc COMPONENT Test)
 SET_SOURCE_FILES_PROPERTIES(mysqltest.cc PROPERTIES COMPILE_FLAGS "-DTHREADS")
-TARGET_LINK_LIBRARIES(mysqltest mysqlclient mysys regex wsock32 dbug)
+TARGET_LINK_LIBRARIES(mysqltest mysqlclient regex)
 
-ADD_EXECUTABLE(mysqlcheck mysqlcheck.c)
-TARGET_LINK_LIBRARIES(mysqlcheck mysqlclient_notls wsock32)
 
-ADD_EXECUTABLE(mysqldump mysqldump.c ../sql-common/my_user.c ../mysys/mf_getdate.c)
-TARGET_LINK_LIBRARIES(mysqldump mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysqlcheck mysqlcheck.c)
+TARGET_LINK_LIBRARIES(mysqlcheck mysqlclient)
 
-ADD_EXECUTABLE(mysqlimport mysqlimport.c)
-TARGET_LINK_LIBRARIES(mysqlimport mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysqldump mysqldump.c ../sql-common/my_user.c)
+TARGET_LINK_LIBRARIES(mysqldump mysqlclient)
 
-ADD_EXECUTABLE(mysql_upgrade mysql_upgrade.c ../mysys/my_getpagesize.c)
-TARGET_LINK_LIBRARIES(mysql_upgrade mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysqlimport mysqlimport.c)
+TARGET_LINK_LIBRARIES(mysqlimport mysqlclient)
+
+MYSQL_ADD_EXECUTABLE(mysql_upgrade mysql_upgrade.c)
+TARGET_LINK_LIBRARIES(mysql_upgrade mysqlclient)
 ADD_DEPENDENCIES(mysql_upgrade GenFixPrivs)
 
-ADD_EXECUTABLE(mysqlshow mysqlshow.c)
-TARGET_LINK_LIBRARIES(mysqlshow mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysqlshow mysqlshow.c)
+TARGET_LINK_LIBRARIES(mysqlshow mysqlclient)
 
-ADD_EXECUTABLE(mysqlbinlog mysqlbinlog.cc
-			   ../mysys/mf_tempdir.c
-			   ../mysys/my_new.cc
-			   ../mysys/my_bit.c
-			   ../mysys/my_bitmap.c
-			   ../mysys/my_vle.c
-			   ../mysys/base64.c)
-TARGET_LINK_LIBRARIES(mysqlbinlog mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysql_plugin mysql_plugin.c)
+TARGET_LINK_LIBRARIES(mysql_plugin mysqlclient)
 
-ADD_EXECUTABLE(mysqladmin mysqladmin.cc)
-TARGET_LINK_LIBRARIES(mysqladmin mysqlclient_notls wsock32)
+MYSQL_ADD_EXECUTABLE(mysqlbinlog mysqlbinlog.cc)
+TARGET_LINK_LIBRARIES(mysqlbinlog mysqlclient)
 
-ADD_EXECUTABLE(mysqlslap mysqlslap.c)
+MYSQL_ADD_EXECUTABLE(mysqladmin mysqladmin.cc)
+TARGET_LINK_LIBRARIES(mysqladmin mysqlclient)
+
+MYSQL_ADD_EXECUTABLE(mysqlslap mysqlslap.c)
 SET_SOURCE_FILES_PROPERTIES(mysqlslap.c PROPERTIES COMPILE_FLAGS "-DTHREADS")
-TARGET_LINK_LIBRARIES(mysqlslap mysqlclient mysys zlib wsock32 dbug)
+TARGET_LINK_LIBRARIES(mysqlslap mysqlclient)
 
-ADD_EXECUTABLE(echo echo.c)
+MYSQL_ADD_EXECUTABLE(mysql_config_editor mysql_config_editor.cc)
+TARGET_LINK_LIBRARIES(mysql_config_editor mysqlclient)
 
-IF(EMBED_MANIFESTS)
-  MYSQL_EMBED_MANIFEST("mysql" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqltest" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqlcheck" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqldump" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqlimport" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysql_upgrade" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqlshow" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqlbinlog" "asInvoker")
-  MYSQL_EMBED_MANIFEST("mysqladmin" "asInvoker")
-  MYSQL_EMBED_MANIFEST("echo" "asInvoker")
-ENDIF(EMBED_MANIFESTS)
+# "WIN32" also covers 64 bit. "echo" is used in some files below "mysql-test/".
+IF(WIN32)
+  MYSQL_ADD_EXECUTABLE(echo echo.c)
+ENDIF(WIN32)
+
+SET_TARGET_PROPERTIES (
+  mysql_plugin 
+  mysql_upgrade
+  mysqlcheck
+  mysqldump
+  mysqlimport
+  mysqlshow
+  mysqlslap
+PROPERTIES HAS_CXX TRUE)
+
+ADD_DEFINITIONS(-DHAVE_DLOPEN)
 

@@ -68,8 +68,11 @@ SHOW DATABASES;
 DROP DATABASE bug58090;
 
 --echo #
---echo # Bug #11766072 - 59107: MYSQLSLAP CRASHES IF STARTED WITH NO ARGUMENTS ON WINDOWS
+--echo # Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
 --echo #
 
---replace_regex /queries: [0-9]+.[0-9]+/queries: TIME/
---exec $MYSQL_SLAP
+--echo Executing mysqlslap with password.
+--exec $MYSQL_SLAP -uroot --password="" --silent --iterations=1 --concurrency=1 --auto-generate-sql 2>&1
+
+--echo
+--echo End of tests

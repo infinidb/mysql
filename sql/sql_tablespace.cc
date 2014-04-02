@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2006, 2007 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,13 +10,16 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /* drop and alter of tablespaces */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "sql_tablespace.h"
+#include "sql_table.h"                          // write_bin_log
+#include "sql_class.h"                          // THD
 
 int mysql_alter_tablespace(THD *thd, st_alter_tablespace *ts_info)
 {
@@ -34,7 +35,7 @@ int mysql_alter_tablespace(THD *thd, st_alter_tablespace *ts_info)
   {
     hton= ha_default_handlerton(thd);
     if (ts_info->storage_engine != 0)
-      push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
                           ER_WARN_USING_OTHER_HANDLER,
                           ER(ER_WARN_USING_OTHER_HANDLER),
                           ha_resolve_storage_engine_name(hton),
@@ -63,11 +64,10 @@ int mysql_alter_tablespace(THD *thd, st_alter_tablespace *ts_info)
   }
   else
   {
-    push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
-                        ER_ILLEGAL_HA_CREATE_OPTION,
-                        ER(ER_ILLEGAL_HA_CREATE_OPTION),
-                        ha_resolve_storage_engine_name(hton),
-                        "TABLESPACE or LOGFILE GROUP");
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+             ha_resolve_storage_engine_name(hton),
+             "TABLESPACE or LOGFILE GROUP");
+    DBUG_RETURN(HA_ADMIN_NOT_IMPLEMENTED);
   }
   error= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
   DBUG_RETURN(error);

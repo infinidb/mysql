@@ -1,5 +1,4 @@
 -- source include/have_ndb.inc
--- source include/not_embedded.inc
 
 --disable_warnings
 DROP TABLE IF EXISTS t1;
@@ -20,6 +19,14 @@ create temporary table t1 (a int key) engine=myisam;
 alter table t1 engine=ndb;
 drop table t1;
 
+
+#
+# create temporary like on an ndb table should give an error (bug#57437)
+#
+CREATE TABLE bar ( id TINYINT NOT NULL AUTO_INCREMENT PRIMARY KEY ) ENGINE=NDBCluster ;
+--error ER_CANT_CREATE_TABLE
+CREATE TEMPORARY TABLE foo LIKE bar ;
+DROP TABLE bar;
 
 #
 # if default storage engine=ndb, temporary tables

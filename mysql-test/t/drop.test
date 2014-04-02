@@ -100,8 +100,8 @@ drop database if exists mysqltest;
 drop table if exists t1;
 --enable_warnings
 create table t1 (i int);
-lock tables t1 read;
 create database mysqltest;
+lock tables t1 read;
 connect (addconroot1, localhost, root,,);
 --send drop table t1
 connect (addconroot2, localhost, root,,);
@@ -123,6 +123,39 @@ connection addconroot1;
 disconnect addconroot1;
 --source include/wait_until_disconnected.inc
 connection default;
+
+#
+# Bug#25858 Some DROP TABLE under LOCK TABLES can cause deadlocks
+#
+
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+create table t1 (a int);
+create table t2 (a int);
+lock table t1 read;
+--error ER_TABLE_NOT_LOCKED
+drop table t2;
+--error ER_TABLE_NOT_LOCKED_FOR_WRITE
+drop table t1;
+unlock tables;
+drop table t1,t2;
+connect (addconroot, localhost, root,,);
+connection default;
+create table t1 (i int);
+create table t2 (i int);
+lock tables t1 read;
+connection addconroot;
+lock tables t2 read;
+--error ER_TABLE_NOT_LOCKED
+drop table t1;
+connection default;
+--error ER_TABLE_NOT_LOCKED_FOR_WRITE
+drop table t1,t2;
+disconnect addconroot;
+connection default;
+unlock tables;
+drop table t1,t2;
 
 --echo End of 5.0 tests
 
@@ -192,13 +225,88 @@ DROP DATABASE mysql_test;
 create database mysqltestbug26703;
 use mysqltestbug26703;
 create table `#mysql50#abc``def` ( id int );
---error ER_WRONG_TABLE_NAME
+--error ER_TOO_LONG_IDENT
 create table `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (a int);
 create table `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (a int);
 create table `#mysql50#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (a int);
---error ER_WRONG_TABLE_NAME
+--error ER_TOO_LONG_IDENT
 create table `#mysql50#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (a int);
 use test;
 drop database mysqltestbug26703;
 
 --echo End of 5.1 tests
+
+###########################################################################
+
+--echo
+--echo # --
+--echo # -- Bug#37431 (DROP TABLE does not report errors correctly).
+--echo # --
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--error ER_BAD_TABLE_ERROR
+DROP TABLE t1;
+
+SHOW WARNINGS;
+
+--echo
+--echo # --
+--echo # -- End of Bug#37431.
+--echo # --
+
+
+--echo #
+--echo # Bug#54282 Crash in MDL_context::upgrade_shared_lock_to_exclusive
+--echo #
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (a INT);
+LOCK TABLE t1 WRITE;
+--error ER_NONUNIQ_TABLE
+DROP TABLE t1, t1;
+
+UNLOCK TABLES;
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#34750: Print database name in Unknown Table error message
+--echo #
+
+--echo 
+--echo # Test error message when droping table/view
+
+--error ER_BAD_TABLE_ERROR
+DROP TABLE table1;
+--error ER_BAD_TABLE_ERROR
+DROP TABLE table1,table2;
+--error ER_BAD_TABLE_ERROR
+DROP VIEW view1,view2,view3,view4;
+--echo
+DROP TABLE IF EXISTS table1;
+DROP TABLE IF EXISTS table1,table2;
+DROP VIEW IF EXISTS view1,view2,view3,view4;
+
+--echo
+--echo # Test error message when trigger does not find table
+
+CREATE TABLE table1(a int);
+CREATE TABLE table2(b int);
+
+# Database name is only available (for printing) if specified in 
+# the trigger definition
+CREATE TRIGGER trg1 AFTER INSERT ON table1
+FOR EACH ROW
+  INSERT INTO table2 SELECT t.notable.*;
+
+--error ER_BAD_TABLE_ERROR
+INSERT INTO table1 VALUES (1);
+
+DROP TABLE table1,table2;
+
+--echo # End BUG#34750

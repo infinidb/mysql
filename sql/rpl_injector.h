@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2007 MySQL AB
+/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
 #include <my_bitmap.h>
 
 #include "rpl_constants.h"
+#include "table.h"                              /* TABLE */
 
 /* Forward declarations */
 class handler;
 class MYSQL_BIN_LOG;
-struct st_table;
+struct TABLE;
 
-typedef st_table TABLE;
 
 /*
   Injector to inject rows into the MySQL server.
@@ -117,6 +117,27 @@ public:
       class table 
       {
       public:
+        class save_sets {
+        public:
+          save_sets(table const &tbl, MY_BITMAP const *new_rs, MY_BITMAP const *new_ws)
+            : m_table(tbl.get_table()),
+              save_read_set(m_table->read_set),
+              save_write_set(m_table->write_set)
+          {
+            m_table->column_bitmaps_set_no_signal(const_cast<MY_BITMAP*>(new_rs),
+                                                  const_cast<MY_BITMAP*>(new_ws));
+          }
+
+          ~save_sets() {
+            m_table->column_bitmaps_set_no_signal(save_read_set, save_write_set);
+          }
+
+        private:
+          TABLE *m_table;
+          MY_BITMAP *save_read_set;
+          MY_BITMAP *save_write_set;
+        };
+
         table(TABLE *table, bool is_transactional) 
             : m_table(table), m_is_transactional(is_transactional)
         { 
@@ -185,19 +206,30 @@ public:
       */
       int write_row (server_id_type sid, table tbl, 
                      MY_BITMAP const *cols, size_t colcnt,
-                     record_type record);
+                     record_type record,
+                     const uchar* extra_row_info);
+      int write_row (server_id_type sid, table tbl,
+                      MY_BITMAP const *cols, size_t colcnt,
+                      record_type record);
 
       /*
         Add a 'delete row' entry to the transaction.
       */
       int delete_row(server_id_type sid, table tbl, 
                      MY_BITMAP const *cols, size_t colcnt,
+                     record_type record,
+                     const uchar* extra_row_info);
+      int delete_row(server_id_type sid, table tbl,
+                     MY_BITMAP const *cols, size_t colcnt,
                      record_type record);
-
       /*
         Add an 'update row' entry to the transaction.
       */
       int update_row(server_id_type sid, table tbl, 
+                     MY_BITMAP const *cols, size_t colcnt,
+                     record_type before, record_type after,
+                     const uchar* extra_row_info);
+      int update_row(server_id_type sid, table tbl,
                      MY_BITMAP const *cols, size_t colcnt,
                      record_type before, record_type after);
 
@@ -210,15 +242,39 @@ public:
       int commit();
 
       /*
+        Rollback a transaction.
+
+        This member function will clean up after a sequence of *_row calls by,
+        for example, releasing resource and unlocking files.
+      */
+      int rollback();
+
+      /*
         Get the position for the start of the transaction.
 
-        Returns the position in the binary log of the first event in this
-        transaction. If no event is yet written, the position where the event
-        *will* be written is returned. This position is known, since a
-        new_transaction() will lock the binary log and prevent any other
-        writes to the binary log.
+        This is the current 'tail of Binlog' at the time the transaction
+        was started.  The first event recorded by the transaction may
+        be at this, or some subsequent position.  The first event recorded
+        by the transaction will not be before this position.
       */
       binlog_pos start_pos() const;
+
+      /*
+        Get the next position after the end of the transaction
+
+        This call is only valid after a transaction has been committed.
+        It returns the next Binlog position after the committed transaction.
+        It is guaranteed that no other events will be recorded between the
+        COMMIT event of the Binlog transaction, and this position.
+        Note that this position may be in a different log file to the COMMIT
+        event.
+
+        If the commit had an error, or the transaction was empty and nothing
+        was binlogged then the next_pos will have a NULL file_name(), and
+        0 file_pos().
+
+      */
+      binlog_pos next_pos() const;
 
     private:
       /* Only the injector may construct these object */
@@ -230,6 +286,13 @@ public:
           binlog_pos const tmp= m_start_pos;
           m_start_pos= o.m_start_pos;
           o.m_start_pos= tmp;
+        }
+
+        /* std::swap(m_end_pos, o.m_end_pos); */
+        {
+          binlog_pos const tmp= m_next_pos;
+          m_next_pos= o.m_next_pos;
+          o.m_next_pos= tmp;
         }
 
         /* std::swap(m_thd, o.m_thd); */
@@ -304,24 +367,20 @@ public:
 
 
       binlog_pos m_start_pos;
+      binlog_pos m_next_pos;
       THD *m_thd;
     };
 
-    /* 
+    /*
        Create a new transaction.  This member function will prepare for a
        sequence of *_row calls by, for example, reserving resources and
-       locking files. There are two overloaded alternatives: one returning a
-       transaction by value and one using placement semantics. The following
-       two calls are equivalent, with the exception that the latter will
-       overwrite the transaction.
-
-         injector::transaction trans1= inj->new_trans(thd);
+       locking files. The call uses placement semantics and will overwrite
+       the transaction.
 
          injector::transaction trans2;
          inj->new_trans(thd, &trans);
      */
-    transaction new_trans(THD *);
-    void        new_trans(THD *, transaction *);
+    void new_trans(THD *, transaction *);
 
     int record_incident(THD*, Incident incident);
     int record_incident(THD*, Incident incident, LEX_STRING const message);

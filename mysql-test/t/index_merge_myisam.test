@@ -1,3 +1,6 @@
+#Want to skip this test from daily Valgrind execution
+--source include/no_valgrind_without_big.inc
+
 # t/index_merge_myisam.test
 #
 # Index merge tests
@@ -36,7 +39,6 @@ select @@optimizer_switch;
 set optimizer_switch='default,index_merge_sort_union=off';
 select @@optimizer_switch;
 
---error ER_WRONG_VALUE_FOR_VAR
 set optimizer_switch=4;
 
 --error ER_WRONG_VALUE_FOR_VAR

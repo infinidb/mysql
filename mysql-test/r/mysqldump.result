@@ -15,7 +15,7 @@ INSERT INTO t1 VALUES (1), (2);
 <database name="test">
 	<table_structure name="t1">
 		<field Field="a" Type="int(11)" Null="YES" Key="MUL" Extra="" Comment="" />
-		<key Table="t1" Non_unique="1" Key_name="a" Seq_in_index="1" Column_name="a" Collation="A" Null="YES" Index_type="BTREE" Comment="" />
+		<key Table="t1" Non_unique="1" Key_name="a" Seq_in_index="1" Column_name="a" Collation="A" Null="YES" Index_type="BTREE" Comment="" Index_comment="" />
 	</table_structure>
 	<table_data name="t1">
 	<row>
@@ -40,7 +40,7 @@ CREATE TABLE `t1` (
   `a` decimal(64,20) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
-INSERT INTO `t1` VALUES ('1234567890123456789012345678901234567890.00000000000000000000'),('987654321098765432109876543210987654321.00000000000000000000');
+INSERT INTO `t1` VALUES (1234567890123456789012345678901234567890.00000000000000000000),(987654321098765432109876543210987654321.00000000000000000000);
 DROP TABLE t1;
 #
 # Bug#2055 mysqldump should replace "-inf" numeric field values with "NULL"
@@ -55,7 +55,7 @@ CREATE TABLE `t1` (
   `a` double DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
-INSERT INTO `t1` VALUES (RES);
+INSERT INTO `t1` VALUES (-1.7976931348623157e308);
 DROP TABLE t1;
 #
 # Bug#3361 mysqldump quotes DECIMAL values inconsistently
@@ -77,7 +77,7 @@ CREATE TABLE `t1` (
   `b` float DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
-INSERT INTO `t1` VALUES ('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456);
+INSERT INTO `t1` VALUES (1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456);
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
@@ -85,7 +85,7 @@ CREATE TABLE `t1` (
   `b` float DEFAULT NULL
 );
 /*!40101 SET character_set_client = @saved_cs_client */;
-INSERT INTO `t1` VALUES ('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456);
+INSERT INTO `t1` VALUES (1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456);
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -108,7 +108,7 @@ CREATE TABLE `t1` (
 
 LOCK TABLES `t1` WRITE;
 /*!40000 ALTER TABLE `t1` DISABLE KEYS */;
-INSERT INTO `t1` VALUES ('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456);
+INSERT INTO `t1` VALUES (1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456);
 /*!40000 ALTER TABLE `t1` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -135,7 +135,7 @@ CREATE TABLE `t1` (
 );
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-INSERT INTO `t1` VALUES ('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456),('1.23450',2.3456);
+INSERT INTO `t1` VALUES (1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456);
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -417,7 +417,7 @@ UNLOCK TABLES;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
-set global sql_mode='';
+set global sql_mode=DEFAULT;
 drop table t1;
 #
 # Bug#2705 mysqldump --tab extra output
@@ -1988,7 +1988,7 @@ DROP TABLE IF EXISTS `v2`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v2` (
- `a` tinyint NOT NULL
+  `a` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 /*!50001 DROP TABLE IF EXISTS `v2`*/;
@@ -2082,7 +2082,7 @@ DROP TABLE IF EXISTS `v1`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v1` (
- `a` tinyint NOT NULL
+  `a` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 /*!50001 DROP TABLE IF EXISTS `v1`*/;
@@ -2156,7 +2156,7 @@ DROP TABLE IF EXISTS `v2`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v2` (
- `a` tinyint NOT NULL
+  `a` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 /*!50001 DROP TABLE IF EXISTS `v2`*/;
@@ -2270,7 +2270,7 @@ DROP TABLE IF EXISTS `v1`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v1` (
- `a` tinyint NOT NULL,
+  `a` tinyint NOT NULL,
   `b` tinyint NOT NULL,
   `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
@@ -2280,7 +2280,7 @@ DROP TABLE IF EXISTS `v2`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v2` (
- `a` tinyint NOT NULL
+  `a` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 DROP TABLE IF EXISTS `v3`;
@@ -2288,7 +2288,7 @@ DROP TABLE IF EXISTS `v3`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v3` (
- `a` tinyint NOT NULL,
+  `a` tinyint NOT NULL,
   `b` tinyint NOT NULL,
   `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
@@ -2383,15 +2383,15 @@ if new.a > 10 then
 set new.a := 10;
 set new.a := 11;
 end if;
-end	BEFORE	0000-00-00 00:00:00		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	0000-00-00 00:00:00	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg2	UPDATE	t1	begin
 if old.a % 2 = 0 then set new.b := 12; end if;
-end	BEFORE	0000-00-00 00:00:00		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	0000-00-00 00:00:00	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg3	UPDATE	t1	begin
 if new.a = -1 then
 set @fired:= "Yes";
 end if;
-end	AFTER	0000-00-00 00:00:00	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	AFTER	0000-00-00 00:00:00	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 INSERT INTO t1 (a) VALUES (1),(2),(3),(22);
 update t1 set a = 4 where a=3;
 
@@ -2430,7 +2430,7 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg1 before insert on t1 for each row
 begin
@@ -2451,7 +2451,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg2 before update on t1 for each row begin
 if old.a % 2 = 0 then set new.b := 12; end if;
@@ -2468,7 +2468,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER' */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg3 after update on t1 for each row
 begin
@@ -2500,7 +2500,7 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER' */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg4 before insert on t2 for each row
 begin
@@ -2586,20 +2586,20 @@ if new.a > 10 then
 set new.a := 10;
 set new.a := 11;
 end if;
-end	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg2	UPDATE	t1	begin
 if old.a % 2 = 0 then set new.b := 12; end if;
-end	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg3	UPDATE	t1	begin
 if new.a = -1 then
 set @fired:= "Yes";
 end if;
-end	AFTER	#	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	AFTER	#	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg4	INSERT	t2	begin
 if new.a > 10 then
 set @fired:= "No";
 end if;
-end	BEFORE	#	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 DROP TABLE t1, t2;
 #
 # Bug#9136  my_print_defaults changed behaviour between 4.1.7 and 4.1.10a
@@ -2613,13 +2613,13 @@ DROP TABLE t1, t2;
 #
 DROP TABLE IF EXISTS `test1`;
 Warnings:
-Note	1051	Unknown table 'test1'
+Note	1051	Unknown table 'test.test1'
 CREATE TABLE `test1` (
 `a1` int(11) default NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 DROP TABLE IF EXISTS `test2`;
 Warnings:
-Note	1051	Unknown table 'test2'
+Note	1051	Unknown table 'test.test2'
 CREATE TABLE `test2` (
 `a2` int(11) default NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
@@ -2632,7 +2632,7 @@ a2
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
 testref	INSERT	test1	BEGIN
-INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 SELECT * FROM `test1`;
 a1
 1
@@ -2704,10 +2704,10 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 FUNCTION `bug9056_func1`(a INT, b INT) RETURNS int(11)
-RETURN a+b */;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `bug9056_func1`(a INT, b INT) RETURNS int(11)
+RETURN a+b ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -2721,13 +2721,13 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 FUNCTION `bug9056_func2`(f1 char binary) RETURNS char(1) CHARSET latin1
+CREATE DEFINER=`root`@`localhost` FUNCTION `bug9056_func2`(f1 char binary) RETURNS char(1) CHARSET latin1
 begin
 set f1= concat( 'hello', f1 );
 return f1;
-end */;;
+end ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -2743,8 +2743,8 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER="root"@"localhost"*/ /*!50003 PROCEDURE "a'b"()
-select 1 */;;
+CREATE DEFINER="root"@"localhost" PROCEDURE "a'b"()
+select 1 ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -2758,10 +2758,10 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `bug9056_proc1`(IN a INT, IN b INT, OUT c INT)
-BEGIN SELECT a+b INTO c; end */;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `bug9056_proc1`(IN a INT, IN b INT, OUT c INT)
+BEGIN SELECT a+b INTO c; end ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -2775,12 +2775,12 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `bug9056_proc2`(OUT a INT)
+CREATE DEFINER=`root`@`localhost` PROCEDURE `bug9056_proc2`(OUT a INT)
 BEGIN
 select sum(id) from t1 into a;
-END */;;
+END ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -2806,7 +2806,7 @@ drop table t1;
 # Bug#13052 mysqldump timestamp reloads broken
 #
 drop table if exists t1;
-create table t1 (`d` timestamp, unique (`d`));
+create table t1 (`d` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, unique (`d`));
 set time_zone='+00:00';
 insert into t1 values ('2003-10-25 22:00:00'),('2003-10-25 23:00:00');
 select * from t1;
@@ -3027,7 +3027,7 @@ DROP TABLE IF EXISTS `v0`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v0` (
- `a` tinyint NOT NULL,
+  `a` tinyint NOT NULL,
   `b` tinyint NOT NULL,
   `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
@@ -3037,7 +3037,7 @@ DROP TABLE IF EXISTS `v1`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v1` (
- `a` tinyint NOT NULL,
+  `a` tinyint NOT NULL,
   `b` tinyint NOT NULL,
   `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
@@ -3047,7 +3047,7 @@ DROP TABLE IF EXISTS `v2`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v2` (
- `a` tinyint NOT NULL,
+  `a` tinyint NOT NULL,
   `b` tinyint NOT NULL,
   `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
@@ -3429,7 +3429,7 @@ DROP TABLE IF EXISTS `v1`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v1` (
- `id` tinyint NOT NULL
+  `id` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 
@@ -3489,7 +3489,7 @@ USE `mysqldump_views`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `nasishnasifu` (
- `id` tinyint NOT NULL
+  `id` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 
@@ -3554,11 +3554,11 @@ use test;
 create user mysqltest_1@localhost;
 create table t1(a int, b varchar(34));
 reset master;
-mysqldump: Couldn't execute 'FLUSH /*!40101 LOCAL */ TABLES': Access denied; you need the RELOAD privilege for this operation (1227)
-mysqldump: Couldn't execute 'FLUSH /*!40101 LOCAL */ TABLES': Access denied; you need the RELOAD privilege for this operation (1227)
+mysqldump: Couldn't execute 'FLUSH /*!40101 LOCAL */ TABLES': Access denied; you need (at least one of) the RELOAD privilege(s) for this operation (1227)
+mysqldump: Couldn't execute 'FLUSH /*!40101 LOCAL */ TABLES': Access denied; you need (at least one of) the RELOAD privilege(s) for this operation (1227)
 grant RELOAD on *.* to mysqltest_1@localhost;
-mysqldump: Couldn't execute 'SHOW MASTER STATUS': Access denied; you need the SUPER,REPLICATION CLIENT privilege for this operation (1227)
-mysqldump: Couldn't execute 'SHOW MASTER STATUS': Access denied; you need the SUPER,REPLICATION CLIENT privilege for this operation (1227)
+mysqldump: Couldn't execute 'SHOW MASTER STATUS': Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation (1227)
+mysqldump: Couldn't execute 'SHOW MASTER STATUS': Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation (1227)
 grant REPLICATION CLIENT on *.* to mysqltest_1@localhost;
 drop table t1;
 drop user mysqltest_1@localhost;
@@ -3611,7 +3611,7 @@ DROP TABLE IF EXISTS `TABLES`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TEMPORARY TABLE `TABLES` (
-  `TABLE_CATALOG` varchar(512) DEFAULT NULL,
+  `TABLE_CATALOG` varchar(512) NOT NULL DEFAULT '',
   `TABLE_SCHEMA` varchar(64) NOT NULL DEFAULT '',
   `TABLE_NAME` varchar(64) NOT NULL DEFAULT '',
   `TABLE_TYPE` varchar(64) NOT NULL DEFAULT '',
@@ -3631,7 +3631,7 @@ CREATE TEMPORARY TABLE `TABLES` (
   `TABLE_COLLATION` varchar(32) DEFAULT NULL,
   `CHECKSUM` bigint(21) unsigned DEFAULT NULL,
   `CREATE_OPTIONS` varchar(255) DEFAULT NULL,
-  `TABLE_COMMENT` varchar(80) NOT NULL DEFAULT ''
+  `TABLE_COMMENT` varchar(2048) NOT NULL DEFAULT ''
 ) ENGINE=MEMORY DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 #
@@ -3764,10 +3764,10 @@ create procedure mysqldump_test_db.sp1() select 'hello';
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`user1`@`%`*/ /*!50003 PROCEDURE `sp1`()
-select 'hello' */;;
+CREATE DEFINER=`user1`@`%` PROCEDURE `sp1`()
+select 'hello' ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
@@ -3882,7 +3882,7 @@ DROP TABLE IF EXISTS `v2`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v2` (
- `c` tinyint NOT NULL
+  `c` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 /*!50001 DROP TABLE IF EXISTS `v2`*/;
@@ -4223,7 +4223,7 @@ Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	E
 first	ee1	root@localhost	UTC	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 show create event ee1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-ee1		UTC	CREATE EVENT `ee1` ON SCHEDULE AT '2035-12-31 20:01:23' ON COMPLETION NOT PRESERVE ENABLE DO set @a=5	latin1	latin1_swedish_ci	latin1_swedish_ci
+ee1		UTC	CREATE DEFINER=`root`@`localhost` EVENT `ee1` ON SCHEDULE AT '2035-12-31 20:01:23' ON COMPLETION NOT PRESERVE ENABLE DO set @a=5	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop database first;
 create database second;
 use second;
@@ -4232,7 +4232,7 @@ Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	E
 second	ee1	root@localhost	UTC	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 show create event ee1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-ee1		UTC	CREATE EVENT `ee1` ON SCHEDULE AT '2035-12-31 20:01:23' ON COMPLETION NOT PRESERVE ENABLE DO set @a=5	latin1	latin1_swedish_ci	latin1_swedish_ci
+ee1		UTC	CREATE DEFINER=`root`@`localhost` EVENT `ee1` ON SCHEDULE AT '2035-12-31 20:01:23' ON COMPLETION NOT PRESERVE ENABLE DO set @a=5	latin1	latin1_swedish_ci	latin1_swedish_ci
 create event ee2 on schedule at '2018-12-31 21:01:23' do set @a=5;
 create event ee3 on schedule at '2030-12-31 22:01:23' do set @a=5;
 show events;
@@ -4299,7 +4299,7 @@ DROP TABLE IF EXISTS `v1`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 /*!50001 CREATE TABLE `v1` (
- `id` tinyint NOT NULL
+  `id` tinyint NOT NULL
 ) ENGINE=MyISAM */;
 SET character_set_client = @saved_cs_client;
 
@@ -4377,6 +4377,8 @@ test	e29938	root@localhost	SYSTEM	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NU
 TRUNCATE mysql.event;
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+test	e29938	root@localhost	SYSTEM	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+DROP EVENT e29938;
 #
 # Bug#31113 mysqldump 5.1 can't handle a dash ("-") in database names
 #
@@ -4575,6 +4577,11 @@ SELECT LENGTH(a) FROM t2;
 LENGTH(a)
 800
 DROP TABLE t1, t2;
+create table t1 (first char(28) , last varchar(37));
+insert into t1 values ("Magnus", "Blåudd");
+truncate table t1;
+test.t1: Records: 1  Deleted: 0  Skipped: 0  Warnings: 0
+drop table t1;
 #
 # Bug #13618 : mysqldump --xml ommit comment on table field
 #
@@ -4626,7 +4633,7 @@ DELIMITER ;
 /*!50003 SET collation_connection  = @saved_col_connection */ ;
 ALTER DATABASE `test-database` CHARACTER SET utf8 COLLATE utf8_unicode_ci ;
 DROP DATABASE `test-database`;
-USE `test`;
+USE test;
 #
 # BUG#11760384 : 52792: mysqldump in XML mode does not dump routines.
 #
@@ -4746,12 +4753,12 @@ END
 	<events>
 		<event Event="e1" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 		<event Event="e2" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 	</events>
@@ -4902,12 +4909,12 @@ END
 	<events>
 		<event Event="e1" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 		<event Event="e2" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 	</events>
@@ -5025,12 +5032,12 @@ END
 	<events>
 		<event Event="e1" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e1` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 		<event Event="e2" sql_mode="" time_zone="SYSTEM" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
 <![CDATA[
-CREATE EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
+CREATE DEFINER=`root`@`localhost` EVENT `e2` ON SCHEDULE EVERY 1 SECOND STARTS '--TIME--' ON COMPLETION NOT PRESERVE ENABLE DO DROP DATABASE BUG52792
 ]]>
 		</event>
 	</events>
@@ -5065,7 +5072,297 @@ RETURN CONCAT(']]]]><![CDATA[>, ', s, '!')
 </database>
 </mysqldump>
 DROP DATABASE BUG52792;
+SET NAMES default;
 USE test;
+#
+# End of 5.1 tests
+#
+#
+# Test for --add-drop-trigger
+#
+USE `test`;
+CREATE TABLE t1 (a int, b int);
+CREATE TRIGGER tt1_t1 BEFORE INSERT ON t1 FOR EACH ROW 
+SET NEW.b=NEW.a + 10;
+INSERT INTO t1 (a) VALUES (1),(2),(3);
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test` /*!40100 DEFAULT CHARACTER SET latin1 */;
+
+USE `test`;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = latin1 */ ;
+/*!50003 SET character_set_results = latin1 */ ;
+/*!50003 SET collation_connection  = latin1_swedish_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = '' */ ;
+/*!50032 DROP TRIGGER IF EXISTS tt1_t1 */;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER tt1_t1 BEFORE INSERT ON t1 FOR EACH ROW 
+SET NEW.b=NEW.a + 10 */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+DROP TABLE t1;
+#
+# Verify that two modes can be given in --compatible;
+# and are reflected in SET SQL_MODE in the mysqldump output.
+# Also verify that a prefix of the mode's name is enough.
+#
+CREATE TABLE t1 (a INT);
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO,NO_TABLE_OPTIONS,NO_FIELD_OPTIONS' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL
+);
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `t1` WRITE;
+/*!40000 ALTER TABLE `t1` DISABLE KEYS */;
+/*!40000 ALTER TABLE `t1` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+DROP TABLE t1;
+#
+# Test columns with function defaults.
+#
+CREATE TABLE t1 (
+a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+b TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+c TIMESTAMP NOT NULL DEFAULT '0000-00-00 00:00:00' ON UPDATE CURRENT_TIMESTAMP,
+d TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+e TIMESTAMP NULL,
+f TIMESTAMP NOT NULL DEFAULT '2010-05-26 12:34:56',
+g DATETIME,
+h DATETIME DEFAULT CURRENT_TIMESTAMP,
+i DATETIME ON UPDATE CURRENT_TIMESTAMP,
+j DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+k DATETIME NULL,
+l DATETIME DEFAULT '2010-05-26 12:34:56'
+);
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `a` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `b` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `c` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' ON UPDATE CURRENT_TIMESTAMP,
+  `d` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `e` timestamp NULL DEFAULT NULL,
+  `f` timestamp NOT NULL DEFAULT '2010-05-26 09:34:56',
+  `g` datetime DEFAULT NULL,
+  `h` datetime DEFAULT CURRENT_TIMESTAMP,
+  `i` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `j` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `k` datetime DEFAULT NULL,
+  `l` datetime DEFAULT '2010-05-26 12:34:56'
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `t1` WRITE;
+/*!40000 ALTER TABLE `t1` DISABLE KEYS */;
+/*!40000 ALTER TABLE `t1` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+DROP TABLE t1;
+#
+# Bug#12809202 61854: MYSQLDUMP --SINGLE-TRANSACTION --FLUSH-LOG BREAKS
+#                     CONSISTENCY
+#
+DROP DATABASE IF EXISTS b12809202_db;
+CREATE DATABASE b12809202_db;
+CREATE TABLE b12809202_db.t1 (c1 INT);
+CREATE TABLE b12809202_db.t2 (c1 INT);
+INSERT INTO b12809202_db.t1 VALUES (1), (2), (3);
+INSERT INTO b12809202_db.t2 VALUES (1), (2), (3);
+# Starting mysqldump with --single-transaction & --flush-logs options..
+# Note : In the following dump the transaction
+#        should start only after the logs are
+#        flushed, as 'flush logs' causes implicit
+#        commit starting 5.5. Also, as stderr is
+#        unbuffered, it is redirected to a different
+#        file to avoid diffs due to bad stdout/stderr
+#        order in the output.
+
+#### Dump starts here ####
+--
+-- Host: localhost    Database: b12809202_db
+-- ------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `t1`
+--
+
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `c1` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `t1`
+--
+
+LOCK TABLES `t1` WRITE;
+/*!40000 ALTER TABLE `t1` DISABLE KEYS */;
+INSERT INTO `t1` VALUES (1),(2),(3);
+/*!40000 ALTER TABLE `t1` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `t2`
+--
+
+DROP TABLE IF EXISTS `t2`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t2` (
+  `c1` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `t2`
+--
+
+LOCK TABLES `t2` WRITE;
+/*!40000 ALTER TABLE `t2` DISABLE KEYS */;
+INSERT INTO `t2` VALUES (1),(2),(3);
+/*!40000 ALTER TABLE `t2` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed
+## stderr ##
+-- Connecting to localhost...
+-- main : logs flushed successfully!
+-- Starting transaction...
+-- Setting savepoint...
+-- Retrieving table structure for table t1...
+-- Sending SELECT query...
+-- Retrieving rows...
+-- Rolling back to savepoint sp...
+-- Retrieving table structure for table t2...
+-- Sending SELECT query...
+-- Retrieving rows...
+-- Rolling back to savepoint sp...
+-- Releasing savepoint...
+-- Disconnecting from localhost...
+
+#### Dump ends here ####
+DROP TABLE b12809202_db.t1;
+DROP TABLE b12809202_db.t2;
+DROP DATABASE b12809202_db;
+#
+# Delete all existing binary logs.
+#
+RESET MASTER;
+#
+# Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
+#
+DROP DATABASE IF EXISTS b12688860_db;
+CREATE DATABASE b12688860_db;
+Warning: Using a password on the command line interface can be insecure.
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+DROP DATABASE b12688860_db;
 #
 # Bug#45740 MYSQLDUMP DOESN'T DUMP GENERAL_LOG AND SLOW_QUERY CAUSES RESTORE PROBLEM
 #
@@ -5074,8 +5371,8 @@ SET @old_general_log_state=      @@global.general_log;
 SET @old_slow_query_log_state=   @@global.slow_query_log;
 call mtr.add_suppression("Failed to write to mysql.general_log");
 SET @@global.log_output="TABLE";
-SET @@global.general_log='ON';
-SET @@global.slow_query_log='ON';
+SET @@global.general_log='OFF';
+SET @@global.slow_query_log='OFF';
 DROP DATABASE mysql;
 Warnings:
 Error	1146	Table 'mysql.proc' doesn't exist
@@ -5085,7 +5382,7 @@ Table	Create Table
 general_log	CREATE TABLE `general_log` (
   `event_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `user_host` mediumtext NOT NULL,
-  `thread_id` int(11) NOT NULL,
+  `thread_id` bigint(21) unsigned NOT NULL,
   `server_id` int(10) unsigned NOT NULL,
   `command_type` varchar(64) NOT NULL,
   `argument` mediumtext NOT NULL
@@ -5103,7 +5400,8 @@ slow_log	CREATE TABLE `slow_log` (
   `last_insert_id` int(11) NOT NULL,
   `insert_id` int(11) NOT NULL,
   `server_id` int(10) unsigned NOT NULL,
-  `sql_text` mediumtext NOT NULL
+  `sql_text` mediumtext NOT NULL,
+  `thread_id` bigint(21) unsigned NOT NULL
 ) ENGINE=CSV DEFAULT CHARSET=utf8 COMMENT='Slow log'
 SET @@global.log_output=       @old_log_output_state;
 SET @@global.slow_query_log=   @old_slow_query_log_state;

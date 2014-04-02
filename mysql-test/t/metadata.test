@@ -15,7 +15,7 @@ drop table if exists t1,t2;
 
 select 1, 1.0, -1, "hello", NULL;
 
-create table t1 (a tinyint, b smallint, c mediumint, d int, e bigint, f float(3,2), g double(4,3), h decimal(5,4), i year, j date, k timestamp, l datetime, m enum('a','b'), n set('a','b'), o char(10));
+create table t1 (a tinyint, b smallint, c mediumint, d int, e bigint, f float(3,2), g double(4,3), h decimal(5,4), i year, j date, k timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, l datetime, m enum('a','b'), n set('a','b'), o char(10));
 select * from t1;
 select a b, b c from t1 as t2;
 drop table t1;
@@ -143,3 +143,85 @@ DROP VIEW v1;
 DROP TABLE t1;
 
 --echo End of 5.0 tests
+
+# Verify that column metadata is correct for all possible data types.
+# Originally about BUG#42980 "Client doesn't set NUM_FLAG for DECIMAL"
+
+create table t1(
+# numeric types
+bool_col bool,
+boolean_col boolean,
+bit_col bit(5),
+tiny tinyint,
+tiny_uns tinyint unsigned,
+small smallint,
+small_uns smallint unsigned,
+medium mediumint,
+medium_uns mediumint unsigned,
+int_col int,
+int_col_uns int unsigned,
+big bigint,
+big_uns bigint unsigned,
+decimal_col decimal(10,5),
+# synonyms of DECIMAL
+numeric_col numeric(10),
+fixed_col fixed(10),
+dec_col dec(10),
+decimal_col_uns decimal(10,5) unsigned,
+fcol float,
+fcol_uns float unsigned,
+dcol double,
+double_precision_col double precision,
+dcol_uns double unsigned,
+# date/time types
+date_col date,
+time_col time,
+timestamp_col timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+year_col year,
+datetime_col datetime,
+# string types
+char_col char(5),
+varchar_col varchar(10),
+binary_col binary(10),
+varbinary_col varbinary(10),
+tinyblob_col tinyblob,
+blob_col blob,
+mediumblob_col mediumblob,
+longblob_col longblob,
+text_col text,
+mediumtext_col mediumtext,
+longtext_col longtext,
+enum_col enum("A","B","C"),
+set_col set("F","E","D")
+);
+
+--enable_metadata
+select * from t1;
+--disable_metadata
+
+drop table t1;
+
+
+--echo #
+--echo #  WL#946 TIME/DATETIME/TIMESTAMP with fractional precision
+--echo #
+CREATE TABLE t1 (
+  t6 TIME(6), t5 TIME(5), t4 TIME(4),
+  t3 TIME(3), t2 TIME(2), t1 TIME(1),
+  t0 TIME,
+  dt6 DATETIME(6), dt5 DATETIME(5), dt4 DATETIME(4),
+  dt3 DATETIME(3), dt2 DATETIME(2), dt1 DATETIME(1),
+  dt0 DATETIME,
+  ts6 TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  ts5 TIMESTAMP(5) NOT NULL DEFAULT '0000-00-00 00:00:00', 
+  ts4 TIMESTAMP(4) NOT NULL DEFAULT '0000-00-00 00:00:00',
+  ts3 TIMESTAMP(3) NOT NULL DEFAULT '0000-00-00 00:00:00',
+  ts2 TIMESTAMP(2) NOT NULL DEFAULT '0000-00-00 00:00:00',
+  ts1 TIMESTAMP(1) NOT NULL DEFAULT '0000-00-00 00:00:00',
+  ts0 TIMESTAMP NOT NULL DEFAULT '0000-00-00 00:00:00'
+);
+--enable_metadata
+SELECT * FROM t1;
+--disable_metadata
+DROP TABLE t1;
+

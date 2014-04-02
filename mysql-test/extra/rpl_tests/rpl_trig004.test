@@ -35,10 +35,9 @@ INSERT INTO test.t2 VALUES (1, 0.0);
 #show binlog events; 
 select * from test.t1;
 select * from test.t2;
-# Have to sleep for a few seconds to allow 
-# NDB injector thread to populate binlog
-sleep 10;
-sync_slave_with_master;
+let $wait_time= 10;
+--source include/wait_for_ndb_to_binlog.inc
+--source include/sync_slave_sql_with_master.inc
 connection slave;
 select * from test.t1;
 select * from test.t2;
@@ -49,5 +48,5 @@ DROP TRIGGER test.t1_bi_t2;
 DROP TABLE test.t1;
 DROP TABLE test.t2;
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 # End of 5.0 test case

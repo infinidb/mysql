@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 set @old_global_binlog_format=  @@global.binlog_format;
 set @old_session_binlog_format=  @@session.binlog_format;
@@ -7,6 +10,17 @@ SET SESSION binlog_format = 'ROW';
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	ROW
 @@session.binlog_format	ROW
+[on slave]
+set @old_global_binlog_format=  @@global.binlog_format;
+set @old_session_binlog_format=  @@session.binlog_format;
+SET GLOBAL binlog_format = 'ROW';
+SET SESSION binlog_format = 'ROW';
+select @@global.binlog_format, @@session.binlog_format;
+@@global.binlog_format	ROW
+@@session.binlog_format	ROW
+include/stop_slave.inc
+include/start_slave.inc
+[on master]
 CREATE TABLE t1(id MEDIUMINT NOT NULL AUTO_INCREMENT,
 dt TIMESTAMP, user CHAR(255), uuidf LONGBLOB,
 fkid MEDIUMINT, filler VARCHAR(255),
@@ -143,4 +157,7 @@ DROP TABLE t1, t2, t3;
 DROP PROCEDURE p1;
 DROP PROCEDURE p2;
 DROP PROCEDURE p3;
+[on slave]
+set @@global.binlog_format=  @old_global_binlog_format;
+set @@session.binlog_format=  @old_session_binlog_format;
 include/rpl_end.inc

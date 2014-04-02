@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,13 +13,29 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
 #ifndef MYSQL_CLIENT
+#include "unireg.h"
+#endif
+#include "my_global.h" // REQUIRED by log_event.h > m_string.h > my_bitmap.h
+#include "log_event.h"
+#ifndef MYSQL_CLIENT
+#include "sql_cache.h"                       // QUERY_CACHE_FLAGS_SIZE
+#include "sql_base.h"                       // close_tables_for_reopen
+#include "key.h"                            // key_copy
+#include "lock.h"                           // mysql_unlock_tables
+#include "sql_parse.h"             // mysql_reset_thd_for_next_command
 #include "rpl_rli.h"
 #include "rpl_utility.h"
 #endif
 #include "log_event_old.h"
 #include "rpl_record_old.h"
+#include "transaction.h"
+
+#include <algorithm>
+
+using std::min;
+using std::max;
 
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
 
@@ -33,12 +49,14 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
   uchar const *row_start= ev->m_rows_buf;
 
   /*
-    If m_table_id == ~0UL, then we have a dummy event that does not
-    contain any data.  In that case, we just remove all tables in the
+    If m_table_id == ~0U or max 6 Bytes integer, then we have a dummy event that
+    does not contain any data.  In that case, we just remove all tables in the
     tables_to_lock list, close the thread tables, and return with
     success.
    */
-  if (ev->m_table_id == ~0UL)
+  if ((ev->m_table_id.id() == ~0U || ev->m_table_id.id() == (~0ULL >> 16)) &&
+      ev->m_cols.n_bits == 1 && ev->m_cols.bitmap[0] == 0)
+
   {
     /*
        This one is supposed to be set: just an extra check so that
@@ -46,8 +64,7 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
      */
     DBUG_ASSERT(ev->get_flags(Old_rows_log_event::STMT_END_F));
 
-    const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
-    close_thread_tables(ev_thd);
+    const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(ev_thd);
     ev_thd->clear_error();
     DBUG_RETURN(0);
   }
@@ -57,7 +74,7 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
     do_apply_event(). We still check here to prevent future coding
     errors.
   */
-  DBUG_ASSERT(rli->sql_thd == ev_thd);
+  DBUG_ASSERT(rli->info_thd == ev_thd);
 
   /*
     If there is no locks taken, this is the first binrow event seen
@@ -73,26 +90,23 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
 
       We also call the mysql_reset_thd_for_next_command(), since this
       is the logical start of the next "statement". Note that this
-      call might reset the value of current_stmt_binlog_row_based, so
+      call might reset the value of current_stmt_binlog_format, so
       we need to do any changes to that value after this function.
     */
     lex_start(ev_thd);
     mysql_reset_thd_for_next_command(ev_thd);
 
     /*
-      Check if the slave is set to use SBR.  If so, it should switch
-      to using RBR until the end of the "statement", i.e., next
-      STMT_END_F or next error.
+      This is a row injection, so we flag the "statement" as
+      such. Note that this code is called both when the slave does row
+      injections and when the BINLOG statement is used to do row
+      injections.
     */
-    if (!ev_thd->current_stmt_binlog_row_based &&
-        mysql_bin_log.is_open() && (ev_thd->options & OPTION_BIN_LOG))
-    {
-      ev_thd->set_current_stmt_binlog_row_based();
-    }
+    ev_thd->lex->set_stmt_row_injection();
 
-    if (simple_open_n_lock_tables(ev_thd, rli->tables_to_lock))
+    if (open_and_lock_tables(ev_thd, rli->tables_to_lock, FALSE, 0))
     {
-      uint actual_error= ev_thd->main_da.sql_errno();
+      uint actual_error= ev_thd->get_stmt_da()->sql_errno();
       if (ev_thd->is_slave_error || ev_thd->is_fatal_error)
       {
         /*
@@ -101,11 +115,11 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
         */
         rli->report(ERROR_LEVEL, actual_error,
                     "Error '%s' on opening tables",
-                    (actual_error ? ev_thd->main_da.message() :
+                    (actual_error ? ev_thd->get_stmt_da()->message() :
                      "unexpected success or fatal error"));
         ev_thd->is_slave_error= 1;
       }
-      const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
+      const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(thd);
       DBUG_RETURN(actual_error);
     }
 
@@ -119,16 +133,23 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
 
     {
       RPL_TABLE_LIST *ptr= rli->tables_to_lock;
-      for ( ; ptr ; ptr= static_cast<RPL_TABLE_LIST*>(ptr->next_global))
+      for (uint i= 0 ; ptr&& (i< rli->tables_to_lock_count); 
+           ptr= static_cast<RPL_TABLE_LIST*>(ptr->next_global), i++)
       {
-        if (ptr->m_tabledef.compatible_with(rli, ptr->table))
+        DBUG_ASSERT(ptr->m_tabledef_valid);
+        TABLE *conv_table;
+        if (!ptr->m_tabledef.compatible_with(thd, const_cast<Relay_log_info*>(rli),
+                                             ptr->table, &conv_table))
         {
-          mysql_unlock_tables(ev_thd, ev_thd->lock);
-          ev_thd->lock= 0;
           ev_thd->is_slave_error= 1;
-          const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
+          const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(ev_thd);
           DBUG_RETURN(Old_rows_log_event::ERR_BAD_TABLE_DEF);
         }
+        DBUG_PRINT("debug", ("Table: %s.%s is compatible with master"
+                             " - conv_table: %p",
+                             ptr->table->s->db.str,
+                             ptr->table->s->table_name.str, conv_table));
+        ptr->m_conv_table= conv_table;
       }
     }
 
@@ -146,10 +167,9 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
       Old_rows_log_event, we can invalidate the query cache for the
       associated table.
      */
-    for (TABLE_LIST *ptr= rli->tables_to_lock ; ptr ; ptr= ptr->next_global)
-    {
+    TABLE_LIST *ptr= rli->tables_to_lock;
+    for (uint i=0; ptr && (i < rli->tables_to_lock_count); ptr= ptr->next_global, i++)
       const_cast<Relay_log_info*>(rli)->m_table_map.set_table(ptr->table_id, ptr->table);
-    }
 #ifdef HAVE_QUERY_CACHE
     query_cache.invalidate_locked_for_write(rli->tables_to_lock);
 #endif
@@ -173,23 +193,23 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
       TIMESTAMP column to a table with one.
       So we call set_time(), like in SBR. Presently it changes nothing.
     */
-    ev_thd->set_time((time_t)ev->when);
+    ev_thd->set_time(&ev->when);
     /*
       There are a few flags that are replicated with each row event.
       Make sure to set/clear them before executing the main body of
       the event.
     */
     if (ev->get_flags(Old_rows_log_event::NO_FOREIGN_KEY_CHECKS_F))
-        ev_thd->options|= OPTION_NO_FOREIGN_KEY_CHECKS;
+        ev_thd->variables.option_bits|= OPTION_NO_FOREIGN_KEY_CHECKS;
     else
-        ev_thd->options&= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+        ev_thd->variables.option_bits&= ~OPTION_NO_FOREIGN_KEY_CHECKS;
 
     if (ev->get_flags(Old_rows_log_event::RELAXED_UNIQUE_CHECKS_F))
-        ev_thd->options|= OPTION_RELAXED_UNIQUE_CHECKS;
+        ev_thd->variables.option_bits|= OPTION_RELAXED_UNIQUE_CHECKS;
     else
-        ev_thd->options&= ~OPTION_RELAXED_UNIQUE_CHECKS;
+        ev_thd->variables.option_bits&= ~OPTION_RELAXED_UNIQUE_CHECKS;
     /* A small test to verify that objects have consistent types */
-    DBUG_ASSERT(sizeof(ev_thd->options) == sizeof(OPTION_RELAXED_UNIQUE_CHECKS));
+    DBUG_ASSERT(sizeof(ev_thd->variables.option_bits) == sizeof(OPTION_RELAXED_UNIQUE_CHECKS));
 
     /*
       Now we are in a statement and will stay in a statement until we
@@ -230,36 +250,29 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
   break;
 
       default:
-  rli->report(ERROR_LEVEL, ev_thd->main_da.sql_errno(),
+  rli->report(ERROR_LEVEL, ev_thd->get_stmt_da()->sql_errno(),
                     "Error in %s event: row application failed. %s",
                     ev->get_type_str(),
-                    ev_thd->is_error() ? ev_thd->main_da.message() : "");
-  ev_thd->is_slave_error= 1;
+                    ev_thd->is_error() ? ev_thd->get_stmt_da()->message() : "");
+  thd->is_slave_error= 1;
   break;
       }
 
       row_start= row_end;
     }
-    DBUG_EXECUTE_IF("STOP_SLAVE_after_first_Rows_event",
+    DBUG_EXECUTE_IF("stop_slave_middle_group",
                     const_cast<Relay_log_info*>(rli)->abort_slave= 1;);
     error= do_after_row_operations(table, error);
   }
 
-  /*
-    We need to delay this clear until the table def is no longer needed.
-    The table def is needed in unpack_row().
-  */
-  if (rli->tables_to_lock && ev->get_flags(Old_rows_log_event::STMT_END_F))
-    const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
-
   if (error)
   {                     /* error has occured during the transaction */
-    rli->report(ERROR_LEVEL, ev_thd->main_da.sql_errno(),
+    rli->report(ERROR_LEVEL, ev_thd->get_stmt_da()->sql_errno(),
                 "Error in %s event: error during transaction execution "
                 "on table %s.%s. %s",
                 ev->get_type_str(), table->s->db.str,
                 table->s->table_name.str,
-                ev_thd->is_error() ? ev_thd->main_da.message() : "");
+                ev_thd->is_error() ? ev_thd->get_stmt_da()->message() : "");
 
     /*
       If one day we honour --skip-slave-errors in row-based replication, and
@@ -272,38 +285,10 @@ Old_rows_log_event::do_apply_event(Old_rows_log_event *ev, const Relay_log_info 
       thread is certainly going to stop.
       rollback at the caller along with sbr.
     */
-    ev_thd->reset_current_stmt_binlog_row_based();
+    ev_thd->reset_current_stmt_binlog_format_row();
     const_cast<Relay_log_info*>(rli)->cleanup_context(ev_thd, error);
     ev_thd->is_slave_error= 1;
     DBUG_RETURN(error);
-  }
-
-  /*
-    This code would ideally be placed in do_update_pos() instead, but
-    since we have no access to table there, we do the setting of
-    last_event_start_time here instead.
-  */
-  if (table && (table->s->primary_key == MAX_KEY) &&
-      !ev->cache_stmt && 
-      ev->get_flags(Old_rows_log_event::STMT_END_F) == Old_rows_log_event::RLE_NO_FLAGS)
-  {
-    /*
-      ------------ Temporary fix until WL#2975 is implemented ---------
-
-      This event is not the last one (no STMT_END_F). If we stop now
-      (in case of terminate_slave_thread()), how will we restart? We
-      have to restart from Table_map_log_event, but as this table is
-      not transactional, the rows already inserted will still be
-      present, and idempotency is not guaranteed (no PK) so we risk
-      that repeating leads to double insert. So we desperately try to
-      continue, hope we'll eventually leave this buggy situation (by
-      executing the final Old_rows_log_event). If we are in a hopeless
-      wait (reached end of last relay log and nothing gets appended
-      there), we timeout after one minute, and notify DBA about the
-      problem.  When WL#2975 is implemented, just remove the member
-      st_relay_log_info::last_event_start_time and all its occurences.
-    */
-    const_cast<Relay_log_info*>(rli)->last_event_start_time= my_time(0);
   }
 
   DBUG_RETURN(0);
@@ -574,18 +559,18 @@ replace_record(THD *thd, TABLE *table,
        We need to retrieve the old row into record[1] to be able to
        either update or delete the offending record.  We either:
 
-       - use rnd_pos() with a row-id (available as dupp_row) to the
+       - use ha_rnd_pos() with a row-id (available as dupp_row) to the
          offending row, if that is possible (MyISAM and Blackhole), or else
 
-       - use index_read_idx() with the key that is duplicated, to
+       - use ha_index_read_idx_map() with the key that is duplicated, to
          retrieve the offending row.
      */
     if (table->file->ha_table_flags() & HA_DUPLICATE_POS)
     {
-      error= table->file->rnd_pos(table->record[1], table->file->dup_ref);
+      error= table->file->ha_rnd_pos(table->record[1], table->file->dup_ref);
       if (error)
       {
-        DBUG_PRINT("info",("rnd_pos() returns error %d",error));
+        DBUG_PRINT("info",("ha_rnd_pos() returns error %d",error));
         if (error == HA_ERR_RECORD_DELETED)
           error= HA_ERR_KEY_NOT_FOUND;
         table->file->print_error(error, MYF(0));
@@ -608,13 +593,13 @@ replace_record(THD *thd, TABLE *table,
 
       key_copy((uchar*)key.get(), table->record[0], table->key_info + keynum,
                0);
-      error= table->file->index_read_idx_map(table->record[1], keynum,
-                                             (const uchar*)key.get(),
-                                             HA_WHOLE_KEY,
-                                             HA_READ_KEY_EXACT);
+      error= table->file->ha_index_read_idx_map(table->record[1], keynum,
+                                                (const uchar*)key.get(),
+                                                HA_WHOLE_KEY,
+                                                HA_READ_KEY_EXACT);
       if (error)
       {
-        DBUG_PRINT("info", ("index_read_idx() returns error %d", error));
+        DBUG_PRINT("info", ("ha_index_read_idx_map() returns error %d", error));
         if (error == HA_ERR_RECORD_DELETED)
           error= HA_ERR_KEY_NOT_FOUND;
         table->file->print_error(error, MYF(0));
@@ -729,9 +714,9 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
 
     */
     table->file->position(table->record[0]);
-    int error= table->file->rnd_pos(table->record[0], table->file->ref);
+    int error= table->file->ha_rnd_pos(table->record[0], table->file->ref);
     /*
-      rnd_pos() returns the record in table->record[0], so we have to
+      ha_rnd_pos() returns the record in table->record[0], so we have to
       move it to table->record[1].
      */
     memcpy(table->record[1], table->record[0], table->s->reclength);
@@ -747,7 +732,10 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
     int error;
     /* We have a key: search the table using the index */
     if (!table->file->inited && (error= table->file->ha_index_init(0, FALSE)))
+    {
+      table->file->print_error(error, MYF(0));
       DBUG_RETURN(error);
+    }
 
   /*
     Don't print debug messages when running valgrind since they can
@@ -767,8 +755,8 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
     my_ptrdiff_t const pos=
       table->s->null_bytes > 0 ? table->s->null_bytes - 1 : 0;
     table->record[1][pos]= 0xFF;
-    if ((error= table->file->index_read_map(table->record[1], key, HA_WHOLE_KEY,
-                                            HA_READ_KEY_EXACT)))
+    if ((error= table->file->ha_index_read_map(table->record[1], key, HA_WHOLE_KEY,
+                                               HA_READ_KEY_EXACT)))
     {
       table->file->print_error(error, MYF(0));
       table->file->ha_index_end();
@@ -822,7 +810,7 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
           256U - (1U << table->s->last_null_bit_pos);
       }
 
-      while ((error= table->file->index_next(table->record[1])))
+      while ((error= table->file->ha_index_next(table->record[1])))
       {
         /* We just skip records that has already been deleted */
         if (error == HA_ERR_RECORD_DELETED)
@@ -843,15 +831,18 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
     int restart_count= 0; // Number of times scanning has restarted from top
     int error;
 
-    /* We don't have a key: search the table using rnd_next() */
+    /* We don't have a key: search the table using ha_rnd_next() */
     if ((error= table->file->ha_rnd_init(1)))
-      return error;
+    {
+      table->file->print_error(error, MYF(0));
+      DBUG_RETURN(error);
+    }
 
     /* Continue until we find the right record or have made a full loop */
     do
     {
-  restart_rnd_next:
-      error= table->file->rnd_next(table->record[1]);
+  restart_ha_rnd_next:
+      error= table->file->ha_rnd_next(table->record[1]);
 
       DBUG_DUMP("record[0]", table->record[0], table->s->reclength);
       DBUG_DUMP("record[1]", table->record[1], table->s->reclength);
@@ -865,18 +856,24 @@ static int find_and_fetch_row(TABLE *table, uchar *key)
         any comparisons.
       */
       case HA_ERR_RECORD_DELETED:
-        goto restart_rnd_next;
+        goto restart_ha_rnd_next;
 
       case HA_ERR_END_OF_FILE:
-  if (++restart_count < 2)
-    table->file->ha_rnd_init(1);
-  break;
+        if (++restart_count < 2)
+        {
+          if ((error= table->file->ha_rnd_init(1)))
+          {
+            table->file->print_error(error, MYF(0));
+            DBUG_RETURN(error);
+          }
+        }
+       break;
 
       default:
-  table->file->print_error(error, MYF(0));
+        table->file->print_error(error, MYF(0));
         DBUG_PRINT("info", ("Record not found"));
-        table->file->ha_rnd_end();
-  DBUG_RETURN(error);
+        (void) table->file->ha_rnd_end();
+        DBUG_RETURN(error);
       }
     }
     while (restart_count < 2 && record_compare(table));
@@ -941,22 +938,6 @@ int Write_rows_log_event_old::do_before_row_operations(TABLE *table)
     from the start.
   */
   table->file->ha_start_bulk_insert(0);
-  /*
-    We need TIMESTAMP_NO_AUTO_SET otherwise ha_write_row() will not use fill
-    any TIMESTAMP column with data from the row but instead will use
-    the event's current time.
-    As we replicate from TIMESTAMP to TIMESTAMP and slave has no extra
-    columns, we know that all TIMESTAMP columns on slave will receive explicit
-    data from the row, so TIMESTAMP_NO_AUTO_SET is ok.
-    When we allow a table without TIMESTAMP to be replicated to a table having
-    more columns including a TIMESTAMP column, or when we allow a TIMESTAMP
-    column to be replicated into a BIGINT column and the slave's table has a
-    TIMESTAMP column, then the slave's TIMESTAMP column will take its value
-    from set_time() which we called earlier (consistent with SBR). And then in
-    some cases we won't want TIMESTAMP_NO_AUTO_SET (will require some code to
-    analyze if explicit data is provided for slave's TIMESTAMP columns).
-  */
-  table->timestamp_field_type= TIMESTAMP_NO_AUTO_SET;
   return error;
 }
 
@@ -1054,7 +1035,7 @@ int Delete_rows_log_event_old::do_after_row_operations(TABLE *table, int error)
 {
   /*error= ToDo:find out what this should really be, this triggers close_scan in nbd, returning error?*/
   table->file->ha_index_or_rnd_end();
-  my_free(m_memory, MYF(MY_ALLOW_ZERO_PTR)); // Free for multi_malloc
+  my_free(m_memory); // Free for multi_malloc
   m_memory= NULL;
   m_after_image= NULL;
   m_key= NULL;
@@ -1143,8 +1124,6 @@ int Update_rows_log_event_old::do_before_row_operations(TABLE *table)
   if (!m_memory)
     return HA_ERR_OUT_OF_MEM;
 
-  table->timestamp_field_type= TIMESTAMP_NO_AUTO_SET;
-
   return error;
 }
 
@@ -1153,7 +1132,7 @@ int Update_rows_log_event_old::do_after_row_operations(TABLE *table, int error)
 {
   /*error= ToDo:find out what this should really be, this triggers close_scan in nbd, returning error?*/
   table->file->ha_index_or_rnd_end();
-  my_free(m_memory, MYF(MY_ALLOW_ZERO_PTR));
+  my_free(m_memory);
   m_memory= NULL;
   m_after_image= NULL;
   m_key= NULL;
@@ -1253,8 +1232,11 @@ int Update_rows_log_event_old::do_exec_row(TABLE *table)
 #ifndef MYSQL_CLIENT
 Old_rows_log_event::Old_rows_log_event(THD *thd_arg, TABLE *tbl_arg, ulong tid,
                                        MY_BITMAP const *cols,
-                                       bool is_transactional)
-  : Log_event(thd_arg, 0, is_transactional),
+                                       bool using_trans)
+  : Log_event(thd_arg, 0,
+              using_trans ? Log_event::EVENT_TRANSACTIONAL_CACHE :
+                            Log_event::EVENT_STMT_CACHE,
+              Log_event::EVENT_NORMAL_LOGGING),
     m_row_count(0),
     m_table(tbl_arg),
     m_table_id(tid),
@@ -1277,9 +1259,9 @@ Old_rows_log_event::Old_rows_log_event(THD *thd_arg, TABLE *tbl_arg, ulong tid,
   DBUG_ASSERT((tbl_arg && tbl_arg->s && tid != ~0UL) ||
               (!tbl_arg && !cols && tid == ~0UL));
 
-  if (thd_arg->options & OPTION_NO_FOREIGN_KEY_CHECKS)
+  if (thd_arg->variables.option_bits & OPTION_NO_FOREIGN_KEY_CHECKS)
       set_flags(NO_FOREIGN_KEY_CHECKS_F);
-  if (thd_arg->options & OPTION_RELAXED_UNIQUE_CHECKS)
+  if (thd_arg->variables.option_bits & OPTION_RELAXED_UNIQUE_CHECKS)
       set_flags(RELAXED_UNIQUE_CHECKS_F);
   /* if bitmap_init fails, caught in is_valid() */
   if (likely(!bitmap_init(&m_cols,
@@ -1371,8 +1353,8 @@ Old_rows_log_event::Old_rows_log_event(const char *buf, uint event_len,
 
   const uchar* const ptr_rows_data= (const uchar*) ptr_after_width;
   size_t const data_size= event_len - (ptr_rows_data - (const uchar *) buf);
-  DBUG_PRINT("info",("m_table_id: %lu  m_flags: %d  m_width: %lu  data_size: %lu",
-                     m_table_id, m_flags, m_width, (ulong) data_size));
+  DBUG_PRINT("info",("m_table_id: %llu  m_flags: %d  m_width: %lu  data_size: %lu",
+                     m_table_id.id(), m_flags, m_width, (ulong) data_size));
   DBUG_DUMP("rows_data", (uchar*) ptr_rows_data, data_size);
 
   m_rows_buf= (uchar*) my_malloc(data_size, MYF(MY_WME));
@@ -1397,7 +1379,7 @@ Old_rows_log_event::~Old_rows_log_event()
   if (m_cols.bitmap == m_bitbuf) // no my_malloc happened
     m_cols.bitmap= 0; // so no my_free in bitmap_free
   bitmap_free(&m_cols); // To pair with bitmap_init().
-  my_free((uchar*)m_rows_buf, MYF(MY_ALLOW_ZERO_PTR));
+  my_free(m_rows_buf);
 }
 
 
@@ -1434,7 +1416,7 @@ int Old_rows_log_event::do_add_row_data(uchar *row_data, size_t length)
     trigger false warnings.
    */
 #ifndef HAVE_purify
-  DBUG_DUMP("row_data", row_data, min(length, 32));
+  DBUG_DUMP("row_data", row_data, min<size_t>(length, 32));
 #endif
 
   DBUG_ASSERT(m_rows_buf <= m_rows_cur);
@@ -1484,12 +1466,13 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
   int error= 0;
 
   /*
-    If m_table_id == ~0UL, then we have a dummy event that does not
-    contain any data.  In that case, we just remove all tables in the
+    If m_table_id == ~0U or max 6 Bytes integer, then we have a dummy event that
+    does not contain any data.  In that case, we just remove all tables in the
     tables_to_lock list, close the thread tables, and return with
     success.
    */
-  if (m_table_id == ~0UL)
+  if ((m_table_id.id() == ~0U || m_table_id.id() == (~0ULL >> 16)) &&
+      m_cols.n_bits == 1 && m_cols.bitmap[0] == 0)
   {
     /*
        This one is supposed to be set: just an extra check so that
@@ -1497,8 +1480,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
      */
     DBUG_ASSERT(get_flags(STMT_END_F));
 
-    const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
-    close_thread_tables(thd);
+    const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(thd);
     thd->clear_error();
     DBUG_RETURN(0);
   }
@@ -1508,7 +1490,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
     do_apply_event(). We still check here to prevent future coding
     errors.
   */
-  DBUG_ASSERT(rli->sql_thd == thd);
+  DBUG_ASSERT(rli->info_thd == thd);
 
   /*
     If there is no locks taken, this is the first binrow event seen
@@ -1518,8 +1500,6 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
   */
   if (!thd->lock)
   {
-    bool need_reopen= 1; /* To execute the first lap of the loop below */
-
     /*
       lock_tables() reads the contents of thd->lex, so they must be
       initialized. Contrary to in
@@ -1528,79 +1508,31 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
     */
     lex_start(thd);
 
-    while ((error= lock_tables(thd, rli->tables_to_lock,
-                               rli->tables_to_lock_count, &need_reopen)))
+    if ((error= lock_tables(thd, rli->tables_to_lock,
+                               rli->tables_to_lock_count, 0)))
     {
-      if (!need_reopen)
+      if (thd->is_slave_error || thd->is_fatal_error)
       {
-        if (thd->is_slave_error || thd->is_fatal_error)
-        {
-          /*
-            Error reporting borrowed from Query_log_event with many excessive
-            simplifications (we don't honour --slave-skip-errors)
-          */
-          uint actual_error= thd->net.last_errno;
-          rli->report(ERROR_LEVEL, actual_error,
-                      "Error '%s' in %s event: when locking tables",
-                      (actual_error ? thd->net.last_error :
-                       "unexpected success or fatal error"),
-                      get_type_str());
-          thd->is_fatal_error= 1;
-        }
-        else
-        {
-          rli->report(ERROR_LEVEL, error,
-                      "Error in %s event: when locking tables",
-                      get_type_str());
-        }
-        const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
-        DBUG_RETURN(error);
+        /*
+          Error reporting borrowed from Query_log_event with many excessive
+          simplifications (we don't honour --slave-skip-errors)
+        */
+        uint actual_error= thd->net.last_errno;
+        rli->report(ERROR_LEVEL, actual_error,
+                    "Error '%s' in %s event: when locking tables",
+                    (actual_error ? thd->net.last_error :
+                     "unexpected success or fatal error"),
+                    get_type_str());
+        thd->is_fatal_error= 1;
       }
-
-      /*
-        So we need to reopen the tables.
-
-        We need to flush the pending RBR event, since it keeps a
-        pointer to an open table.
-
-        ALTERNATIVE SOLUTION (not implemented): Extract a pointer to
-        the pending RBR event and reset the table pointer after the
-        tables has been reopened.
-
-        NOTE: For this new scheme there should be no pending event:
-        need to add code to assert that is the case.
-       */
-      error= thd->binlog_flush_pending_rows_event(false);
-      if (error)
+      else
       {
-        rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR,
-                    ER(ER_SLAVE_FATAL_ERROR),
-                    "call to binlog_flush_pending_rows_event() failed");
-        thd->is_slave_error= 1;
-        DBUG_RETURN(error);
+        rli->report(ERROR_LEVEL, error,
+                    "Error in %s event: when locking tables",
+                    get_type_str());
       }
-      TABLE_LIST *tables= rli->tables_to_lock;
-      close_tables_for_reopen(thd, &tables);
-
-      uint tables_count= rli->tables_to_lock_count;
-      if ((error= open_tables(thd, &tables, &tables_count, 0)))
-      {
-        if (thd->is_slave_error || thd->is_fatal_error)
-        {
-          /*
-            Error reporting borrowed from Query_log_event with many excessive
-            simplifications (we don't honour --slave-skip-errors)
-          */
-          uint actual_error= thd->net.last_errno;
-          rli->report(ERROR_LEVEL, actual_error,
-                      "Error '%s' on reopening tables",
-                      (actual_error ? thd->net.last_error :
-                       "unexpected success or fatal error"));
-          thd->is_slave_error= 1;
-        }
-        const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
-        DBUG_RETURN(error);
-      }
+      const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(thd);
+      DBUG_RETURN(error);
     }
 
     /*
@@ -1613,22 +1545,25 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
 
     {
       RPL_TABLE_LIST *ptr= rli->tables_to_lock;
-      for ( ; ptr ; ptr= static_cast<RPL_TABLE_LIST*>(ptr->next_global))
+      for (uint i= 0 ; ptr&& (i< rli->tables_to_lock_count);
+           ptr= static_cast<RPL_TABLE_LIST*>(ptr->next_global), i++)
       {
-        if (ptr->m_tabledef.compatible_with(rli, ptr->table))
+        TABLE *conv_table;
+        if (ptr->m_tabledef.compatible_with(thd, const_cast<Relay_log_info*>(rli),
+                                            ptr->table, &conv_table))
         {
-          mysql_unlock_tables(thd, thd->lock);
-          thd->lock= 0;
           thd->is_slave_error= 1;
-          const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
+          const_cast<Relay_log_info*>(rli)->slave_close_thread_tables(thd);
           DBUG_RETURN(ERR_BAD_TABLE_DEF);
         }
+        ptr->m_conv_table= conv_table;
       }
     }
 
     /*
-      ... and then we add all the tables to the table map and remove
-      them from tables to lock.
+      ... and then we add all the tables to the table map but keep
+      them in the tables to lock list.
+
 
       We also invalidate the query cache for all the tables, since
       they will now be changed.
@@ -1669,23 +1604,23 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
       TIMESTAMP column to a table with one.
       So we call set_time(), like in SBR. Presently it changes nothing.
     */
-    thd->set_time((time_t)when);
+    thd->set_time(&when);
     /*
       There are a few flags that are replicated with each row event.
       Make sure to set/clear them before executing the main body of
       the event.
     */
     if (get_flags(NO_FOREIGN_KEY_CHECKS_F))
-        thd->options|= OPTION_NO_FOREIGN_KEY_CHECKS;
+        thd->variables.option_bits|= OPTION_NO_FOREIGN_KEY_CHECKS;
     else
-        thd->options&= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+        thd->variables.option_bits&= ~OPTION_NO_FOREIGN_KEY_CHECKS;
 
     if (get_flags(RELAXED_UNIQUE_CHECKS_F))
-        thd->options|= OPTION_RELAXED_UNIQUE_CHECKS;
+        thd->variables.option_bits|= OPTION_RELAXED_UNIQUE_CHECKS;
     else
-        thd->options&= ~OPTION_RELAXED_UNIQUE_CHECKS;
+        thd->variables.option_bits&= ~OPTION_RELAXED_UNIQUE_CHECKS;
     /* A small test to verify that objects have consistent types */
-    DBUG_ASSERT(sizeof(thd->options) == sizeof(OPTION_RELAXED_UNIQUE_CHECKS));
+    DBUG_ASSERT(sizeof(thd->variables.option_bits) == sizeof(OPTION_RELAXED_UNIQUE_CHECKS));
 
     /*
       Now we are in a statement and will stay in a statement until we
@@ -1781,17 +1716,10 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
  
     } // row processing loop
 
-    DBUG_EXECUTE_IF("STOP_SLAVE_after_first_Rows_event",
+    DBUG_EXECUTE_IF("stop_slave_middle_group",
                     const_cast<Relay_log_info*>(rli)->abort_slave= 1;);
     error= do_after_row_operations(rli, error);
   } // if (table)
-
-  /*
-    We need to delay this clear until here bacause unpack_current_row() uses
-    master-side table definitions stored in rli.
-  */
-  if (rli->tables_to_lock && get_flags(STMT_END_F))
-    const_cast<Relay_log_info*>(rli)->clear_tables_to_lock();
 
   if (error)
   {                     /* error has occured during the transaction */
@@ -1813,7 +1741,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
       thread is certainly going to stop.
       rollback at the caller along with sbr.
     */
-    thd->reset_current_stmt_binlog_row_based();
+    thd->reset_current_stmt_binlog_format_row();
     const_cast<Relay_log_info*>(rli)->cleanup_context(thd, error);
     thd->is_slave_error= 1;
     DBUG_RETURN(error);
@@ -1825,7 +1753,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
     last_event_start_time here instead.
   */
   if (table && (table->s->primary_key == MAX_KEY) &&
-      !cache_stmt && get_flags(STMT_END_F) == RLE_NO_FLAGS)
+      !is_using_trans_cache() && get_flags(STMT_END_F) == RLE_NO_FLAGS)
   {
     /*
       ------------ Temporary fix until WL#2975 is implemented ---------
@@ -1863,7 +1791,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
       (assume the last master's transaction is ignored by the slave because of
       replicate-ignore rules).
     */
-    int binlog_error= thd->binlog_flush_pending_rows_event(true);
+    int binlog_error= thd->binlog_flush_pending_rows_event(TRUE);
 
     /*
       If this event is not in a transaction, the call below will, if some
@@ -1873,8 +1801,11 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
       Xid_log_event will come next which will, if some transactional engines
       are involved, commit the transaction and flush the pending event to the
       binlog.
+      If there was a deadlock the transaction should have been rolled back
+      already. So there should be no need to rollback the transaction.
     */
-    if ((error= ha_autocommit_or_rollback(thd, binlog_error)))
+    DBUG_ASSERT(! thd->transaction_rollback_request);
+    if ((error= (binlog_error ? trans_rollback_stmt(thd) : trans_commit_stmt(thd))))
       rli->report(ERROR_LEVEL, error,
                   "Error in %s event: commit of row events failed, "
                   "table `%s`.`%s`",
@@ -1892,7 +1823,7 @@ int Old_rows_log_event::do_apply_event(Relay_log_info const *rli)
       event flushed.
     */
 
-    thd->reset_current_stmt_binlog_row_based();
+    thd->reset_current_stmt_binlog_format_row();
     const_cast<Relay_log_info*>(rli)->cleanup_context(thd, 0);
   }
 
@@ -1930,7 +1861,7 @@ Old_rows_log_event::do_update_pos(Relay_log_info *rli)
       Step the group log position if we are not in a transaction,
       otherwise increase the event log position.
      */
-    rli->stmt_done(log_pos, when);
+    rli->stmt_done(log_pos);
     /*
       Clear any errors in thd->net.last_err*. It is not known if this is
       needed or not. It is believed that any errors that may exist in
@@ -1953,21 +1884,9 @@ Old_rows_log_event::do_update_pos(Relay_log_info *rli)
 #ifndef MYSQL_CLIENT
 bool Old_rows_log_event::write_data_header(IO_CACHE *file)
 {
-  uchar buf[ROWS_HEADER_LEN];	// No need to init the buffer
-
   // This method should not be reached.
   assert(0);
-
-  DBUG_ASSERT(m_table_id != ~0UL);
-  DBUG_EXECUTE_IF("old_row_based_repl_4_byte_map_id_master",
-                  {
-                    int4store(buf + 0, m_table_id);
-                    int2store(buf + 4, m_flags);
-                    return (my_b_safe_write(file, buf, 6));
-                  });
-  int6store(buf + RW_MAPID_OFFSET, (ulonglong)m_table_id);
-  int2store(buf + RW_FLAGS_OFFSET, m_flags);
-  return (my_b_safe_write(file, buf, ROWS_HEADER_LEN));
+  return TRUE;
 }
 
 
@@ -2003,14 +1922,15 @@ bool Old_rows_log_event::write_data_body(IO_CACHE*file)
 
 
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
-void Old_rows_log_event::pack_info(Protocol *protocol)
+int Old_rows_log_event::pack_info(Protocol *protocol)
 {
   char buf[256];
   char const *const flagstr=
     get_flags(STMT_END_F) ? " flags: STMT_END_F" : "";
   size_t bytes= my_snprintf(buf, sizeof(buf),
-                               "table_id: %lu%s", m_table_id, flagstr);
+                            "table_id: %llu%s", m_table_id.id(), flagstr);
   protocol->store(buf, bytes, &my_charset_bin);
+  return 0;
 }
 #endif
 
@@ -2026,16 +1946,10 @@ void Old_rows_log_event::print_helper(FILE *file,
   {
     bool const last_stmt_event= get_flags(STMT_END_F);
     print_header(head, print_event_info, !last_stmt_event);
-    my_b_printf(head, "\t%s: table id %lu%s\n",
-                name, m_table_id,
+    my_b_printf(head, "\t%s: table id %llu%s\n",
+                name, m_table_id.id(),
                 last_stmt_event ? " flags: STMT_END_F" : "");
     print_base64(body, print_event_info, !last_stmt_event);
-  }
-
-  if (get_flags(STMT_END_F))
-  {
-    copy_event_cache_to_file_and_reinit(head, file);
-    copy_event_cache_to_file_and_reinit(body, file);
   }
 }
 #endif
@@ -2091,7 +2005,7 @@ Old_rows_log_event::write_row(const Relay_log_info *const rli,
 
   /* fill table->record[0] with default values */
 
-  if ((error= prepare_record(table, m_width,
+  if ((error= prepare_record(table, table->write_set,
                              TRUE /* check if columns have def. values */)))
     DBUG_RETURN(error);
   
@@ -2135,19 +2049,19 @@ Old_rows_log_event::write_row(const Relay_log_info *const rli,
        We need to retrieve the old row into record[1] to be able to
        either update or delete the offending record.  We either:
 
-       - use rnd_pos() with a row-id (available as dupp_row) to the
+       - use ha_rnd_pos() with a row-id (available as dupp_row) to the
          offending row, if that is possible (MyISAM and Blackhole), or else
 
-       - use index_read_idx() with the key that is duplicated, to
+       - use ha_index_read_idx_map() with the key that is duplicated, to
          retrieve the offending row.
      */
     if (table->file->ha_table_flags() & HA_DUPLICATE_POS)
     {
-      DBUG_PRINT("info",("Locating offending record using rnd_pos()"));
-      error= table->file->rnd_pos(table->record[1], table->file->dup_ref);
+      DBUG_PRINT("info",("Locating offending record using ha_rnd_pos()"));
+      error= table->file->ha_rnd_pos(table->record[1], table->file->dup_ref);
       if (error)
       {
-        DBUG_PRINT("info",("rnd_pos() returns error %d",error));
+        DBUG_PRINT("info",("ha_rnd_pos() returns error %d",error));
         if (error == HA_ERR_RECORD_DELETED)
           error= HA_ERR_KEY_NOT_FOUND;
         table->file->print_error(error, MYF(0));
@@ -2176,13 +2090,13 @@ Old_rows_log_event::write_row(const Relay_log_info *const rli,
 
       key_copy((uchar*)key.get(), table->record[0], table->key_info + keynum,
                0);
-      error= table->file->index_read_idx_map(table->record[1], keynum,
-                                             (const uchar*)key.get(),
-                                             HA_WHOLE_KEY,
-                                             HA_READ_KEY_EXACT);
+      error= table->file->ha_index_read_idx_map(table->record[1], keynum,
+                                                (const uchar*)key.get(),
+                                                HA_WHOLE_KEY,
+                                                HA_READ_KEY_EXACT);
       if (error)
       {
-        DBUG_PRINT("info",("index_read_idx() returns error %d", error));
+        DBUG_PRINT("info",("ha_index_read_idx_map() returns error %d", error));
         if (error == HA_ERR_RECORD_DELETED)
           error= HA_ERR_KEY_NOT_FOUND;
         table->file->print_error(error, MYF(0));
@@ -2306,7 +2220,7 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
   /* unpack row - missing fields get default values */
 
   // TODO: shall we check and report errors here?
-  prepare_record(table, m_width, FALSE /* don't check errors */); 
+  prepare_record(table, table->read_set, FALSE /* don't check errors */); 
   error= unpack_current_row(rli); 
 
 #ifndef DBUG_OFF
@@ -2396,9 +2310,9 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
       table->s->null_bytes > 0 ? table->s->null_bytes - 1 : 0;
     table->record[0][pos]= 0xFF;
     
-    if ((error= table->file->index_read_map(table->record[0], m_key, 
-                                            HA_WHOLE_KEY,
-                                            HA_READ_KEY_EXACT)))
+    if ((error= table->file->ha_index_read_map(table->record[0], m_key,
+                                               HA_WHOLE_KEY,
+                                               HA_READ_KEY_EXACT)))
     {
       DBUG_PRINT("info",("no record matching the key found in the table"));
       if (error == HA_ERR_RECORD_DELETED)
@@ -2446,7 +2360,7 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
           BI image that is null and part of UNNI.
         */
         bool null_found= FALSE;
-        for (uint i=0; i < keyinfo->key_parts && !null_found; i++)
+        for (uint i=0; i < keyinfo->user_defined_key_parts && !null_found; i++)
         {
           uint fieldnr= keyinfo->key_part[i].fieldnr - 1;
           Field **f= table->field+fieldnr;
@@ -2487,14 +2401,14 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
           256U - (1U << table->s->last_null_bit_pos);
       }
 
-      while ((error= table->file->index_next(table->record[0])))
+      while ((error= table->file->ha_index_next(table->record[0])))
       {
         /* We just skip records that has already been deleted */
         if (error == HA_ERR_RECORD_DELETED)
           continue;
         DBUG_PRINT("info",("no record matching the given row found"));
         table->file->print_error(error, MYF(0));
-        table->file->ha_index_end();
+        (void) table->file->ha_index_end();
         DBUG_RETURN(error);
       }
     }
@@ -2506,11 +2420,11 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
   }
   else
   {
-    DBUG_PRINT("info",("locating record using table scan (rnd_next)"));
+    DBUG_PRINT("info",("locating record using table scan (ha_rnd_next)"));
 
     int restart_count= 0; // Number of times scanning has restarted from top
 
-    /* We don't have a key: search the table using rnd_next() */
+    /* We don't have a key: search the table using ha_rnd_next() */
     if ((error= table->file->ha_rnd_init(1)))
     {
       DBUG_PRINT("info",("error initializing table scan"
@@ -2522,8 +2436,8 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
     /* Continue until we find the right record or have made a full loop */
     do
     {
-  restart_rnd_next:
-      error= table->file->rnd_next(table->record[0]);
+  restart_ha_rnd_next:
+      error= table->file->ha_rnd_next(table->record[0]);
 
       switch (error) {
 
@@ -2531,16 +2445,22 @@ int Old_rows_log_event::find_row(const Relay_log_info *rli)
         break;
 
       case HA_ERR_RECORD_DELETED:
-        goto restart_rnd_next;
+        goto restart_ha_rnd_next;
 
       case HA_ERR_END_OF_FILE:
         if (++restart_count < 2)
-          table->file->ha_rnd_init(1);
+        {
+          if ((error= table->file->ha_rnd_init(1)))
+          {
+            table->file->print_error(error, MYF(0));
+            DBUG_RETURN(error);
+          }
+        }
         break;
 
       default:
         DBUG_PRINT("info", ("Failed to get next record"
-                            " (rnd_next returns %d)",error));
+                            " (ha_rnd_next returns %d)",error));
         table->file->print_error(error, MYF(0));
         table->file->ha_rnd_end();
         DBUG_RETURN(error);
@@ -2654,22 +2574,6 @@ Write_rows_log_event_old::do_before_row_operations(const Slave_reporting_capabil
     from the start.
   */
   m_table->file->ha_start_bulk_insert(0);
-  /*
-    We need TIMESTAMP_NO_AUTO_SET otherwise ha_write_row() will not use fill
-    any TIMESTAMP column with data from the row but instead will use
-    the event's current time.
-    As we replicate from TIMESTAMP to TIMESTAMP and slave has no extra
-    columns, we know that all TIMESTAMP columns on slave will receive explicit
-    data from the row, so TIMESTAMP_NO_AUTO_SET is ok.
-    When we allow a table without TIMESTAMP to be replicated to a table having
-    more columns including a TIMESTAMP column, or when we allow a TIMESTAMP
-    column to be replicated into a BIGINT column and the slave's table has a
-    TIMESTAMP column, then the slave's TIMESTAMP column will take its value
-    from set_time() which we called earlier (consistent with SBR). And then in
-    some cases we won't want TIMESTAMP_NO_AUTO_SET (will require some code to
-    analyze if explicit data is provided for slave's TIMESTAMP columns).
-  */
-  m_table->timestamp_field_type= TIMESTAMP_NO_AUTO_SET;
   return error;
 }
 
@@ -2791,7 +2695,7 @@ Delete_rows_log_event_old::do_after_row_operations(const Slave_reporting_capabil
 {
   /*error= ToDo:find out what this should really be, this triggers close_scan in nbd, returning error?*/
   m_table->file->ha_index_or_rnd_end();
-  my_free(m_key, MYF(MY_ALLOW_ZERO_PTR));
+  my_free(m_key);
   m_key= NULL;
 
   return error;
@@ -2878,8 +2782,6 @@ Update_rows_log_event_old::do_before_row_operations(const Slave_reporting_capabi
       return HA_ERR_OUT_OF_MEM;
   }
 
-  m_table->timestamp_field_type= TIMESTAMP_NO_AUTO_SET;
-
   return 0;
 }
 
@@ -2890,7 +2792,7 @@ Update_rows_log_event_old::do_after_row_operations(const Slave_reporting_capabil
 {
   /*error= ToDo:find out what this should really be, this triggers close_scan in nbd, returning error?*/
   m_table->file->ha_index_or_rnd_end();
-  my_free(m_key, MYF(MY_ALLOW_ZERO_PTR)); // Free for multi_malloc
+  my_free(m_key); // Free for multi_malloc
   m_key= NULL;
 
   return error;

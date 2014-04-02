@@ -35,7 +35,7 @@ if (!$_include_file_depth)
 if ($rpl_debug)
 {
   --echo $_include_file_indent con='$CURRENT_CONNECTION' warn='$ENABLED_WARNINGS' qlog='$ENABLED_QUERY_LOG' rlog='$ENABLED_RESULT_LOG' aborterr='$ENABLED_ABORT_ON_ERROR'
-  --echo $_include_file_indent==== BEGIN include/$include_filename ====
+  --echo $_include_file_indent==== BEGIN include/rpl_stop_server.inc ====
 }
 
 
@@ -47,8 +47,8 @@ if ($rpl_debug)
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.$rpl_server_number.expect
 
 # Send shutdown to the connected server and give
-# it 10 seconds to die before zapping it
-shutdown_server 10;
+# it 14 seconds to die before zapping it
+shutdown_server 14;
 
 --source include/wait_until_disconnected.inc
 

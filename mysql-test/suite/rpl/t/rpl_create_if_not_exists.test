@@ -28,6 +28,8 @@
 #
 
 source include/master-slave.inc;
+source include/not_gtid_enabled.inc;
+
 disable_warnings;
 DROP DATABASE IF EXISTS mysqltest;
 
@@ -39,7 +41,7 @@ CREATE TABLE IF NOT EXISTS t2 SELECT * FROM t;
 CREATE EVENT IF NOT EXISTS e 
 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR 
 DO SELECT now();
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 connection slave;
 #DROP database from slave.
@@ -56,7 +58,7 @@ CREATE TABLE IF NOT EXISTS t2 SELECT * FROM t;
 CREATE EVENT IF NOT EXISTS e 
 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR 
 DO SELECT now(); 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 connection slave;
 SHOW TABLES in mysqltest;
@@ -102,7 +104,7 @@ CREATE TABLE t2(c1 INTEGER) SELECT c1 FROM t3;
 # value '1' in them.  The records of t2 are not inserted into them.  
 SELECT * FROM t1; 
 SELECT * FROM t2; 
-sync_slave_with_master; 
+--source include/sync_slave_sql_with_master.inc 
 
 # In these two statements, t1 and t2 are the base table. The recoreds of t2
 # are inserted into it when CREATE TABLE ...  SELECT was executed.  
@@ -119,32 +121,75 @@ SELECT * FROM t2;
 DROP TABLE t1;
 DROP TABLE t2;
 DROP TABLE t3;
-sync_slave_with_master;
+
+--echo # WL#5370
+--echo # The behavior of statement 'CREATE TABLE SELECT IF NOT EXISTS' is changed.
+--echo # After the worklog, it will insert nothing and the statement will not be
+--echo # binlogged if the table already exists.
+--echo # After the worklog, some bugs will disappear automotically.
+--source include/rpl_reset.inc
 
 --echo
---echo # Bug#55616 Killing thread or query during CREATE IF NOT EXISTS makes
---echo # slave SQL thread abort
+--echo # Case 1: BUG#47132
+connection master;
+call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.*");
+
+CREATE TABLE t1 (id int);
+CREATE TABLE t2 (id int);
+INSERT INTO t1 VALUES (1), (1);
+INSERT INTO t2 VALUES (2), (2);
+
+CREATE VIEW v1 AS SELECT id FROM t2;
+--let binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+CREATE TABLE IF NOT EXISTS v1(a int, b int) SELECT id, id FROM t1;
+--source include/show_binlog_events.inc
+
+SHOW CREATE TABLE v1;
+SELECT * FROM t2;
+SELECT * FROM v1;
+DROP VIEW v1;
+
+# the warning only happens on SBR, so we disable it.
+--disable_warnings
+CREATE TEMPORARY TABLE tt1 AS SELECT id FROM t2;
+--enable_warnings
+
+--let binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+CREATE TEMPORARY TABLE IF NOT EXISTS tt1(a int, b int) SELECT id, id FROM t1;
+--source include/show_binlog_events.inc
+SELECT * FROM t2;
+SELECT * FROM tt1;
+DROP TEMPORARY TABLE tt1;
+
 --echo
-
---connection master1
-let $con_id = `SELECT CONNECTION_ID()`;
-
-CREATE TABLE t1 ( i INT );
-send CREATE TABLE IF NOT EXISTS t1
-  AS SELECT SLEEP(3);
-
-connection master;
-let $wait_timeout = 3;
-let $show_statement = SHOW PROCESSLIST;
-let $field = State;
-let $condition = = 'User sleep';
-source include/wait_show_condition.inc;
-
---replace_result $con_id master1
-eval KILL QUERY $con_id;
-sync_slave_with_master;
+--echo # Case 1: BUG#47132
+--echo # RBR breaks on CREATE TABLE IF EXISTS <existing VIEW> AS SELECT
+CREATE VIEW v1 AS SELECT 1 as a;
+--let binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+CREATE TABLE IF NOT EXISTS v1 SELECT 2 as a;
+--source include/show_binlog_events.inc
+--source include/sync_slave_sql_with_master.inc
 
 connection master;
-DROP TABLE t1;
+DROP VIEW v1;
+
+DROP TABLE t1, t2;
+
+
+--echo #
+--echo # Test case which has failed on assertion after refactoring which was
+--echo # made as part of fix for bug #27480 "Extend CREATE TEMPORARY TABLES
+--echo # privilege to allow temp table operations".
+--echo #
+CREATE TEMPORARY TABLE t1 (id int);
+CREATE TABLE IF NOT EXISTS t2 LIKE t1;
+--echo # The below statement should succeed with warning and
+--echo # should not crash due to failing assertion.
+CREATE TABLE IF NOT EXISTS t2 LIKE t1;
+--echo # Clean-up.
+DROP TABLE t1, t2;
+--source include/sync_slave_sql_with_master.inc
+connection master;
+
 
 --source include/rpl_end.inc

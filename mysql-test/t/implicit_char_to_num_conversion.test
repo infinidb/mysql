@@ -16,7 +16,7 @@
 DROP TABLE IF EXISTS t5;
 --enable_warnings
 
-let $default_engine = `select @@SESSION.storage_engine`;
+let $default_engine = `select @@SESSION.default_storage_engine`;
 
 # Bug#11766521 - BIT Datatype comparison in where clause return incorrect
 # result for '=' , '<=>' operators
@@ -30,6 +30,8 @@ SELECT HEX(c1) FROM t5 ORDER BY c1;
 SELECT HEX(c1) FROM t5 WHERE c1 = b'1' ORDER BY c1;
 SELECT HEX(c1) FROM t5 WHERE c1 <=> b'1' ORDER BY c1;
 SELECT HEX(c1) FROM t5 WHERE c1 != b'1' ORDER BY c1;
+--echo # In the following queries the string is compared as ASCII when
+--echo # range access is used. See BUG#13727586.
 SELECT HEX(c1) FROM t5 WHERE c1 >= '1' ORDER BY c1;
 SELECT HEX(c1) FROM t5 WHERE c1 <= '1' ORDER BY c1;
 SELECT HEX(c1) FROM t5 WHERE c1 < '1' ORDER BY c1;

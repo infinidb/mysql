@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2004-2007 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,9 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /**
   @file
@@ -23,7 +20,10 @@
   Text .frm files management routines
 */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "parse_file.h"
+#include "unireg.h"                            // CREATE_MODE
+#include "sql_table.h"                        // build_table_filename
 #include <errno.h>
 #include <m_ctype.h>
 #include <my_sys.h>
@@ -240,8 +240,9 @@ sql_create_definition_file(const LEX_STRING *dir, const LEX_STRING *file_name,
   // temporary file name
   path[path_end]='~';
   path[path_end+1]= '\0';
-  if ((handler= my_create(path, CREATE_MODE, O_RDWR | O_TRUNC,
-			  MYF(MY_WME))) <= 0)
+  if ((handler= mysql_file_create(key_file_fileparser,
+                                  path, CREATE_MODE, O_RDWR | O_TRUNC,
+                                  MYF(MY_WME))) <= 0)
   {
     DBUG_RETURN(TRUE);
   }
@@ -270,11 +271,11 @@ sql_create_definition_file(const LEX_STRING *dir, const LEX_STRING *file_name,
     goto err_w_file;
 
   if (opt_sync_frm) {
-    if (my_sync(handler, MYF(MY_WME)))
+    if (mysql_file_sync(handler, MYF(MY_WME)))
       goto err_w_file;
   }
 
-  if (my_close(handler, MYF(MY_WME)))
+  if (mysql_file_close(handler, MYF(MY_WME)))
   {
     DBUG_RETURN(TRUE);
   }
@@ -286,7 +287,7 @@ sql_create_definition_file(const LEX_STRING *dir, const LEX_STRING *file_name,
     char path_to[FN_REFLEN];
     memcpy(path_to, path, path_end+1);
     path[path_end]='~';
-    if (my_rename(path, path_to, MYF(MY_WME)))
+    if (mysql_file_rename(key_file_fileparser, path, path_to, MYF(MY_WME)))
     {
       DBUG_RETURN(TRUE);
     }
@@ -295,7 +296,7 @@ sql_create_definition_file(const LEX_STRING *dir, const LEX_STRING *file_name,
 err_w_cache:
   end_io_cache(&file);
 err_w_file:
-  my_close(handler, MYF(MY_WME));
+  mysql_file_close(handler, MYF(MY_WME));
   DBUG_RETURN(TRUE);
 }
 
@@ -324,7 +325,7 @@ my_bool rename_in_schema_file(THD *thd,
   build_table_filename(new_path, sizeof(new_path) - 1,
                        new_db, new_name, reg_ext, 0);
 
-  if (my_rename(old_path, new_path, MYF(MY_WME)))
+  if (mysql_file_rename(key_file_frm, old_path, new_path, MYF(MY_WME)))
     return 1;
 
   /* check if arc_dir exists: disabled unused feature (see bug #17823). */
@@ -363,12 +364,13 @@ sql_parse_prepare(const LEX_STRING *file_name, MEM_ROOT *mem_root,
 {
   MY_STAT stat_info;
   size_t len;
-  char *end, *sign;
+  char *buff, *end, *sign;
   File_parser *parser;
   File file;
   DBUG_ENTER("sql_parse_prepare");
 
-  if (!my_stat(file_name->str, &stat_info, MYF(MY_WME)))
+  if (!mysql_file_stat(key_file_fileparser,
+                       file_name->str, &stat_info, MYF(MY_WME)))
   {
     DBUG_RETURN(0);
   }
@@ -384,43 +386,43 @@ sql_parse_prepare(const LEX_STRING *file_name, MEM_ROOT *mem_root,
     DBUG_RETURN(0);
   }
 
-  if (!(parser->buff= (char*) alloc_root(mem_root, stat_info.st_size+1)))
+  if (!(buff= (char*) alloc_root(mem_root, stat_info.st_size+1)))
   {
     DBUG_RETURN(0);
   }
 
-  if ((file= my_open(file_name->str, O_RDONLY | O_SHARE, MYF(MY_WME))) < 0)
+  if ((file= mysql_file_open(key_file_fileparser, file_name->str,
+                             O_RDONLY | O_SHARE, MYF(MY_WME))) < 0)
   {
     DBUG_RETURN(0);
   }
   
-  if ((len= my_read(file, (uchar *)parser->buff,
-                    stat_info.st_size, MYF(MY_WME))) ==
-      MY_FILE_ERROR)
+  if ((len= mysql_file_read(file, (uchar *)buff, stat_info.st_size,
+                            MYF(MY_WME))) == MY_FILE_ERROR)
   {
-    my_close(file, MYF(MY_WME));
+    mysql_file_close(file, MYF(MY_WME));
     DBUG_RETURN(0);
   }
 
-  if (my_close(file, MYF(MY_WME)))
+  if (mysql_file_close(file, MYF(MY_WME)))
   {
     DBUG_RETURN(0);
   }
 
-  end= parser->end= parser->buff + len;
+  end= buff + len;
   *end= '\0'; // barrier for more simple parsing
 
   // 7 = 5 (TYPE=) + 1 (letter at least of type name) + 1 ('\n')
   if (len < 7 ||
-      parser->buff[0] != 'T' ||
-      parser->buff[1] != 'Y' ||
-      parser->buff[2] != 'P' ||
-      parser->buff[3] != 'E' ||
-      parser->buff[4] != '=')
+      buff[0] != 'T' ||
+      buff[1] != 'Y' ||
+      buff[2] != 'P' ||
+      buff[3] != 'E' ||
+      buff[4] != '=')
     goto frm_error;
 
   // skip signature;
-  parser->file_type.str= sign= parser->buff + 5;
+  parser->file_type.str= sign= buff + 5;
   while (*sign >= 'A' && *sign <= 'Z' && sign < end)
     sign++;
   if (*sign != '\n')
@@ -429,6 +431,7 @@ sql_parse_prepare(const LEX_STRING *file_name, MEM_ROOT *mem_root,
   // EOS for file signature just for safety
   *sign= '\0';
 
+  parser->end= end;
   parser->start= sign + 1;
   parser->content_ok= 1;
 
@@ -461,11 +464,12 @@ frm_error:
 */
 
 
-static char *
-parse_string(char *ptr, char *end, MEM_ROOT *mem_root, LEX_STRING *str)
+static const char *
+parse_string(const char *ptr, const char *end, MEM_ROOT *mem_root,
+             LEX_STRING *str)
 {
   // get string length
-  char *eol= strchr(ptr, '\n');
+  const char *eol= strchr(ptr, '\n');
 
   if (eol >= end)
     return 0;
@@ -492,7 +496,7 @@ parse_string(char *ptr, char *end, MEM_ROOT *mem_root, LEX_STRING *str)
 */
 
 my_bool
-read_escaped_string(char *ptr, char *eol, LEX_STRING *str)
+read_escaped_string(const char *ptr, const char *eol, LEX_STRING *str)
 {
   char *write_pos= str->str;
 
@@ -552,10 +556,11 @@ read_escaped_string(char *ptr, char *eol, LEX_STRING *str)
 */
 
 
-char *
-parse_escaped_string(char *ptr, char *end, MEM_ROOT *mem_root, LEX_STRING *str)
+const char *
+parse_escaped_string(const char *ptr, const char *end, MEM_ROOT *mem_root,
+                     LEX_STRING *str)
 {
-  char *eol= strchr(ptr, '\n');
+  const char *eol= strchr(ptr, '\n');
 
   if (eol == 0 || eol >= end ||
       !(str->str= (char*) alloc_root(mem_root, (eol - ptr) + 1)) ||
@@ -581,11 +586,11 @@ parse_escaped_string(char *ptr, char *end, MEM_ROOT *mem_root, LEX_STRING *str)
     \#	  pointer on symbol after string
 */
 
-static char *
-parse_quoted_escaped_string(char *ptr, char *end,
+static const char *
+parse_quoted_escaped_string(const char *ptr, const char *end,
 			    MEM_ROOT *mem_root, LEX_STRING *str)
 {
-  char *eol;
+  const char *eol;
   uint result_len= 0;
   bool escaped= 0;
 
@@ -622,7 +627,7 @@ parse_quoted_escaped_string(char *ptr, char *end,
   @param[in] mem_root         MEM_ROOT for parameters allocation
 */
 
-bool get_file_options_ulllist(char *&ptr, char *end, char *line,
+bool get_file_options_ulllist(const char *&ptr, const char *end, const char *line,
                               uchar* base, File_option *parameter,
                               MEM_ROOT *mem_root)
 {
@@ -633,7 +638,7 @@ bool get_file_options_ulllist(char *&ptr, char *end, char *line,
   while (ptr < end)
   {
     int not_used;
-    char *num_end= end;
+    char *num_end= const_cast<char *>(end);
     if (!(num= (ulonglong*)alloc_root(mem_root, sizeof(ulonglong))) ||
         nlist->push_back(num, mem_root))
       goto nlist_err;
@@ -688,18 +693,18 @@ nlist_err:
 my_bool
 File_parser::parse(uchar* base, MEM_ROOT *mem_root,
                    struct File_option *parameters, uint required,
-                   Unknown_key_hook *hook)
+                   Unknown_key_hook *hook) const
 {
   uint first_param= 0, found= 0;
-  char *ptr= start;
-  char *eol;
+  const char *ptr= start;
+  const char *eol;
   LEX_STRING *str;
   List<LEX_STRING> *list;
   DBUG_ENTER("File_parser::parse");
 
   while (ptr < end && found < required)
   {
-    char *line= ptr;
+    const char *line= ptr;
     if (*ptr == '#')
     {
       // it is comment
@@ -892,9 +897,9 @@ list_err:
 */
 
 bool
-File_parser_dummy_hook::process_unknown_string(char *&unknown_key,
+File_parser_dummy_hook::process_unknown_string(const char *&unknown_key,
                                                uchar* base, MEM_ROOT *mem_root,
-                                               char *end)
+                                               const char *end)
 {
   DBUG_ENTER("file_parser_dummy_hook::process_unknown_string");
   DBUG_PRINT("info", ("Unknown key: '%60s'", unknown_key));

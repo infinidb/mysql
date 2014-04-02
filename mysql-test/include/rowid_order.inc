@@ -16,7 +16,7 @@
 #               main code went into include/rowid_order.inc
 #
 
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 
 --disable_warnings
 drop table if exists t1, t2, t3,t4;
@@ -36,6 +36,11 @@ insert into t1 values (-5, 1, 1),
   (3, 1, 1),
   (0, 1, 1),
   (10, 1, 1);
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
 explain select * from t1 force index(key1, key2) where key1 < 3 or key2 < 3;
 select * from t1 force index(key1, key2) where key1 < 3 or key2 < 3;
 drop table t1;

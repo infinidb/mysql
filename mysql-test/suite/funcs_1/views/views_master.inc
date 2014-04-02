@@ -298,7 +298,7 @@ RENAME TABLE v1 TO v2;
 # RENAME VIEW is not available even when we try it via rename table.
 --error ER_PARSE_ERROR
 RENAME VIEW  v2 TO v1;
-#--error ER_WRONG_OBJECT
+--error ER_WRONG_OBJECT
 ALTER TABLE v2 RENAME AS v1;
 --error ER_PARSE_ERROR
 ALTER VIEW  v1 RENAME AS v2;
@@ -2262,7 +2262,7 @@ while ($num1)
   dec $num1;
 }
 
-SELECT * FROM t1_results ORDER BY v3_to_v1_options;
+SELECT * FROM t1_results ORDER BY v3_to_v1_options, statement, v3_to_v1_violation, errno;
 
 let $message=
 Plausibility checks for INSERTs and UPDATEs ( 4. and 5. above).
@@ -2488,6 +2488,13 @@ Insert into t2 values (2, 'double',    6, '2')  ;
 Insert into t2 values (3, 'single-f3', 6, '3')  ;
 Insert into t2 values (4, 'single',    4, '4')  ;
 
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+analyze table t2;
+-- enable_result_log
+-- enable_query_log
+
 # Testcase 3.3.1.55 ;
 create or replace view test.v1 as
 Select t1.f59 t1_f59, t2.f59 t2_f59, t1.f60 t1_f60, t2.f60 t2_f60,
@@ -2546,6 +2553,7 @@ Select t1.f59 t1_f59, t2.f59 t2_f59, t1.f60 t1_f60, t2.f60 t2_f60,
        t1.f61 t1_f61, t2.f61 t2_f61
 FROM t2 right outer join t1 on t2.f59=t1.f59;
 Select * from v1 order by t1_f59;
+--sorted_result
 Select t1.f59 t1_f59, t2.f59 t2_f59, t1.f60 t1_f60, t2.f60 t2_f60,
        t1.f61 t1_f61, t2.f61 t2_f61
 FROM t2 right outer join t1 on t2.f59=t1.f59;
@@ -2555,6 +2563,7 @@ Create or replace view test.v1 as
 Select f59, f60, a, b
 FROM t2 natural right outer join t1;
 Select * from v1 order by f59 desc;
+--sorted_result
 Select f59, f60, a, b
 FROM t2 natural right outer join t1;
 

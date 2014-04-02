@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,11 +13,7 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-
-   original idea: Brian Aker via playing with ab for too many years
-   coded by: Patrick Galbraith
 */
-
 
 /*
   MySQL Slap
@@ -85,6 +81,7 @@ TODO:
 #define DELETE_TYPE_REQUIRES_PREFIX 6
 
 #include "client_priv.h"
+#include "my_default.h"
 #include <mysqld_error.h>
 #include <my_dir.h>
 #include <signal.h>
@@ -128,6 +125,10 @@ static char *host= NULL, *opt_password= NULL, *user= NULL,
             *pre_system= NULL,
             *post_system= NULL,
             *opt_mysql_unix_port= NULL;
+static char *opt_plugin_dir= 0, *opt_default_auth= 0;
+static my_bool opt_secure_auth= TRUE;
+static uint opt_enable_cleartext_plugin= 0;
+static my_bool using_opt_enable_cleartext_plugin= 0;
 
 const char *delimiter= "\n";
 
@@ -146,6 +147,7 @@ const char *auto_generate_sql_type= "mixed";
 static unsigned long connect_flags= CLIENT_MULTI_RESULTS |
                                     CLIENT_MULTI_STATEMENTS |
                                     CLIENT_REMEMBER_OPTIONS;
+
 
 static int verbose, delimiter_length;
 static uint commit_rate;
@@ -302,7 +304,13 @@ int main(int argc, char **argv)
 
   MY_INIT(argv[0]);
 
-  load_defaults("my",load_default_groups,&argc,&argv);
+  my_getopt_use_args_separator= TRUE;
+  if (load_defaults("my",load_default_groups,&argc,&argv))
+  {
+    my_end(0);
+    exit(1);
+  }
+  my_getopt_use_args_separator= FALSE;
   defaults_argv=argv;
   if (get_options(&argc,&argv))
   {
@@ -330,17 +338,35 @@ int main(int argc, char **argv)
     mysql_options(&mysql,MYSQL_OPT_COMPRESS,NullS);
 #ifdef HAVE_OPENSSL
   if (opt_use_ssl)
+  {
     mysql_ssl_set(&mysql, opt_ssl_key, opt_ssl_cert, opt_ssl_ca,
                   opt_ssl_capath, opt_ssl_cipher);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRL, opt_ssl_crl);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRLPATH, opt_ssl_crlpath);
+  }
 #endif
   if (opt_protocol)
     mysql_options(&mysql,MYSQL_OPT_PROTOCOL,(char*)&opt_protocol);
+  if (!opt_secure_auth && slap_connect(&mysql))
+    mysql_options(&mysql, MYSQL_SECURE_AUTH,(char*)&opt_secure_auth);
 #ifdef HAVE_SMEM
   if (shared_memory_base_name)
     mysql_options(&mysql,MYSQL_SHARED_MEMORY_BASE_NAME,shared_memory_base_name);
 #endif
   mysql_options(&mysql, MYSQL_SET_CHARSET_NAME, default_charset);
 
+  if (opt_plugin_dir && *opt_plugin_dir)
+    mysql_options(&mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+
+  if (opt_default_auth && *opt_default_auth)
+    mysql_options(&mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
+
+  mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
+  mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
+                 "program_name", "mysqlslap");
+  if (using_opt_enable_cleartext_plugin)
+    mysql_options(&mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN, 
+                  (char*) &opt_enable_cleartext_plugin);
   if (!opt_only_print) 
   {
     if (!(mysql_real_connect(&mysql, host, user, opt_password,
@@ -355,10 +381,10 @@ int main(int argc, char **argv)
     }
   }
 
-  VOID(pthread_mutex_init(&counter_mutex, NULL));
-  VOID(pthread_cond_init(&count_threshhold, NULL));
-  VOID(pthread_mutex_init(&sleeper_mutex, NULL));
-  VOID(pthread_cond_init(&sleep_threshhold, NULL));
+  pthread_mutex_init(&counter_mutex, NULL);
+  pthread_cond_init(&count_threshhold, NULL);
+  pthread_mutex_init(&sleeper_mutex, NULL);
+  pthread_cond_init(&sleep_threshhold, NULL);
 
   /* Main iterations loop */
   eptr= engine_options;
@@ -389,19 +415,17 @@ int main(int argc, char **argv)
 
   } while (eptr ? (eptr= eptr->next) : 0);
 
-  VOID(pthread_mutex_destroy(&counter_mutex));
-  VOID(pthread_cond_destroy(&count_threshhold));
-  VOID(pthread_mutex_destroy(&sleeper_mutex));
-  VOID(pthread_cond_destroy(&sleep_threshhold));
+  pthread_mutex_destroy(&counter_mutex);
+  pthread_cond_destroy(&count_threshhold);
+  pthread_mutex_destroy(&sleeper_mutex);
+  pthread_cond_destroy(&sleep_threshhold);
 
   if (!opt_only_print) 
     mysql_close(&mysql); /* Close & free connection */
 
   /* now free all the strings we created */
-  if (opt_password)
-    my_free(opt_password, MYF(0));
-
-  my_free(concurrency, MYF(0));
+  my_free(opt_password);
+  my_free(concurrency);
 
   statement_cleanup(create_statements);
   statement_cleanup(query_statements);
@@ -410,8 +434,7 @@ int main(int argc, char **argv)
   option_cleanup(engine_options);
 
 #ifdef HAVE_SMEM
-  if (shared_memory_base_name)
-    my_free(shared_memory_base_name, MYF(MY_ALLOW_ZERO_PTR));
+  my_free(shared_memory_base_name);
 #endif
   free_defaults(defaults_argv);
   my_end(my_end_arg);
@@ -431,7 +454,7 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr)
   head_sptr= (stats *)my_malloc(sizeof(stats) * iterations, 
                                 MYF(MY_ZEROFILL|MY_FAE|MY_WME));
 
-  bzero(&conclusion, sizeof(conclusions));
+  memset(&conclusion, 0, sizeof(conclusions));
 
   if (auto_actual_queries)
     client_limit= auto_actual_queries;
@@ -503,7 +526,7 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr)
   if (opt_csv_str)
     print_conclusions_csv(&conclusion);
 
-  my_free(head_sptr, MYF(0));
+  my_free(head_sptr);
 
 }
 
@@ -587,6 +610,10 @@ static struct my_option my_long_options[] =
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"debug-info", 'T', "Print some debug info at exit.", &debug_info_flag,
    &debug_info_flag, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"default_auth", OPT_DEFAULT_AUTH,
+   "Default authentication client-side plugin to use.",
+   &opt_default_auth, &opt_default_auth, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"delimiter", 'F',
     "Delimiter to use in SQL statements supplied in file or command line.",
     &delimiter, &delimiter, 0, GET_STR, REQUIRED_ARG,
@@ -595,6 +622,10 @@ static struct my_option my_long_options[] =
     "Detach (close and reopen) connections after X number of requests.",
     &detach_rate, &detach_rate, 0, GET_UINT, REQUIRED_ARG, 
     0, 0, 0, 0, 0, 0},
+  {"enable_cleartext_plugin", OPT_ENABLE_CLEARTEXT_PLUGIN, 
+    "Enable/disable the clear text authentication plugin.",
+   &opt_enable_cleartext_plugin, &opt_enable_cleartext_plugin, 
+   0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"engine", 'e', "Storage engine to use for creating the table.",
     &default_engine, &default_engine, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
@@ -623,11 +654,14 @@ static struct my_option my_long_options[] =
     0, 0, 0, 0, 0, 0},
   {"password", 'p',
     "Password to use when connecting to server. If password is not given it's "
-      "asked from the tty.", 0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+      "asked from the tty.", 0, 0, 0, GET_PASSWORD, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef __WIN__
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
     NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
+  {"plugin_dir", OPT_PLUGIN_DIR, "Directory for client-side plugins.",
+   &opt_plugin_dir, &opt_plugin_dir, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"port", 'P', "Port number to use for connection.", &opt_mysql_port,
     &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, MYSQL_PORT, 0, 0, 0, 0,
     0},
@@ -653,6 +687,9 @@ static struct my_option my_long_options[] =
   {"query", 'q', "Query to run or file containing query to run.",
     &user_supplied_query, &user_supplied_query,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
+    " uses old (pre-4.1.1) protocol.", &opt_secure_auth,
+    &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
     "Base name of shared memory.", &shared_memory_base_name,
@@ -680,8 +717,6 @@ static struct my_option my_long_options[] =
 };
 
 
-#include <help_start.h>
-
 static void print_version(void)
 {
   printf("%s  Ver %s Distrib %s, for %s (%s)\n",my_progname, SLAP_VERSION,
@@ -699,7 +734,6 @@ static void usage(void)
   my_print_help(my_long_options);
 }
 
-#include <help_end.h>
 
 static my_bool
 get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
@@ -707,11 +741,6 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
 {
   DBUG_ENTER("get_one_option");
   switch(optid) {
-#ifdef __NETWARE__
-  case OPT_AUTO_CLOSE:
-    setscreenmode(SCR_AUTOCLOSE_ON_EXIT);
-    break;
-#endif
   case 'v':
     verbose++;
     break;
@@ -721,7 +750,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     if (argument)
     {
       char *start= argument;
-      my_free(opt_password, MYF(MY_ALLOW_ZERO_PTR));
+      my_free(opt_password);
       opt_password= my_strdup(argument,MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
       if (*start)
@@ -758,6 +787,9 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
   case 'I':					/* Info */
     usage();
     exit(0);
+  case OPT_ENABLE_CLEARTEXT_PLUGIN:
+    using_opt_enable_cleartext_plugin= TRUE;
+    break;
   }
   DBUG_RETURN(0);
 }
@@ -1207,7 +1239,7 @@ get_options(int *argc,char ***argv)
     
     if (opt_csv_str[0] == '-')
     {
-      csv_file= fileno(stdout);
+      csv_file= my_fileno(stdout);
     }
     else
     {
@@ -1370,7 +1402,7 @@ get_options(int *argc,char ***argv)
       tmp_string[sbuf.st_size]= '\0';
       my_close(data_file,MYF(0));
       parse_delimiter(tmp_string, &create_statements, delimiter[0]);
-      my_free(tmp_string, MYF(0));
+      my_free(tmp_string);
     }
     else if (create_string)
     {
@@ -1399,7 +1431,7 @@ get_options(int *argc,char ***argv)
       if (user_supplied_query)
         actual_queries= parse_delimiter(tmp_string, &query_statements,
                                         delimiter[0]);
-      my_free(tmp_string, MYF(0));
+      my_free(tmp_string);
     } 
     else if (user_supplied_query)
     {
@@ -1430,7 +1462,7 @@ get_options(int *argc,char ***argv)
     if (user_supplied_pre_statements)
       (void)parse_delimiter(tmp_string, &pre_statements,
                             delimiter[0]);
-    my_free(tmp_string, MYF(0));
+    my_free(tmp_string);
   } 
   else if (user_supplied_pre_statements)
   {
@@ -1461,7 +1493,7 @@ get_options(int *argc,char ***argv)
     if (user_supplied_post_statements)
       (void)parse_delimiter(tmp_string, &post_statements,
                             delimiter[0]);
-    my_free(tmp_string, MYF(0));
+    my_free(tmp_string);
   } 
   else if (user_supplied_post_statements)
   {
@@ -1563,9 +1595,9 @@ drop_primary_key_list(void)
   if (primary_keys_number_of)
   {
     for (counter= 0; counter < primary_keys_number_of; counter++)
-      my_free(primary_keys[counter], MYF(0));
+      my_free(primary_keys[counter]);
 
-    my_free(primary_keys, MYF(0));
+    my_free(primary_keys);
   }
 
   return 0;
@@ -2167,11 +2199,9 @@ option_cleanup(option_string *stmt)
   for (ptr= stmt; ptr; ptr= nptr)
   {
     nptr= ptr->next;
-    if (ptr->string)
-      my_free(ptr->string, MYF(0)); 
-    if (ptr->option)
-      my_free(ptr->option, MYF(0)); 
-    my_free(ptr, MYF(0));
+    my_free(ptr->string);
+    my_free(ptr->option);
+    my_free(ptr);
   }
 }
 
@@ -2185,9 +2215,8 @@ statement_cleanup(statement *stmt)
   for (ptr= stmt; ptr; ptr= nptr)
   {
     nptr= ptr->next;
-    if (ptr->string)
-      my_free(ptr->string, MYF(0)); 
-    my_free(ptr, MYF(0));
+    my_free(ptr->string);
+    my_free(ptr);
   }
 }
 

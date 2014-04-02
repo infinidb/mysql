@@ -1,4 +1,5 @@
-/* Copyright (c) 2003, 2006, 2007 MySQL AB
+/*
+   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef WOPOOL_HPP
 #define WOPOOL_HPP
@@ -51,9 +53,9 @@ private:
   bool seize_new_page(Ptr<void>&);
   void release_not_current(Ptr<void>);
 
-  void handle_invalid_release(Ptr<void>);
-  void handle_invalid_get_ptr(Uint32 i);
-  void handle_inconsistent_release(Ptr<void>);
+  void handle_invalid_release(Ptr<void>) ATTRIBUTE_NORETURN;
+  void handle_invalid_get_ptr(Uint32 i) ATTRIBUTE_NORETURN;
+  void handle_inconsistent_release(Ptr<void>) ATTRIBUTE_NORETURN;
 };
 
 inline

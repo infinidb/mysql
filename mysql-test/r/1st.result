@@ -3,6 +3,7 @@ Database
 information_schema
 mtr
 mysql
+performance_schema
 test
 show tables in mysql;
 Tables_in_mysql
@@ -15,12 +16,17 @@ help_category
 help_keyword
 help_relation
 help_topic
-host
+innodb_index_stats
+innodb_table_stats
 ndb_binlog_index
 plugin
 proc
 procs_priv
+proxies_priv
 servers
+slave_master_info
+slave_relay_log_info
+slave_worker_info
 slow_log
 tables_priv
 time_zone

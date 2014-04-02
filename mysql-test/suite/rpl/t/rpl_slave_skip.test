@@ -1,3 +1,13 @@
+# Every statement in this test is either executing under ROW or
+# STATEMENT format, which requires the slave thread to be able to apply
+# both statement and row events. Hence, we only need to execute this
+# test for MIXED mode.
+source include/have_binlog_format_mixed.inc;
+-- source include/not_gtid_enabled.inc
+
+# UNTIL is not supported yet (TODO: support and remove the guard)
+-- source include/not_mts_slave_parallel_workers.inc
+
 source include/master-slave.inc;
 source include/have_innodb.inc;
 
@@ -5,13 +15,14 @@ source include/have_innodb.inc;
 connection slave;
 source include/have_innodb.inc;
 STOP SLAVE;
+--source include/wait_for_slave_to_stop.inc
 
 --echo **** On Master ****
 connection master;
 SET SESSION BINLOG_FORMAT=ROW;
 
-CREATE TABLE t1 (a INT, b INT);
-CREATE TABLE t2 (c INT, d INT);
+CREATE TABLE t1 (a INT, b INT) ENGINE=MyISAM;
+CREATE TABLE t2 (c INT, d INT) ENGINE=MyISAM;
 INSERT INTO t1 VALUES (1,1),(2,4),(3,9);
 INSERT INTO t2 VALUES (1,1),(2,8),(3,27);
 let $master_log_pos= query_get_value(SHOW MASTER STATUS, Position, 1);
@@ -37,8 +48,9 @@ source include/check_slave_no_error.inc;
 # Now we skip *one* table map event. If the execution starts right
 # after that table map event, *one* of the involved tables will be
 # changed.
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 START SLAVE;
+--source include/wait_for_slave_to_start.inc
 sync_with_master;
 
 # These values should be what was inserted, not what was
@@ -49,6 +61,7 @@ SELECT * FROM t1;
 SELECT * FROM t2;
 
 STOP SLAVE;
+--source include/wait_for_slave_to_stop.inc
 RESET SLAVE;
 connection master;
 RESET MASTER;
@@ -64,14 +77,15 @@ connection slave;
 --replace_result $master_log_pos MASTER_LOG_POS
 eval START SLAVE UNTIL MASTER_LOG_FILE='master-bin.000001', MASTER_LOG_POS=$master_log_pos;
 source include/wait_for_slave_sql_to_stop.inc;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 START SLAVE;
+--source include/wait_for_slave_to_start.inc
 sync_with_master;
 
 --echo **** On Master ****
 connection master;
 DROP TABLE t1, t2;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 #
 # More tests for BUG#28618
@@ -110,7 +124,7 @@ END|
 DELIMITER ;|
 
 --echo **** On Slave ****
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 source include/stop_slave.inc;
 
 --echo **** On Master ****
@@ -131,7 +145,7 @@ save_master_pos;
 
 --echo *** On Slave ***
 connection slave;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 source include/start_slave.inc;
 sync_with_master;
 
@@ -141,7 +155,7 @@ SELECT * FROM t3 ORDER BY a;
 
 connection master;
 DROP TABLE t1, t2, t3;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 --echo **** Case 2: Row binlog format and transactional tables ****
 
@@ -155,7 +169,7 @@ CREATE TABLE t5 (a INT, b VARCHAR(20)) ENGINE=innodb;
 CREATE TABLE t6 (a INT, b VARCHAR(20)) ENGINE=innodb;
 
 --echo **** On Slave ****
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 source include/stop_slave.inc;
 
 --echo *** On Master ***
@@ -180,7 +194,7 @@ save_master_pos;
 
 --echo *** On Slave ***
 connection slave;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 source include/start_slave.inc;
 sync_with_master;
 
@@ -216,7 +230,7 @@ save_master_pos;
 
 --echo *** On Slave ***
 connection slave;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=10;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=11;
 source include/start_slave.inc;
 sync_with_master;
 
@@ -251,7 +265,7 @@ save_master_pos;
 
 --echo *** On Slave ***
 connection slave;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 source include/start_slave.inc;
 sync_with_master;
 
@@ -261,7 +275,7 @@ SELECT * FROM t6 ORDER BY a;
 
 connection master;
 DROP TABLE t4, t5, t6;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 --echo **** Case 3: Statement logging format and LOAD DATA with non-transactional table ****
 
@@ -273,7 +287,7 @@ connection master;
 CREATE TABLE t10 (a INT, b VARCHAR(20)) ENGINE=myisam;
 
 --echo *** On Slave ***
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 source include/stop_slave.inc;
 
 --echo *** On Master ***
@@ -289,7 +303,7 @@ save_master_pos;
 
 --echo *** On Slave ***
 connection slave;
-SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=2;
 source include/start_slave.inc;
 sync_with_master;
 
@@ -297,6 +311,6 @@ SELECT * FROM t10 ORDER BY a;
 
 connection master;
 DROP TABLE t10;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 --source include/rpl_end.inc

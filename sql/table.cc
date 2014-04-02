@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,19 +12,40 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
-
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Some general useful functions */
 
-#include "mysql_priv.h"
+#include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
+#include "sql_priv.h"
+#include "unireg.h"                    // REQUIRED: for other includes
+#include "table.h"
+#include "frm_crypt.h"           // get_crypt_for_frm
+#include "key.h"                                // find_ref_key
+#include "sql_table.h"                          // build_table_filename,
+                                                // primary_key_name
 #include "sql_trigger.h"
+#include "sql_parse.h"                          // free_items
+#include "strfunc.h"                            // unhex_type2
+#include "sql_partition.h"       // mysql_unpack_partition,
+                                 // fix_partition_func, partition_info
+#include "sql_acl.h"             // *_ACL, acl_getroot_no_password
+#include "sql_base.h"            // release_table_share
+#include "sql_derived.h"
 #include <m_ctype.h>
 #include "my_md5.h"
+#include "my_bit.h"
+#include "sql_select.h"
+#include "mdl.h"                 // MDL_wait_for_graph_visitor
+#include "opt_trace.h"           // opt_trace_disable_if_no_security_...
+#include "table_cache.h"         // table_cache_manager
+#include "sql_view.h"
 
 /* INFORMATION_SCHEMA name */
 LEX_STRING INFORMATION_SCHEMA_NAME= {C_STRING_WITH_LEN("information_schema")};
+
+/* PERFORMANCE_SCHEMA name */
+LEX_STRING PERFORMANCE_SCHEMA_DB_NAME= {C_STRING_WITH_LEN("performance_schema")};
 
 /* MYSQL_SCHEMA name */
 LEX_STRING MYSQL_SCHEMA_NAME= {C_STRING_WITH_LEN("mysql")};
@@ -35,6 +56,15 @@ LEX_STRING GENERAL_LOG_NAME= {C_STRING_WITH_LEN("general_log")};
 /* SLOW_LOG name */
 LEX_STRING SLOW_LOG_NAME= {C_STRING_WITH_LEN("slow_log")};
 
+/* RLI_INFO name */
+LEX_STRING RLI_INFO_NAME= {C_STRING_WITH_LEN("slave_relay_log_info")};
+
+/* MI_INFO name */
+LEX_STRING MI_INFO_NAME= {C_STRING_WITH_LEN("slave_master_info")};
+
+/* WORKER_INFO name */
+LEX_STRING WORKER_INFO_NAME= {C_STRING_WITH_LEN("slave_worker_info")};
+
 	/* Functions defined in this file */
 
 void open_table_error(TABLE_SHARE *share, int error, int db_errno,
@@ -44,6 +74,10 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
 static void fix_type_pointers(const char ***array, TYPELIB *point_to_type,
 			      uint types, char **names);
 static uint find_field(Field **fields, uchar *record, uint start, uint length);
+
+static Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
+                               const char *name,
+                               Name_resolution_context *context);
 
 inline bool is_system_table_name(const char *name, uint length);
 
@@ -84,7 +118,7 @@ Default_object_creation_ctx::Default_object_creation_ctx(THD *thd)
 { }
 
 Default_object_creation_ctx::Default_object_creation_ctx(
-  CHARSET_INFO *client_cs, CHARSET_INFO *connection_cl)
+  const CHARSET_INFO *client_cs, const CHARSET_INFO *connection_cl)
   : m_client_cs(client_cs),
     m_connection_cl(connection_cl)
 { }
@@ -126,7 +160,7 @@ View_creation_ctx * View_creation_ctx::create(THD *thd,
   if (!view->view_client_cs_name.str ||
       !view->view_connection_cl_name.str)
   {
-    push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_NOTE,
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE,
                         ER_VIEW_NO_CREATION_CTX,
                         ER(ER_VIEW_NO_CREATION_CTX),
                         (const char *) view->db,
@@ -160,7 +194,7 @@ View_creation_ctx * View_creation_ctx::create(THD *thd,
                       (const char *) view->view_client_cs_name.str,
                       (const char *) view->view_connection_cl_name.str);
 
-    push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_NOTE,
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE,
                         ER_VIEW_INVALID_CREATION_CTX,
                         ER(ER_VIEW_INVALID_CREATION_CTX),
                         (const char *) view->db,
@@ -216,36 +250,52 @@ TABLE_CATEGORY get_table_category(const LEX_STRING *db, const LEX_STRING *name)
   DBUG_ASSERT(db != NULL);
   DBUG_ASSERT(name != NULL);
 
-  if (is_schema_db(db->str, db->length))
-  {
+  if (is_infoschema_db(db->str, db->length))
     return TABLE_CATEGORY_INFORMATION;
-  }
+
+  if ((db->length == PERFORMANCE_SCHEMA_DB_NAME.length) &&
+      (my_strcasecmp(system_charset_info,
+                     PERFORMANCE_SCHEMA_DB_NAME.str,
+                     db->str) == 0))
+    return TABLE_CATEGORY_PERFORMANCE;
 
   if ((db->length == MYSQL_SCHEMA_NAME.length) &&
       (my_strcasecmp(system_charset_info,
-                    MYSQL_SCHEMA_NAME.str,
-                    db->str) == 0))
+                     MYSQL_SCHEMA_NAME.str,
+                     db->str) == 0))
   {
     if (is_system_table_name(name->str, name->length))
-    {
       return TABLE_CATEGORY_SYSTEM;
-    }
 
     if ((name->length == GENERAL_LOG_NAME.length) &&
         (my_strcasecmp(system_charset_info,
-                      GENERAL_LOG_NAME.str,
-                      name->str) == 0))
-    {
-      return TABLE_CATEGORY_PERFORMANCE;
-    }
+                       GENERAL_LOG_NAME.str,
+                       name->str) == 0))
+      return TABLE_CATEGORY_LOG;
 
     if ((name->length == SLOW_LOG_NAME.length) &&
         (my_strcasecmp(system_charset_info,
-                      SLOW_LOG_NAME.str,
+                       SLOW_LOG_NAME.str,
+                       name->str) == 0))
+      return TABLE_CATEGORY_LOG;
+
+    if ((name->length == RLI_INFO_NAME.length) &&
+        (my_strcasecmp(system_charset_info,
+                      RLI_INFO_NAME.str,
                       name->str) == 0))
-    {
-      return TABLE_CATEGORY_PERFORMANCE;
-    }
+      return TABLE_CATEGORY_RPL_INFO;
+
+    if ((name->length == MI_INFO_NAME.length) &&
+        (my_strcasecmp(system_charset_info,
+                      MI_INFO_NAME.str,
+                      name->str) == 0))
+      return TABLE_CATEGORY_RPL_INFO;
+
+    if ((name->length == WORKER_INFO_NAME.length) &&
+        (my_strcasecmp(system_charset_info,
+                      WORKER_INFO_NAME.str,
+                      name->str) == 0))
+      return TABLE_CATEGORY_RPL_INFO;
   }
 
   return TABLE_CATEGORY_USER;
@@ -266,7 +316,7 @@ TABLE_CATEGORY get_table_category(const LEX_STRING *db, const LEX_STRING *name)
     #  Share
 */
 
-TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, char *key,
+TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, const char *key,
                                uint key_length)
 {
   MEM_ROOT mem_root;
@@ -274,6 +324,7 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, char *key,
   char *key_buff, *path_buff;
   char path[FN_REFLEN];
   uint path_length;
+  Table_cache_element **cache_element_array;
   DBUG_ENTER("alloc_table_share");
   DBUG_PRINT("enter", ("table: '%s'.'%s'",
                        table_list->db, table_list->table_name));
@@ -286,9 +337,11 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, char *key,
                        &share, sizeof(*share),
                        &key_buff, key_length,
                        &path_buff, path_length + 1,
+                       &cache_element_array,
+                       table_cache_instances * sizeof(*cache_element_array),
                        NULL))
   {
-    bzero((char*) share, sizeof(*share));
+    memset(share, 0, sizeof(*share));
 
     share->set_table_cache_key(key_buff, key, key_length);
 
@@ -307,12 +360,18 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, char *key,
       elsewhere, and then assign a table map id inside open_table()
       under the protection of the LOCK_open mutex.
     */
-    share->table_map_id= ~0UL;
+    share->table_map_id= ~0ULL;
     share->cached_row_logging_check= -1;
 
+    share->m_flush_tickets.empty();
+
+    memset(cache_element_array, 0,
+           table_cache_instances * sizeof(*cache_element_array));
+    share->cache_element= cache_element_array;
+
     memcpy((char*) &share->mem_root, (char*) &mem_root, sizeof(mem_root));
-    pthread_mutex_init(&share->mutex, MY_MUTEX_INIT_FAST);
-    pthread_cond_init(&share->cond, NULL);
+    mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data,
+                     &share->LOCK_ha_data, MY_MUTEX_INIT_FAST);
   }
   DBUG_RETURN(share);
 }
@@ -348,7 +407,7 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   DBUG_ENTER("init_tmp_table_share");
   DBUG_PRINT("enter", ("table: '%s'.'%s'", key, table_name));
 
-  bzero((char*) share, sizeof(*share));
+  memset(share, 0, sizeof(*share));
   init_sql_alloc(&share->mem_root, TABLE_ALLOC_BLOCK_SIZE, 0);
   share->table_category=         TABLE_CATEGORY_TEMPORARY;
   share->tmp_table=              INTERNAL_TMP_TABLE;
@@ -369,11 +428,63 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
     table_map_id is also used for MERGE tables to suppress repeated
     compatibility checks.
   */
-  share->table_map_id= (ulong) thd->query_id;
+  share->table_map_id= (ulonglong) thd->query_id;
+
+  share->m_flush_tickets.empty();
 
   DBUG_VOID_RETURN;
 }
 
+
+/**
+  Release resources (plugins) used by the share and free its memory.
+  TABLE_SHARE is self-contained -- it's stored in its own MEM_ROOT.
+  Free this MEM_ROOT.
+*/
+
+void TABLE_SHARE::destroy()
+{
+  uint idx;
+  KEY *info_it;
+
+  DBUG_ENTER("TABLE_SHARE::destroy");
+  DBUG_PRINT("info", ("db: %s table: %s", db.str, table_name.str));
+  if (ha_share)
+  {
+    delete ha_share;
+    ha_share= NULL;
+  }
+  /* The mutex is initialized only for shares that are part of the TDC */
+  if (tmp_table == NO_TMP_TABLE)
+    mysql_mutex_destroy(&LOCK_ha_data);
+  my_hash_free(&name_hash);
+
+  plugin_unlock(NULL, db_plugin);
+  db_plugin= NULL;
+
+  /* Release fulltext parsers */
+  info_it= key_info;
+  for (idx= keys; idx; idx--, info_it++)
+  {
+    if (info_it->flags & HA_USES_PARSER)
+    {
+      plugin_unlock(NULL, info_it->parser);
+      info_it->flags= 0;
+    }
+  }
+
+#ifdef HAVE_PSI_TABLE_INTERFACE
+  PSI_TABLE_CALL(release_table_share)(m_psi);
+#endif
+
+  /*
+    Make a copy since the share is allocated in its own root,
+    and free_root() updates its argument after freeing the memory.
+  */
+  MEM_ROOT own_root= mem_root;
+  free_root(&own_root, MYF(0));
+  DBUG_VOID_RETURN;
+}
 
 /*
   Free table share and memory used by it
@@ -381,60 +492,43 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   SYNOPSIS
     free_table_share()
     share		Table share
-
-  NOTES
-    share->mutex must be locked when we come here if it's not a temp table
 */
 
 void free_table_share(TABLE_SHARE *share)
 {
-  MEM_ROOT mem_root;
-  uint idx;
-  KEY *key_info;
   DBUG_ENTER("free_table_share");
   DBUG_PRINT("enter", ("table: %s.%s", share->db.str, share->table_name.str));
   DBUG_ASSERT(share->ref_count == 0);
 
-  /*
-    If someone is waiting for this to be deleted, inform it about this.
-    Don't do a delete until we know that no one is refering to this anymore.
-  */
-  if (share->tmp_table == NO_TMP_TABLE)
+  if (share->m_flush_tickets.is_empty())
   {
-    /* share->mutex is locked in release_table_share() */
-    while (share->waiting_on_cond)
-    {
-      pthread_cond_broadcast(&share->cond);
-      pthread_cond_wait(&share->cond, &share->mutex);
-    }
-    /* No thread refers to this anymore */
-    pthread_mutex_unlock(&share->mutex);
-    pthread_mutex_destroy(&share->mutex);
-    pthread_cond_destroy(&share->cond);
+    /*
+      No threads are waiting for this share to be flushed (the
+      share is not old, is for a temporary table, or just nobody
+      happens to be waiting for it). Destroy it.
+    */
+    share->destroy();
   }
-  hash_free(&share->name_hash);
-  
-  plugin_unlock(NULL, share->db_plugin);
-  share->db_plugin= NULL;
+  else
+  {
+    Wait_for_flush_list::Iterator it(share->m_flush_tickets);
+    Wait_for_flush *ticket;
+    /*
+      We're about to iterate over a list that is used
+      concurrently. Make sure this never happens without a lock.
+    */
+    mysql_mutex_assert_owner(&LOCK_open);
 
-  /* Release fulltext parsers */
-  key_info= share->key_info;
-  for (idx= share->keys; idx; idx--, key_info++)
-  {
-    if (key_info->flags & HA_USES_PARSER)
-    {
-      plugin_unlock(NULL, key_info->parser);
-      key_info->flags= 0;
-    }
+    while ((ticket= it++))
+      (void) ticket->get_ctx()->m_wait.set_status(MDL_wait::GRANTED);
+    /*
+      If there are threads waiting for this share to be flushed,
+      the last one to receive the notification will destroy the
+      share. At this point the share is removed from the table
+      definition cache, so is OK to proceed here without waiting
+      for this thread to do the work.
+    */
   }
-  if (share->ha_data_destroy)
-  {
-    share->ha_data_destroy(share->ha_data);
-    share->ha_data_destroy= NULL;
-  }
-  /* We must copy mem_root from share because share is allocated through it */
-  memcpy((char*) &mem_root, (char*) &share->mem_root, sizeof(mem_root));
-  free_root(&mem_root, MYF(0));                 // Free's share
   DBUG_VOID_RETURN;
 }
 
@@ -534,6 +628,8 @@ static inline bool has_disabled_path_chars(const char *str)
    4    Error (see open_table_error)
    5    Error (see open_table_error: charset unavailable)
    6    Unknown .frm version
+   8    Error while reading view definition from .FRM file.
+   9    Wrong type in view's .frm file.
 */
 
 int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
@@ -541,7 +637,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
   int error, table_type;
   bool error_given;
   File file;
-  uchar head[288];
+  uchar head[64];
   char	path[FN_REFLEN];
   MEM_ROOT **root_ptr, *old_root;
   DBUG_ENTER("open_table_def");
@@ -552,7 +648,8 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
   error_given= 0;
 
   strxmov(path, share->normalized_path.str, reg_ext, NullS);
-  if ((file= my_open(path, O_RDONLY | O_SHARE, MYF(0))) < 0)
+  if ((file= mysql_file_open(key_file_frm,
+                             path, O_RDONLY | O_SHARE, MYF(0))) < 0)
   {
     /*
       We don't try to open 5.0 unencoded name, if
@@ -563,7 +660,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
         
       - non-encoded db or table name contain "#mysql50#" prefix.
         This kind of tables must have been opened only by the
-        my_open() above.
+        mysql_file_open() above.
     */
     if (has_disabled_path_chars(share->table_name.str) ||
         has_disabled_path_chars(share->db.str) ||
@@ -590,7 +687,8 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
       so no need to check the old file name.
     */
     if (length == share->normalized_path.length ||
-        ((file= my_open(path, O_RDONLY | O_SHARE, MYF(0))) < 0))
+        ((file= mysql_file_open(key_file_frm,
+                                path, O_RDONLY | O_SHARE, MYF(0))) < 0))
       goto err_not_open;
 
     /* Unencoded 5.0 table name found */
@@ -600,7 +698,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
   }
 
   error= 4;
-  if (my_read(file, head, 64, MYF(MY_NABP)))
+  if (mysql_file_read(file, head, 64, MYF(MY_NABP)))
     goto err;
 
   if (head[0] == (uchar) 254 && head[1] == 1)
@@ -625,18 +723,20 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
   else if (memcmp(head, STRING_WITH_LEN("TYPE=")) == 0)
   {
     error= 5;
-    if (memcmp(head+5,"VIEW",4) == 0)
+    if (memcmp(head+5, "VIEW", 4) == 0)
     {
       share->is_view= 1;
       if (db_flags & OPEN_VIEW)
-        error= 0;
+        table_type= 2;
+      else
+        goto err;
     }
-    goto err;
+    else
+      goto err;
   }
   else
     goto err;
 
-  /* No handling of text based files yet */
   if (table_type == 1)
   {
     root_ptr= my_pthread_getspecific_ptr(MEM_ROOT**, THR_MALLOC);
@@ -646,6 +746,22 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
     *root_ptr= old_root;
     error_given= 1;
   }
+  else if (table_type == 2)
+  {
+    LEX_STRING pathstr= { path, strlen(path) };
+
+    /*
+      Create view file parser and hold it in TABLE_SHARE member
+      view_def.
+      */ 
+    share->view_def= sql_parse_prepare(&pathstr, &share->mem_root, true);
+    if (!share->view_def)
+      error= 8;
+    else if (!is_equal(&view_type, share->view_def->type()))
+      error= 9;
+    else
+      error= 0;
+  }
 
   share->table_category= get_table_category(& share->db, & share->table_name);
 
@@ -653,7 +769,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
     thd->status_var.opened_shares++;
 
 err:
-  my_close(file, MYF(MY_WME));
+  mysql_file_close(file, MYF(MY_WME));
 
 err_not_open:
   if (error && !error_given)
@@ -666,8 +782,199 @@ err_not_open:
 }
 
 
+/**
+  Initialize key_part_flag from source field.
+*/
+
+void KEY_PART_INFO::init_flags()
+{
+  DBUG_ASSERT(field);
+  if (field->type() == MYSQL_TYPE_BLOB ||
+      field->type() == MYSQL_TYPE_GEOMETRY)
+    key_part_flag|= HA_BLOB_PART;
+  else if (field->real_type() == MYSQL_TYPE_VARCHAR)
+    key_part_flag|= HA_VAR_LENGTH_PART;
+  else if (field->type() == MYSQL_TYPE_BIT)
+    key_part_flag|= HA_BIT_PART;
+}
+
+
+/**
+  Initialize KEY_PART_INFO from the given field.
+
+  @param fld The field to initialize keypart from
+*/
+
+void KEY_PART_INFO::init_from_field(Field *fld)
+{
+  field= fld;
+  fieldnr= field->field_index + 1;
+  null_bit= field->null_bit;
+  null_offset= field->null_offset();
+  offset= field->offset(field->table->record[0]);
+  length= (uint16) field->key_length();
+  store_length= length;
+  key_part_flag= 0;
+
+  if (field->real_maybe_null())
+    store_length+= HA_KEY_NULL_LENGTH;
+  if (field->type() == MYSQL_TYPE_BLOB ||
+      field->real_type() == MYSQL_TYPE_VARCHAR ||
+      field->type() == MYSQL_TYPE_GEOMETRY)
+  {
+    store_length+= HA_KEY_BLOB_LENGTH;
+  }
+  init_flags();
+
+  type=  (uint8) field->key_type();
+  key_type =
+    ((ha_base_keytype) type == HA_KEYTYPE_TEXT ||
+     (ha_base_keytype) type == HA_KEYTYPE_VARTEXT1 ||
+     (ha_base_keytype) type == HA_KEYTYPE_VARTEXT2) ?
+    0 : FIELDFLAG_BINARY;
+}
+
+
+/**
+  Setup key-related fields of Field object for given key and key part.
+
+  @param[in]     share         Pointer to TABLE_SHARE
+  @param[in]     handler       Pointer to handler
+  @param[in]     primary_key_n Primary key number
+  @param[in]     keyinfo       Pointer to processed key
+  @param[in]     key_n         Processed key number
+  @param[in]     key_part_n    Processed key part number
+  @param[in,out] usable_parts  Pointer to usable_parts variable
+*/
+
+static void setup_key_part_field(TABLE_SHARE *share, handler *handler_file,
+                                 uint primary_key_n, KEY *keyinfo, uint key_n,
+                                 uint key_part_n, uint *usable_parts)
+{
+  KEY_PART_INFO *key_part= &keyinfo->key_part[key_part_n];
+  Field *field= key_part->field;
+
+  /* Flag field as unique if it is the only keypart in a unique index */
+  if (key_part_n == 0 && key_n != primary_key_n)
+    field->flags |= (((keyinfo->flags & HA_NOSAME) &&
+                      (keyinfo->user_defined_key_parts == 1)) ?
+                     UNIQUE_KEY_FLAG : MULTIPLE_KEY_FLAG);
+  if (key_part_n == 0)
+    field->key_start.set_bit(key_n);
+  if (field->key_length() == key_part->length &&
+      !(field->flags & BLOB_FLAG))
+  {
+    if (handler_file->index_flags(key_n, key_part_n, 0) & HA_KEYREAD_ONLY)
+    {
+      share->keys_for_keyread.set_bit(key_n);
+      field->part_of_key.set_bit(key_n);
+      field->part_of_key_not_clustered.set_bit(key_n);
+    }
+    if (handler_file->index_flags(key_n, key_part_n, 1) & HA_READ_ORDER)
+      field->part_of_sortkey.set_bit(key_n);
+  }
+
+  if (!(key_part->key_part_flag & HA_REVERSE_SORT) &&
+      *usable_parts == key_part_n)
+    (*usable_parts)++;			// For FILESORT
+}
+
+
+/**
+  Generate extended secondary keys by adding primary key parts to the
+  existing secondary key. A primary key part is added if such part doesn't
+  present in the secondary key or the part in the secondary key is a
+  prefix of the key field. Key parts are added till:
+  .) all parts were added
+  .) number of key parts became bigger that MAX_REF_PARTS
+  .) total key length became longer than MAX_REF_LENGTH
+  depending on what occurs first first.
+  Unlike existing secondary key parts which are initialized at
+  open_binary_frm(), newly added ones are initialized here by copying
+  KEY_PART_INFO structure from primary key part and calling
+  setup_key_part_field().
+
+  Function updates sk->actual/unused_key_parts and sk->actual_flags.
+
+  @param[in]     sk            Secondary key
+  @param[in]     sk_n          Secondary key number
+  @param[in]     pk            Primary key
+  @param[in]     pk_n          Primary key number
+  @param[in]     share         Pointer to TABLE_SHARE
+  @param[in]     handler       Pointer to handler
+  @param[in,out] usable_parts  Pointer to usable_parts variable
+
+  @retval                      Number of added key parts
+*/
+
+static uint add_pk_parts_to_sk(KEY *sk, uint sk_n, KEY *pk, uint pk_n,
+                               TABLE_SHARE *share, handler *handler_file,
+                               uint *usable_parts)
+{
+  uint max_key_length= sk->key_length;
+  bool is_unique_key= false;
+  KEY_PART_INFO *current_key_part= &sk->key_part[sk->user_defined_key_parts];
+  ulong *current_rec_per_key= &sk->rec_per_key[sk->user_defined_key_parts];
+
+  /* 
+     For each keypart in the primary key: check if the keypart is
+     already part of the secondary key and add it if not.
+  */
+  for (uint pk_part= 0; pk_part < pk->user_defined_key_parts; pk_part++)
+  {
+    KEY_PART_INFO *pk_key_part= &pk->key_part[pk_part];
+    /* MySQL does not supports more key parts than MAX_REF_LENGTH */
+    if (sk->actual_key_parts >= MAX_REF_PARTS)
+      goto end;
+
+    bool pk_field_is_in_sk= false;
+    for (uint j= 0; j < sk->user_defined_key_parts; j++)
+    {
+      if (sk->key_part[j].fieldnr == pk_key_part->fieldnr &&
+          share->field[pk_key_part->fieldnr - 1]->key_length() ==
+          sk->key_part[j].length)
+      {
+        pk_field_is_in_sk= true;
+        break;
+      }
+    }
+
+    /* Add PK field to secondary key if it's not already  part of the key. */
+    if (!pk_field_is_in_sk)
+    {
+      /* MySQL does not supports keys longer than MAX_KEY_LENGTH */
+      if (max_key_length + pk_key_part->length > MAX_KEY_LENGTH)
+        goto end;
+
+      *current_key_part= *pk_key_part;
+      setup_key_part_field(share, handler_file, pk_n, sk, sk_n,
+                           sk->actual_key_parts, usable_parts);
+      *current_rec_per_key++= 0;
+      sk->actual_key_parts++;
+      sk->unused_key_parts--;
+      current_key_part++;
+      max_key_length+= pk_key_part->length;
+      /*
+        Secondary key will be unique if the key  does not exceed
+        key length limitation and key parts limitation.
+      */
+      is_unique_key= true;
+    }
+  }
+  if (is_unique_key)
+    sk->actual_flags|= HA_NOSAME;
+
+end:
+  return (sk->actual_key_parts - sk->user_defined_key_parts);
+}
+
+
 /*
   Read data from a binary .frm file from MySQL 3.23 - 5.0 into TABLE_SHARE
+
+  NOTE: Much of the logic here is duplicated in create_tmp_table()
+  (see sql_select.cc). Hence, changes to this function may have to be
+  repeated there.
 */
 
 static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
@@ -680,8 +987,10 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   uint key_info_length, com_length, null_bit_pos;
   uint extra_rec_buf_length;
   uint i,j;
+  bool use_extended_sk;   // Supported extending of secondary keys with PK parts
   bool use_hash;
   char *keynames, *names, *comment_pos;
+  uchar forminfo[288];
   uchar *record;
   uchar *disk_buff, *strpos, *null_flags, *null_pos;
   ulong pos, record_offset, *rec_per_key, rec_buff_length;
@@ -693,6 +1002,9 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   const char **interval_array;
   enum legacy_db_type legacy_db_type;
   my_bitmap_map *bitmaps;
+  uchar *extra_segment_buff= 0;
+  const uint format_section_header_size= 8;
+  uchar *format_section_fields= 0;
   DBUG_ENTER("open_binary_frm");
 
   new_field_pack_flag= head[27];
@@ -705,6 +1017,9 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   if (!(pos= get_form_pos(file, head)))
     goto err;                                   /* purecov: inspected */
 
+  mysql_file_seek(file,pos,MY_SEEK_SET,MYF(0));
+  if (mysql_file_read(file, forminfo,288,MYF(MY_NABP)))
+    goto err;
   share->frm_version= head[2];
   /*
     Check if .frm file created by MySQL 5.0. In this case we want to
@@ -740,8 +1055,11 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   {
     share->avg_row_length= uint4korr(head+34);
     share->row_type= (row_type) head[40];
-    share->table_charset= get_charset((uint) head[38],MYF(0));
+    share->table_charset= get_charset((((uint) head[41]) << 8) + 
+                                        (uint) head[38],MYF(0));
     share->null_field_first= 1;
+    share->stats_sample_pages= uint2korr(head+42);
+    share->stats_auto_recalc= static_cast<enum_stats_auto_recalc>(head[44]);
   }
   if (!share->table_charset)
   {
@@ -757,17 +1075,15 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
     share->table_charset= default_charset_info;
   }
   share->db_record_offset= 1;
-  if (db_create_options & HA_OPTION_LONG_BLOB_PTR)
-    share->blob_ptr_size= portable_sizeof_char_ptr;
   /* Set temporarily a good value for db_low_byte_first */
-  share->db_low_byte_first= test(legacy_db_type != DB_TYPE_ISAM);
+  share->db_low_byte_first= MY_TEST(legacy_db_type != DB_TYPE_ISAM);
   error=4;
   share->max_rows= uint4korr(head+18);
   share->min_rows= uint4korr(head+22);
 
   /* Read keyinformation */
   key_info_length= (uint) uint2korr(head+28);
-  VOID(my_seek(file,(ulong) uint2korr(head+6),MY_SEEK_SET,MYF(0)));
+  mysql_file_seek(file, (ulong) uint2korr(head+6), MY_SEEK_SET, MYF(0));
   if (read_string(file,(uchar**) &disk_buff,key_info_length))
     goto err;                                   /* purecov: inspected */
   if (disk_buff[0] & 0x80)
@@ -783,17 +1099,32 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   share->keys_for_keyread.init(0);
   share->keys_in_use.init(keys);
 
-  n_length=keys*sizeof(KEY)+key_parts*sizeof(KEY_PART_INFO);
+  strpos=disk_buff+6;  
+
+  use_extended_sk=
+    ha_check_storage_engine_flag(share->db_type(),
+                                 HTON_SUPPORTS_EXTENDED_KEYS);
+
+  uint total_key_parts;
+  if (use_extended_sk)
+  {
+    uint primary_key_parts= keys ?
+      (new_frm_ver >= 3) ? (uint) strpos[4] : (uint) strpos[3] : 0;
+    total_key_parts= key_parts + primary_key_parts * (keys - 1);
+  }
+  else
+    total_key_parts= key_parts;
+  n_length= keys * sizeof(KEY) + total_key_parts * sizeof(KEY_PART_INFO);
+
   if (!(keyinfo = (KEY*) alloc_root(&share->mem_root,
 				    n_length + uint2korr(disk_buff+4))))
     goto err;                                   /* purecov: inspected */
-  bzero((char*) keyinfo,n_length);
+  memset(keyinfo, 0, n_length);
   share->key_info= keyinfo;
-  key_part= my_reinterpret_cast(KEY_PART_INFO*) (keyinfo+keys);
-  strpos=disk_buff+6;
+  key_part= reinterpret_cast<KEY_PART_INFO*>(keyinfo+keys);
 
   if (!(rec_per_key= (ulong*) alloc_root(&share->mem_root,
-                                         sizeof(ulong)*key_parts)))
+                                         sizeof(ulong) * total_key_parts)))
     goto err;
 
   for (i=0 ; i < keys ; i++, keyinfo++)
@@ -803,7 +1134,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
     {
       keyinfo->flags=	   (uint) uint2korr(strpos) ^ HA_NOSAME;
       keyinfo->key_length= (uint) uint2korr(strpos+2);
-      keyinfo->key_parts=  (uint) strpos[4];
+      keyinfo->user_defined_key_parts= (uint) strpos[4];
       keyinfo->algorithm=  (enum ha_key_alg) strpos[5];
       keyinfo->block_size= uint2korr(strpos+6);
       strpos+=8;
@@ -812,14 +1143,14 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
     {
       keyinfo->flags=	 ((uint) strpos[0]) ^ HA_NOSAME;
       keyinfo->key_length= (uint) uint2korr(strpos+1);
-      keyinfo->key_parts=  (uint) strpos[3];
+      keyinfo->user_defined_key_parts= (uint) strpos[3];
       keyinfo->algorithm= HA_KEY_ALG_UNDEF;
       strpos+=4;
     }
 
     keyinfo->key_part=	 key_part;
     keyinfo->rec_per_key= rec_per_key;
-    for (j=keyinfo->key_parts ; j-- ; key_part++)
+    for (j=keyinfo->user_defined_key_parts ; j-- ; key_part++)
     {
       *rec_per_key++=0;
       key_part->fieldnr=	(uint16) (uint2korr(strpos) & FIELD_NR_MASK);
@@ -845,9 +1176,41 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       }
       key_part->store_length=key_part->length;
     }
+    /*
+      Add primary key parts if engine supports primary key extension for
+      secondary keys. Here we add unique first key parts to the end of
+      secondary key parts array and increase actual number of key parts.
+      Note that primary key is always first if exists. Later if there is no
+      primary key in the table then number of actual keys parts is set to
+      user defined key parts.
+    */
+    keyinfo->actual_key_parts= keyinfo->user_defined_key_parts;
+    keyinfo->actual_flags= keyinfo->flags;
+    if (use_extended_sk && i && !(keyinfo->flags & HA_NOSAME))
+    {
+      const uint primary_key_parts= share->key_info->user_defined_key_parts;
+      keyinfo->unused_key_parts= primary_key_parts;
+      key_part+= primary_key_parts;
+      rec_per_key+= primary_key_parts;
+      share->key_parts+= primary_key_parts;
+    }
   }
   keynames=(char*) key_part;
   strpos+= (strmov(keynames, (char *) strpos) - keynames)+1;
+
+  //reading index comments
+  for (keyinfo= share->key_info, i=0; i < keys; i++, keyinfo++)
+  {
+    if (keyinfo->flags & HA_USES_COMMENT)
+    {
+      keyinfo->comment.length= uint2korr(strpos);
+      keyinfo->comment.str= strmake_root(&share->mem_root, (char*) strpos+2,
+                                         keyinfo->comment.length);
+      strpos+= 2 + keyinfo->comment.length;
+    } 
+    DBUG_ASSERT(MY_TEST(keyinfo->flags & HA_USES_COMMENT) ==
+               (keyinfo->comment.length > 0));
+  }
 
   share->reclength = uint2korr((head+16));
   if (*(head+26) == 1)
@@ -867,27 +1230,27 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   if ((n_length= uint4korr(head+55)))
   {
     /* Read extra data segment */
-    uchar *buff, *next_chunk, *buff_end;
+    uchar *next_chunk, *buff_end;
     DBUG_PRINT("info", ("extra segment size is %u bytes", n_length));
-    if (!(next_chunk= buff= (uchar*) my_malloc(n_length, MYF(MY_WME))))
+    if (!(extra_segment_buff= (uchar*) my_malloc(n_length, MYF(MY_WME))))
       goto err;
-    if (my_pread(file, buff, n_length, record_offset + share->reclength,
-                 MYF(MY_NABP)))
+    next_chunk= extra_segment_buff;
+    if (mysql_file_pread(file, extra_segment_buff,
+                         n_length, record_offset + share->reclength,
+                         MYF(MY_NABP)))
     {
-      my_free(buff, MYF(0));
       goto err;
     }
-    share->connect_string.length= uint2korr(buff);
+    share->connect_string.length= uint2korr(next_chunk);
     if (!(share->connect_string.str= strmake_root(&share->mem_root,
                                                   (char*) next_chunk + 2,
                                                   share->connect_string.
                                                   length)))
     {
-      my_free(buff, MYF(0));
       goto err;
     }
     next_chunk+= share->connect_string.length + 2;
-    buff_end= buff + n_length;
+    buff_end= extra_segment_buff + n_length;
     if (next_chunk + 2 < buff_end)
     {
       uint str_db_type_length= uint2korr(next_chunk);
@@ -895,7 +1258,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       name.str= (char*) next_chunk + 2;
       name.length= str_db_type_length;
 
-      plugin_ref tmp_plugin= ha_resolve_by_name(thd, &name);
+      plugin_ref tmp_plugin= ha_resolve_by_name(thd, &name, FALSE);
       if (tmp_plugin != NULL && !plugin_equals(tmp_plugin, share->db_plugin))
       {
         if (legacy_db_type > DB_TYPE_UNKNOWN &&
@@ -904,7 +1267,6 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
                 plugin_data(tmp_plugin, handlerton *)))
         {
           /* bad file, legacy_db_type did not match the name */
-          my_free(buff, MYF(0));
           goto err;
         }
         /*
@@ -934,7 +1296,6 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
           error= 8;
           my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0),
                    "--skip-partition");
-          my_free(buff, MYF(0));
           goto err;
         }
         plugin_unlock(NULL, share->db_plugin);
@@ -948,8 +1309,8 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       {
         /* purecov: begin inspected */
         error= 8;
+        name.str[name.length]=0;
         my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), name.str);
-        my_free(buff, MYF(0));
         goto err;
         /* purecov: end */
       }
@@ -957,28 +1318,26 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
     }
     if (next_chunk + 5 < buff_end)
     {
-      uint32 partition_info_len = uint4korr(next_chunk);
+      uint32 partition_info_str_len = uint4korr(next_chunk);
 #ifdef WITH_PARTITION_STORAGE_ENGINE
       if ((share->partition_info_buffer_size=
-             share->partition_info_len= partition_info_len))
+             share->partition_info_str_len= partition_info_str_len))
       {
-        if (!(share->partition_info= (char*)
+        if (!(share->partition_info_str= (char*)
               memdup_root(&share->mem_root, next_chunk + 4,
-                          partition_info_len + 1)))
+                          partition_info_str_len + 1)))
         {
-          my_free(buff, MYF(0));
           goto err;
         }
       }
 #else
-      if (partition_info_len)
+      if (partition_info_str_len)
       {
         DBUG_PRINT("info", ("WITH_PARTITION_STORAGE_ENGINE is not defined"));
-        my_free(buff, MYF(0));
         goto err;
       }
 #endif
-      next_chunk+= 5 + partition_info_len;
+      next_chunk+= 5 + partition_info_str_len;
     }
 #if MYSQL_VERSION_ID < 50200
     if (share->mysql_version >= 50106 && share->mysql_version <= 50109)
@@ -992,8 +1351,9 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       */
       next_chunk+= 4;
     }
-    else if (share->mysql_version >= 50110)
+    else
 #endif
+    if (share->mysql_version >= 50110 && next_chunk < buff_end)
     {
       /* New auto_partitioned indicator introduced in 5.1.11 */
 #ifdef WITH_PARTITION_STORAGE_ENGINE
@@ -1011,7 +1371,6 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
         {
           DBUG_PRINT("error",
                      ("fulltext key uses parser that is not defined in .frm"));
-          my_free(buff, MYF(0));
           goto err;
         }
         parser_name.str= (char*) next_chunk;
@@ -1022,12 +1381,79 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
         if (! keyinfo->parser)
         {
           my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0), parser_name.str);
-          my_free(buff, MYF(0));
           goto err;
         }
       }
     }
-    my_free(buff, MYF(0));
+    if (forminfo[46] == (uchar)255)
+    {
+      //reading long table comment
+      if (next_chunk + 2 > buff_end)
+      {
+          DBUG_PRINT("error",
+                     ("long table comment is not defined in .frm"));
+          goto err;
+      }
+      share->comment.length = uint2korr(next_chunk);
+      if (! (share->comment.str= strmake_root(&share->mem_root,
+             (char*)next_chunk + 2, share->comment.length)))
+      {
+          goto err;
+      }
+      next_chunk+= 2 + share->comment.length;
+    }
+
+    if (next_chunk + format_section_header_size < buff_end)
+    {
+      /*
+        New extra data segment called "format section" with additional
+        table and column properties introduced by MySQL Cluster
+        based on 5.1.20
+
+        Table properties:
+        TABLESPACE <ts> and STORAGE [DISK|MEMORY]
+
+        Column properties:
+        COLUMN_FORMAT [DYNAMIC|FIXED] and STORAGE [DISK|MEMORY]
+      */
+      DBUG_PRINT("info", ("Found format section"));
+
+      /* header */
+      const uint format_section_length= uint2korr(next_chunk);
+      const uint format_section_flags= uint4korr(next_chunk+2);
+      /* 2 bytes unused */
+
+      if (next_chunk + format_section_length > buff_end)
+      {
+        DBUG_PRINT("error", ("format section length too long: %u",
+                             format_section_length));
+        goto err;
+      }
+      DBUG_PRINT("info", ("format_section_length: %u, format_section_flags: %u",
+                          format_section_length, format_section_flags));
+
+      share->default_storage_media=
+        (enum ha_storage_media) (format_section_flags & 0x7);
+
+      /* tablespace */
+      const char *tablespace=
+        (const char*)next_chunk + format_section_header_size;
+      const uint tablespace_length= strlen(tablespace);
+      if (tablespace_length &&
+          !(share->tablespace= strmake_root(&share->mem_root,
+                                            tablespace, tablespace_length+1)))
+      {
+        goto err;
+      }
+      DBUG_PRINT("info", ("tablespace: '%s'",
+                          share->tablespace ? share->tablespace : "<null>"));
+
+      /* pointer to format section for fields */
+      format_section_fields=
+        next_chunk + format_section_header_size + tablespace_length + 1;
+
+      next_chunk+= format_section_length;
+    }
   }
   share->key_block_size= uint2korr(head+62);
 
@@ -1039,33 +1465,34 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
                                      rec_buff_length)))
     goto err;                                   /* purecov: inspected */
   share->default_values= record;
-  if (my_pread(file, record, (size_t) share->reclength,
-               record_offset, MYF(MY_NABP)))
+  if (mysql_file_pread(file, record, (size_t) share->reclength,
+                       record_offset, MYF(MY_NABP)))
     goto err;                                   /* purecov: inspected */
 
-  VOID(my_seek(file,pos,MY_SEEK_SET,MYF(0)));
-  if (my_read(file, head,288,MYF(MY_NABP)))
-    goto err;
+  mysql_file_seek(file, pos+288, MY_SEEK_SET, MYF(0));
 #ifdef HAVE_CRYPTED_FRM
   if (crypted)
   {
-    crypted->decode((char*) head+256,288-256);
-    if (sint2korr(head+284) != 0)		// Should be 0
+    crypted->decode((char*) forminfo+256,288-256);
+    if (sint2korr(forminfo+284) != 0)		// Should be 0
       goto err;                                 // Wrong password
   }
 #endif
 
-  share->fields= uint2korr(head+258);
-  pos= uint2korr(head+260);			/* Length of all screens */
-  n_length= uint2korr(head+268);
-  interval_count= uint2korr(head+270);
-  interval_parts= uint2korr(head+272);
-  int_length= uint2korr(head+274);
-  share->null_fields= uint2korr(head+282);
-  com_length= uint2korr(head+284);
-  share->comment.length=  (int) (head[46]);
-  share->comment.str= strmake_root(&share->mem_root, (char*) head+47,
-                                   share->comment.length);
+  share->fields= uint2korr(forminfo+258);
+  pos= uint2korr(forminfo+260);   /* Length of all screens */
+  n_length= uint2korr(forminfo+268);
+  interval_count= uint2korr(forminfo+270);
+  interval_parts= uint2korr(forminfo+272);
+  int_length= uint2korr(forminfo+274);
+  share->null_fields= uint2korr(forminfo+282);
+  com_length= uint2korr(forminfo+284);
+  if (forminfo[46] != (uchar)255)
+  {
+    share->comment.length=  (int) (forminfo[46]);
+    share->comment.str= strmake_root(&share->mem_root, (char*) forminfo+47,
+                                     share->comment.length);
+  }
 
   DBUG_PRINT("info",("i_count: %d  i_parts: %d  index: %d  n_length: %d  int_length: %d  com_length: %d", interval_count,interval_parts, share->keys,n_length,int_length, com_length));
 
@@ -1137,6 +1564,9 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
                                       share->db_type())))
     goto err;
 
+  if (handler_file->set_ha_share_ref(&share->ha_share))
+    goto err;
+
   record= share->default_values-1;              /* Fieldstart = 1 */
   if (share->null_field_first)
   {
@@ -1161,16 +1591,16 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
 
   use_hash= share->fields >= MAX_FIELDS_BEFORE_HASH;
   if (use_hash)
-    use_hash= !hash_init(&share->name_hash,
-			 system_charset_info,
-			 share->fields,0,0,
-			 (hash_get_key) get_field_name,0,0);
+    use_hash= !my_hash_init(&share->name_hash,
+                            system_charset_info,
+                            share->fields,0,0,
+                            (my_hash_get_key) get_field_name,0,0);
 
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
   {
     uint pack_flag, interval_nr, unireg_type, recpos, field_length;
     enum_field_types field_type;
-    CHARSET_INFO *charset=NULL;
+    const CHARSET_INFO *charset=NULL;
     Field::geometry_type geom_type= Field::GEOM_GEOMETRY;
     LEX_STRING comment;
 
@@ -1198,12 +1628,13 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       }
       else
       {
-        if (!strpos[14])
+        uint csid= strpos[14] + (((uint) strpos[11]) << 8);
+        if (!csid)
           charset= &my_charset_bin;
-        else if (!(charset=get_charset((uint) strpos[14], MYF(0))))
+        else if (!(charset= get_charset(csid, MYF(0))))
         {
           error= 5; // Unknown or unavailable charset
-          errarg= (int) strpos[14];
+          errarg= (int) csid;
           goto err;
         }
       }
@@ -1250,7 +1681,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
       }
       else
         charset= share->table_charset;
-      bzero((char*) &comment, sizeof(comment));
+      memset(&comment, 0, sizeof(comment));
     }
 
     if (interval_nr && charset->mbminlen > 1)
@@ -1273,13 +1704,13 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
                                                    decimals,
                                                    f_is_dec(pack_flag) == 0);
       sql_print_error("Found incompatible DECIMAL field '%s' in %s; "
-                      "Please do \"ALTER TABLE '%s' FORCE\" to fix it!",
+                      "Please do \"ALTER TABLE `%s` FORCE\" to fix it!",
                       share->fieldnames.type_names[i], share->table_name.str,
                       share->table_name.str);
-      push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
                           ER_CRASHED_ON_USAGE,
                           "Found incompatible DECIMAL field '%s' in %s; "
-                          "Please do \"ALTER TABLE '%s' FORCE\" to fix it!",
+                          "Please do \"ALTER TABLE `%s` FORCE\" to fix it!",
                           share->fieldnames.type_names[i],
                           share->table_name.str,
                           share->table_name.str);
@@ -1326,8 +1757,6 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
 
     if (reg_field->unireg_check == Field::NEXT_NUMBER)
       share->found_next_number_field= field_ptr;
-    if (share->timestamp_field == reg_field)
-      share->timestamp_field_offset= i;
 
     if (use_hash)
       if (my_hash_insert(&share->name_hash, (uchar*) field_ptr) )
@@ -1340,14 +1769,26 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
         error= 8; 
         goto err;
       }
+
+    if (format_section_fields)
+    {
+      const uchar field_flags= format_section_fields[i];
+      const uchar field_storage= (field_flags & STORAGE_TYPE_MASK);
+      const uchar field_column_format=
+        ((field_flags >> COLUMN_FORMAT_SHIFT)& COLUMN_FORMAT_MASK);
+      DBUG_PRINT("debug", ("field flags: %u, storage: %u, column_format: %u",
+                           field_flags, field_storage, field_column_format));
+      reg_field->set_storage_type((ha_storage_media)field_storage);
+      reg_field->set_column_format((column_format_type)field_column_format);
+    }
   }
   *field_ptr=0;					// End marker
 
   /* Fix key->name and key_part->field */
   if (key_parts)
   {
-    uint primary_key=(uint) (find_type((char*) primary_key_name,
-				       &share->keynames, 3) - 1);
+    uint primary_key=(uint) (find_type(primary_key_name, &share->keynames,
+                                       FIND_TYPE_NO_PREFIX) - 1);
     longlong ha_option= handler_file->ha_table_flags();
     keyinfo= share->key_info;
     key_part= keyinfo->key_part;
@@ -1367,21 +1808,33 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
 	  declare this as a primary key.
 	*/
 	primary_key=key;
-	for (i=0 ; i < keyinfo->key_parts ;i++)
+	for (i=0 ; i < keyinfo->user_defined_key_parts ;i++)
 	{
-	  uint fieldnr= key_part[i].fieldnr;
-	  if (!fieldnr ||
-	      share->field[fieldnr-1]->null_ptr ||
-	      share->field[fieldnr-1]->key_length() !=
-	      key_part[i].length)
-	  {
-	    primary_key=MAX_KEY;		// Can't be used
+          DBUG_ASSERT(key_part[i].fieldnr > 0);
+          // Table field corresponding to the i'th key part.
+          Field *table_field= share->field[key_part[i].fieldnr - 1];
+
+          /*
+            If the key column is of NOT NULL BLOB type, then it
+            will definitly have key prefix. And if key part prefix size
+            is equal to the BLOB column max size, then we can promote
+            it to primary key.
+          */
+          if (!table_field->real_maybe_null() &&
+              table_field->type() == MYSQL_TYPE_BLOB &&
+              table_field->field_length == key_part[i].length)
+            continue;
+
+	  if (table_field->real_maybe_null() ||
+	      table_field->key_length() != key_part[i].length)
+ 	  {
+	    primary_key= MAX_KEY;		// Can't be used
 	    break;
 	  }
 	}
       }
 
-      for (i=0 ; i < keyinfo->key_parts ; key_part++,i++)
+      for (i=0 ; i < keyinfo->user_defined_key_parts ; key_part++,i++)
       {
         Field *field;
 	if (new_field_pack_flag <= 1)
@@ -1396,59 +1849,27 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
         }
         field= key_part->field= share->field[key_part->fieldnr-1];
         key_part->type= field->key_type();
-        if (field->null_ptr)
+        if (field->real_maybe_null())
         {
-          key_part->null_offset=(uint) ((uchar*) field->null_ptr -
-                                        share->default_values);
+          key_part->null_offset=field->null_offset(share->default_values);
           key_part->null_bit= field->null_bit;
           key_part->store_length+=HA_KEY_NULL_LENGTH;
           keyinfo->flags|=HA_NULL_PART_KEY;
-          keyinfo->extra_length+= HA_KEY_NULL_LENGTH;
           keyinfo->key_length+= HA_KEY_NULL_LENGTH;
         }
         if (field->type() == MYSQL_TYPE_BLOB ||
             field->real_type() == MYSQL_TYPE_VARCHAR ||
             field->type() == MYSQL_TYPE_GEOMETRY)
         {
-          if (field->type() == MYSQL_TYPE_BLOB ||
-              field->type() == MYSQL_TYPE_GEOMETRY)
-            key_part->key_part_flag|= HA_BLOB_PART;
-          else
-            key_part->key_part_flag|= HA_VAR_LENGTH_PART;
-          keyinfo->extra_length+=HA_KEY_BLOB_LENGTH;
           key_part->store_length+=HA_KEY_BLOB_LENGTH;
-          keyinfo->key_length+= HA_KEY_BLOB_LENGTH;
-          /*
-            Mark that there may be many matching values for one key
-            combination ('a', 'a ', 'a  '...)
-          */
-          if (!(field->flags & BINARY_FLAG))
-            keyinfo->flags|= HA_END_SPACE_KEY;
+          if (i + 1 <= keyinfo->user_defined_key_parts)
+            keyinfo->key_length+= HA_KEY_BLOB_LENGTH;
         }
-        if (field->type() == MYSQL_TYPE_BIT)
-          key_part->key_part_flag|= HA_BIT_PART;
+        key_part->init_flags();
 
-        if (i == 0 && key != primary_key)
-          field->flags |= (((keyinfo->flags & HA_NOSAME) &&
-                           (keyinfo->key_parts == 1)) ?
-                           UNIQUE_KEY_FLAG : MULTIPLE_KEY_FLAG);
-        if (i == 0)
-          field->key_start.set_bit(key);
-        if (field->key_length() == key_part->length &&
-            !(field->flags & BLOB_FLAG))
-        {
-          if (handler_file->index_flags(key, i, 0) & HA_KEYREAD_ONLY)
-          {
-            share->keys_for_keyread.set_bit(key);
-            field->part_of_key.set_bit(key);
-            field->part_of_key_not_clustered.set_bit(key);
-          }
-          if (handler_file->index_flags(key, i, 1) & HA_READ_ORDER)
-            field->part_of_sortkey.set_bit(key);
-        }
-        if (!(key_part->key_part_flag & HA_REVERSE_SORT) &&
-            usable_parts == i)
-          usable_parts++;			// For FILESORT
+        setup_key_part_field(share, handler_file, primary_key,
+                             keyinfo, key, i, &usable_parts);
+
         field->flags|= PART_KEY_FLAG;
         if (key == primary_key)
         {
@@ -1483,37 +1904,37 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
                                               field->key_length());
             key_part->length= (uint16)field->key_length();
             sql_print_error("Found wrong key definition in %s; "
-                            "Please do \"ALTER TABLE '%s' FORCE \" to fix it!",
+                            "Please do \"ALTER TABLE `%s` FORCE \" to fix it!",
                             share->table_name.str,
                             share->table_name.str);
-            push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
+            push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
                                 ER_CRASHED_ON_USAGE,
                                 "Found wrong key definition in %s; "
-                                "Please do \"ALTER TABLE '%s' FORCE\" to fix "
+                                "Please do \"ALTER TABLE `%s` FORCE\" to fix "
                                 "it!",
                                 share->table_name.str,
                                 share->table_name.str);
             share->crashed= 1;                // Marker for CHECK TABLE
-            goto to_be_deleted;
+            continue;
           }
 #endif
           key_part->key_part_flag|= HA_PART_KEY_SEG;
         }
-
-	to_be_deleted:
-
-        /*
-          If the field can be NULL, don't optimize away the test
-          key_part_column = expression from the WHERE clause
-          as we need to test for NULL = NULL.
-        */
-        if (field->real_maybe_null())
-          key_part->key_part_flag|= HA_NULL_PART;
       }
+
+
+      if (use_extended_sk && primary_key < MAX_KEY &&
+          key && !(keyinfo->flags & HA_NOSAME))
+        key_part+= add_pk_parts_to_sk(keyinfo, key, share->key_info, primary_key,
+                                      share,  handler_file, &usable_parts);
+
+      /* Skip unused key parts if they exist */
+      key_part+= keyinfo->unused_key_parts;
+
       keyinfo->usable_key_parts= usable_parts; // Filesort
 
       set_if_bigger(share->max_key_length,keyinfo->key_length+
-                    keyinfo->key_parts);
+                    keyinfo->user_defined_key_parts);
       share->total_key_length+= keyinfo->key_length;
       /*
         MERGE tables do not have unique indexes. But every key could be
@@ -1531,7 +1952,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
 	If we are using an integer as the primary key then allow the user to
 	refer to it as '_rowid'
       */
-      if (share->key_info[primary_key].key_parts == 1)
+      if (share->key_info[primary_key].user_defined_key_parts == 1)
       {
 	Field *field= share->key_info[primary_key].key_part[0].field;
 	if (field && field->result_type() == INT_RESULT)
@@ -1547,14 +1968,14 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   }
   else
     share->primary_key= MAX_KEY;
-  x_free((uchar*) disk_buff);
+  my_free(disk_buff);
   disk_buff=0;
   if (new_field_pack_flag <= 1)
   {
     /* Old file format with default as not null */
     uint null_length= (share->null_fields+7)/8;
-    bfill(share->default_values + (null_flags - (uchar*) record),
-          null_length, 255);
+    memset(share->default_values + (null_flags - (uchar*) record), 255,
+           null_length);
   }
 
   if (share->found_next_number_field)
@@ -1611,23 +2032,20 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   delete handler_file;
 #ifndef DBUG_OFF
   if (use_hash)
-    (void) hash_check(&share->name_hash);
+    (void) my_hash_check(&share->name_hash);
 #endif
+  my_free(extra_segment_buff);
   DBUG_RETURN (0);
 
  err:
   share->error= error;
   share->open_errno= my_errno;
   share->errarg= errarg;
-  x_free((uchar*) disk_buff);
+  my_free(disk_buff);
+  my_free(extra_segment_buff);
   delete crypted;
   delete handler_file;
-  hash_free(&share->name_hash);
-  if (share->ha_data_destroy)
-  {
-    share->ha_data_destroy(share->ha_data);
-    share->ha_data_destroy= NULL;
-  }
+  my_hash_free(&share->name_hash);
 
   open_table_error(share, error, share->open_errno, errarg);
   DBUG_RETURN(error);
@@ -1648,6 +2066,8 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
     prgflag   		READ_ALL etc..
     ha_open_flags	HA_OPEN_ABORT_IF_LOCKED etc..
     outparam       	result table
+    is_create_table     Indicates that table is opened as part
+                        of CREATE or ALTER and does not yet exist in SE
 
   RETURN VALUES
    0	ok
@@ -1672,11 +2092,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   DBUG_PRINT("enter",("name: '%s.%s'  form: 0x%lx", share->db.str,
                       share->table_name.str, (long) outparam));
 
-  /* Parsing of partitioning information from .frm needs thd->lex set up. */
-  DBUG_ASSERT(thd->lex->is_lex_started);
-
   error= 1;
-  bzero((char*) outparam, sizeof(*outparam));
+  memset(outparam, 0, sizeof(*outparam));
   outparam->in_use= thd;
   outparam->s= share;
   outparam->db_stat= db_stat;
@@ -1687,6 +2104,7 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   if (!(outparam->alias= my_strdup(alias, MYF(MY_WME))))
     goto err;
   outparam->quick_keys.init();
+  outparam->possible_quick_keys.init();
   outparam->covering_keys.init();
   outparam->merge_keys.init();
   outparam->keys_in_use_for_query.init();
@@ -1697,6 +2115,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   {
     if (!(outparam->file= get_new_handler(share, &outparam->mem_root,
                                           share->db_type())))
+      goto err;
+    if (outparam->file->set_ha_share_ref(&share->ha_share))
       goto err;
   }
   else
@@ -1740,9 +2160,6 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   {
     memcpy(outparam->record[0], share->default_values, share->rec_buff_length);
     memcpy(outparam->record[1], share->default_values, share->null_bytes);
-    if (records > 2)
-      memcpy(outparam->record[1], share->default_values,
-             share->rec_buff_length);
   }
 #endif
 
@@ -1763,17 +2180,19 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   /* Setup copy of fields from share, but use the right alias and record */
   for (i=0 ; i < share->fields; i++, field_ptr++)
   {
-    if (!((*field_ptr)= share->field[i]->clone(&outparam->mem_root, outparam)))
+    Field *new_field= share->field[i]->clone(&outparam->mem_root);
+    *field_ptr= new_field;
+    if (new_field == NULL)
       goto err;
+    new_field->init(outparam);
+    new_field->move_field_offset((my_ptrdiff_t) (outparam->record[0] -
+                                                 outparam->s->default_values));
   }
   (*field_ptr)= 0;                              // End marker
 
   if (share->found_next_number_field)
     outparam->found_next_number_field=
       outparam->field[(uint) (share->found_next_number_field - share->field)];
-  if (share->timestamp_field)
-    outparam->timestamp_field= (Field_timestamp*) outparam->field[share->timestamp_field_offset];
-
 
   /* Fix key->name and key_part->field */
   if (share->key_parts)
@@ -1781,12 +2200,14 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
     KEY	*key_info, *key_info_end;
     KEY_PART_INFO *key_part;
     uint n_length;
-    n_length= share->keys*sizeof(KEY) + share->key_parts*sizeof(KEY_PART_INFO);
+    n_length= share->keys * sizeof(KEY) +
+      share->key_parts * sizeof(KEY_PART_INFO);
+
     if (!(key_info= (KEY*) alloc_root(&outparam->mem_root, n_length)))
       goto err;
     outparam->key_info= key_info;
-    key_part= (my_reinterpret_cast(KEY_PART_INFO*) (key_info+share->keys));
-    
+    key_part= (reinterpret_cast<KEY_PART_INFO*>(key_info+share->keys));
+
     memcpy(key_info, share->key_info, sizeof(*key_info)*share->keys);
     memcpy(key_part, share->key_info[0].key_part, (sizeof(*key_part) *
                                                    share->key_parts));
@@ -1800,7 +2221,7 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
       key_info->table= outparam;
       key_info->key_part= key_part;
 
-      for (key_part_end= key_part+ key_info->key_parts ;
+      for (key_part_end= key_part + key_info->actual_key_parts ;
            key_part < key_part_end ;
            key_part++)
       {
@@ -1818,11 +2239,13 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
           field->field_length= key_part->length;
         }
       }
+      /* Skip unused key parts if they exist */
+      key_part+= key_info->unused_key_parts;
     }
   }
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  if (share->partition_info_len && outparam->file)
+  if (share->partition_info_str_len && outparam->file)
   {
   /*
     In this execution we must avoid calling thd->change_item_tree since
@@ -1837,16 +2260,15 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
 
     Query_arena *backup_stmt_arena_ptr= thd->stmt_arena;
     Query_arena backup_arena;
-    Query_arena part_func_arena(&outparam->mem_root, Query_arena::INITIALIZED);
+    Query_arena part_func_arena(&outparam->mem_root,
+                                Query_arena::STMT_INITIALIZED);
     thd->set_n_backup_active_arena(&part_func_arena, &backup_arena);
     thd->stmt_arena= &part_func_arena;
     bool tmp;
     bool work_part_info_used;
 
-    tmp= mysql_unpack_partition(thd, share->partition_info,
-                                share->partition_info_len,
-                                share->part_state,
-                                share->part_state_len,
+    tmp= mysql_unpack_partition(thd, share->partition_info_str,
+                                share->partition_info_str_len,
                                 outparam, is_create_table,
                                 share->default_part_db_type,
                                 &work_part_info_used);
@@ -1858,8 +2280,9 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
     }
     outparam->part_info->is_auto_partitioned= share->auto_partitioned;
     DBUG_PRINT("info", ("autopartitioned: %u", share->auto_partitioned));
-    /* we should perform the fix_partition_func in either local or
-       caller's arena depending on work_part_info_used value
+    /*
+      We should perform the fix_partition_func in either local or
+      caller's arena depending on work_part_info_used value.
     */
     if (!work_part_info_used)
       tmp= fix_partition_func(thd, outparam, is_create_table);
@@ -1954,12 +2377,26 @@ partititon_err:
   }
 
 #if defined(HAVE_purify) && !defined(DBUG_OFF)
-  bzero((char*) bitmaps, bitmap_size*3);
+  memset(bitmaps, 0, bitmap_size*3);
 #endif
 
-  outparam->no_replicate= outparam->file &&
-                          test(outparam->file->ha_table_flags() &
-                               HA_HAS_OWN_BINLOGGING);
+  if ((share->table_category == TABLE_CATEGORY_LOG) ||
+      (share->table_category == TABLE_CATEGORY_RPL_INFO))
+  {
+    outparam->no_replicate= TRUE;
+  }
+  else if (outparam->file)
+  {
+    handler::Table_flags flags= outparam->file->ha_table_flags();
+    outparam->no_replicate= ! MY_TEST(flags & (HA_BINLOG_STMT_CAPABLE
+                                               | HA_BINLOG_ROW_CAPABLE))
+                            || MY_TEST(flags & HA_HAS_OWN_BINLOGGING);
+  }
+  else
+  {
+    outparam->no_replicate= FALSE;
+  }
+
   thd->status_var.opened_tables++;
 
   DBUG_RETURN (0);
@@ -1974,8 +2411,8 @@ partititon_err:
 #endif
   outparam->file= 0;				// For easier error checking
   outparam->db_stat=0;
-  free_root(&outparam->mem_root, MYF(0));       // Safe to call on bzero'd root
-  my_free((char*) outparam->alias, MYF(MY_ALLOW_ZERO_PTR));
+  free_root(&outparam->mem_root, MYF(0));
+  my_free((void *) outparam->alias);
   DBUG_RETURN (error);
 }
 
@@ -1996,8 +2433,8 @@ int closefrm(register TABLE *table, bool free_share)
   DBUG_PRINT("enter", ("table: 0x%lx", (long) table));
 
   if (table->db_stat)
-    error=table->file->close();
-  my_free((char*) table->alias, MYF(MY_ALLOW_ZERO_PTR));
+    error=table->file->ha_close();
+  my_free((void *) table->alias);
   table->alias= 0;
   if (table->field)
   {
@@ -2010,6 +2447,7 @@ int closefrm(register TABLE *table, bool free_share)
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   if (table->part_info)
   {
+    /* Allocated through table->mem_root, freed below */
     free_items(table->part_info->item_free_list);
     table->part_info->item_free_list= 0;
     table->part_info= 0;
@@ -2018,7 +2456,7 @@ int closefrm(register TABLE *table, bool free_share)
   if (free_share)
   {
     if (table->s->tmp_table == NO_TMP_TABLE)
-      release_table_share(table->s, RELEASE_NORMAL);
+      release_table_share(table->s);
     else
       free_table_share(table->s);
   }
@@ -2035,7 +2473,15 @@ void free_blobs(register TABLE *table)
   for (ptr= table->s->blob_field, end=ptr + table->s->blob_fields ;
        ptr != end ;
        ptr++)
-    ((Field_blob*) table->field[*ptr])->free();
+  {
+    /*
+      Reduced TABLE objects which are used by row-based replication for
+      type conversion might have some fields missing. Skip freeing BLOB
+      buffers for such missing fields.
+    */
+    if (table->field[*ptr])
+      ((Field_blob*) table->field[*ptr])->free();
+  }
 }
 
 
@@ -2085,21 +2531,21 @@ static ulong get_form_pos(File file, uchar *head)
 
   length= uint2korr(head+4);
 
-  my_seek(file, 64L, MY_SEEK_SET, MYF(0));
+  mysql_file_seek(file, 64L, MY_SEEK_SET, MYF(0));
 
   if (!(buf= (uchar*) my_malloc(length+names*4, MYF(MY_WME))))
     DBUG_RETURN(0);
 
-  if (my_read(file, buf, length+names*4, MYF(MY_NABP)))
+  if (mysql_file_read(file, buf, length+names*4, MYF(MY_NABP)))
   {
-    x_free(buf);
+    my_free(buf);
     DBUG_RETURN(0);
   }
 
   pos= buf+length;
   ret_value= uint4korr(pos);
 
-  my_free(buf, MYF(0));
+  my_free(buf);
 
   DBUG_RETURN(ret_value);
 }
@@ -2116,11 +2562,11 @@ int read_string(File file, uchar**to, size_t length)
 {
   DBUG_ENTER("read_string");
 
-  x_free(*to);
+  my_free(*to);
   if (!(*to= (uchar*) my_malloc(length+1,MYF(MY_WME))) ||
-      my_read(file, *to, length,MYF(MY_NABP)))
+      mysql_file_read(file, *to, length, MYF(MY_NABP)))
   {
-    x_free(*to);                              /* purecov: inspected */
+     my_free(*to);                            /* purecov: inspected */
     *to= 0;                                   /* purecov: inspected */
     DBUG_RETURN(1);                           /* purecov: inspected */
   }
@@ -2150,23 +2596,24 @@ ulong make_new_entry(File file, uchar *fileinfo, TYPELIB *formnames,
   {						/* Expand file */
     newpos+=IO_SIZE;
     int4store(fileinfo+10,newpos);
-    endpos=(ulong) my_seek(file,0L,MY_SEEK_END,MYF(0));/* Copy from file-end */
+    /* Copy from file-end */
+    endpos= (ulong) mysql_file_seek(file, 0L, MY_SEEK_END, MYF(0));
     bufflength= (uint) (endpos & (IO_SIZE-1));	/* IO_SIZE is a power of 2 */
 
     while (endpos > maxlength)
     {
-      VOID(my_seek(file,(ulong) (endpos-bufflength),MY_SEEK_SET,MYF(0)));
-      if (my_read(file, buff, bufflength, MYF(MY_NABP+MY_WME)))
+      mysql_file_seek(file, (ulong) (endpos-bufflength), MY_SEEK_SET, MYF(0));
+      if (mysql_file_read(file, buff, bufflength, MYF(MY_NABP+MY_WME)))
 	DBUG_RETURN(0L);
-      VOID(my_seek(file,(ulong) (endpos-bufflength+IO_SIZE),MY_SEEK_SET,
-		   MYF(0)));
-      if ((my_write(file, buff,bufflength,MYF(MY_NABP+MY_WME))))
+      mysql_file_seek(file, (ulong) (endpos-bufflength+IO_SIZE), MY_SEEK_SET,
+                      MYF(0));
+      if ((mysql_file_write(file, buff, bufflength, MYF(MY_NABP+MY_WME))))
 	DBUG_RETURN(0);
       endpos-=bufflength; bufflength=IO_SIZE;
     }
-    bzero(buff,IO_SIZE);			/* Null new block */
-    VOID(my_seek(file,(ulong) maxlength,MY_SEEK_SET,MYF(0)));
-    if (my_write(file,buff,bufflength,MYF(MY_NABP+MY_WME)))
+    memset(buff, 0, IO_SIZE);			/* Null new block */
+    mysql_file_seek(file, (ulong) maxlength, MY_SEEK_SET, MYF(0));
+    if (mysql_file_write(file, buff, bufflength, MYF(MY_NABP+MY_WME)))
 	DBUG_RETURN(0L);
     maxlength+=IO_SIZE;				/* Fix old ref */
     int2store(fileinfo+6,maxlength);
@@ -2181,20 +2628,21 @@ ulong make_new_entry(File file, uchar *fileinfo, TYPELIB *formnames,
   if (n_length == 1 )
   {						/* First name */
     length++;
-    VOID(strxmov((char*) buff,"/",newname,"/",NullS));
+    (void) strxmov((char*) buff,"/",newname,"/",NullS);
   }
   else
-    VOID(strxmov((char*) buff,newname,"/",NullS)); /* purecov: inspected */
-  VOID(my_seek(file,63L+(ulong) n_length,MY_SEEK_SET,MYF(0)));
-  if (my_write(file, buff, (size_t) length+1,MYF(MY_NABP+MY_WME)) ||
-      (names && my_write(file,(uchar*) (*formnames->type_names+n_length-1),
-			 names*4, MYF(MY_NABP+MY_WME))) ||
-      my_write(file, fileinfo+10, 4,MYF(MY_NABP+MY_WME)))
+    (void) strxmov((char*) buff,newname,"/",NullS); /* purecov: inspected */
+  mysql_file_seek(file, 63L+(ulong) n_length, MY_SEEK_SET, MYF(0));
+  if (mysql_file_write(file, buff, (size_t) length+1, MYF(MY_NABP+MY_WME)) ||
+      (names && mysql_file_write(file,
+                                 (uchar*) (*formnames->type_names+n_length-1),
+                                 names*4, MYF(MY_NABP+MY_WME))) ||
+      mysql_file_write(file, fileinfo+10, 4, MYF(MY_NABP+MY_WME)))
     DBUG_RETURN(0L); /* purecov: inspected */
 
   int2store(fileinfo+8,names+1);
   int2store(fileinfo+4,n_length+length);
-  VOID(my_chsize(file, newpos, 0, MYF(MY_WME)));/* Append file with '\0' */
+  (void) mysql_file_chsize(file, newpos, 0, MYF(MY_WME));/* Append file with '\0' */
   DBUG_RETURN(newpos);
 } /* make_new_entry */
 
@@ -2205,6 +2653,7 @@ void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg)
 {
   int err_no;
   char buff[FN_REFLEN];
+  char errbuf[MYSYS_STRERROR_SIZE];
   myf errortype= ME_ERROR+ME_WAITTANG;
   DBUG_ENTER("open_table_error");
 
@@ -2217,7 +2666,8 @@ void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg)
     {
       strxmov(buff, share->normalized_path.str, reg_ext, NullS);
       my_error((db_errno == EMFILE) ? ER_CANT_OPEN_FILE : ER_FILE_NOT_FOUND,
-               errortype, buff, db_errno);
+               errortype, buff,
+               db_errno, my_strerror(errbuf, sizeof(errbuf), db_errno));
     }
     break;
   case 2:
@@ -2237,7 +2687,8 @@ void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg)
     err_no= (db_errno == ENOENT) ? ER_FILE_NOT_FOUND : (db_errno == EAGAIN) ?
       ER_FILE_USED : ER_CANT_OPEN_FILE;
     strxmov(buff, share->normalized_path.str, datext, NullS);
-    my_error(err_no,errortype, buff, db_errno);
+    my_error(err_no,errortype, buff,
+             db_errno, my_strerror(errbuf, sizeof(errbuf), db_errno));
     delete file;
     break;
   }
@@ -2263,6 +2714,11 @@ void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg)
                     MYF(0), buff);
     break;
   case 8:
+    break;
+  case 9:
+    /* Unknown FRM type read while preparing File_parser object for view*/
+    my_error(ER_FRM_UNKNOWN_TYPE, MYF(0), share->path.str,
+             share->view_def->type()->str);
     break;
   default:				/* Better wrong error than none */
   case 4:
@@ -2460,12 +2916,14 @@ void append_unescaped(String *res, const char *pos, uint length)
 
 File create_frm(THD *thd, const char *name, const char *db,
                 const char *table, uint reclength, uchar *fileinfo,
-  		HA_CREATE_INFO *create_info, uint keys)
+  		HA_CREATE_INFO *create_info, uint keys, KEY *key_info)
 {
   register File file;
   ulong length;
   uchar fill[IO_SIZE];
   int create_flags= O_RDWR | O_TRUNC;
+  ulong key_comment_total_bytes= 0;
+  uint i;
 
   if (create_info->options & HA_LEX_CREATE_TMP_TABLE)
     create_flags|= O_EXCL | O_NOFOLLOW;
@@ -2476,15 +2934,15 @@ File create_frm(THD *thd, const char *name, const char *db,
   if (create_info->min_rows > UINT_MAX32)
     create_info->min_rows= UINT_MAX32;
 
-  if ((file= my_create(name, CREATE_MODE, create_flags, MYF(0))) >= 0)
+  if ((file= mysql_file_create(key_file_frm,
+                               name, CREATE_MODE, create_flags, MYF(0))) >= 0)
   {
-    uint key_length, tmp_key_length;
-    uint tmp;
-    bzero((char*) fileinfo,64);
+    uint key_length, tmp_key_length, tmp, csid;
+    memset(fileinfo, 0, 64);
     /* header */
     fileinfo[0]=(uchar) 254;
     fileinfo[1]= 1;
-    fileinfo[2]= FRM_VER+3+ test(create_info->varchar);
+    fileinfo[2]= FRM_VER+3+ MY_TEST(create_info->varchar);
 
     fileinfo[3]= (uchar) ha_legacy_type(
           ha_checktype(thd,ha_legacy_type(create_info->db_type),0,0));
@@ -2502,7 +2960,17 @@ File create_frm(THD *thd, const char *name, const char *db,
       1 byte for the NAMES_SEP_CHAR (after the last name)
       9 extra bytes (padding for safety? alignment?)
     */
-    key_length= keys * (8 + MAX_REF_PARTS * 9 + NAME_LEN + 1) + 16;
+    for (i= 0; i < keys; i++)
+    {
+      DBUG_ASSERT(MY_TEST(key_info[i].flags & HA_USES_COMMENT) ==
+                 (key_info[i].comment.length > 0));
+      if (key_info[i].flags & HA_USES_COMMENT)
+        key_comment_total_bytes += 2 + key_info[i].comment.length;
+    }
+
+    key_length= keys * (8 + MAX_REF_PARTS * 9 + NAME_LEN + 1) + 16
+                + key_comment_total_bytes;
+
     length= next_io_size((ulong) (IO_SIZE+key_length+reclength+
                                   create_info->extra_size));
     int4store(fileinfo+10,length);
@@ -2519,19 +2987,19 @@ File create_frm(THD *thd, const char *name, const char *db,
     fileinfo[32]=0;				// No filename anymore
     fileinfo[33]=5;                             // Mark for 5.0 frm file
     int4store(fileinfo+34,create_info->avg_row_length);
-    fileinfo[38]= (create_info->default_table_charset ?
-		   create_info->default_table_charset->number : 0);
+    csid= (create_info->default_table_charset ?
+           create_info->default_table_charset->number : 0);
+    fileinfo[38]= (uchar) csid;
     /*
       In future versions, we will store in fileinfo[39] the values of the
       TRANSACTIONAL and PAGE_CHECKSUM clauses of CREATE TABLE.
     */
     fileinfo[39]= 0;
     fileinfo[40]= (uchar) create_info->row_type;
-    /* Next few bytes where for RAID support */
-    fileinfo[41]= 0;
-    fileinfo[42]= 0;
-    fileinfo[43]= 0;
-    fileinfo[44]= 0;
+    /* Bytes 41-46 were for RAID support; now reused for other purposes */
+    fileinfo[41]= (uchar) (csid >> 8);
+    int2store(fileinfo+42, create_info->stats_sample_pages & 0xffff);
+    fileinfo[44]= (uchar) create_info->stats_auto_recalc;
     fileinfo[45]= 0;
     fileinfo[46]= 0;
     int4store(fileinfo+47, key_length);
@@ -2543,13 +3011,13 @@ File create_frm(THD *thd, const char *name, const char *db,
       61 for default_part_db_type
     */
     int2store(fileinfo+62, create_info->key_block_size);
-    bzero(fill,IO_SIZE);
+    memset(fill, 0, IO_SIZE);
     for (; length > IO_SIZE ; length-= IO_SIZE)
     {
-      if (my_write(file,fill, IO_SIZE, MYF(MY_WME | MY_NABP)))
+      if (mysql_file_write(file, fill, IO_SIZE, MYF(MY_WME | MY_NABP)))
       {
-	VOID(my_close(file,MYF(0)));
-	VOID(my_delete(name,MYF(0)));
+        (void) mysql_file_close(file, MYF(0));
+        (void) mysql_file_delete(key_file_frm, name, MYF(0));
 	return(-1);
       }
     }
@@ -2578,6 +3046,8 @@ void update_create_info_from_table(HA_CREATE_INFO *create_info, TABLE *table)
   create_info->default_table_charset= share->table_charset;
   create_info->table_charset= 0;
   create_info->comment= share->comment;
+  create_info->storage_media= share->default_storage_media;
+  create_info->tablespace= share->tablespace;
 
   DBUG_VOID_RETURN;
 }
@@ -2586,9 +3056,9 @@ int
 rename_file_ext(const char * from,const char * to,const char * ext)
 {
   char from_b[FN_REFLEN],to_b[FN_REFLEN];
-  VOID(strxmov(from_b,from,ext,NullS));
-  VOID(strxmov(to_b,to,ext,NullS));
-  return (my_rename(from_b,to_b,MYF(MY_WME)));
+  (void) strxmov(from_b,from,ext,NullS);
+  (void) strxmov(to_b,to,ext,NullS);
+  return (mysql_file_rename(key_file_frm, from_b, to_b, MYF(MY_WME)));
 }
 
 
@@ -2620,7 +3090,7 @@ bool get_field(MEM_ROOT *mem, Field *field, String *res)
   }
   if (!(to= strmake_root(mem, str.ptr(), length)))
     length= 0;                                  // Safety fix
-  res->set(to, length, ((Field_str*)field)->charset());
+  res->set(to, length, field->charset());
   return 0;
 }
 
@@ -2664,9 +3134,9 @@ uint calculate_key_len(TABLE *table, uint key, const uchar *buf,
   /* works only with key prefixes */
   DBUG_ASSERT(((keypart_map + 1) & keypart_map) == 0);
 
-  KEY *key_info= table->s->key_info+key;
+  KEY *key_info= table->key_info + key;
   KEY_PART_INFO *key_part= key_info->key_part;
-  KEY_PART_INFO *end_key_part= key_part + key_info->key_parts;
+  KEY_PART_INFO *end_key_part= key_part + actual_key_parts(key_info);
   uint length= 0;
 
   while (key_part < end_key_part && keypart_map)
@@ -2678,29 +3148,37 @@ uint calculate_key_len(TABLE *table, uint key, const uchar *buf,
   return length;
 }
 
-/*
+/**
   Check if database name is valid
 
-  SYNPOSIS
-    check_db_name()
-    org_name		Name of database and length
+  @param org_name             Name of database and length
+  @param preserve_lettercase  Preserve lettercase if true
 
-  NOTES
-    If lower_case_table_names is set then database is converted to lower case
+  @note If lower_case_table_names is true and preserve_lettercase
+  is false then database is converted to lower case
 
-  RETURN
-    0	ok
-    1   error
+  @retval  IDENT_NAME_OK        Identifier name is Ok (Success)
+  @retval  IDENT_NAME_WRONG     Identifier name is Wrong (ER_WRONG_TABLE_NAME)
+  @retval  IDENT_NAME_TOO_LONG  Identifier name is too long if it is greater
+                                than 64 characters (ER_TOO_LONG_IDENT)
+
+  @note In case of IDENT_NAME_WRONG and IDENT_NAME_TOO_LONG, this
+  function reports an error (my_error)
 */
 
-bool check_db_name(LEX_STRING *org_name)
+enum_ident_name_check check_and_convert_db_name(LEX_STRING *org_name,
+                                                bool preserve_lettercase)
 {
   char *name= org_name->str;
   uint name_length= org_name->length;
   bool check_for_path_chars;
+  enum_ident_name_check ident_check_status;
 
   if (!name_length || name_length > NAME_LEN)
-    return 1;
+  {
+    my_error(ER_WRONG_DB_NAME, MYF(0), org_name->str);
+    return IDENT_NAME_WRONG;
+  }
 
   if ((check_for_path_chars= check_mysql50_prefix(name)))
   {
@@ -2708,30 +3186,47 @@ bool check_db_name(LEX_STRING *org_name)
     name_length-= MYSQL50_TABLE_NAME_PREFIX_LENGTH;
   }
 
-  if (lower_case_table_names && name != any_db)
+  if (!preserve_lettercase && lower_case_table_names && name != any_db)
     my_casedn_str(files_charset_info, name);
 
-  return check_table_name(name, name_length, check_for_path_chars);
+  ident_check_status= check_table_name(name, name_length, check_for_path_chars);
+  if (ident_check_status == IDENT_NAME_WRONG)
+    my_error(ER_WRONG_DB_NAME, MYF(0), org_name->str);
+  else if (ident_check_status == IDENT_NAME_TOO_LONG)
+    my_error(ER_TOO_LONG_IDENT, MYF(0), org_name->str);
+  return ident_check_status;
 }
 
 
-/*
-  Allow anything as a table name, as long as it doesn't contain an
-  ' ' at the end
-  returns 1 on error
+/**
+  Function to check if table name is valid or not. If it is invalid,
+  return appropriate error in each case to the caller.
+
+  @param name                  Table name
+  @param length                Length of table name
+  @param check_for_path_chars  Check if the table name contains path chars
+
+  @retval  IDENT_NAME_OK        Identifier name is Ok (Success)
+  @retval  IDENT_NAME_WRONG     Identifier name is Wrong (ER_WRONG_TABLE_NAME)
+  @retval  IDENT_NAME_TOO_LONG  Identifier name is too long if it is greater
+                                than 64 characters (ER_TOO_LONG_IDENT)
+
+  @note Reporting error to the user is the responsiblity of the caller.
 */
 
-bool check_table_name(const char *name, uint length, bool check_for_path_chars)
+enum_ident_name_check check_table_name(const char *name, size_t length,
+                                       bool check_for_path_chars)
 {
-  uint name_length= 0;  // name length in symbols
+  // name length in symbols
+  size_t name_length= 0;
   const char *end= name+length;
   if (!length || length > NAME_LEN)
-    return 1;
+    return IDENT_NAME_WRONG;
 #if defined(USE_MB) && defined(USE_MB_IDENT)
   bool last_char_is_space= FALSE;
 #else
   if (name[length-1]==' ')
-    return 1;
+    return IDENT_NAME_WRONG;
 #endif
 
   while (name != end)
@@ -2751,23 +3246,26 @@ bool check_table_name(const char *name, uint length, bool check_for_path_chars)
 #endif
     if (check_for_path_chars &&
         (*name == '/' || *name == '\\' || *name == '~' || *name == FN_EXTCHAR))
-      return 1;
+      return IDENT_NAME_WRONG;
     name++;
     name_length++;
   }
 #if defined(USE_MB) && defined(USE_MB_IDENT)
-  return (last_char_is_space || name_length > NAME_CHAR_LEN) ;
-#else
-  return 0;
+  if (last_char_is_space)
+   return IDENT_NAME_WRONG;
+  else if (name_length > NAME_CHAR_LEN)
+   return IDENT_NAME_TOO_LONG;
 #endif
+  return IDENT_NAME_OK;
 }
 
 
 bool check_column_name(const char *name)
 {
-  uint name_length= 0;  // name length in symbols
+  // name length in symbols
+  size_t name_length= 0;
   bool last_char_is_space= TRUE;
-  
+
   while (*name)
   {
 #if defined(USE_MB) && defined(USE_MB_IDENT)
@@ -2792,7 +3290,7 @@ bool check_column_name(const char *name)
     name_length++;
   }
   /* Error if empty or too long column name */
-  return last_char_is_space || (uint) name_length > NAME_CHAR_LEN;
+  return last_char_is_space || (name_length > NAME_CHAR_LEN);
 }
 
 
@@ -2843,8 +3341,9 @@ Table_check_intact::check(TABLE *table, const TABLE_FIELD_DEF *table_def)
     }
     else if (MYSQL_VERSION_ID == table->s->mysql_version)
     {
-      report_error(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED,
-                   ER(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED), table->alias,
+      report_error(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2,
+                   ER(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2),
+                   table->s->db.str, table->s->table_name.str,
                    table_def->count, table->s->fields);
       DBUG_RETURN(TRUE);
     }
@@ -2945,11 +3444,261 @@ Table_check_intact::check(TABLE *table, const TABLE_FIELD_DEF *table_def)
 }
 
 
+/**
+  Traverse portion of wait-for graph which is reachable through edge
+  represented by this flush ticket in search for deadlocks.
+
+  @retval TRUE  A deadlock is found. A victim is remembered
+                by the visitor.
+  @retval FALSE Success, no deadlocks.
+*/
+
+bool Wait_for_flush::accept_visitor(MDL_wait_for_graph_visitor *gvisitor)
+{
+  return m_share->visit_subgraph(this, gvisitor);
+}
+
+
+uint Wait_for_flush::get_deadlock_weight() const
+{
+  return m_deadlock_weight;
+}
+
+
+/**
+  Traverse portion of wait-for graph which is reachable through this
+  table share in search for deadlocks.
+
+  @param waiting_ticket  Ticket representing wait for this share.
+  @param dvisitor        Deadlock detection visitor.
+
+  @retval TRUE  A deadlock is found. A victim is remembered
+                by the visitor.
+  @retval FALSE No deadlocks, it's OK to begin wait.
+*/
+
+bool TABLE_SHARE::visit_subgraph(Wait_for_flush *wait_for_flush,
+                                 MDL_wait_for_graph_visitor *gvisitor)
+{
+  TABLE *table;
+  MDL_context *src_ctx= wait_for_flush->get_ctx();
+  bool result= TRUE;
+  bool locked= FALSE;
+
+  /*
+    To protect used_tables list from being concurrently modified
+    while we are iterating through it we acquire LOCK_open.
+    This does not introduce deadlocks in the deadlock detector
+    because we won't try to acquire LOCK_open while
+    holding a write-lock on MDL_lock::m_rwlock.
+  */
+  if (gvisitor->m_lock_open_count++ == 0)
+  {
+    locked= TRUE;
+    table_cache_manager.lock_all_and_tdc();
+  }
+
+  Table_cache_iterator tables_it(this);
+
+  /*
+    In case of multiple searches running in parallel, avoid going
+    over the same loop twice and shortcut the search.
+    Do it after taking the lock to weed out unnecessary races.
+  */
+  if (src_ctx->m_wait.get_status() != MDL_wait::EMPTY)
+  {
+    result= FALSE;
+    goto end;
+  }
+
+  if (gvisitor->enter_node(src_ctx))
+    goto end;
+
+  while ((table= tables_it++))
+  {
+    if (gvisitor->inspect_edge(&table->in_use->mdl_context))
+    {
+      goto end_leave_node;
+    }
+  }
+
+  tables_it.rewind();
+  while ((table= tables_it++))
+  {
+    if (table->in_use->mdl_context.visit_subgraph(gvisitor))
+    {
+      goto end_leave_node;
+    }
+  }
+
+  result= FALSE;
+
+end_leave_node:
+  gvisitor->leave_node(src_ctx);
+
+end:
+  gvisitor->m_lock_open_count--;
+  if (locked)
+  {
+    DBUG_ASSERT(gvisitor->m_lock_open_count == 0);
+    table_cache_manager.unlock_all_and_tdc();
+  }
+
+  return result;
+}
+
+
+/**
+  Wait until the subject share is removed from the table
+  definition cache and make sure it's destroyed.
+
+  @param mdl_context     MDL context for thread which is going to wait.
+  @param abstime         Timeout for waiting as absolute time value.
+  @param deadlock_weight Weight of this wait for deadlock detector.
+
+  @pre LOCK_open is write locked, the share is used (has
+       non-zero reference count), is marked for flush and
+       this connection does not reference the share.
+       LOCK_open will be unlocked temporarily during execution.
+
+  @retval FALSE - Success.
+  @retval TRUE  - Error (OOM, deadlock, timeout, etc...).
+*/
+
+bool TABLE_SHARE::wait_for_old_version(THD *thd, struct timespec *abstime,
+                                       uint deadlock_weight)
+{
+  MDL_context *mdl_context= &thd->mdl_context;
+  Wait_for_flush ticket(mdl_context, this, deadlock_weight);
+  MDL_wait::enum_wait_status wait_status;
+
+  mysql_mutex_assert_owner(&LOCK_open);
+  /*
+    We should enter this method only when share's version is not
+    up to date and the share is referenced. Otherwise our
+    thread will never be woken up from wait.
+  */
+  DBUG_ASSERT(version != refresh_version && ref_count != 0);
+
+  m_flush_tickets.push_front(&ticket);
+
+  mdl_context->m_wait.reset_status();
+
+  mysql_mutex_unlock(&LOCK_open);
+
+  mdl_context->will_wait_for(&ticket);
+
+  mdl_context->find_deadlock();
+
+  wait_status= mdl_context->m_wait.timed_wait(thd, abstime, TRUE,
+                                              &stage_waiting_for_table_flush);
+
+  mdl_context->done_waiting_for();
+
+  mysql_mutex_lock(&LOCK_open);
+
+  m_flush_tickets.remove(&ticket);
+
+  if (m_flush_tickets.is_empty() && ref_count == 0)
+  {
+    /*
+      If our thread was the last one using the share,
+      we must destroy it here.
+    */
+    destroy();
+  }
+
+  /*
+    In cases when our wait was aborted by KILL statement,
+    a deadlock or a timeout, the share might still be referenced,
+    so we don't delete it. Note, that we can't determine this
+    condition by checking wait_status alone, since, for example,
+    a timeout can happen after all references to the table share
+    were released, but before the share is removed from the
+    cache and we receive the notification. This is why
+    we first destroy the share, and then look at
+    wait_status.
+  */
+  switch (wait_status)
+  {
+  case MDL_wait::GRANTED:
+    return FALSE;
+  case MDL_wait::VICTIM:
+    my_error(ER_LOCK_DEADLOCK, MYF(0));
+    return TRUE;
+  case MDL_wait::TIMEOUT:
+    my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
+    return TRUE;
+  case MDL_wait::KILLED:
+    return TRUE;
+  default:
+    DBUG_ASSERT(0);
+    return TRUE;
+  }
+}
+
+
+/**
+  Initialize TABLE instance (newly created, or coming either from table
+  cache or THD::temporary_tables list) and prepare it for further use
+  during statement execution. Set the 'alias' attribute from the specified
+  TABLE_LIST element. Remember the TABLE_LIST element in the
+  TABLE::pos_in_table_list member.
+
+  @param thd  Thread context.
+  @param tl   TABLE_LIST element.
+*/
+
+void TABLE::init(THD *thd, TABLE_LIST *tl)
+{
+  DBUG_ASSERT(s->ref_count > 0 || s->tmp_table != NO_TMP_TABLE);
+
+  if (thd->lex->need_correct_ident())
+    alias_name_used= my_strcasecmp(table_alias_charset,
+                                   s->table_name.str,
+                                   tl->alias);
+  /* Fix alias if table name changes. */
+  if (strcmp(alias, tl->alias))
+  {
+    uint length= (uint) strlen(tl->alias)+1;
+    alias= (char*) my_realloc((char*) alias, length, MYF(MY_WME));
+    memcpy((char*) alias, tl->alias, length);
+  }
+
+  tablenr= thd->current_tablenr++;
+  used_fields= 0;
+  const_table= 0;
+  null_row= 0;
+  maybe_null= 0;
+  force_index= 0;
+  force_index_order= 0;
+  force_index_group= 0;
+  status= STATUS_GARBAGE | STATUS_NOT_FOUND;
+  insert_values= 0;
+  fulltext_searched= 0;
+  file->ft_handler= 0;
+  reginfo.impossible_range= 0;
+
+  /* Catch wrong handling of the auto_increment_field_not_null. */
+  DBUG_ASSERT(!auto_increment_field_not_null);
+  auto_increment_field_not_null= FALSE;
+
+  pos_in_table_list= tl;
+
+  clear_column_bitmaps();
+
+  DBUG_ASSERT(key_read == 0);
+
+  /* Tables may be reused in a sub statement. */
+  DBUG_ASSERT(!file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
+}
+
+
 /*
   Create Item_field for each column in the table.
 
   SYNPOSIS
-    st_table::fill_item_list()
+    TABLE::fill_item_list()
       item_list          a pointer to an empty list used to store items
 
   DESCRIPTION
@@ -2962,7 +3711,7 @@ Table_check_intact::check(TABLE *table, const TABLE_FIELD_DEF *table_def)
     1                    out of memory
 */
 
-bool st_table::fill_item_list(List<Item> *item_list) const
+bool TABLE::fill_item_list(List<Item> *item_list) const
 {
   /*
     All Item_field's created using a direct pointer to a field
@@ -2982,7 +3731,7 @@ bool st_table::fill_item_list(List<Item> *item_list) const
   Fields of this table.
 
   SYNPOSIS
-    st_table::fill_item_list()
+    TABLE::fill_item_list()
       item_list          a non-empty list with Item_fields
 
   DESCRIPTION
@@ -2992,7 +3741,7 @@ bool st_table::fill_item_list(List<Item> *item_list) const
     is the same as the number of columns in the table.
 */
 
-void st_table::reset_item_list(List<Item> *item_list) const
+void TABLE::reset_item_list(List<Item> *item_list) const
 {
   List_iterator_fast<Item> it(*item_list);
   for (Field **ptr= field; *ptr; ptr++)
@@ -3003,6 +3752,50 @@ void st_table::reset_item_list(List<Item> *item_list) const
   }
 }
 
+/**
+  Create a TABLE_LIST object representing a nested join
+
+  @param allocator  Mem root allocator that object is created from.
+  @param alias      Name of nested join object
+  @param embedding  Pointer to embedding join nest (or NULL if top-most)
+  @param belongs_to List of tables this nest belongs to (never NULL).
+  @param select     The query block that this join nest belongs within.
+
+  @returns Pointer to created join nest object, or NULL if error.
+*/
+
+TABLE_LIST *TABLE_LIST::new_nested_join(MEM_ROOT *allocator,
+                            const char *alias,
+                            TABLE_LIST *embedding,
+                            List<TABLE_LIST> *belongs_to,
+                            class st_select_lex *select)
+{
+  DBUG_ASSERT(belongs_to && select);
+
+  TABLE_LIST *const join_nest=
+    (TABLE_LIST *) alloc_root(allocator, ALIGN_SIZE(sizeof(TABLE_LIST))+
+                                                    sizeof(NESTED_JOIN));
+  if (join_nest == NULL)
+    return NULL;
+
+  memset(join_nest, 0, ALIGN_SIZE(sizeof(TABLE_LIST)) + sizeof(NESTED_JOIN));
+  join_nest->nested_join=
+    (NESTED_JOIN *) ((uchar *)join_nest + ALIGN_SIZE(sizeof(TABLE_LIST)));
+
+  join_nest->db= (char *)"";
+  join_nest->db_length= 0;
+  join_nest->table_name= (char *)"";
+  join_nest->table_name_length= 0;
+  join_nest->alias= (char *)alias;
+  
+  join_nest->embedding= embedding;
+  join_nest->join_list= belongs_to;
+  join_nest->select_lex= select;
+
+  join_nest->nested_join->join_list.empty();
+
+  return join_nest;
+}
 /*
   calculate md5 of query
 
@@ -3013,14 +3806,10 @@ void st_table::reset_item_list(List<Item> *item_list) const
 
 void  TABLE_LIST::calc_md5(char *buffer)
 {
-  uchar digest[16];
-  MY_MD5_HASH(digest, (uchar *) select_stmt.str, select_stmt.length);
-  sprintf((char *) buffer,
-	    "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-	    digest[0], digest[1], digest[2], digest[3],
-	    digest[4], digest[5], digest[6], digest[7],
-	    digest[8], digest[9], digest[10], digest[11],
-	    digest[12], digest[13], digest[14], digest[15]);
+  uchar digest[MD5_HASH_SIZE];
+  compute_md5_hash((char *) digest, (const char *) select_stmt.str,
+                   select_stmt.length);
+  array_to_hex((char *) buffer, digest, MD5_HASH_SIZE);
 }
 
 
@@ -3072,6 +3861,12 @@ void TABLE_LIST::set_underlying_merge()
     if (!multitable_view)
     {
       table= merge_underlying_list->table;
+      /*
+        If underlying view is not updatable and current view
+        is a single table view
+      */
+      if (!merge_underlying_list->updatable)
+        updatable= false;
       schema_table= merge_underlying_list->schema_table;
     }
   }
@@ -3134,7 +3929,7 @@ bool TABLE_LIST::setup_underlying(THD *thd)
 
     while ((item= it++))
     {
-      transl[field_count].name= item->name;
+      transl[field_count].name= item->item_name.ptr();
       transl[field_count++].item= item;
     }
     field_translation= transl;
@@ -3187,22 +3982,35 @@ bool TABLE_LIST::prep_where(THD *thd, Item **conds,
     }
   }
 
-  if (where)
+  if (where && !where_processed)
   {
-    if (!where->fixed && where->fix_fields(thd, &where))
+
+    if (!where->fixed)
     {
-      DBUG_RETURN(TRUE);
+      /*
+        This WHERE will be included in check_option. If it contains a
+        subquery, fix_fields() may convert it to semijoin, making it
+        impossible to call val_int() on the Item[...]_subselect, preventing
+        evaluation of check_option when we insert/update/delete a row.
+        So we must forbid semijoin transformation in fix_fields():
+      */
+      Switch_resolve_place SRP(&thd->lex->current_select->resolve_place,
+                               st_select_lex::RESOLVE_NONE,
+                               effective_with_check != VIEW_CHECK_NONE);
+
+      if (where->fix_fields(thd, &where))
+        DBUG_RETURN(TRUE);
     }
 
     /*
       check that it is not VIEW in which we insert with INSERT SELECT
       (in this case we can't add view WHERE condition to main SELECT_LEX)
     */
-    if (!no_where_clause && !where_processed)
+    if (!no_where_clause)
     {
       TABLE_LIST *tbl= this;
-      Query_arena *arena= thd->stmt_arena, backup;
-      arena= thd->activate_stmt_arena_if_needed(&backup);  // For easier test
+
+      Prepared_stmt_arena_holder ps_arena_holder(thd);
 
       /* Go up to join tree and try to find left join */
       for (; tbl; tbl= tbl->embedding)
@@ -3215,15 +4023,13 @@ bool TABLE_LIST::prep_where(THD *thd, Item **conds,
             this expression will not be moved to WHERE condition (i.e. will
             be clean correctly for PS/SP)
           */
-          tbl->on_expr= and_conds(tbl->on_expr,
-                                  where->copy_andor_structure(thd));
+          tbl->set_join_cond(and_conds(tbl->join_cond(),
+                                       where->copy_andor_structure(thd)));
           break;
         }
       }
       if (tbl == 0)
         *conds= and_conds(*conds, where->copy_andor_structure(thd));
-      if (arena)
-        thd->restore_active_arena(arena, &backup);
       where_processed= TRUE;
     }
   }
@@ -3258,8 +4064,8 @@ merge_on_conds(THD *thd, TABLE_LIST *table, bool is_cascaded)
 
   Item *cond= NULL;
   DBUG_PRINT("info", ("alias: %s", table->alias));
-  if (table->on_expr)
-    cond= table->on_expr->copy_andor_structure(thd);
+  if (table->join_cond())
+    cond= table->join_cond()->copy_andor_structure(thd);
   if (!table->nested_join)
     DBUG_RETURN(cond);
   List_iterator<TABLE_LIST> li(table->nested_join->join_list);
@@ -3315,8 +4121,7 @@ bool TABLE_LIST::prep_check_option(THD *thd, uint8 check_opt_type)
 
   if (check_opt_type && !check_option_processed)
   {
-    Query_arena *arena= thd->stmt_arena, backup;
-    arena= thd->activate_stmt_arena_if_needed(&backup);  // For easier test
+    Prepared_stmt_arena_holder ps_arena_holder(thd);
 
     if (where)
     {
@@ -3334,10 +4139,7 @@ bool TABLE_LIST::prep_check_option(THD *thd, uint8 check_opt_type)
     check_option= and_conds(check_option,
                             merge_on_conds(thd, this, is_cascaded));
 
-    if (arena)
-      thd->restore_active_arena(arena, &backup);
     check_option_processed= TRUE;
-
   }
 
   if (check_option)
@@ -3376,26 +4178,32 @@ void TABLE_LIST::hide_view_error(THD *thd)
   /* Hide "Unknown column" or "Unknown function" error */
   DBUG_ASSERT(thd->is_error());
 
-  if (thd->main_da.sql_errno() == ER_BAD_FIELD_ERROR ||
-      thd->main_da.sql_errno() == ER_SP_DOES_NOT_EXIST ||
-      thd->main_da.sql_errno() == ER_FUNC_INEXISTENT_NAME_COLLISION ||
-      thd->main_da.sql_errno() == ER_PROCACCESS_DENIED_ERROR ||
-      thd->main_da.sql_errno() == ER_COLUMNACCESS_DENIED_ERROR ||
-      thd->main_da.sql_errno() == ER_TABLEACCESS_DENIED_ERROR ||
-      thd->main_da.sql_errno() == ER_TABLE_NOT_LOCKED ||
-      thd->main_da.sql_errno() == ER_NO_SUCH_TABLE)
-  {
-    TABLE_LIST *top= top_table();
-    thd->clear_error();
-    my_error(ER_VIEW_INVALID, MYF(0), top->view_db.str, top->view_name.str);
-  }
-  else if (thd->main_da.sql_errno() == ER_NO_DEFAULT_FOR_FIELD)
-  {
-    TABLE_LIST *top= top_table();
-    thd->clear_error();
-    // TODO: make correct error message
-    my_error(ER_NO_DEFAULT_FOR_VIEW_FIELD, MYF(0),
-             top->view_db.str, top->view_name.str);
+  switch (thd->get_stmt_da()->sql_errno()) {
+    case ER_BAD_FIELD_ERROR:
+    case ER_SP_DOES_NOT_EXIST:
+    case ER_FUNC_INEXISTENT_NAME_COLLISION:
+    case ER_PROCACCESS_DENIED_ERROR:
+    case ER_COLUMNACCESS_DENIED_ERROR:
+    case ER_TABLEACCESS_DENIED_ERROR:
+    case ER_TABLE_NOT_LOCKED:
+    case ER_NO_SUCH_TABLE:
+    {
+      TABLE_LIST *top= top_table();
+      thd->clear_error();
+      my_error(ER_VIEW_INVALID, MYF(0),
+               top->view_db.str, top->view_name.str);
+      break;
+    }
+
+    case ER_NO_DEFAULT_FOR_FIELD:
+    {
+      TABLE_LIST *top= top_table();
+      thd->clear_error();
+      // TODO: make correct error message
+      my_error(ER_NO_DEFAULT_FOR_VIEW_FIELD, MYF(0),
+               top->view_db.str, top->view_name.str);
+      break;
+    }
   }
 }
 
@@ -3460,14 +4268,14 @@ void TABLE_LIST::cleanup_items()
     VIEW_CHECK_SKIP   FAILED, but continue
 */
 
-int TABLE_LIST::view_check_option(THD *thd, bool ignore_failure)
+int TABLE_LIST::view_check_option(THD *thd, bool ignore_failure) const
 {
   if (check_option && check_option->val_int() == 0)
   {
-    TABLE_LIST *main_view= top_table();
+    const TABLE_LIST *main_view= top_table();
     if (ignore_failure)
     {
-      push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_ERROR,
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
                           ER_VIEW_CHECK_FAILED, ER(ER_VIEW_CHECK_FAILED),
                           main_view->view_db.str, main_view->view_name.str);
       return(VIEW_CHECK_SKIP);
@@ -3736,16 +4544,13 @@ bool TABLE_LIST::prepare_view_securety_context(THD *thd)
   {
     DBUG_PRINT("info", ("This table is suid view => load contest"));
     DBUG_ASSERT(view && view_sctx);
-    if (acl_getroot_no_password(view_sctx,
-                                definer.user.str,
-                                definer.host.str,
-                                definer.host.str,
-                                thd->db))
+    if (acl_getroot(view_sctx, definer.user.str, definer.host.str,
+                                definer.host.str, thd->db))
     {
       if ((thd->lex->sql_command == SQLCOM_SHOW_CREATE) ||
           (thd->lex->sql_command == SQLCOM_SHOW_FIELDS))
       {
-        push_warning_printf(thd, MYSQL_ERROR::WARN_LEVEL_NOTE, 
+        push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, 
                             ER_NO_SUCH_USER, 
                             ER(ER_NO_SUCH_USER),
                             definer.user.str, definer.host.str);
@@ -3759,10 +4564,15 @@ bool TABLE_LIST::prepare_view_securety_context(THD *thd)
         }
         else
         {
-           my_error(ER_ACCESS_DENIED_ERROR, MYF(0),
-                    thd->security_ctx->priv_user,
-                    thd->security_ctx->priv_host,
-                    (thd->password ?  ER(ER_YES) : ER(ER_NO)));
+          if (thd->password == 2)
+            my_error(ER_ACCESS_DENIED_NO_PASSWORD_ERROR, MYF(0),
+                     thd->security_ctx->priv_user,
+                     thd->security_ctx->priv_host);
+          else
+            my_error(ER_ACCESS_DENIED_ERROR, MYF(0),
+                     thd->security_ctx->priv_user,
+                     thd->security_ctx->priv_host,
+                     (thd->password ?  ER(ER_YES) : ER(ER_NO)));
         }
         DBUG_RETURN(TRUE);
       }
@@ -3836,6 +4646,7 @@ bool TABLE_LIST::prepare_security(THD *thd)
   if (prepare_view_securety_context(thd))
     DBUG_RETURN(TRUE);
   thd->security_ctx= find_view_security_context(thd);
+  opt_trace_disable_if_no_security_context_access(thd);
   while ((tbl= tb++))
   {
     DBUG_ASSERT(tbl->referencing_view);
@@ -3903,8 +4714,9 @@ Item *Natural_join_column::create_item(THD *thd)
   if (view_field)
   {
     DBUG_ASSERT(table_field == NULL);
+    SELECT_LEX *select= thd->lex->current_select;
     return create_view_field(thd, table_ref, &view_field->item,
-                             view_field->name);
+                             view_field->name, &select->context);
   }
   return table_field;
 }
@@ -3934,14 +4746,15 @@ const char *Natural_join_column::db_name()
     return table_ref->view_db.str;
 
   /*
-    Test that TABLE_LIST::db is the same as st_table_share::db to
+    Test that TABLE_LIST::db is the same as TABLE_SHARE::db to
     ensure consistency. An exception are I_S schema tables, which
     are inconsistent in this respect.
   */
   DBUG_ASSERT(!strcmp(table_ref->db,
                       table_ref->table->s->db.str) ||
               (table_ref->schema_table &&
-               table_ref->table->s->db.str[0] == 0));
+               is_infoschema_db(table_ref->table->s->db.str,
+                                table_ref->table->s->db.length)));
   return table_ref->db;
 }
 
@@ -3974,12 +4787,21 @@ Item *Field_iterator_table::create_item(THD *thd)
   SELECT_LEX *select= thd->lex->current_select;
 
   Item_field *item= new Item_field(thd, &select->context, *ptr);
-  if (item && thd->variables.sql_mode & MODE_ONLY_FULL_GROUP_BY &&
-      !thd->lex->in_sum_func && select->cur_pos_in_select_list != UNDEF_POS)
+  /*
+    This function creates Item-s which don't go through fix_fields(); see same
+    code in Item_field::fix_fields().
+    */
+  if (item && !thd->lex->in_sum_func &&
+      select->cur_pos_in_all_fields != SELECT_LEX::ALL_FIELDS_UNDEF_POS)
   {
-    select->non_agg_fields.push_back(item);
-    item->marker= select->cur_pos_in_select_list;
-    select->set_non_agg_field_used(true);
+    if (thd->variables.sql_mode & MODE_ONLY_FULL_GROUP_BY)
+    {
+      item->push_to_non_agg_fields(select);
+      select->set_non_agg_field_used(true);
+    }
+    if (thd->lex->current_select->with_sum_func &&
+        !thd->lex->current_select->group_list.elements)
+      item->maybe_null= true;
   }
   return item;
 }
@@ -3993,11 +4815,14 @@ const char *Field_iterator_view::name()
 
 Item *Field_iterator_view::create_item(THD *thd)
 {
-  return create_view_field(thd, view, &ptr->item, ptr->name);
+  SELECT_LEX *select= thd->lex->current_select;
+  return create_view_field(thd, view, &ptr->item, ptr->name,
+                           &select->context);
 }
 
-Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
-                        const char *name)
+static Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
+                               const char *name,
+                               Name_resolution_context *context)
 {
   bool save_wrapper= thd->lex->select_lex.no_wrap_view_item;
   Item *field= *field_ref;
@@ -4030,7 +4855,8 @@ Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
   {
     DBUG_RETURN(field);
   }
-  Item *item= new Item_direct_view_ref(view, field_ref, name);
+  Item *item= new Item_direct_view_ref(context, field_ref,
+                                       view->alias, view->table_name, name);
   DBUG_RETURN(item);
 }
 
@@ -4152,13 +4978,14 @@ const char *Field_iterator_table_ref::get_db_name()
     return natural_join_it.column_ref()->db_name();
 
   /*
-    Test that TABLE_LIST::db is the same as st_table_share::db to
+    Test that TABLE_LIST::db is the same as TABLE_SHARE::db to
     ensure consistency. An exception are I_S schema tables, which
     are inconsistent in this respect.
   */
   DBUG_ASSERT(!strcmp(table_ref->db, table_ref->table->s->db.str) ||
               (table_ref->schema_table &&
-               table_ref->table->s->db.str[0] == 0));
+               is_infoschema_db(table_ref->table->s->db.str,
+                                table_ref->table->s->db.length)));
 
   return table_ref->db;
 }
@@ -4328,32 +5155,35 @@ Field_iterator_table_ref::get_natural_column_ref()
 
 /* Reset all columns bitmaps */
 
-void st_table::clear_column_bitmaps()
+void TABLE::clear_column_bitmaps()
 {
   /*
     Reset column read/write usage. It's identical to:
     bitmap_clear_all(&table->def_read_set);
     bitmap_clear_all(&table->def_write_set);
   */
-  bzero((char*) def_read_set.bitmap, s->column_bitmap_size*2);
+  memset(def_read_set.bitmap, 0, s->column_bitmap_size*2);
   column_bitmaps_set(&def_read_set, &def_write_set);
 }
 
 
-/*
+/**
   Tell handler we are going to call position() and rnd_pos() later.
   
-  NOTES:
   This is needed for handlers that uses the primary key to find the
   row. In this case we have to extend the read bitmap with the primary
   key fields.
+
+  @note: Calling this function does not initialize the table for
+  reading using rnd_pos(). rnd_init() still has to be called before
+  rnd_pos().
 */
 
-void st_table::prepare_for_position()
+void TABLE::prepare_for_position()
 {
-  DBUG_ENTER("st_table::prepare_for_position");
+  DBUG_ENTER("TABLE::prepare_for_position");
 
-  if ((file->ha_table_flags() & HA_PRIMARY_KEY_IN_READ_INDEX) &&
+  if ((file->ha_table_flags() & HA_PRIMARY_KEY_REQUIRED_FOR_POSITION) &&
       s->primary_key < MAX_KEY)
   {
     mark_columns_used_by_index_no_reset(s->primary_key, read_set);
@@ -4370,14 +5200,13 @@ void st_table::prepare_for_position()
   NOTE:
     This changes the bitmap to use the tmp bitmap
     After this, you can't access any other columns in the table until
-    bitmaps are reset, for example with st_table::clear_column_bitmaps()
-    or st_table::restore_column_maps_after_mark_index()
+    bitmaps are reset, for example with TABLE::clear_column_bitmaps().
 */
 
-void st_table::mark_columns_used_by_index(uint index)
+void TABLE::mark_columns_used_by_index(uint index)
 {
   MY_BITMAP *bitmap= &tmp_set;
-  DBUG_ENTER("st_table::mark_columns_used_by_index");
+  DBUG_ENTER("TABLE::mark_columns_used_by_index");
 
   set_keyread(TRUE);
   bitmap_clear_all(bitmap);
@@ -4388,58 +5217,15 @@ void st_table::mark_columns_used_by_index(uint index)
 
 
 /*
-  Add fields used by a specified index to the table's read_set.
-
-  NOTE:
-    The original state can be restored with
-    restore_column_maps_after_mark_index().
-*/
-
-void st_table::add_read_columns_used_by_index(uint index)
-{
-  MY_BITMAP *bitmap= &tmp_set;
-  DBUG_ENTER("st_table::add_read_columns_used_by_index");
-
-  set_keyread(TRUE);
-  bitmap_copy(bitmap, read_set);
-  mark_columns_used_by_index_no_reset(index, bitmap);
-  column_bitmaps_set(bitmap, write_set);
-  DBUG_VOID_RETURN;
-}
-
-
-/*
-  Restore to use normal column maps after key read
-
-  NOTES
-    This reverse the change done by mark_columns_used_by_index
-
-  WARNING
-    For this to work, one must have the normal table maps in place
-    when calling mark_columns_used_by_index
-*/
-
-void st_table::restore_column_maps_after_mark_index()
-{
-  DBUG_ENTER("st_table::restore_column_maps_after_mark_index");
-
-  set_keyread(FALSE);
-  default_column_bitmaps();
-  file->column_bitmaps_signal();
-  DBUG_VOID_RETURN;
-}
-
-
-/*
   mark columns used by key, but don't reset other fields
 */
 
-void st_table::mark_columns_used_by_index_no_reset(uint index,
+void TABLE::mark_columns_used_by_index_no_reset(uint index,
                                                    MY_BITMAP *bitmap)
 {
   KEY_PART_INFO *key_part= key_info[index].key_part;
   KEY_PART_INFO *key_part_end= (key_part +
-                                key_info[index].key_parts);
+                                key_info[index].user_defined_key_parts);
   for (;key_part != key_part_end; key_part++)
     bitmap_set_bit(bitmap, key_part->fieldnr-1);
 }
@@ -4453,7 +5239,7 @@ void st_table::mark_columns_used_by_index_no_reset(uint index,
     always set and sometimes read.
 */
 
-void st_table::mark_auto_increment_column()
+void TABLE::mark_auto_increment_column()
 {
   DBUG_ASSERT(found_next_number_field);
   /*
@@ -4486,8 +5272,10 @@ void st_table::mark_auto_increment_column()
     retrieve the row again.
 */
 
-void st_table::mark_columns_needed_for_delete()
+void TABLE::mark_columns_needed_for_delete()
 {
+  mark_columns_per_binlog_row_image();
+
   if (triggers)
     triggers->mark_fields_used(TRG_EVENT_DELETE);
   if (file->ha_table_flags() & HA_REQUIRES_KEY_COLUMNS_FOR_DELETE)
@@ -4502,26 +5290,36 @@ void st_table::mark_columns_needed_for_delete()
   }
   if (file->ha_table_flags() & HA_PRIMARY_KEY_REQUIRED_FOR_DELETE)
   {
+
     /*
-      If the handler has no cursor capabilites, we have to read either
-      the primary key, the hidden primary key or all columns to be
-      able to do an delete
+      If the handler has no cursor capabilites we have to read
+      either the primary key, the hidden primary key or all columns to
+      be able to do an delete
     */
     if (s->primary_key == MAX_KEY)
-      file->use_hidden_primary_key();
-    else
     {
-      mark_columns_used_by_index_no_reset(s->primary_key, read_set);
-      file->column_bitmaps_signal();
+      /*
+        If in RBR, we have alreay marked the full before image
+        in mark_columns_per_binlog_row_image, if not, then use
+        the hidden primary key
+      */
+      if (!(mysql_bin_log.is_open() && in_use &&
+          in_use->is_current_stmt_binlog_format_row()))
+        file->use_hidden_primary_key();
     }
+    else
+      mark_columns_used_by_index_no_reset(s->primary_key, read_set);
+
+    file->column_bitmaps_signal();
   }
 }
 
 
-/*
+/**
+  @brief
   Mark columns needed for doing an update of a row
 
-  DESCRIPTON
+  @details
     Some engines needs to have all columns in an update (to be able to
     build a complete row). If this is the case, we mark all not
     updated columns to be read.
@@ -4534,13 +5332,17 @@ void st_table::mark_columns_needed_for_delete()
     mark all USED key columns as 'to-be-read'. This allows the engine to
     loop over the given record to find all changed keys and doesn't have to
     retrieve the row again.
+    
+    Unlike other similar methods, it doesn't mark fields used by triggers,
+    that is the responsibility of the caller to do, by using
+    Table_triggers_list::mark_used_fields(TRG_EVENT_UPDATE)!
 */
 
-void st_table::mark_columns_needed_for_update()
+void TABLE::mark_columns_needed_for_update()
 {
+
   DBUG_ENTER("mark_columns_needed_for_update");
-  if (triggers)
-    triggers->mark_fields_used(TRG_EVENT_UPDATE);
+  mark_columns_per_binlog_row_image();
   if (file->ha_table_flags() & HA_REQUIRES_KEY_COLUMNS_FOR_DELETE)
   {
     /* Mark all used key columns for read */
@@ -4553,23 +5355,330 @@ void st_table::mark_columns_needed_for_update()
     }
     file->column_bitmaps_signal();
   }
+
   if (file->ha_table_flags() & HA_PRIMARY_KEY_REQUIRED_FOR_DELETE)
   {
     /*
-      If the handler has no cursor capabilites, we have to read either
+      If the handler has no cursor capabilites we have to read either
       the primary key, the hidden primary key or all columns to be
       able to do an update
     */
     if (s->primary_key == MAX_KEY)
-      file->use_hidden_primary_key();
-    else
     {
-      mark_columns_used_by_index_no_reset(s->primary_key, read_set);
-      file->column_bitmaps_signal();
+      /*
+        If in RBR, we have alreay marked the full before image
+        in mark_columns_per_binlog_row_image, if not, then use
+        the hidden primary key
+      */
+      if (!(mysql_bin_log.is_open() && in_use &&
+          in_use->is_current_stmt_binlog_format_row()))
+        file->use_hidden_primary_key();
     }
+    else
+      mark_columns_used_by_index_no_reset(s->primary_key, read_set);
+
+    file->column_bitmaps_signal();
   }
   DBUG_VOID_RETURN;
 }
+
+/*
+  Mark columns according the binlog row image option.
+
+  When logging in RBR, the user can select whether to
+  log partial or full rows, depending on the table
+  definition, and the value of binlog_row_image.
+
+  Semantics of the binlog_row_image are the following 
+  (PKE - primary key equivalent, ie, PK fields if PK 
+  exists, all fields otherwise):
+
+  binlog_row_image= MINIMAL
+    - This marks the PKE fields in the read_set
+    - This marks all fields where a value was specified
+      in the write_set
+
+  binlog_row_image= NOBLOB
+    - This marks PKE + all non-blob fields in the read_set
+    - This marks all fields where a value was specified
+      and all non-blob fields in the write_set
+
+  binlog_row_image= FULL
+    - all columns in the read_set
+    - all columns in the write_set
+    
+  This marking is done without resetting the original 
+  bitmaps. This means that we will strip extra fields in
+  the read_set at binlogging time (for those cases that 
+  we only want to log a PK and we needed other fields for
+  execution).
+ */
+void TABLE::mark_columns_per_binlog_row_image()
+{
+  DBUG_ENTER("mark_columns_per_binlog_row_image");
+  DBUG_ASSERT(read_set->bitmap);
+  DBUG_ASSERT(write_set->bitmap);
+
+  /**
+    If in RBR we may need to mark some extra columns,
+    depending on the binlog-row-image command line argument.
+   */
+  if ((mysql_bin_log.is_open() && in_use &&
+       in_use->is_current_stmt_binlog_format_row() &&
+       !ha_check_storage_engine_flag(s->db_type(), HTON_NO_BINLOG_ROW_OPT)))
+  {
+
+    THD *thd= current_thd;
+
+    /* if there is no PK, then mark all columns for the BI. */
+    if (s->primary_key >= MAX_KEY)
+      bitmap_set_all(read_set);
+
+    switch (thd->variables.binlog_row_image)
+    {
+      case BINLOG_ROW_IMAGE_FULL:
+        if (s->primary_key < MAX_KEY)
+          bitmap_set_all(read_set);
+        bitmap_set_all(write_set);
+        break;
+      case BINLOG_ROW_IMAGE_NOBLOB:
+        /* for every field that is not set, mark it unless it is a blob */
+        for (Field **ptr=field ; *ptr ; ptr++)
+        {
+          Field *field= *ptr;
+          /* 
+            bypass blob fields. These can be set or not set, we don't care.
+            Later, at binlogging time, if we don't need them in the before 
+            image, we will discard them.
+
+            If set in the AI, then the blob is really needed, there is 
+            nothing we can do about it.
+           */
+          if ((s->primary_key < MAX_KEY) && 
+              ((field->flags & PRI_KEY_FLAG) || 
+              (field->type() != MYSQL_TYPE_BLOB)))
+            bitmap_set_bit(read_set, field->field_index);
+
+          if (field->type() != MYSQL_TYPE_BLOB)
+            bitmap_set_bit(write_set, field->field_index);
+        }
+        break;
+      case BINLOG_ROW_IMAGE_MINIMAL:
+        /* mark the primary key if available in the read_set */
+        if (s->primary_key < MAX_KEY)
+          mark_columns_used_by_index_no_reset(s->primary_key, read_set);
+        break;
+
+      default: 
+        DBUG_ASSERT(FALSE);
+    }
+    file->column_bitmaps_signal();
+  }
+
+  DBUG_VOID_RETURN;
+}
+
+
+
+/**
+  @brief
+  Allocate space for keys
+
+  @param key_count  number of keys to allocate.
+
+  @details
+  Allocate space enough to fit 'key_count' keys for this table.
+
+  @return FALSE space was successfully allocated.
+  @return TRUE OOM error occur.
+*/
+
+bool TABLE::alloc_keys(uint key_count)
+{
+  DBUG_ASSERT(!s->keys);
+  max_keys= key_count;
+  if (!(key_info= s->key_info=
+        (KEY*) alloc_root(&mem_root, sizeof(KEY)*max_keys)))
+    return TRUE;
+
+  memset(key_info, 0, sizeof(KEY)*max_keys);
+  return FALSE;
+}
+
+
+/**
+  @brief Add one key to a temporary table.
+
+  @param key_parts      bitmap of fields that take a part in the key.
+  @param key_name       name of the key
+
+  @details
+  Creates a key for this table from fields which corresponds the bits set to 1
+  in the 'key_parts' bitmap. The 'key_name' name is given to the newly created
+  key.
+  @see add_derived_key
+
+  @TODO somehow manage to create keys in tmp_table_param for unification
+        purposes
+
+  @return TRUE OOM error.
+  @return FALSE the key was created or ignored (too long key).
+*/
+
+bool TABLE::add_tmp_key(Field_map *key_parts, char *key_name)
+{
+  DBUG_ASSERT(!created && s->keys < max_keys && key_parts);
+
+  KEY* cur_key= key_info + s->keys;
+  Field **reg_field;
+  uint i;
+  bool key_start= TRUE;
+  uint field_count= 0;
+  uchar *key_buf;
+  KEY_PART_INFO* key_part_info;
+  uint key_len= 0;
+
+  for (i= 0, reg_field=field ; *reg_field; i++, reg_field++)
+  {
+    if (key_parts->is_set(i))
+    {
+      KEY_PART_INFO tkp;
+      // Ensure that we're not creating a key over a blob field.
+      DBUG_ASSERT(!((*reg_field)->flags & BLOB_FLAG));
+      /*
+        Check if possible key is too long, ignore it if so.
+        The reason to use MI_MAX_KEY_LENGTH (myisam's default) is that it is
+        smaller than MAX_KEY_LENGTH (heap's default) and it's unknown whether
+        myisam or heap will be used for tmp table.
+      */
+      tkp.init_from_field(*reg_field);
+      key_len+= tkp.store_length;
+      if (key_len > MI_MAX_KEY_LENGTH)
+      {
+        max_keys--;
+        return FALSE;
+      }
+    }
+    field_count++;
+  }
+  const uint key_part_count= key_parts->bits_set();
+
+  /* Allocate key parts in the tables' mem_root. */
+  size_t key_buf_size= sizeof(KEY_PART_INFO) * key_part_count +
+                       sizeof(ulong) * key_part_count;
+  key_buf= (uchar*) alloc_root(&mem_root, key_buf_size);
+
+  if (!key_buf)
+    return TRUE;
+  memset(key_buf, 0, key_buf_size);
+  cur_key->key_part= key_part_info= (KEY_PART_INFO*) key_buf;
+  cur_key->usable_key_parts= cur_key->user_defined_key_parts= key_part_count;
+  cur_key->actual_key_parts= cur_key->user_defined_key_parts;
+  s->key_parts+= key_part_count;
+  cur_key->key_length= key_len;
+  cur_key->algorithm= HA_KEY_ALG_BTREE;
+  cur_key->name= key_name;
+  cur_key->actual_flags= cur_key->flags= HA_GENERATED_KEY;
+  cur_key->rec_per_key= (ulong*) (key_buf + sizeof(KEY_PART_INFO) * key_part_count);
+  cur_key->table= this;
+
+  if (field_count == key_part_count)
+    covering_keys.set_bit(s->keys);
+
+  keys_in_use_for_group_by.set_bit(s->keys);
+  keys_in_use_for_order_by.set_bit(s->keys);
+  for (i= 0, reg_field=field ; *reg_field; i++, reg_field++)
+  {
+    if (!(key_parts->is_set(i)))
+      continue;
+
+    if (key_start)
+      (*reg_field)->key_start.set_bit(s->keys);
+    key_start= FALSE;
+    (*reg_field)->part_of_key.set_bit(s->keys);
+    (*reg_field)->part_of_sortkey.set_bit(s->keys);
+    (*reg_field)->flags|= PART_KEY_FLAG;
+    key_part_info->init_from_field(*reg_field);
+    key_part_info++;
+  }
+  set_if_bigger(s->max_key_length, cur_key->key_length);
+  s->keys++;
+  return FALSE;
+}
+
+/*
+  @brief
+  Save the specified index for later use for ref access.
+
+  @param key_to_save the key to save
+
+  @details
+  Save given index as index #0. Table is configured to ignore other indexes.
+  Memory occupied by other indexes and index parts will be freed along with
+  the table. If the 'key_to_save' is negative then all indexes are freed.
+  After keys info being changed, info in fields regarding taking part in keys
+  becomes outdated. This function fixes this also.
+  @see add_derived_key
+*/
+
+void TABLE::use_index(int key_to_save)
+{
+  DBUG_ASSERT(!created && s->keys && key_to_save < (int)s->keys);
+
+  Field **reg_field;
+  /*
+    Reset the flags and maps associated with the fields. They are set
+    only for the key chosen by the optimizer later.
+   */
+  for (reg_field=field ; *reg_field; reg_field++)
+  {
+    if(!(*reg_field)->part_of_key.is_set(key_to_save))
+      (*reg_field)->key_start.clear_all();
+    (*reg_field)->part_of_key.clear_all();
+    (*reg_field)->part_of_sortkey.clear_all();
+    (*reg_field)->flags&= ~PART_KEY_FLAG;
+  }
+
+  /* Drop all keys if none of them were chosen */
+  if (key_to_save < 0)
+  {
+    key_info= s->key_info= 0;
+    s->key_parts= 0;
+    s->keys= 0;
+    covering_keys.clear_all();
+    keys_in_use_for_group_by.clear_all();
+    keys_in_use_for_order_by.clear_all();
+  }
+  else
+  {
+    /* Set the flags and maps for the key chosen by the optimizer */
+    uint i;
+    KEY_PART_INFO *kp;
+    for (kp= key_info[key_to_save].key_part, i= 0;
+         i < key_info[key_to_save].user_defined_key_parts;
+         i++, kp++)
+    {
+      if (kp->field->key_start.is_set(key_to_save))
+        kp->field->key_start.set_prefix(1);
+      kp->field->part_of_key.set_prefix(1);
+      kp->field->part_of_sortkey.set_prefix(1);
+      kp->field->flags|= PART_KEY_FLAG;
+    }
+
+    /* Save the given key. No need to copy key#0. */
+    if (key_to_save > 0)
+      key_info[0]= key_info[key_to_save];
+    s->keys= 1;
+    s->key_parts= key_info[0].user_defined_key_parts;
+    if (covering_keys.is_set(key_to_save))
+      covering_keys.set_prefix(1);
+    else
+      covering_keys.clear_all();
+    keys_in_use_for_group_by.set_prefix(1);
+    keys_in_use_for_order_by.set_prefix(1);
+  }
+}
+
 
 
 /*
@@ -4579,8 +5688,9 @@ void st_table::mark_columns_needed_for_update()
   as changed.
 */
 
-void st_table::mark_columns_needed_for_insert()
+void TABLE::mark_columns_needed_for_insert()
 {
+  mark_columns_per_binlog_row_image();
   if (triggers)
   {
     /*
@@ -4597,24 +5707,6 @@ void st_table::mark_columns_needed_for_insert()
 }
 
 
-/**
-  @brief Check if this is part of a MERGE table with attached children.
-
-  @return       status
-    @retval     TRUE            children are attached
-    @retval     FALSE           no MERGE part or children not attached
-
-  @detail
-    A MERGE table consists of a parent TABLE and zero or more child
-    TABLEs. Each of these TABLEs is called a part of a MERGE table.
-*/
-
-bool st_table::is_children_attached(void)
-{
-  return((child_l && children_attached) ||
-         (parent && parent->children_attached));
-}
-
 /*
   Cleanup this table for re-execution.
 
@@ -4629,6 +5721,23 @@ void TABLE_LIST::reinit_before_use(THD *thd)
     were closed in the end of previous prepare or execute call.
   */
   table= 0;
+
+ /*
+   Reset table_name and table_name_length,if it is a anonymous derived table
+   or schema table. They are not valid as TABLEs were closed in the end of
+   previous prepare or execute call.
+ */
+  if (derived)
+  {
+    table_name= NULL;
+    table_name_length= 0;
+  }
+  else if (schema_table_name)
+  {
+    table_name= schema_table_name;
+    table_name_length= strlen(schema_table_name);
+  }
+
   /* Reset is_schema_table_processed value(needed for I_S tables */
   schema_table_state= NOT_PROCESSED;
 
@@ -4637,12 +5746,15 @@ void TABLE_LIST::reinit_before_use(THD *thd)
   do
   {
     embedded= parent_embedding;
-    if (embedded->prep_on_expr)
-      embedded->on_expr= embedded->prep_on_expr->copy_andor_structure(thd);
+    if (embedded->prep_join_cond)
+      embedded->
+        set_join_cond(embedded->prep_join_cond->copy_andor_structure(thd));
     parent_embedding= embedded->embedding;
   }
   while (parent_embedding &&
          parent_embedding->nested_join->join_list.head() == embedded);
+
+  mdl_request.ticket= NULL;
 }
 
 /*
@@ -4663,6 +5775,11 @@ Item_subselect *TABLE_LIST::containing_subselect()
   return (select_lex ? select_lex->master_unit()->item : 0);
 }
 
+uint TABLE_LIST::query_block_id() const
+{
+  return derived ? derived->first_select()->select_number : 0;
+}
+
 /*
   Compiles the tagged hints list and fills up the bitmasks.
 
@@ -4673,9 +5790,9 @@ Item_subselect *TABLE_LIST::containing_subselect()
   DESCRIPTION
     The parser collects the index hints for each table in a "tagged list" 
     (TABLE_LIST::index_hints). Using the information in this tagged list
-    this function sets the members st_table::keys_in_use_for_query, 
+    this function sets the members st_table::keys_in_use_for_query,
     st_table::keys_in_use_for_group_by, st_table::keys_in_use_for_order_by,
-    st_table::force_index, st_table::force_index_order, 
+    st_table::force_index, st_table::force_index_order,
     st_table::force_index_group and st_table::covering_keys.
 
     Current implementation of the runtime does not allow mixing FORCE INDEX
@@ -4724,22 +5841,14 @@ bool TABLE_LIST::process_index_hints(TABLE *tbl)
   /* index hint list processing */
   if (index_hints)
   {
+    /* Temporary variables used to collect hints of each kind. */
     key_map index_join[INDEX_HINT_FORCE + 1];
     key_map index_order[INDEX_HINT_FORCE + 1];
     key_map index_group[INDEX_HINT_FORCE + 1];
     Index_hint *hint;
-    int type;
     bool have_empty_use_join= FALSE, have_empty_use_order= FALSE, 
          have_empty_use_group= FALSE;
     List_iterator <Index_hint> iter(*index_hints);
-
-    /* initialize temporary variables used to collect hints of each kind */
-    for (type= INDEX_HINT_IGNORE; type <= INDEX_HINT_FORCE; type++)
-    {
-      index_join[type].clear_all();
-      index_order[type].clear_all();
-      index_group[type].clear_all();
-    }
 
     /* iterate over the hints list */
     while ((hint= iter++))
@@ -4865,11 +5974,437 @@ size_t max_row_length(TABLE *table, const uchar *data)
   return length;
 }
 
-/*****************************************************************************
-** Instansiate templates
-*****************************************************************************/
 
-#ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
-template class List<String>;
-template class List_iterator<String>;
-#endif
+/**
+   Helper function which allows to allocate metadata lock request
+   objects for all elements of table list.
+*/
+
+void init_mdl_requests(TABLE_LIST *table_list)
+{
+  for ( ; table_list ; table_list= table_list->next_global)
+    table_list->mdl_request.init(MDL_key::TABLE,
+                                 table_list->db, table_list->table_name,
+                                 table_list->lock_type >= TL_WRITE_ALLOW_WRITE ?
+                                 MDL_SHARED_WRITE : MDL_SHARED_READ,
+                                 MDL_TRANSACTION);
+}
+
+
+
+///  @returns true if materializable table contains one or zero rows
+bool TABLE_LIST::materializable_is_const() const
+{
+  DBUG_ASSERT(uses_materialization());
+  return get_unit()->get_result()->estimated_rowcount <= 1;
+}
+
+/**
+  @brief
+  Retrieve number of rows in the table
+
+  @details
+  Retrieve number of rows in the table referred by this TABLE_LIST and
+  store it in the table's stats.records variable. If this TABLE_LIST refers
+  to a materialized derived table/view, then the estimated number of rows of
+  the derived table/view is used instead.
+
+  @return 0          ok
+  @return non zero   error
+*/
+
+int TABLE_LIST::fetch_number_of_rows()
+{
+  int error= 0;
+  if (uses_materialization())
+    table->file->stats.records= derived->get_result()->estimated_rowcount;
+  else
+    error= table->file->info(HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK);
+  return error;
+}
+
+
+/**
+  A helper function to add a derived key to the list of possible keys
+
+  @param derived_key_list  list of all possible derived keys
+  @param field             referenced field
+  @param ref_by_tbl        the table that refers to given field
+
+  @details The possible key to be used for join with table with ref_by_tbl
+  table map is extended to include 'field'. If ref_by_tbl == 0 then the key
+  that includes all referred fields is extended.
+
+  @note
+  Procedure of keys generation for result tables of materialized derived
+  tables/views for allowing ref access to them.
+
+  A key is generated for each equi-join pair (derived table, another table).
+  Each generated key consists of fields of derived table used in equi-join.
+  Example:
+
+    SELECT * FROM (SELECT f1, f2, count(*) FROM t1 GROUP BY f1) tt JOIN
+                  t1 ON tt.f1=t1.f3 and tt.f2=t1.f4;
+
+  In this case for the derived table tt one key will be generated. It will
+  consist of two parts f1 and f2.
+  Example:
+
+    SELECT * FROM (SELECT f1, f2, count(*) FROM t1 GROUP BY f1) tt JOIN
+                  t1 ON tt.f1=t1.f3 JOIN
+                  t2 ON tt.f2=t2.f4;
+
+  In this case for the derived table tt two keys will be generated.
+  One key over f1 field, and another key over f2 field.
+  Currently optimizer may choose to use only one such key, thus the second
+  one will be dropped after the range optimizer is finished.
+  See also JOIN::drop_unused_derived_keys function.
+  Example:
+
+    SELECT * FROM (SELECT f1, f2, count(*) FROM t1 GROUP BY f1) tt JOIN
+                  t1 ON tt.f1=a_function(t1.f3);
+
+  In this case for the derived table tt one key will be generated. It will
+  consist of one field - f1.
+  In all cases beside one-per-table keys one additional key is generated.
+  It includes all fields referenced by other tables.
+
+  Implementation is split in two steps:
+    gather information on all used fields of derived tables/view and
+      store it in lists of possible keys, one per a derived table/view.
+    add keys to result tables of derived tables/view using info from above
+      lists.
+
+  The above procedure is implemented in 4 functions:
+    TABLE_LIST::update_derived_keys
+                          Create/extend list of possible keys for one derived
+                          table/view based on given field/used tables info.
+                          (Step one)
+    JOIN::generate_derived_keys
+                          This function is called from update_ref_and_keys
+                          when all possible info on keys is gathered and it's
+                          safe to add keys - no keys or key parts would be
+                          missed.  Walk over list of derived tables/views and
+                          call to TABLE_LIST::generate_keys to actually
+                          generate keys. (Step two)
+    TABLE_LIST::generate_keys
+                          Walks over list of possible keys for this derived
+                          table/view to add keys to the result table.
+                          Calls to TABLE::add_tmp_key to actually add
+                          keys. (Step two)
+    TABLE::add_tmp_key    Creates one index description according to given
+                          bitmap of used fields. (Step two)
+  There is also the fifth function called TABLE::use_index. It saves used
+  key and frees others. It is called when the optimizer has chosen which key
+  it will use, thus we don't need other keys anymore.
+
+  @return TRUE  OOM
+  @return FALSE otherwise
+*/
+
+static bool add_derived_key(List<Derived_key> &derived_key_list, Field *field,
+                             table_map ref_by_tbl)
+{
+  uint key= 0;
+  Derived_key *entry= 0;
+  List_iterator<Derived_key> ki(derived_key_list);
+
+  /* Search for already existing possible key. */
+  while ((entry= ki++))
+  {
+    key++;
+    if (ref_by_tbl)
+    {
+      /* Search for the entry for the specified table.*/
+      if (entry->referenced_by & ref_by_tbl)
+        break;
+    }
+    else
+    {
+      /*
+        Search for the special entry that should contain fields referred
+        from any table.
+      */
+      if (!entry->referenced_by)
+        break;
+    }
+  }
+  /* Add new possible key if nothing is found. */
+  if (!entry)
+  {
+    THD *thd= field->table->in_use;
+    key++;
+    entry= new (thd->stmt_arena->mem_root) Derived_key();
+    if (!entry)
+      return TRUE;
+    entry->referenced_by= ref_by_tbl;
+    entry->used_fields.clear_all();
+    if (derived_key_list.push_back(entry, thd->stmt_arena->mem_root))
+      return TRUE;
+    field->table->max_keys++;
+  }
+  /* Don't create keys longer than REF access can use. */
+  if (entry->used_fields.bits_set() < MAX_REF_PARTS)
+  {
+    field->part_of_key.set_bit(key - 1);
+    field->flags|= PART_KEY_FLAG;
+    entry->used_fields.set_bit(field->field_index);
+  }
+  return FALSE;
+}
+
+/*
+  @brief
+  Update derived table's list of possible keys
+
+  @param field      derived table's field to take part in a key
+  @param values     array of values that a part of equality predicate with the
+                    field above
+  @param num_values number of elements in the array values
+
+  @details
+  This function creates/extends a list of possible keys for this derived
+  table/view. For each table used by a value from the 'values' array the
+  corresponding possible key is extended to include the 'field'.
+  If there is no such possible key, then it is created. field's
+  part_of_key bitmaps are updated accordingly.
+  @see add_derived_key
+
+  @return TRUE  new possible key can't be allocated.
+  @return FALSE list of possible keys successfully updated.
+*/
+
+bool TABLE_LIST::update_derived_keys(Field *field, Item **values,
+                                     uint num_values)
+{
+  /* Don't bother with keys for CREATE VIEW and for BLOB fields. */
+  if (field->table->in_use->lex->is_ps_or_view_context_analysis() ||
+      field->flags & BLOB_FLAG)
+    return FALSE;
+
+  /* Allow all keys to be used. */
+  if (derived_key_list.elements == 0)
+  {
+    table->keys_in_use_for_query.set_all();
+    table->s->uniques= 0;
+  }
+
+  for (uint i= 0; i < num_values; i++)
+  {
+    table_map tables= values[i]->used_tables() & ~PSEUDO_TABLE_BITS;
+    if (!tables || values[i]->real_item()->type() != Item::FIELD_ITEM)
+      continue;
+    for (table_map tbl= 1; tables >= tbl; tbl<<= 1)
+    {
+      if (! (tables & tbl))
+        continue;
+      if (add_derived_key(derived_key_list, field, tbl))
+        return TRUE;
+    }
+  }
+  /* Extend key which includes all referenced fields. */
+  if (add_derived_key(derived_key_list, field, (table_map)0))
+    return TRUE;
+  return FALSE;
+}
+
+
+/*
+  Comparison function for Derived_key entries.
+  See TABLE_LIST::generate_keys.
+*/
+
+static int Derived_key_comp(Derived_key *e1, Derived_key *e2, void *arg)
+{
+  /* Move entries for tables with greater table bit to the end. */
+  return ((e1->referenced_by < e2->referenced_by) ? -1 :
+          ((e1->referenced_by > e2->referenced_by) ? 1 : 0));
+}
+
+
+/**
+  @brief
+  Generate keys for a materialized derived table/view
+
+  @details
+  This function adds keys to the result table by walking over the list of
+  possible keys for this derived table/view and calling the
+  TABLE::add_tmp_key to actually add keys. A name <auto_keyN>, where N is a
+  sequential number, is given to each key to ease debugging.
+  @see add_derived_key
+
+  @return TRUE  an error occur.
+  @return FALSE all keys were successfully added.
+*/
+
+bool TABLE_LIST::generate_keys()
+{
+  List_iterator<Derived_key> it(derived_key_list);
+  Derived_key *entry;
+  uint key= 0;
+  char buf[NAME_CHAR_LEN];
+  DBUG_ASSERT(uses_materialization());
+
+  if (!derived_key_list.elements)
+    return FALSE;
+
+  if (table->alloc_keys(derived_key_list.elements))
+    return TRUE;
+
+  /* Sort entries to make key numbers sequence deterministic. */
+  derived_key_list.sort((Node_cmp_func)Derived_key_comp, 0);
+  while ((entry= it++))
+  {
+    sprintf(buf, "<auto_key%i>", key++);
+    if (table->add_tmp_key(&entry->used_fields,
+                           table->in_use->strdup(buf)))
+      return TRUE;
+  }
+  return FALSE;
+}
+
+
+/*
+  @brief Run derived tables/view handling phases on underlying select_lex.
+
+  @param lex    LEX for this thread
+  @param phases derived tables/views handling phases to run
+                (set of DT_XXX constants)
+  @details
+  This function runs this derived table through specified 'phases' and used for
+  handling materialized derived tables on all stages except preparation.
+  The reason that on all stages except prepare derived tables of different
+  type needs different handling. Materializable derived tables needs
+  processor to be called directly on them. Mergeable derived tables doesn't
+  need such call, but require diving into them to process underlying derived
+  tables. This differs from the mysql_handle_derived which runs preparation
+  processor on all derived tables without exception. 'lex' is passed as
+  an argument to called functions.
+
+  @see mysql_handle_derived.
+
+  @return TRUE on error
+  @return FALSE ok
+*/
+
+bool TABLE_LIST::handle_derived(LEX *lex,
+                                bool (*processor)(THD*, LEX*, TABLE_LIST*))
+{
+  SELECT_LEX_UNIT *unit= get_unit();
+  DBUG_ASSERT(unit);
+
+  /* Dive into a merged derived table or materialize as is otherwise. */
+  if (!uses_materialization())
+  {
+    for (SELECT_LEX *sl= unit->first_select(); sl; sl= sl->next_select())
+      if (sl->handle_derived(lex, processor))
+        return TRUE;
+  }
+  else
+    return mysql_handle_single_derived(lex, this, processor);
+
+  return FALSE;
+}
+
+
+/**
+  @brief
+  Return unit of this derived table/view
+
+  @return reference to a unit  if it's a derived table/view.
+  @return 0                    when it's not a derived table/view.
+*/
+
+st_select_lex_unit *TABLE_LIST::get_unit() const
+{
+  return (view ? &view->unit : derived);
+}
+
+
+/**
+  Update TABLE::const_key_parts for single table UPDATE/DELETE query
+
+  @param conds               WHERE clause expression
+
+  @retval TRUE   error (OOM)
+  @retval FALSE  success
+
+  @note
+    Set const_key_parts bits if key fields are equal to constants in
+    the WHERE expression.
+*/
+
+bool TABLE::update_const_key_parts(Item *conds)
+{
+  memset(const_key_parts, 0, sizeof(key_part_map) * s->keys);
+
+  if (conds == NULL)
+    return FALSE;
+
+  for (uint index= 0; index < s->keys; index++)
+  {
+    KEY_PART_INFO *keyinfo= key_info[index].key_part;
+    KEY_PART_INFO *keyinfo_end= keyinfo + key_info[index].user_defined_key_parts;
+
+    for (key_part_map part_map= (key_part_map)1; 
+        keyinfo < keyinfo_end;
+        keyinfo++, part_map<<= 1)
+    {
+      if (const_expression_in_where(conds, NULL, keyinfo->field))
+        const_key_parts[index]|= part_map;
+    }
+  }
+  return FALSE;
+}
+
+
+/**
+  Read removal is possible if the selected quick read
+  method is using full unique index
+
+  @see HA_READ_BEFORE_WRITE_REMOVAL
+
+  @param index              Number of the index used for read
+
+  @retval true   success, read removal started
+  @retval false  read removal not started
+*/
+
+bool TABLE::check_read_removal(uint index)
+{
+  DBUG_ENTER("check_read_removal");
+  DBUG_ASSERT(file->ha_table_flags() & HA_READ_BEFORE_WRITE_REMOVAL);
+  DBUG_ASSERT(index != MAX_KEY);
+
+  // Index must be unique
+  if ((key_info[index].flags & HA_NOSAME) == 0)
+    DBUG_RETURN(false);
+
+  // Full index must be used
+  bitmap_clear_all(&tmp_set);
+  mark_columns_used_by_index_no_reset(index, &tmp_set);
+  if (!bitmap_cmp(&tmp_set, read_set))
+    DBUG_RETURN(false);
+
+  // Start read removal in handler
+  DBUG_RETURN(file->start_read_removal());
+}
+
+
+/**
+  Test if the order list consists of simple field expressions
+
+  @param order                Linked list of ORDER BY arguments
+
+  @return TRUE if @a order is empty or consist of simple field expressions
+*/
+
+bool is_simple_order(ORDER *order)
+{
+  for (ORDER *ord= order; ord; ord= ord->next)
+  {
+    if (ord->item[0]->real_item()->type() != Item::FIELD_ITEM)
+      return FALSE;
+  }
+  return TRUE;
+}

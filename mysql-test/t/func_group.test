@@ -140,6 +140,7 @@ select t1.a1, t1.a2, t2.a1, t2.a2 from t1,t2;
 
 select max(t1.a1), max(t2.a1) from t1, t2 where t2.a2=9;
 select max(t2.a1), max(t1.a1) from t1, t2 where t2.a2=9;
+--sorted_result
 select t1.a1, t1.a2, t2.a1, t2.a2 from t1 left outer join t2 on t1.a1=10;
 select max(t1.a2) from t1 left outer join t2 on t1.a1=10;
 select max(t2.a1) from t2 left outer join t1 on t2.a2=10 where t2.a2=20;
@@ -1059,7 +1060,7 @@ DROP TABLE t1;
 create table t1 (f1 year(2), f2 year(4), f3 date, f4 datetime);
 insert into t1 values
   (98,1998,19980101,"1998-01-01 00:00:00"),
-  (00,2000,20000101,"2000-01-01 00:00:01"),
+  ('00',2000,20000101,"2000-01-01 00:00:01"),
   (02,2002,20020101,"2002-01-01 23:59:59"),
   (60,2060,20600101,"2060-01-01 11:11:11"),
   (70,1970,19700101,"1970-11-11 22:22:22"),
@@ -1142,3 +1143,71 @@ DROP TABLE t1;
 --echo #
 --echo End of 5.1 tests
 
+###
+--echo #
+--echo # Bug#52123 Assertion failed: aggregator == aggr->Aggrtype(),
+--echo #           file .\item_sum.cc, line 587
+--echo #
+
+CREATE TABLE t1(a int, KEY(a));
+INSERT INTO t1 VALUES (1), (2);
+SELECT 1 FROM t1 ORDER BY AVG(DISTINCT a);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#55648: Server crash on MIN/MAX on maximum time value
+--echo #
+CREATE TABLE t1(c1 TIME NOT NULL);
+INSERT INTO t1 VALUES('837:59:59');
+INSERT INTO t1 VALUES('838:59:59');
+SELECT MAX(c1) FROM t1;
+DROP TABLE t1;
+--echo # End of the bug#55648
+
+--echo #
+--echo # Bug#56120: Failed assertion on MIN/MAX on negative time value
+--echo #
+CREATE TABLE t1(c1 TIME NOT NULL);
+INSERT INTO t1 VALUES('-00:00:01');
+SELECT MAX(c1),MIN(c1) FROM t1;
+DROP TABLE t1;
+--echo # End of the bug#56120
+
+--echo #
+--echo # Bug#57932 "query with AVG(DISTINCT) returns NULL if last
+--echo # aggregated value was NULL"
+--echo #
+CREATE TABLE t1 (col_int_nokey int(11));
+INSERT INTO t1 VALUES (7),(8),(NULL);
+SELECT AVG(DISTINCT col_int_nokey) FROM t1;
+SELECT AVG(DISTINCT outr.col_int_nokey) FROM t1 AS outr LEFT JOIN t1 AS outr2 ON
+outr.col_int_nokey = outr2.col_int_nokey;
+DROP TABLE t1;
+--echo # End of the bug#57932
+
+--echo #
+--echo # BUG#12773464 - 61925: WRONG RESULT WITH AGGREGATE + NOT BETWEEN + KEY
+--echo #
+CREATE TABLE t1 (a int, KEY (a));
+INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+SELECT MAX(a) FROM t1 WHERE a NOT BETWEEN 3 AND 9;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#13724099 1032 BYTE MEMORY LEAK NEW_CACHED_ITEM IN
+--echo #              SUBQUERY WITH GROUPING OF OUTER COLUMN
+--echo #
+
+CREATE TABLE t1 (
+  a BLOB,
+  b INT)
+engine=innodb;
+
+INSERT INTO t1 VALUES ('a', 0);
+
+SELECT 0 FROM t1
+WHERE 0 = (SELECT group_concat(b)
+           FROM t1 t GROUP BY t1.a)
+;
+DROP TABLE t1;

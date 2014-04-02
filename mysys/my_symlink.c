@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include "mysys_err.h"
@@ -55,7 +53,11 @@ int my_readlink(char *to, const char *filename, myf MyFlags)
     else
     {
       if (MyFlags & MY_WME)
-	my_error(EE_CANT_READLINK, MYF(0), filename, errno);
+      {
+        char errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_CANT_READLINK, MYF(0), filename,
+                 errno, my_strerror(errbuf, sizeof(errbuf), errno));
+      }
       result= -1;
     }
   }
@@ -84,7 +86,11 @@ int my_symlink(const char *content, const char *linkname, myf MyFlags)
     result= -1;
     my_errno=errno;
     if (MyFlags & MY_WME)
-      my_error(EE_CANT_SYMLINK, MYF(0), linkname, content, errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_CANT_SYMLINK, MYF(0), linkname, content,
+               errno, my_strerror(errbuf, sizeof(errbuf), errno));
+    }
   }
   else if ((MyFlags & MY_SYNC_DIR) && my_sync_dir_by_file(linkname, MyFlags))
     result= -1;
@@ -141,7 +147,11 @@ int my_realpath(char *to, const char *filename, myf MyFlags)
     DBUG_PRINT("error",("realpath failed with errno: %d", errno));
     my_errno=errno;
     if (MyFlags & MY_WME)
-      my_error(EE_REALPATH, MYF(0), filename, my_errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_REALPATH, MYF(0), filename,
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
     my_load_path(to, filename, NullS);
     result= -1;
   }
@@ -152,7 +162,11 @@ int my_realpath(char *to, const char *filename, myf MyFlags)
   {
     my_errno= (ret > FN_REFLEN) ? ENAMETOOLONG : GetLastError();
     if (MyFlags & MY_WME)
-      my_error(EE_REALPATH, MYF(0), filename, my_errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_REALPATH, MYF(0), filename,
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
     /* 
       GetFullPathName didn't work : use my_load_path() which is a poor 
       substitute original name but will at least be able to resolve 

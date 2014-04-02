@@ -1,4 +1,5 @@
-/* Copyright (C) 2003 MySQL AB
+/*
+   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,32 +12,48 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 #ifndef NDB_GLOBAL_H
 #define NDB_GLOBAL_H
 
-#include <my_config.h>
-#include <ndb_types.h>
-
-#define NDB_PORT "1186"
-#define NDB_TCP_BASE_PORT "@ndb_port_base@"
-
-#if defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) || defined(WIN32)
-#define NDB_WIN32
-#include <winsock2.h>
-#define PATH_MAX 256
-#define DIR_SEPARATOR "\\"
-#define MYSQLCLUSTERDIR "c:\\mysql\\mysql-cluster"
-#define HAVE_STRCASECMP
-#define strcasecmp _strcmpi
-#pragma warning(disable: 4503 4786)
-#else
-#undef NDB_WIN32
-#define DIR_SEPARATOR "/"
+#ifdef _WIN32
+/* Workaround for Bug#32082: VOID refdefinition results in compile errors */
+#ifndef DONT_DEFINE_VOID
+#define DONT_DEFINE_VOID
+#endif
 #endif
 
 #include <my_global.h>
+
+#ifdef HAVE_NDB_CONFIG_H
+#include "ndb_config.h"
+#endif
+
+#include <mysql_com.h>
+#include <ndb_types.h>
+
+#ifndef NDB_PORT
+/* Default port used by ndb_mgmd */
+#define NDB_PORT 1186
+#endif
+
+#if defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) || defined(WIN32)
+#define NDB_WIN32 1
+#define NDB_WIN 1
+#define PATH_MAX 256
+#define DIR_SEPARATOR "\\"
+
+/* Disable a few compiler warnings on Windows */
+/* 4355: 'this': used in base member initializer list */
+#pragma warning(disable: 4355)
+
+#else
+#undef NDB_WIN32
+#undef NDB_WIN
+#define DIR_SEPARATOR "/"
+#endif
 
 #if ! (NDB_SIZEOF_CHAR == SIZEOF_CHAR)
 #error "Invalid define for Uint8"
@@ -50,12 +67,31 @@
 #error "Invalid define for Uint64"
 #endif
 
-#include <my_alarm.h>
+#include <signal.h>
 
 #ifdef _AIX
 #undef _H_STRINGS
 #endif
 #include <m_string.h>
+
+#ifndef NDB_REMOVE_BZERO
+/*
+  Make it possible to use bzero in NDB although
+  MySQL headers redefines it to an invalid symbol
+*/
+#ifdef bzero
+#undef bzero
+#endif
+
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+
+#if !defined(bzero) && !defined(HAVE_BZERO)
+#define bzero(A,B) memset((A),0,(B))
+#endif
+#endif
+
 #include <m_ctype.h>
 #include <ctype.h>
 
@@ -71,18 +107,10 @@
 #include <fcntl.h>
 #endif
 
+#include <sys/stat.h>
+
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
-#endif
-
-#ifdef HAVE_SYS_STAT_H
-  #if defined(__cplusplus) && defined(_APP32_64BIT_OFF_T) && defined(_INCLUDE_AES_SOURCE)
-    #undef _INCLUDE_AES_SOURCE
-    #include <sys/stat.h>
-    #define _INCLUDE_AES_SOURCE
-  #else
-    #include <sys/stat.h>
-  #endif
 #endif
 
 #ifdef HAVE_SYS_RESOURCE_H
@@ -99,11 +127,6 @@
 
 #ifndef HAVE_STRDUP
 extern char * strdup(const char *s);
-#endif
-
-#ifndef HAVE_STRCASECMP
-extern int strcasecmp(const char *s1, const char *s2);
-extern int strncasecmp(const char *s1, const char *s2, size_t n);
 #endif
 
 static const char table_name_separator =  '/';
@@ -144,6 +167,135 @@ extern "C" {
 #define MAX(x,y) (((x)>(y))?(x):(y))
 #endif
 
+/*
+  Dont allow use of min() or max() macros
+   - in order to enforce forward compatibilty
+*/
+
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+
 #define NDB_O_DIRECT_WRITE_ALIGNMENT 512
+
+#ifndef STATIC_ASSERT
+#if defined VM_TRACE
+/**
+ * Compile-time assert for use from procedure body
+ * Zero length array not allowed in C
+ * Add use of array to avoid compiler warning
+ */
+#define STATIC_ASSERT(expr) { char static_assert[(expr)? 1 : 0] = {'\0'}; if (static_assert[0]) {}; }
+#else
+#define STATIC_ASSERT(expr)
+#endif
+#endif
+
+#define NDB_ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+
+
+/*
+  NDB_STATIC_ASSERT(expr)
+   - Check coding assumptions during compile time
+     by laying out code that will generate a compiler error
+     if the expression is false.
+*/
+
+#if (_MSC_VER > 1500) || (defined __GXX_EXPERIMENTAL_CXX0X__)
+
+/*
+  Prefer to use the 'static_assert' function from C++0x
+  to get best error message
+*/
+#define NDB_STATIC_ASSERT(expr) static_assert(expr, #expr)
+
+#else
+
+/*
+  Fallback to use home grown solution
+  (i.e use mysys version)
+*/
+
+#define NDB_STATIC_ASSERT(expr) compile_time_assert(expr)
+
+#endif
+
+
+#if (_MSC_VER > 1500)
+#define HAVE___HAS_TRIVIAL_CONSTRUCTOR
+#define HAVE___IS_POD
+#endif
+
+#ifdef HAVE___HAS_TRIVIAL_CONSTRUCTOR
+#define ASSERT_TYPE_HAS_CONSTRUCTOR(x)     \
+  NDB_STATIC_ASSERT(!__has_trivial_constructor(x))
+#else
+#define ASSERT_TYPE_HAS_CONSTRUCTOR(x)
+#endif
+
+/**
+ * visual studio is stricter than gcc for __is_pod, settle for __has_trivial_constructor
+ *  until we really really made all signal data classes POD
+ *
+ * UPDATE: also gcc fails to compile our code with gcc4.4.3
+ */
+#ifdef HAVE___HAS_TRIVIAL_CONSTRUCTOR
+#define NDB_ASSERT_POD(x) \
+  NDB_STATIC_ASSERT(__has_trivial_constructor(x))
+#else
+#define NDB_ASSERT_POD(x)
+#endif
+
+/**
+ *  __attribute__((noreturn)) was introduce in gcc 2.5
+ */
+#if (GCC_VERSION >= 2005)
+#define ATTRIBUTE_NORETURN __attribute__((noreturn))
+#else
+#define ATTRIBUTE_NORETURN
+#endif
+
+/**
+ *  __attribute__((noinline)) was introduce in gcc 3.1
+ */
+#if (GCC_VERSION >= 3001)
+#define ATTRIBUTE_NOINLINE __attribute__((noinline))
+#else
+#define ATTRIBUTE_NOINLINE
+#endif
+
+/*
+ * require is like a normal assert, only it's always on (eg. in release)
+ */
+C_MODE_START
+/** see below */
+typedef int(*RequirePrinter)(const char *fmt, ...);
+void require_failed(int exitcode, RequirePrinter p,
+                    const char* expr, const char* file, int line);
+int ndbout_printer(const char * fmt, ...);
+C_MODE_END
+/*
+ *  this allows for an exit() call if exitcode is not zero
+ *  and takes a Printer to print the error
+ */
+#define require_exit_or_core_with_printer(v, exitcode, printer) \
+  do { if (likely(!(!(v)))) break;                                    \
+       require_failed((exitcode), (printer), #v, __FILE__, __LINE__); \
+  } while (0)
+
+/*
+ *  this allows for an exit() call if exitcode is not zero
+*/
+#define require_exit_or_core(v, exitcode) \
+       require_exit_or_core_with_printer((v), (exitcode), 0)
+
+/*
+ * this require is like a normal assert.  (only it's always on)
+*/
+#define require(v) require_exit_or_core_with_printer((v), 0, 0)
 
 #endif

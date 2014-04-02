@@ -1,7 +1,24 @@
-/**********************************************************************
-Sort utility
+/*****************************************************************************
 
-(c) 1995 Innobase Oy
+Copyright (c) 1995, 2009, Oracle and/or its affiliates. All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+
+*****************************************************************************/
+
+/******************************************************************//**
+@file include/ut0sort.h
+Sort utility
 
 Created 11/9/1995 Heikki Tuuri
 ***********************************************************************/
@@ -18,7 +35,7 @@ the macro. The sort algorithm is mergesort which has logarithmic
 worst case.
 */
 
-/***********************************************************************
+/*******************************************************************//**
 This macro expands to the body of a standard sort function.
 The sort function uses mergesort and must be defined separately
 for each type of array.
@@ -30,8 +47,7 @@ and the low (LOW), inclusive, and high (HIGH), noninclusive,
 limits for the sort interval as arguments.
 CMP_FUN is the comparison function name. It takes as arguments
 two elements from the array and returns 1, if the first is bigger,
-0 if equal, and -1 if the second bigger. For an eaxmaple of use
-see test program in tsut.c. */
+0 if equal, and -1 if the second bigger. */
 
 #define UT_SORT_FUNCTION_BODY(SORT_FUN, ARR, AUX_ARR, LOW, HIGH, CMP_FUN)\
 {\
@@ -81,9 +97,8 @@ see test program in tsut.c. */
 		}\
 	}\
 \
-	for (ut_sort_i77 = (LOW); ut_sort_i77 < (HIGH); ut_sort_i77++) {\
-		(ARR)[ut_sort_i77] = (AUX_ARR)[ut_sort_i77];\
-	}\
+	memcpy((void*) ((ARR) + (LOW)), (AUX_ARR) + (LOW),\
+	       ((HIGH) - (LOW)) * sizeof *(ARR));\
 }\
 
 

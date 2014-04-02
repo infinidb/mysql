@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2003, 2005, 2006 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Wait a given number of microseconds */
 
@@ -20,9 +20,7 @@
 
 void my_sleep(ulong m_seconds)
 {
-#ifdef __NETWARE__
-  delay(m_seconds/1000+1);
-#elif defined(__WIN__)
+#if defined(__WIN__)
   Sleep(m_seconds/1000+1);      /* Sleep() has millisecond arg */
 #elif defined(HAVE_SELECT)
   struct timeval t;

@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS t1,t2,t3;
 CREATE TABLE t1(c1 DOUBLE, c2 DOUBLE, c3 DOUBLE, c4 DOUBLE, c5 DOUBLE,
 c6 DOUBLE, c7 DOUBLE, c8 DOUBLE, c9 DOUBLE, a INT PRIMARY KEY);
 INSERT INTO t1 VALUES
@@ -45,14 +46,12 @@ insert into t1 select * from t1;
 flush tables;
 optimize table t1;
 Table	Op	Msg_type	Msg_text
-test.t1	optimize	error	Table 'test.t1' is read only
-Warnings:
-Error	1036	Table 't1' is read only
+test.t1	optimize	Error	Table 't1' is read only
+test.t1	optimize	status	Operation failed
 repair table t1;
 Table	Op	Msg_type	Msg_text
-test.t1	repair	error	Table 'test.t1' is read only
-Warnings:
-Error	1036	Table 't1' is read only
+test.t1	repair	Error	Table 't1' is read only
+test.t1	repair	status	Operation failed
 drop table t1;
 #
 # BUG#41541 - Valgrind warnings on packed MyISAM table
@@ -85,6 +84,38 @@ FLUSH TABLE mysql_db1.t1;
 SELECT COUNT(*) FROM mysql_db1.t1 WHERE c2 < 5;
 COUNT(*)
 128
+# ===== myisampack.1 =====
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(20);
+CREATE TABLE t2(a INT);
+INSERT INTO t2 VALUES(40);
+FLUSH TABLE t1,t2;
+#If the myisampack --join operation is successful, we have table t3(.frm)
+#so we should be able to query about the table from server.
+SELECT COUNT(a) FROM t3;
+COUNT(a)
+1024
+# ===== myisampack.2 =====
+FLUSH TABLE t3;
+#Tests the myisampack join operation with an existing destination .frm file, 
+#the command should return correct exit status(0) and
+#we should be able to query the table.
+SELECT COUNT(a) FROM t3;
+COUNT(a)
+1024
+# ===== myisampack.3 =====
+DROP TABLE t3;
+#Tests the myisampack join operation without frm file for the first and second table
+#No frm file is generated in this and we shouldn't  be able to access the newly 
+#created table
+SELECT COUNT(a) FROM t3;
+ERROR 42S02: Table 'test.t3' doesn't exist
+# ===== myisampack.4 =====
+#Tests the myisampack join operation with an existing destination .frm,.MYI,.MDI 
+#the command should fail with exit status 2
+myisampack: Can't create/write to file (Errcode: 17 - File exists)
+Aborted: file is not compressed
+DROP TABLE t1,t2,t3;
 DROP TABLE mysql_db1.t1;
 DROP DATABASE mysql_db1;
 #
@@ -119,3 +150,10 @@ CHECK TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 DROP TABLE t1;
+#
+# BUG#11751736: DROP DATABASE STATEMENT SHOULD REMOVE .OLD SUFFIX FROM 
+# DATABASE DIRECTORY 
+#
+CREATE DATABASE db1;
+CREATE TABLE db1.t1(c1 INT) ENGINE=MyISAM;
+DROP DATABASE db1;

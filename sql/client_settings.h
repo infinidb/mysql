@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2003, 2006 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,29 +10,40 @@
    GNU General Public License for more details.
    
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
+
+#ifndef CLIENT_SETTINGS_INCLUDED
+#define CLIENT_SETTINGS_INCLUDED
+#else
+#error You have already included an client_settings.h and it should not be included twice
+#endif /* CLIENT_SETTINGS_INCLUDED */
 
 #include <thr_alarm.h>
+#include <sql_common.h>
 
-#define CLIENT_CAPABILITIES (CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG |	  \
-                             CLIENT_SECURE_CONNECTION | CLIENT_TRANSACTIONS | \
-			     CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION)
+/*
+ Note: CLIENT_CAPABILITIES is also defined in libmysql/client_settings.h.
+ When adding capabilities here, consider if they should be also added to
+ the libmysql version.
+*/
+#define CLIENT_CAPABILITIES (CLIENT_LONG_PASSWORD | \
+                             CLIENT_LONG_FLAG |     \
+                             CLIENT_SECURE_CONNECTION | \
+                             CLIENT_TRANSACTIONS |  \
+                             CLIENT_PROTOCOL_41 |   \
+                             CLIENT_SECURE_CONNECTION | \
+                             CLIENT_PLUGIN_AUTH | \
+                             CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | \
+                             CLIENT_CONNECT_ATTRS)
 
-#define init_sigpipe_variables
-#define set_sigpipe(mysql)
-#define reset_sigpipe(mysql)
 #define read_user_name(A) {}
-#define mysql_rpl_query_type(A,B) MYSQL_RPL_ADMIN
-#define mysql_master_send_query(A, B, C) 1
-#define mysql_slave_send_query(A, B, C) 1
-#define mysql_rpl_probe(mysql) 0
 #undef HAVE_SMEM
 #undef _CUSTOMCONFIG_
 
-#define mysql_server_init(a,b,c) 0
+#define mysql_server_init(a,b,c) mysql_client_plugin_init()
+#define mysql_server_end()       mysql_client_plugin_deinit()
 
 #ifdef HAVE_REPLICATION
 C_MODE_START

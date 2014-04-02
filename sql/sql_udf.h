@@ -1,4 +1,7 @@
-/* Copyright (c) 2000, 2001, 2003-2007 MySQL AB
+#ifndef SQL_UDF_INCLUDED
+#define SQL_UDF_INCLUDED
+
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -10,15 +13,11 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 
 /* This file defines structures needed by udf functions */
-
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface
-#endif
 
 enum Item_udftype {UDFTYPE_FUNCTION=1,UDFTYPE_AGGREGATE};
 
@@ -140,3 +139,4 @@ void free_udf(udf_func *udf);
 int mysql_create_function(THD *thd,udf_func *udf);
 int mysql_drop_function(THD *thd,const LEX_STRING *name);
 #endif
+#endif /* SQL_UDF_INCLUDED */

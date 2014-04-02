@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <process.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "nt_servc.h"
 
 
@@ -275,7 +276,13 @@ error:
 void NTService::SetRunning()
 {
   if (pService)
-    pService->SetStatus(SERVICE_RUNNING,NO_ERROR, 0, 0, 0);
+    pService->SetStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0);
+}
+
+void NTService::SetSlowStarting(unsigned long timeout)
+{
+  if (pService)
+    pService->SetStatus(SERVICE_START_PENDING,NO_ERROR, 0, 0, timeout);
 }
 
 
@@ -374,29 +381,6 @@ void NTService::ServiceCtrlHandler(DWORD ctrlCode)
   dwState=pService->dwState;  // get current state
 
   switch(ctrlCode) {
-
-#ifdef NOT_USED	 /* do we need this ? */
-  case SERVICE_CONTROL_PAUSE:
-    if (pService->bRunning && ! pService->bPause)
-    {
-      dwState = SERVICE_PAUSED;
-      pService->SetStatus(SERVICE_PAUSE_PENDING,NO_ERROR, 0, 1,
-			  pService->nPauseTimeOut);
-      pService->PauseService();
-    }
-    break;
-
-  case SERVICE_CONTROL_CONTINUE:
-    if (pService->bRunning && pService->bPause)
-    {
-      dwState = SERVICE_RUNNING;
-      pService->SetStatus(SERVICE_CONTINUE_PENDING,NO_ERROR, 0, 1,
-			  pService->nResumeTimeOut);
-      pService->ResumeService();
-    }
-    break;
-#endif
-
   case SERVICE_CONTROL_SHUTDOWN:
   case SERVICE_CONTROL_STOP:
     dwState = SERVICE_STOP_PENDING;

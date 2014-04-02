@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
    along with this program; see the file COPYING. If not, write to the
    Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
    MA  02110-1301  USA.
-*/
+ */
 
 
 /* The socket wrapper header defines a Socket class that hides the differences
@@ -54,7 +54,9 @@ typedef unsigned int uint;
     const int SOCKET_ERROR = -1;
 #endif
 
-
+  extern "C" {
+    #include "openssl/transport_types.h"
+  }
 
 typedef unsigned char byte;
 
@@ -64,6 +66,9 @@ class Socket {
     socket_t socket_;                    // underlying socket descriptor
     bool     wouldBlock_;                // if non-blocking data, for last read 
     bool     nonBlocking_;               // is option set
+    void     *ptr_;                      // Argument to transport function
+    yaSSL_send_func_t send_func_;        // Function to send data
+    yaSSL_recv_func_t recv_func_;        // Function to receive data
 public:
     explicit Socket(socket_t s = INVALID_SOCKET);
     ~Socket();
@@ -72,9 +77,12 @@ public:
     uint     get_ready() const;
     socket_t get_fd()    const;
 
-    uint send(const byte* buf, unsigned int len, unsigned int& sent,
-              int flags = 0);
-    uint receive(byte* buf, unsigned int len, int flags = 0);
+    void set_transport_ptr(void *ptr);
+    void set_transport_recv_function(yaSSL_recv_func_t recv_func);
+    void set_transport_send_function(yaSSL_send_func_t send_func);
+
+    uint send(const byte* buf, unsigned int len, unsigned int& sent);
+    uint receive(byte* buf, unsigned int len);
 
     bool wait();
     bool WouldBlock() const;

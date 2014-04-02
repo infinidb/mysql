@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2004, 2006, 2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   get_ptr_compare(len) returns a pointer to a optimal byte-compare function
@@ -22,14 +22,40 @@
 #include "mysys_priv.h"
 #include <myisampack.h>
 
+#ifdef __sun
+/*
+ * On Solaris, memcmp() is normally faster than the unrolled ptr_compare_N
+ * functions, as memcmp() is usually a platform-specific implementation
+ * written in assembler, provided in /usr/lib/libc/libc_hwcap*.so.1.
+ * This implementation is also usually faster than the built-in memcmp
+ * supplied by GCC, so it is recommended to build with "-fno-builtin-memcmp"
+ * in CFLAGS if building with GCC on Solaris.
+ */
+
+#include <string.h>
+
+static int native_compare(size_t *length, unsigned char **a, unsigned char **b)
+{
+  return memcmp(*a, *b, *length);
+}
+
+#else	/* __sun */
+
 static int ptr_compare(size_t *compare_length, uchar **a, uchar **b);
 static int ptr_compare_0(size_t *compare_length, uchar **a, uchar **b);
 static int ptr_compare_1(size_t *compare_length, uchar **a, uchar **b);
 static int ptr_compare_2(size_t *compare_length, uchar **a, uchar **b);
 static int ptr_compare_3(size_t *compare_length, uchar **a, uchar **b);
+#endif	/* __sun */
 
 	/* Get a pointer to a optimal byte-compare function for a given size */
 
+#ifdef __sun
+qsort2_cmp get_ptr_compare (size_t size __attribute__((unused)))
+{
+  return (qsort2_cmp) native_compare;
+}
+#else
 qsort2_cmp get_ptr_compare (size_t size)
 {
   if (size < 4)
@@ -42,6 +68,7 @@ qsort2_cmp get_ptr_compare (size_t size)
     }
   return 0;					/* Impossible */
 }
+#endif /* __sun */
 
 
 	/*
@@ -50,6 +77,8 @@ qsort2_cmp get_ptr_compare (size_t size)
 	*/
 
 #define cmp(N) if (first[N] != last[N]) return (int) first[N] - (int) last[N]
+
+#ifndef __sun
 
 static int ptr_compare(size_t *compare_length, uchar **a, uchar **b)
 {
@@ -152,6 +181,8 @@ static int ptr_compare_3(size_t *compare_length,uchar **a, uchar **b)
   }
   return (0);
 }
+
+#endif /* !__sun */
 
 void my_store_ptr(uchar *buff, size_t pack_length, my_off_t pos)
 {

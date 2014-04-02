@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "myrg_def.h"
 
@@ -65,7 +65,17 @@ int _myrg_init_queue(MYRG_INFO *info,int inx,enum ha_rkey_function search_flag)
     }
   }
   else
-    my_errno= error= HA_ERR_WRONG_INDEX;
+  {
+    /*
+      inx may be bigger than info->keys if there are no underlying tables
+      defined. In this case we should return empty result. As we check for
+      underlying tables conformance when we open a table, we may not enter
+      this branch with underlying table that has less keys than merge table
+      have.
+    */
+    DBUG_ASSERT(!info->tables);
+    error= my_errno= HA_ERR_END_OF_FILE;
+  }
   return error;
 }
 

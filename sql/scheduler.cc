@@ -1,4 +1,4 @@
-/* Copyright (C) 2007 MySQL AB
+/* Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -10,42 +10,21 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /*
   Implementation for the thread scheduler
 */
 
-#ifdef USE_PRAGMA_INTERFACE
-#pragma implementation
-#endif
-
-#include <mysql_priv.h>
-
-/*
-  'Dummy' functions to be used when we don't need any handling for a scheduler
-  event
- */
-
-static bool init_dummy(void) {return 0;}
-static void post_kill_dummy(THD* thd) {}  
-static void end_dummy(void) {}
-static bool end_thread_dummy(THD *thd, bool cache_thread) { return 0; }
-
-/*
-  Initialize default scheduler with dummy functions so that setup functions
-  only need to declare those that are relvant for their usage
-*/
-
-scheduler_functions::scheduler_functions()
-  :init(init_dummy),
-   init_new_connection_thread(init_new_connection_handler_thread),
-   add_connection(0),                           // Must be defined
-   post_kill_notification(post_kill_dummy),
-   end_thread(end_thread_dummy), end(end_dummy)
-{}
-
+#include <sql_priv.h>
+#include "unireg.h"                    // REQUIRED: for other includes
+#include "scheduler.h"
+#include "sql_connect.h"         // init_new_connection_handler_thread
+#include "scheduler.h"
+#include "sql_callback.h"
+#include "global_threads.h"
+#include "mysql/thread_pool_priv.h"
 
 /*
   End connection, in case when we are using 'no-threads'
@@ -53,24 +32,116 @@ scheduler_functions::scheduler_functions()
 
 static bool no_threads_end(THD *thd, bool put_in_cache)
 {
-  unlink_thd(thd);
-  pthread_mutex_unlock(&LOCK_thread_count);
+  thd_release_resources(thd);
+  dec_connection_count();
+
+  // THD is an incomplete type here, so use destroy_thd() to delete it.
+  mysql_mutex_lock(&LOCK_thread_count);
+  remove_global_thread(thd);
+  mysql_mutex_unlock(&LOCK_thread_count);
+  destroy_thd(thd);
+
   return 1;                                     // Abort handle_one_connection
 }
 
+static scheduler_functions one_thread_scheduler_functions=
+{
+  1,                                     // max_threads
+  NULL,                                  // init
+  init_new_connection_handler_thread,    // init_new_connection_thread
+#ifndef EMBEDDED_LIBRARY
+  handle_connection_in_main_thread,      // add_connection
+#else
+  NULL,                                  // add_connection
+#endif // EMBEDDED_LIBRARY
+  NULL,                                  // thd_wait_begin
+  NULL,                                  // thd_wait_end
+  NULL,                                  // post_kill_notification
+  no_threads_end,                        // end_thread
+  NULL,                                  // end
+};
+
+#ifndef EMBEDDED_LIBRARY
+static scheduler_functions one_thread_per_connection_scheduler_functions=
+{
+  0,                                     // max_threads
+  NULL,                                  // init
+  init_new_connection_handler_thread,    // init_new_connection_thread
+  create_thread_to_handle_connection,    // add_connection
+  NULL,                                  // thd_wait_begin
+  NULL,                                  // thd_wait_end
+  NULL,                                  // post_kill_notification
+  one_thread_per_connection_end,         // end_thread
+  NULL,                                  // end
+};
+#endif  // EMBEDDED_LIBRARY
+
+
+scheduler_functions *thread_scheduler= NULL;
+
+/** @internal
+  Helper functions to allow mysys to call the thread scheduler when
+  waiting for locks.
+*/
+
+/**@{*/
+extern "C"
+{
+static void scheduler_wait_lock_begin(void) {
+  MYSQL_CALLBACK(thread_scheduler,
+                 thd_wait_begin, (current_thd, THD_WAIT_TABLE_LOCK));
+}
+
+static void scheduler_wait_lock_end(void) {
+  MYSQL_CALLBACK(thread_scheduler, thd_wait_end, (current_thd));
+}
+
+static void scheduler_wait_sync_begin(void) {
+  MYSQL_CALLBACK(thread_scheduler,
+                 thd_wait_begin, (current_thd, THD_WAIT_TABLE_LOCK));
+}
+
+static void scheduler_wait_sync_end(void) {
+  MYSQL_CALLBACK(thread_scheduler, thd_wait_end, (current_thd));
+}
+};
+/**@}*/
+
+/**
+  Common scheduler init function.
+
+  The scheduler is either initialized by calling
+  one_thread_scheduler() or one_thread_per_connection_scheduler() in
+  mysqld.cc, so this init function will always be called.
+ */
+static void scheduler_init() {
+  thr_set_lock_wait_callback(scheduler_wait_lock_begin,
+                             scheduler_wait_lock_end);
+  thr_set_sync_wait_callback(scheduler_wait_sync_begin,
+                             scheduler_wait_sync_end);
+}
+
+/*
+  Initialize scheduler for --thread-handling=one-thread-per-connection
+*/
+
+#ifndef EMBEDDED_LIBRARY
+void one_thread_per_connection_scheduler()
+{
+  scheduler_init();
+  one_thread_per_connection_scheduler_functions.max_threads= max_connections;
+  thread_scheduler= &one_thread_per_connection_scheduler_functions;
+}
+#endif
 
 /*
   Initailize scheduler for --thread-handling=no-threads
 */
 
-void one_thread_scheduler(scheduler_functions* func)
+void one_thread_scheduler()
 {
-  func->max_threads= 1;
-#ifndef EMBEDDED_LIBRARY
-  func->add_connection= handle_connection_in_main_thread;
-#endif
-  func->init_new_connection_thread= init_dummy;
-  func->end_thread= no_threads_end;
+  scheduler_init();
+  thread_scheduler= &one_thread_scheduler_functions;
 }
 
 
@@ -78,11 +149,54 @@ void one_thread_scheduler(scheduler_functions* func)
   Initialize scheduler for --thread-handling=one-thread-per-connection
 */
 
-#ifndef EMBEDDED_LIBRARY
-void one_thread_per_connection_scheduler(scheduler_functions* func)
+/*
+  thd_scheduler keeps the link between THD and events.
+  It's embedded in the THD class.
+*/
+
+thd_scheduler::thd_scheduler()
+  : m_psi(NULL), data(NULL)
 {
-  func->max_threads= max_connections;
-  func->add_connection= create_thread_to_handle_connection;
-  func->end_thread= one_thread_per_connection_end;
 }
-#endif /* EMBEDDED_LIBRARY */
+
+
+thd_scheduler::~thd_scheduler()
+{
+}
+
+static scheduler_functions *saved_thread_scheduler;
+static uint saved_thread_handling;
+
+extern "C"
+int my_thread_scheduler_set(scheduler_functions *scheduler)
+{
+  DBUG_ASSERT(scheduler != 0);
+
+  if (scheduler == NULL)
+    return 1;
+
+  saved_thread_scheduler= thread_scheduler;
+  saved_thread_handling= thread_handling;
+  thread_scheduler= scheduler;
+  // Scheduler loaded dynamically
+  thread_handling= SCHEDULER_TYPES_COUNT;
+  return 0;
+}
+
+
+extern "C"
+int my_thread_scheduler_reset()
+{
+  DBUG_ASSERT(saved_thread_scheduler != NULL);
+
+  if (saved_thread_scheduler == NULL)
+    return 1;
+
+  thread_scheduler= saved_thread_scheduler;
+  thread_handling= saved_thread_handling;
+  saved_thread_scheduler= 0;
+  return 0;
+}
+
+
+

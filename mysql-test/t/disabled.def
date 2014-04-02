@@ -9,7 +9,11 @@
 #  Do not use any TAB characters for whitespace.
 #
 ##############################################################################
-kill                     : Bug#11748945 2008-12-03 HHunger need some changes to be robust enough for pushbuild.
+lowercase_table3         : Bug#11762269 2010-06-30 alik main.lowercase_table3 on Mac OSX
 read_many_rows_innodb    : Bug#11748886 2010-11-15 mattiasj report already exists
-main.log_tables-big      : Bug#11756699 2010-11-15 mattiasj report already exists
-query_cache_28249        : Bug#12584161 2011-11-17 joh      fails sporadically in 5.1 only
+sum_distinct-big         : Bug#11764126 2010-11-15 mattiasj was not tested
+archive-big              : Bug#11817185 2011-03-10 Anitha Disabled since this leads to timeout on Solaris Sparc
+log_tables-big           : Bug#11756699 2010-11-15 mattiasj report already exists
+ds_mrr-big @solaris      : Bug#14168107 2012-04-03 Hemant disabled new test added by Olav Sandstå,since this leads to timeout on Solaris on slow sparc servers
+mysql_embedded_client_test	: Bug#13964673 2012-04-16 amitbha since most of the test cases are failing
+mysql_client_test_embedded : Bug#16084066 2013-01-08 Disabled since this test is failing

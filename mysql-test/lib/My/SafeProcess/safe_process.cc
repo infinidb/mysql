@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 
 /*
@@ -160,6 +159,7 @@ int main(int argc, char* const argv[] )
   sigemptyset(&sa.sa_mask);
 
   sa_abort.sa_handler= handle_abort;
+  sa_abort.sa_flags= 0;
   sigemptyset(&sa_abort.sa_mask);
   /* Install signal handlers */
   sigaction(SIGTERM, &sa,NULL);
@@ -183,7 +183,7 @@ int main(int argc, char* const argv[] )
     } else {
       if ( strcmp(arg, "--verbose") == 0 )
         verbose++;
-      else if ( strncmp(arg, "--parent-pid", 10) == 0 )
+      else if ( strncmp(arg, "--parent-pid", 12) == 0 )
       {
         /* Override parent_pid with a value provided by user */
         const char* start;
@@ -192,9 +192,14 @@ int main(int argc, char* const argv[] )
         start++; /* Step past = */
         if ((parent_pid= atoi(start)) == 0)
           die("Invalid value '%s' passed to --parent-id", start);
-      } else if ( strcmp(arg, "--nocore") == 0 )
+      }
+      else if ( strcmp(arg, "--nocore") == 0 )
       {
         nocore = true;	// Don't allow the process to dump core
+      }
+      else if ( strncmp (arg, "--env ", 6) == 0 )
+      {
+	putenv(strdup(arg+6));
       }
       else
         die("Unknown option: %s", arg);

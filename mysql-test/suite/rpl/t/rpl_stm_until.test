@@ -19,13 +19,19 @@
 
 -- source include/have_binlog_format_mixed_or_statement.inc
 -- source include/master-slave.inc
+-- source include/not_mts_slave_parallel_workers.inc
 
 # Test is dependent on binlog positions
+
+call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+# prepare version for substitutions
+let $VERSION=`select version()`;
 
 # Stop slave before it starts replication.  Also sync with master
 # to avoid nondeterministic behaviour.
 --echo [on slave]
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 --source include/stop_slave.inc
 
 --echo ==== Create some events on master ====
@@ -87,7 +93,7 @@ start slave;
 --echo [on master]
 connection master;
 --echo [on slave]
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 --source include/stop_slave.inc
 
 --let $exec_log_pos_1= query_get_value(SHOW SLAVE STATUS, Exec_Master_Log_Pos, 1)
@@ -121,6 +127,11 @@ start slave sql_thread;
 start slave until master_log_file='master-bin.000001', master_log_pos=776;
 
 #
+# Note: The test for START SLAVE UNTIL SQL_AFTER_MTS_GAPS is located
+#       in rpl_parallel_start_stop.test
+#
+
+#
 # bug#47210  first execution of "start slave until" stops too early  
 #
 # testing that a slave rotate event that is caused by stopping the slave
@@ -133,6 +144,7 @@ source include/stop_slave.inc;
 drop table if exists t1;
 --enable_warnings
 reset slave;
+RESET MASTER;
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval change master to master_host='127.0.0.1',master_port=$MASTER_MYPORT, master_user='root'; 
 

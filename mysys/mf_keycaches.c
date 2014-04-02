@@ -1,4 +1,4 @@
-/* Copyright (c) 2003-2007 MySQL AB
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Handling of multiple key caches
@@ -53,9 +53,7 @@ typedef struct st_safe_hash_entry
 
 typedef struct st_safe_hash_with_default
 {
-#ifdef THREAD
   rw_lock_t mutex;
-#endif
   HASH hash;
   uchar *default_value;
   SAFE_HASH_ENTRY *root;
@@ -71,7 +69,7 @@ typedef struct st_safe_hash_with_default
 static void safe_hash_entry_free(SAFE_HASH_ENTRY *entry)
 {
   DBUG_ENTER("free_assign_entry");
-  my_free((uchar*) entry, MYF(0));
+  my_free(entry);
   DBUG_VOID_RETURN;
 }
 
@@ -108,9 +106,9 @@ static my_bool safe_hash_init(SAFE_HASH *hash, uint elements,
 			      uchar *default_value)
 {
   DBUG_ENTER("safe_hash");
-  if (hash_init(&hash->hash, &my_charset_bin, elements,
-		0, 0, (hash_get_key) safe_hash_entry_get,
-		(void (*)(void*)) safe_hash_entry_free, 0))
+  if (my_hash_init(&hash->hash, &my_charset_bin, elements,
+                   0, 0, (my_hash_get_key) safe_hash_entry_get,
+                   (void (*)(void*)) safe_hash_entry_free, 0))
   {
     hash->default_value= 0;
     DBUG_RETURN(1);
@@ -137,7 +135,7 @@ static void safe_hash_free(SAFE_HASH *hash)
   */
   if (hash->default_value)
   {
-    hash_free(&hash->hash);
+    my_hash_free(&hash->hash);
     rwlock_destroy(&hash->mutex);
     hash->default_value=0;
   }
@@ -152,7 +150,7 @@ static uchar *safe_hash_search(SAFE_HASH *hash, const uchar *key, uint length)
   uchar *result;
   DBUG_ENTER("safe_hash_search");
   rw_rdlock(&hash->mutex);
-  result= hash_search(&hash->hash, key, length);
+  result= my_hash_search(&hash->hash, key, length);
   rw_unlock(&hash->mutex);
   if (!result)
     result= hash->default_value;
@@ -192,7 +190,7 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
   DBUG_PRINT("enter",("key: %.*s  data: 0x%lx", length, key, (long) data));
 
   rw_wrlock(&hash->mutex);
-  entry= (SAFE_HASH_ENTRY*) hash_search(&hash->hash, key, length);
+  entry= (SAFE_HASH_ENTRY*) my_hash_search(&hash->hash, key, length);
 
   if (data == hash->default_value)
   {
@@ -206,7 +204,7 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
     /* unlink entry from list */
     if ((*entry->prev= entry->next))
       entry->next->prev= entry->prev;
-    hash_delete(&hash->hash, (uchar*) entry);
+    my_hash_delete(&hash->hash, (uchar*) entry);
     goto end;
   }
   if (entry)
@@ -234,7 +232,7 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
     if (my_hash_insert(&hash->hash, (uchar*) entry))
     {
       /* This can only happen if hash got out of memory */
-      my_free((char*) entry, MYF(0));
+      my_free(entry);
       error= 1;
       goto end;
     }
@@ -277,7 +275,7 @@ static void safe_hash_change(SAFE_HASH *hash, uchar *old_data, uchar *new_data)
       {
         if ((*entry->prev= entry->next))
           entry->next->prev= entry->prev;
-	hash_delete(&hash->hash, (uchar*) entry);
+	my_hash_delete(&hash->hash, (uchar*) entry);
       }
       else
 	entry->data= new_data;

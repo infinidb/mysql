@@ -43,12 +43,14 @@
 #
 #    [--let $rpl_server_count= 7]
 #    --let $rpl_topology= 1->2->3->1->4, 2->5, 6->7
+#    [--let $rpl_extra_connections_per_server= 1]
 #    [--let $rpl_check_server_ids= 1]
 #    [--let $rpl_skip_change_master= 1]
 #    [--let $rpl_skip_start_slave= 1]
 #    [--let $rpl_skip_reset_master_and_slave= 1]
 #    [--let $rpl_debug= 1]
 #    [--let $slave_timeout= NUMBER]
+#    [--let $use_gtids= 1]
 #    --source include/rpl_init.inc
 #
 #    Parameters:
@@ -64,6 +66,12 @@
 #      This file will configure S(i+1) to be a slave of S(i).  If you
 #      want to specify the empty topology (no server replicates at
 #      all), you have to set $rpl_topology=none.
+#
+#    $rpl_extra_connections_per_server
+#      By default, this script creates connections server_N and
+#      server_N_1.  If you can set this variable to a number, the
+#      script creates:
+#      server_N, server_N_1, ..., server_N_$rpl_extra_connections_per_server
 #
 #    $rpl_check_server_ids
 #      If $rpl_check_server_ids is set, this script checks that the
@@ -96,6 +104,9 @@
 #      Timeout used when waiting for the slave threads to start.
 #      See include/wait_for_slave_param.inc
 #
+#    $use_gtids
+#      Use option MASTER_AUTO_POSITION = 1 to CHANGE MASTER.
+#
 #
 # ==== Side effects ====
 #
@@ -115,32 +126,41 @@ if ($rpl_debug)
 }
 
 # Allow $MASTER_MYPORT as alias for $SERVER_MYPORT_1
-if (`SELECT '$SERVER_MYPORT_1' = ''`)
+if (!$SERVER_MYPORT_1)
 {
   --let SERVER_MYPORT_1= $MASTER_MYPORT
 }
 # Allow $SLAVE_MYPORT as alias for $SERVER_MYPORT_2
-if (`SELECT '$SERVER_MYPORT_2' = ''`)
+if (!$SERVER_MYPORT_2)
 {
   --let SERVER_MYPORT_2= $SLAVE_MYPORT
 }
 # Allow $MASTER_MYPORT1 as alias for $SERVER_MYPORT_3
 # (this alias is used by rpl_ndb tests)
-if (`SELECT '$SERVER_MYPORT_3' = ''`)
+if (!$SERVER_MYPORT_3)
 {
   --let SERVER_MYPORT_3= $MASTER_MYPORT1
 }
 # Allow $SLAVE_MYPORT1 as alias for $SERVER_MYPORT_4
 # (this alias is used by rpl_ndb tests)
-if (`SELECT '$SERVER_MYPORT_4' = ''`)
+if (!$SERVER_MYPORT_4)
 {
   --let SERVER_MYPORT_4= $SLAVE_MYPORT1
 }
 # Check that $rpl_server_count is set
 if (!$rpl_server_count)
 {
-  --let $_compute_rpl_server_count= `SELECT REPLACE('$rpl_topology', '->', ',')`
-  --let $rpl_server_count= `SELECT GREATEST($_compute_rpl_server_count)`
+  --let $rpl_server_count= `SELECT REPLACE('$rpl_topology', '->', ',')`
+  if (`SELECT LOCATE(',', '$rpl_server_count')`)
+  {
+    --let $rpl_server_count= `SELECT GREATEST($rpl_server_count)`
+  }
+}
+
+--let $_rpl_extra_connections_per_server= $rpl_extra_connections_per_server
+if ($_rpl_extra_connections_per_server == '')
+{
+  --let $_rpl_extra_connections_per_server= 1
 }
 
 
@@ -159,15 +179,20 @@ if (!$rpl_debug)
 # Create two connections to each server; reset master/slave, select
 # database, set autoinc variables.
 --let $_rpl_server= $rpl_server_count
---let $_rpl_one= _1
+--let $underscore= _
 while ($_rpl_server)
 {
   # Connect.
   --let $rpl_server_number= $_rpl_server
   --let $rpl_connection_name= server_$_rpl_server
   --source include/rpl_connect.inc
-  --let $rpl_connection_name= server_$_rpl_server$_rpl_one
-  --source include/rpl_connect.inc
+  --let $_rpl_connection_number= 1
+  while ($_rpl_connection_number <= $_rpl_extra_connections_per_server)
+  {
+    --let $rpl_connection_name= server_$_rpl_server$underscore$_rpl_connection_number
+    --source include/rpl_connect.inc
+    --inc $_rpl_connection_number
+  }
 
   # Configure server.
   --let $rpl_connection_name= server_$_rpl_server
@@ -220,6 +245,10 @@ if ($rpl_check_server_ids)
 
 # $rpl_master_list must be set so that include/rpl_change_topology.inc
 # knows which servers are initialized and not.
+if (!`SELECT COUNT(*) = 0 OR VARIABLE_VALUE != 'ON' FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'GTID_MODE'`)
+{
+  --let $use_gtids=1
+}
 --let $rpl_master_list= `SELECT REPEAT('x', $rpl_server_count * LENGTH($rpl_server_count))`
 --source include/rpl_change_topology.inc
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002-2007 MySQL AB
+/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Testing of the basic functions of a MyISAM rtree table         */
 /* Written by Alex Barkov who has a shared copyright to this code */
@@ -147,7 +147,7 @@ static int run_test(const char *filename)
   if (!silent)
     printf("- Creating isam-file\n");
   
-  bzero((char*) &create_info,sizeof(create_info));
+  memset(&create_info, 0, sizeof(create_info));
   create_info.max_rows=10000000;
   
   if (mi_create(filename,
@@ -193,7 +193,7 @@ static int run_test(const char *filename)
     my_errno=0;
     create_record(record,i);
     
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rkey(file,read_record,0,record+1,0,HA_READ_MBR_EQUAL);
     
     if (error && error!=HA_ERR_KEY_NOT_FOUND)
@@ -214,7 +214,7 @@ static int run_test(const char *filename)
   for (i=0; i < nrecords/4; i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -236,7 +236,7 @@ static int run_test(const char *filename)
   for (i=0; i < (nrecords - nrecords/4) ; i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -349,7 +349,7 @@ static int read_with_pos (MI_INFO * file,int silent)
   for (i=0;;i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -364,25 +364,6 @@ static int read_with_pos (MI_INFO * file,int silent)
   }
   return 0;
 }
-
-
-#ifdef NOT_USED
-static void bprint_record(char * record,
-			  my_off_t offs __attribute__((unused)),
-			  const char * tail)
-{
-  int i;
-  char * pos;
-  i=(unsigned char)record[0];
-  printf("%02X ",i);
-  
-  for( pos=record+1, i=0; i<32; i++,pos++){
-    int b=(unsigned char)*pos;
-    printf("%02X",b);
-  }
-  printf("%s",tail);
-}
-#endif
 
 
 static void print_record(uchar * record,
@@ -413,7 +394,7 @@ static void create_record1(uchar *record,uint rownr)
    uchar * pos;
    double c=rownr+10;
    
-   bzero((char*) record,MAX_REC_LENGTH);
+   memset(record, 0, MAX_REC_LENGTH);
    record[0]=0x01; /* DEL marker */
 
    for (pos=record+1, i=0; i<2*ndims; i++)
@@ -424,30 +405,6 @@ static void create_record1(uchar *record,uint rownr)
    }
 }
 
-#ifdef NOT_USED
-
-static void create_record0(uchar *record,uint rownr)
-{
-   int i;
-   char * pos;
-   double c=rownr+10;
-   double c0=0;
-   
-   bzero((char*) record,MAX_REC_LENGTH);
-   record[0]=0x01; /* DEL marker */
-
-   for ( pos=record+1, i=0; i<ndims; i++)
-   {
-      memcpy(pos,&c0,sizeof(c0));
-      float8store(pos,c0);
-      pos+=sizeof(c0);
-      memcpy(pos,&c,sizeof(c));
-      float8store(pos,c);
-      pos+=sizeof(c);
-   }
-}
-
-#endif
 
 static void create_record(uchar *record,uint rownr)
 {
@@ -468,3 +425,5 @@ int main(int argc __attribute__((unused)),char *argv[] __attribute__((unused)))
   exit(0);
 }
 #endif /*HAVE_RTREE_KEYS*/
+
+#include "mi_extrafunc.h"

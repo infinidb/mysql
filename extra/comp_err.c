@@ -35,6 +35,7 @@
 
 #define MAX_ROWS  1000
 #define HEADER_LENGTH 32                /* Length of header in errmsg.sys */
+#define ERRMSG_VERSION 3                /* Version number of errmsg.sys */
 #define DEFAULT_CHARSET_DIR "../sql/share/charsets"
 #define ER_PREFIX "ER_"
 #define WARN_PREFIX "WARN_"
@@ -42,14 +43,20 @@ static char *OUTFILE= (char*) "errmsg.sys";
 static char *HEADERFILE= (char*) "mysqld_error.h";
 static char *NAMEFILE= (char*) "mysqld_ername.h";
 static char *STATEFILE= (char*) "sql_state.h";
-static char *TXTFILE= (char*) "../sql/share/errmsg.txt";
+static char *TXTFILE= (char*) "../sql/share/errmsg-utf8.txt";
 static char *DATADIRECTORY= (char*) "../sql/share/";
 #ifndef DBUG_OFF
 static char *default_dbug_option= (char*) "d:t:O,/tmp/comp_err.trace";
 #endif
 
-/* Header for errmsg.sys files */
-uchar file_head[]= { 254, 254, 2, 1 };
+/* 
+  Header for errmsg.sys files 
+  Byte 3 is treated as version number for errmsg.sys
+    With this version ERRMSG_VERSION = 3, number of bytes 
+    used for the length, count and offset are increased 
+    from 2 bytes to 4 bytes.
+*/
+uchar file_head[]= { 254, 254, ERRMSG_VERSION, 1 };
 /* Store positions to each error message row to store in errmsg.sys header */
 uint file_pos[MAX_ROWS];
 
@@ -217,13 +224,35 @@ int main(int argc, char *argv[])
 }
 
 
+static void print_escaped_string(FILE *f, const char *str)
+{
+  const char *tmp = str;
+
+  while (tmp[0] != 0)
+  {
+    switch (tmp[0])
+    {
+      case '\\': fprintf(f, "\\\\"); break;
+      case '\'': fprintf(f, "\\\'"); break;
+      case '\"': fprintf(f, "\\\""); break;
+      case '\n': fprintf(f, "\\n"); break;
+      case '\r': fprintf(f, "\\r"); break;
+      default: fprintf(f, "%c", tmp[0]);
+    }
+    tmp++;
+  }
+}
+
+
 static int create_header_files(struct errors *error_head)
 {
-  uint er_last;
+  uint er_last= 0;
   FILE *er_definef, *sql_statef, *er_namef;
   struct errors *tmp_error;
+  struct message *er_msg;
+  const char *er_text;
+
   DBUG_ENTER("create_header_files");
-  LINT_INIT(er_last);
 
   if (!(er_definef= my_fopen(HEADERFILE, O_WRONLY, MYF(MY_WME))))
   {
@@ -263,9 +292,12 @@ static int create_header_files(struct errors *error_head)
 	      "{ %-40s,\"%s\", \"%s\" },\n", tmp_error->er_name,
 	      tmp_error->sql_code1, tmp_error->sql_code2);
     /*generating er_name file */
-    fprintf(er_namef, "{ \"%s\", %d },\n", tmp_error->er_name,
-	    tmp_error->d_code);
-
+    er_msg= find_message(tmp_error, default_language, 0);
+    er_text = (er_msg ? er_msg->text : "");
+    fprintf(er_namef, "{ \"%s\", %d, \"", tmp_error->er_name,
+            tmp_error->d_code);
+    print_escaped_string(er_namef, er_text);
+    fprintf(er_namef, "\" },\n");
   }
   /* finishing off with mysqld_error.h */
   fprintf(er_definef, "#define ER_ERROR_LAST %d\n", er_last);
@@ -322,8 +354,8 @@ static int create_sys_files(struct languages *lang_head,
     if (!(to= my_fopen(outfile, O_WRONLY | FILE_BINARY, MYF(MY_WME))))
       DBUG_RETURN(1);
 
-    /* 2 is for 2 bytes to store row position / error message */
-    start_pos= (long) (HEADER_LENGTH + row_count * 2);
+    /* 4 is for 4 bytes to store row position / error message */
+    start_pos= (long) (HEADER_LENGTH + row_count * 4);
     fseek(to, start_pos, 0);
     row_nr= 0;
     for (tmp_error= error_head; tmp_error; tmp_error= tmp_error->next_error)
@@ -347,12 +379,12 @@ static int create_sys_files(struct languages *lang_head,
     }
 
     /* continue with header of the errmsg.sys file */
-    length= ftell(to) - HEADER_LENGTH - row_count * 2;
-    bzero((uchar*) head, HEADER_LENGTH);
+    length= ftell(to) - HEADER_LENGTH - row_count * 4;
+    memset(head, 0, HEADER_LENGTH);
     bmove((uchar *) head, (uchar *) file_head, 4);
     head[4]= 1;
-    int2store(head + 6, length);
-    int2store(head + 8, row_count);
+    int4store(head + 6, length);
+    int4store(head + 10, row_count);
     head[30]= csnum;
 
     my_fseek(to, 0l, MY_SEEK_SET, MYF(0));
@@ -361,8 +393,8 @@ static int create_sys_files(struct languages *lang_head,
 
     for (i= 0; i < row_count; i++)
     {
-      int2store(head, file_pos[i]);
-      if (my_fwrite(to, (uchar*) head, 2, MYF(MY_WME | MY_FNABP)))
+      int4store(head, file_pos[i]);
+      if (my_fwrite(to, (uchar*) head, 4, MYF(MY_WME | MY_FNABP)))
 	goto err;
     }
     my_fclose(to, MYF(0));
@@ -381,15 +413,15 @@ static void clean_up(struct languages *lang_head, struct errors *error_head)
   struct errors *tmp_error, *next_error;
   uint count, i;
 
-  my_free((uchar*) default_language, MYF(0));
+  my_free((void*) default_language);
 
   for (tmp_lang= lang_head; tmp_lang; tmp_lang= next_language)
   {
     next_language= tmp_lang->next_lang;
-    my_free(tmp_lang->lang_short_name, MYF(0));
-    my_free(tmp_lang->lang_long_name, MYF(0));
-    my_free(tmp_lang->charset, MYF(0));
-    my_free((uchar*) tmp_lang, MYF(0));
+    my_free(tmp_lang->lang_short_name);
+    my_free(tmp_lang->lang_long_name);
+    my_free(tmp_lang->charset);
+    my_free(tmp_lang);
   }
 
   for (tmp_error= error_head; tmp_error; tmp_error= next_error)
@@ -400,17 +432,17 @@ static void clean_up(struct languages *lang_head, struct errors *error_head)
     {
       struct message *tmp;
       tmp= dynamic_element(&tmp_error->msg, i, struct message*);
-      my_free((uchar*) tmp->lang_short_name, MYF(0));
-      my_free((uchar*) tmp->text, MYF(0));
+      my_free(tmp->lang_short_name);
+      my_free(tmp->text);
     }
 
     delete_dynamic(&tmp_error->msg);
     if (tmp_error->sql_code1[0])
-      my_free((uchar*) tmp_error->sql_code1, MYF(0));
+      my_free((void*) tmp_error->sql_code1);
     if (tmp_error->sql_code2[0])
-      my_free((uchar*) tmp_error->sql_code2, MYF(0));
-    my_free((uchar*) tmp_error->er_name, MYF(0));
-    my_free((uchar*) tmp_error, MYF(0));
+      my_free((void*) tmp_error->sql_code2);
+    my_free((void*) tmp_error->er_name);
+    my_free(tmp_error);
   }
 }
 
@@ -490,7 +522,7 @@ static int parse_input_file(const char *file_name, struct errors **top_error,
 		current_error->er_name, current_message.lang_short_name);
 	DBUG_RETURN(0);
       }
-      if (insert_dynamic(&current_error->msg, (uchar *) & current_message))
+      if (insert_dynamic(&current_error->msg, &current_message))
 	DBUG_RETURN(0);
       continue;
     }
@@ -553,7 +585,7 @@ static uint parse_error_offset(char *str)
 
   end= 0;
   ioffset= (uint) my_strtoll10(soffset, &end, &error);
-  my_free((uchar*) soffset, MYF(0));
+  my_free(soffset);
   DBUG_RETURN(ioffset);
 }
 
@@ -678,7 +710,7 @@ static ha_checksum checksum_format_specifier(const char* msg)
       case 'u':
       case 'x':
       case 's':
-        chksum= my_checksum(chksum, start, (uint) (p + 1 - start));
+        chksum= my_checksum(chksum, (uchar*) start, (uint) (p + 1 - start));
         start= 0; /* Not in format specifier anymore */
         break;
 
@@ -1057,11 +1089,11 @@ static char *parse_text_line(char *pos)
       switch (*++pos) {
       case '\\':
       case '"':
-	VOID(memmove (pos - 1, pos, len - (row - pos)));
+	(void) memmove (pos - 1, pos, len - (row - pos));
 	break;
       case 'n':
 	pos[-1]= '\n';
-	VOID(memmove (pos, pos + 1, len - (row - pos)));
+	(void) memmove (pos, pos + 1, len - (row - pos));
 	break;
       default:
 	if (*pos >= '0' && *pos < '8')
@@ -1071,10 +1103,10 @@ static char *parse_text_line(char *pos)
 	    nr= nr * 8 + (*(pos++) - '0');
 	  pos -= i;
 	  pos[-1]= nr;
-	  VOID(memmove (pos, pos + i, len - (row - pos)));
+	  (void) memmove (pos, pos + i, len - (row - pos));
 	}
 	else if (*pos)
-	  VOID(memmove (pos - 1, pos, len - (row - pos)));		/* Remove '\' */
+          (void) memmove (pos - 1, pos, len - (row - pos));             /* Remove '\' */
       }
     }
     else

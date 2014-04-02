@@ -1,4 +1,4 @@
-/* Copyright (c) 2005-2008 MySQL AB
+/* Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -10,16 +10,15 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #ifndef TABLE_MAPPING_H
 #define TABLE_MAPPING_H
 
 /* Forward declarations */
 #ifndef MYSQL_CLIENT
-struct st_table;
-typedef st_table TABLE;
+struct TABLE;
 #else
 class Table_map_log_event;
 typedef Table_map_log_event TABLE;
@@ -53,6 +52,8 @@ void free_table_map_log_event(TABLE *table);
   A dedicated MEM_ROOT needs to be used, see below.
 */
 
+#include "hash.h"                               /* HASH */
+
 class table_mapping {
 
 private:
@@ -69,10 +70,10 @@ public:
   table_mapping();
   ~table_mapping();
 
-  TABLE* get_table(ulong table_id);
+  TABLE* get_table(ulonglong table_id);
 
-  int       set_table(ulong table_id, TABLE* table);
-  int       remove_table(ulong table_id);
+  int       set_table(ulonglong table_id, TABLE* table);
+  int       remove_table(ulonglong table_id);
   void      clear_tables();
   ulong     count() const { return m_table_ids.records; }
 
@@ -82,18 +83,18 @@ private:
     it, which only works for PODs)
   */
   struct entry { 
-    ulong table_id;
+    ulonglong table_id;
     union {
       TABLE *table;
       entry *next;
     };
   };
 
-  entry *find_entry(ulong table_id)
+  entry *find_entry(ulonglong table_id)
   {
-    return (entry *)hash_search(&m_table_ids,
-				(uchar*)&table_id,
-				sizeof(table_id));
+    return (entry *) my_hash_search(&m_table_ids,
+                                    (uchar*)&table_id,
+                                    sizeof(table_id));
   }
   int expand();
 

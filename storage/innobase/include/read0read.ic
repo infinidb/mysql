@@ -1,81 +1,148 @@
-/******************************************************
-Cursor read
+/*****************************************************************************
 
-(c) 1997 Innobase Oy
+Copyright (c) 1997, 2012, Oracle and/or its affiliates. All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+
+*****************************************************************************/
+
+/**************************************************//**
+@file include/read0read.ic
+Cursor read
 
 Created 2/16/1997 Heikki Tuuri
 *******************************************************/
 
-/*************************************************************************
-Gets the nth trx id in a read view. */
-UNIV_INLINE
-dulint
-read_view_get_nth_trx_id(
-/*=====================*/
-				/* out: trx id */
-	read_view_t*	view,	/* in: read view */
-	ulint		n)	/* in: position */
-{
-	ut_ad(n < view->n_trx_ids);
+#include "trx0sys.h"
 
-	return(*(view->trx_ids + n));
+#ifdef UNIV_DEBUG
+/*********************************************************************//**
+Validates a read view object. */
+static
+bool
+read_view_validate(
+/*===============*/
+	const read_view_t*	view)	/*!< in: view to validate */
+{
+	ut_ad(mutex_own(&trx_sys->mutex));
+
+	/* Check that the view->trx_ids array is in descending order. */
+	for (ulint i = 1; i < view->n_trx_ids; ++i) {
+
+		ut_a(view->trx_ids[i] < view->trx_ids[i - 1]);
+	}
+
+	return(true);
 }
 
-/*************************************************************************
-Sets the nth trx id in a read view. */
-UNIV_INLINE
-void
-read_view_set_nth_trx_id(
-/*=====================*/
-	read_view_t*	view,	/* in: read view */
-	ulint		n,	/* in: position */
-	dulint		trx_id)	/* in: trx id to set */
+/** Functor to validate the view list. */
+struct	ViewCheck {
+
+	ViewCheck() : m_prev_view(0) { }
+
+	void	operator()(const read_view_t* view)
+	{
+		ut_a(m_prev_view == NULL
+		     || m_prev_view->low_limit_no >= view->low_limit_no);
+
+		m_prev_view = view;
+	}
+
+	const read_view_t*	m_prev_view;
+};
+
+/*********************************************************************//**
+Validates a read view list. */
+static
+bool
+read_view_list_validate(void)
+/*=========================*/
 {
-	ut_ad(n < view->n_trx_ids);
+	ut_ad(mutex_own(&trx_sys->mutex));
 
-	*(view->trx_ids + n) = trx_id;
+	ut_list_map(trx_sys->view_list, &read_view_t::view_list, ViewCheck());
+
+	return(true);
 }
+#endif /* UNIV_DEBUG */
 
-/*************************************************************************
-Checks if a read view sees the specified transaction. */
+/*********************************************************************//**
+Checks if a read view sees the specified transaction.
+@return	true if sees */
 UNIV_INLINE
-ibool
+bool
 read_view_sees_trx_id(
 /*==================*/
-				/* out: TRUE if sees */
-	read_view_t*	view,	/* in: read view */
-	dulint		trx_id)	/* in: trx id */
+	const read_view_t*	view,	/*!< in: read view */
+	trx_id_t		trx_id)	/*!< in: trx id */
 {
-	ulint	n_ids;
-	int	cmp;
-	ulint	i;
+	if (trx_id < view->up_limit_id) {
 
-	if (ut_dulint_cmp(trx_id, view->up_limit_id) < 0) {
+		return(true);
+	} else if (trx_id >= view->low_limit_id) {
 
-		return(TRUE);
+		return(false);
+	} else {
+		ulint	lower = 0;
+		ulint	upper = view->n_trx_ids - 1;
+
+		ut_a(view->n_trx_ids > 0);
+
+		do {
+			ulint		mid	= (lower + upper) >> 1;
+			trx_id_t	mid_id	= view->trx_ids[mid];
+
+			if (mid_id == trx_id) {
+				return(FALSE);
+			} else if (mid_id < trx_id) {
+				if (mid > 0) {
+					upper = mid - 1;
+				} else {
+					break;
+				}
+			} else {
+				lower = mid + 1;
+			}
+		} while (lower <= upper);
 	}
 
-	if (ut_dulint_cmp(trx_id, view->low_limit_id) >= 0) {
+	return(true);
+}
 
-		return(FALSE);
-	}
+/*********************************************************************//**
+Remove a read view from the trx_sys->view_list. */
+UNIV_INLINE
+void
+read_view_remove(
+/*=============*/
+	read_view_t*	view,		/*!< in: read view, can be 0 */
+	bool		own_mutex)	/*!< in: true if caller owns the
+					trx_sys_t::mutex */
+{
+	if (view != 0) {
+		if (!own_mutex) {
+			mutex_enter(&trx_sys->mutex);
+		}
 
-	/* We go through the trx ids in the array smallest first: this order
-	may save CPU time, because if there was a very long running
-	transaction in the trx id array, its trx id is looked at first, and
-	the first two comparisons may well decide the visibility of trx_id. */
+		ut_ad(read_view_validate(view));
 
-	n_ids = view->n_trx_ids;
+		UT_LIST_REMOVE(view_list, trx_sys->view_list, view);
 
-	for (i = 0; i < n_ids; i++) {
+		ut_ad(read_view_list_validate());
 
-		cmp = ut_dulint_cmp(
-			trx_id,
-			read_view_get_nth_trx_id(view, n_ids - i - 1));
-		if (cmp <= 0) {
-			return(cmp < 0);
+		if (!own_mutex) {
+			mutex_exit(&trx_sys->mutex);
 		}
 	}
-
-	return(TRUE);
 }
+

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -738,13 +738,9 @@ void build_certHashes(SSL& ssl, Hashes& hashes)
 // do process input requests, return 0 is done, 1 is call again to complete
 int DoProcessReply(SSL& ssl)
 {
-    // wait for input if blocking
-    if (!ssl.useSocket().wait()) {
-        ssl.SetError(receive_error);
-        return 0;
-    }
     uint ready = ssl.getSocket().get_ready();
-    if (!ready) return 1; 
+    if (!ready)
+      ready= 64;
 
     // add buffered data if its there
     input_buffer* buffered = ssl.useBuffers().TakeRawInput();
@@ -1158,6 +1154,8 @@ void sendCertificateRequest(SSL& ssl, BufferOutput buffer)
 void sendCertificateVerify(SSL& ssl, BufferOutput buffer)
 {
     if (ssl.GetError()) return;
+
+    if(ssl.getCrypto().get_certManager().sendBlankCert()) return;
 
     CertificateVerify  verify;
     verify.Build(ssl);

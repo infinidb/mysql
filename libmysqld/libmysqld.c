@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2001-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,15 +11,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
 #include <mysql.h>
-#include <mysql_embed.h>
 #include <mysqld_error.h>
 #include <my_pthread.h>
-#include "embedded_priv.h"
 #include <my_sys.h>
 #include <mysys_err.h>
 #include <m_string.h>
@@ -31,15 +26,13 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <time.h>
+#include <sql_common.h>
+#include "embedded_priv.h"
 #include "client_settings.h"
 #ifdef	 HAVE_PWD_H
 #include <pwd.h>
 #endif
-#if !defined(MSDOS) && !defined(__WIN__)
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
+#if !defined(__WIN__)
 #ifdef HAVE_SELECT_H
 #  include <select.h>
 #endif
@@ -57,7 +50,7 @@
 extern ulong net_buffer_length;
 extern ulong max_allowed_packet;
 
-#if defined(MSDOS) || defined(__WIN__)
+#if defined(__WIN__)
 #define ERRNO WSAGetLastError()
 #define perror(A)
 #else
@@ -80,17 +73,6 @@ static my_bool is_NT(void)
 }
 #endif
 
-/**************************************************************************
-** Shut down connection
-**************************************************************************/
-
-static void end_server(MYSQL *mysql)
-{
-  DBUG_ENTER("end_server");
-  free_old_query(mysql);
-  DBUG_VOID_RETURN;
-}
-
 
 int mysql_init_character_set(MYSQL *mysql);
 
@@ -99,13 +81,20 @@ mysql_real_connect(MYSQL *mysql,const char *host, const char *user,
 		   const char *passwd, const char *db,
 		   uint port, const char *unix_socket,ulong client_flag)
 {
-  char name_buff[USERNAME_LENGTH];
+  char name_buff[USERNAME_LENGTH + 1];
 
   DBUG_ENTER("mysql_real_connect");
-  DBUG_PRINT("enter",("host: %s  db: %s  user: %s",
+  DBUG_PRINT("enter",("host: %s  db: %s  user: %s (libmysqld)",
 		      host ? host : "(Null)",
 		      db ? db : "(Null)",
 		      user ? user : "(Null)"));
+
+  /* Test whether we're already connected */
+  if (mysql->server_version)
+  {
+    set_mysql_error(mysql, CR_ALREADY_CONNECTED, unknown_sqlstate);
+    DBUG_RETURN(0);
+  }
 
   if (!host || !host[0])
     host= mysql->options.host;
@@ -126,8 +115,8 @@ mysql_real_connect(MYSQL *mysql,const char *host, const char *user,
 			       (mysql->options.my_cnf_file ?
 				mysql->options.my_cnf_file : "my"),
 			       mysql->options.my_cnf_group);
-    my_free(mysql->options.my_cnf_file,MYF(MY_ALLOW_ZERO_PTR));
-    my_free(mysql->options.my_cnf_group,MYF(MY_ALLOW_ZERO_PTR));
+    my_free(mysql->options.my_cnf_file);
+    my_free(mysql->options.my_cnf_group);
     mysql->options.my_cnf_file=mysql->options.my_cnf_group=0;
   }
 
@@ -172,7 +161,11 @@ mysql_real_connect(MYSQL *mysql,const char *host, const char *user,
   client_flag|=CLIENT_CAPABILITIES;
   if (client_flag & CLIENT_MULTI_STATEMENTS)
     client_flag|= CLIENT_MULTI_RESULTS;
-  client_flag&= ~CLIENT_COMPRESS;
+  /*
+    no compression in embedded as we don't send any data,
+    and no pluggable auth, as we cannot do a client-server dialog
+  */
+  client_flag&= ~(CLIENT_COMPRESS | CLIENT_PLUGIN_AUTH);
   if (db)
     client_flag|=CLIENT_CONNECT_WITH_DB;
 
@@ -219,7 +212,7 @@ error:
   {
     /* Free alloced memory */
     my_bool free_me=mysql->free_me;
-    end_server(mysql);
+    free_old_query(mysql); 
     mysql->free_me=0;
     mysql_close(mysql);
     mysql->free_me=free_me;

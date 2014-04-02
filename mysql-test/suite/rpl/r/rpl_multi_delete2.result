@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 set sql_log_bin=0;
 create database mysqltest_from;
@@ -12,10 +15,11 @@ DELETE alias FROM a alias WHERE alias.i=1;
 SELECT * FROM a;
 i
 insert into a values(2),(3);
-delete a alias FROM a alias where alias.i=2;
+delete alias FROM a alias where alias.i=2;
 select * from a;
 i
 3
+include/sync_slave_sql_with_master.inc
 use mysqltest_to;
 select * from a;
 i

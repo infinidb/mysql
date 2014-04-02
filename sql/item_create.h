@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +11,14 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Functions to create an item. Used by sql/sql_yacc.yy */
 
 #ifndef ITEM_CREATE_H
 #define ITEM_CREATE_H
+
+typedef struct st_udf_func udf_func;
 
 /**
   Public function builder interface.
@@ -163,6 +164,15 @@ protected:
 Item *
 create_func_cast(THD *thd, Item *a, Cast_target cast_type,
                  const char *len, const char *dec,
-                 CHARSET_INFO *cs);
+                 const CHARSET_INFO *cs);
+
+Item *create_temporal_literal(THD *thd,
+                              const char *str, uint length,
+                              const CHARSET_INFO *cs,
+                              enum_field_types type, bool send_error);
+
+int item_create_init();
+void item_create_cleanup();
+
 #endif
 

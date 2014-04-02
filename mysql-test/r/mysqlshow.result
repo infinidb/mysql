@@ -90,6 +90,8 @@ Database: information_schema
 | GLOBAL_STATUS                         |
 | GLOBAL_VARIABLES                      |
 | KEY_COLUMN_USAGE                      |
+| OPTIMIZER_TRACE                       |
+| PARAMETERS                            |
 | PARTITIONS                            |
 | PLUGINS                               |
 | PROCESSLIST                           |
@@ -102,11 +104,40 @@ Database: information_schema
 | SESSION_VARIABLES                     |
 | STATISTICS                            |
 | TABLES                                |
+| TABLESPACES                           |
 | TABLE_CONSTRAINTS                     |
 | TABLE_PRIVILEGES                      |
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |
+| INNODB_LOCKS                          |
+| INNODB_TRX                            |
+| INNODB_SYS_DATAFILES                  |
+| INNODB_LOCK_WAITS                     |
+| INNODB_SYS_TABLESTATS                 |
+| INNODB_CMP                            |
+| INNODB_METRICS                        |
+| INNODB_CMP_RESET                      |
+| INNODB_CMP_PER_INDEX                  |
+| INNODB_CMPMEM_RESET                   |
+| INNODB_FT_DELETED                     |
+| INNODB_BUFFER_PAGE_LRU                |
+| INNODB_SYS_FOREIGN                    |
+| INNODB_SYS_COLUMNS                    |
+| INNODB_SYS_INDEXES                    |
+| INNODB_FT_DEFAULT_STOPWORD            |
+| INNODB_SYS_FIELDS                     |
+| INNODB_CMP_PER_INDEX_RESET            |
+| INNODB_BUFFER_PAGE                    |
+| INNODB_CMPMEM                         |
+| INNODB_FT_INDEX_TABLE                 |
+| INNODB_FT_BEING_DELETED               |
+| INNODB_SYS_TABLESPACES                |
+| INNODB_FT_INDEX_CACHE                 |
+| INNODB_SYS_FOREIGN_COLS               |
+| INNODB_SYS_TABLES                     |
+| INNODB_BUFFER_POOL_STATS              |
+| INNODB_FT_CONFIG                      |
 +---------------------------------------+
 Database: INFORMATION_SCHEMA
 +---------------------------------------+
@@ -123,6 +154,8 @@ Database: INFORMATION_SCHEMA
 | GLOBAL_STATUS                         |
 | GLOBAL_VARIABLES                      |
 | KEY_COLUMN_USAGE                      |
+| OPTIMIZER_TRACE                       |
+| PARAMETERS                            |
 | PARTITIONS                            |
 | PLUGINS                               |
 | PROCESSLIST                           |
@@ -135,11 +168,40 @@ Database: INFORMATION_SCHEMA
 | SESSION_VARIABLES                     |
 | STATISTICS                            |
 | TABLES                                |
+| TABLESPACES                           |
 | TABLE_CONSTRAINTS                     |
 | TABLE_PRIVILEGES                      |
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |
+| INNODB_LOCKS                          |
+| INNODB_TRX                            |
+| INNODB_SYS_DATAFILES                  |
+| INNODB_LOCK_WAITS                     |
+| INNODB_SYS_TABLESTATS                 |
+| INNODB_CMP                            |
+| INNODB_METRICS                        |
+| INNODB_CMP_RESET                      |
+| INNODB_CMP_PER_INDEX                  |
+| INNODB_CMPMEM_RESET                   |
+| INNODB_FT_DELETED                     |
+| INNODB_BUFFER_PAGE_LRU                |
+| INNODB_SYS_FOREIGN                    |
+| INNODB_SYS_COLUMNS                    |
+| INNODB_SYS_INDEXES                    |
+| INNODB_FT_DEFAULT_STOPWORD            |
+| INNODB_SYS_FIELDS                     |
+| INNODB_CMP_PER_INDEX_RESET            |
+| INNODB_BUFFER_PAGE                    |
+| INNODB_CMPMEM                         |
+| INNODB_FT_INDEX_TABLE                 |
+| INNODB_FT_BEING_DELETED               |
+| INNODB_SYS_TABLESPACES                |
+| INNODB_FT_INDEX_CACHE                 |
+| INNODB_SYS_FOREIGN_COLS               |
+| INNODB_SYS_TABLES                     |
+| INNODB_BUFFER_POOL_STATS              |
+| INNODB_FT_CONFIG                      |
 +---------------------------------------+
 Wildcard: inf_rmation_schema
 +--------------------+
@@ -147,4 +209,25 @@ Wildcard: inf_rmation_schema
 +--------------------+
 | information_schema |
 +--------------------+
-End of 5.0 tests
+Database: test
++--------+
+| Tables |
++--------+
++--------+
+#
+# Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
+#
+DROP DATABASE IF EXISTS b12688860_db;
+CREATE DATABASE b12688860_db;
+CREATE TABLE b12688860_db.b12688860_tab (c1 INT);
+Warning: Using a password on the command line interface can be insecure.
+Database: b12688860_db
++---------------+
+|    Tables     |
++---------------+
+| b12688860_tab |
++---------------+
+DROP TABLE b12688860_db.b12688860_tab;
+DROP DATABASE b12688860_db;
+
+End of tests

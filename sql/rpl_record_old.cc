@@ -1,5 +1,4 @@
-/* Copyright (c) 2007 MySQL AB
-   Use is subject to license terms.
+/* Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -14,9 +13,11 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"                      // REQUIRED by other includes
 #include "rpl_rli.h"
 #include "rpl_record_old.h"
+#include "log_event.h"                          // Log_event_type
 
 size_t
 pack_row_old(TABLE *table, MY_BITMAP const* cols,

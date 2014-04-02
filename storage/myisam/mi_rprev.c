@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2004-2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "myisamdef.h"
 
@@ -39,7 +39,7 @@ int mi_rprev(MI_INFO *info, uchar *buf, int inx)
     DBUG_RETURN(my_errno);
   changed=_mi_test_if_changed(info);
   if (share->concurrent_insert)
-    rw_rdlock(&share->key_root_lock[inx]);
+    mysql_rwlock_rdlock(&share->key_root_lock[inx]);
   if (!flag)
     error=_mi_search_last(info, share->keyinfo+inx,
 			  share->state.key_root[inx]);
@@ -50,6 +50,33 @@ int mi_rprev(MI_INFO *info, uchar *buf, int inx)
   else
     error=_mi_search(info,share->keyinfo+inx,info->lastkey,
 		     USE_WHOLE_KEY, flag, share->state.key_root[inx]);
+
+  if (!error)
+  {
+    int res= 0;
+    while ((share->concurrent_insert && 
+            info->lastpos >= info->state->data_file_length) ||
+           (info->index_cond_func &&
+            !(res= mi_check_index_cond(info, inx, buf))))
+    {
+      /* 
+         Skip rows that are either inserted by other threads since
+         we got a lock or do not match pushed index conditions
+      */
+      if  ((error=_mi_search_next(info,share->keyinfo+inx,info->lastkey,
+                                  info->lastkey_length,
+                                  SEARCH_SMALLER,
+                                  share->state.key_root[inx])))
+        break;
+    }
+    if (!error && res == 2) 
+    {
+      if (share->concurrent_insert)
+        mysql_rwlock_unlock(&share->key_root_lock[inx]);
+      info->lastpos= HA_OFFSET_ERROR;
+      DBUG_RETURN(my_errno= HA_ERR_END_OF_FILE);
+    }
+  }
 
   if (share->concurrent_insert)
   {
@@ -65,8 +92,9 @@ int mi_rprev(MI_INFO *info, uchar *buf, int inx)
 	  break;
       }
     }
-    rw_unlock(&share->key_root_lock[inx]);
+    mysql_rwlock_unlock(&share->key_root_lock[inx]);
   }
+
   info->update&= (HA_STATE_CHANGED | HA_STATE_ROW_CHANGED);
   info->update|= HA_STATE_PREV_FOUND;
   if (error)

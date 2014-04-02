@@ -1,12 +1,10 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 SET @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
-drop procedure if exists p1;
-drop procedure if exists p2;
-drop function if exists f1;
-drop table if exists t1,t2;
-drop view if exists v1;
-create table t1 (a int);
+create table t1 (a int) engine = innodb;
 SET GLOBAL log_bin_trust_function_creators = 1;
 create procedure p1()
 begin
@@ -17,6 +15,7 @@ set spv=spv+1;
 end while;
 end//
 call p1();
+include/sync_slave_sql_with_master.inc
 SELECT * FROM t1 ORDER BY a;
 a
 1
@@ -34,12 +33,13 @@ a
 create procedure p2()
 begin
 declare a int default 4;
-create table t2 as select a;
+create table t2 engine = innodb as select a;
 end//
 call p2();
 SELECT * FROM t2 ORDER BY a;
 a
 4
+include/sync_slave_sql_with_master.inc
 SELECT * FROM t2 ORDER BY a;
 a
 4
@@ -78,7 +78,7 @@ a
 6
 7
 8
-create table t2(a int);
+create table t2(a int) engine = innodb;
 insert into t2 values (10),(11);
 SELECT a,f1(a) FROM t2 ORDER BY a;
 a	f1(a)
@@ -101,6 +101,7 @@ master:	7
 master:	8
 master:	10
 master:	11
+include/sync_slave_sql_with_master.inc
 SELECT 'slave:',a FROM t1 ORDER BY a;
 slave:	a
 slave:	1
@@ -131,6 +132,7 @@ SELECT 'master:',a FROM t1 ORDER BY a;
 master:	a
 master:	1
 master:	2
+include/sync_slave_sql_with_master.inc
 SELECT 'slave:',a FROM t1 ORDER BY a;
 slave:	a
 slave:	1
@@ -145,6 +147,7 @@ f1(?)
 SELECT 'master:',a FROM t1 ORDER BY a;
 master:	a
 master:	123
+include/sync_slave_sql_with_master.inc
 SELECT 'slave:',a FROM t1 ORDER BY a;
 slave:	a
 slave:	123
@@ -166,6 +169,7 @@ master:	6
 master:	6
 master:	15
 master:	15
+include/sync_slave_sql_with_master.inc
 SELECT 'slave:',a FROM t1 ORDER BY a;
 slave:	a
 slave:	6
@@ -217,6 +221,7 @@ master	100
 master	101
 master	101
 master	102
+include/sync_slave_sql_with_master.inc
 SELECT 'slave', a FROM t1 ORDER BY a;
 slave	a
 slave	10
@@ -232,6 +237,7 @@ drop table t1;
 drop function f1;
 drop function f2;
 drop procedure p1;
+include/sync_slave_sql_with_master.inc
 create table t2 (b BIT(7));
 create procedure sp_bug26199(bitvalue BIT(7))
 begin
@@ -262,6 +268,7 @@ E
 7F
 7F
 27
+include/sync_slave_sql_with_master.inc
 select hex(b) from t2;
 hex(b)
 E
@@ -273,5 +280,6 @@ drop table t2;
 drop procedure sp_bug26199;
 drop function sf_bug26199;
 SET @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
+include/sync_slave_sql_with_master.inc
 end of the tests
 include/rpl_end.inc

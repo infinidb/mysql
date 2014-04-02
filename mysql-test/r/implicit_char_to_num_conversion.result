@@ -16,6 +16,8 @@ SELECT HEX(c1) FROM t5 WHERE c1 != b'1' ORDER BY c1;
 HEX(c1)
 0
 2
+# In the following queries the string is compared as ASCII when
+# range access is used. See BUG#13727586.
 SELECT HEX(c1) FROM t5 WHERE c1 >= '1' ORDER BY c1;
 HEX(c1)
 1

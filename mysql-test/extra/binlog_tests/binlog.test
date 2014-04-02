@@ -7,10 +7,7 @@
 -- source include/have_innodb.inc
 -- source include/have_debug.inc
 
---disable_warnings
-drop table if exists t1, t2;
---enable_warnings
-reset master;
+RESET MASTER;
 
 create table t1 (a int) engine=innodb;
 create table t2 (a int) engine=innodb;
@@ -83,17 +80,22 @@ set @bcs = @@binlog_cache_size;
 set global binlog_cache_size=4096;
 reset master;
 
-create table t1 (a int) engine=innodb;
+create table t1 (a int, b char(255)) engine=innodb;
 
-let $1=400;
+flush status;
+show status like "binlog_cache_use";
+
+let $1=100;
 disable_query_log;
 begin;
 while ($1)
 {
- eval insert into t1 values( $1 );
+ eval insert into t1 values( $1, 'just to fill void to make transaction occupying at least two buffers of the trans cache' );
  dec $1;
 }
 commit;
+--echo *** the following must show the counter value = 1 ***
+show status like "binlog_cache_use";
 enable_query_log;
 
 --source include/show_binlog_events.inc
@@ -231,7 +233,17 @@ DELETE FROM user WHERE host='localhost' AND user='@#@';
 --enable_warnings
 
 use test;
+
+# Show binlog events on a different connection because it calls
+# `SELECT UUID()` internally, which is marked unsafe. Since there is
+# an open temporary table, this causes the current connection to log
+# subsequent statements in row format.
+connect (other,localhost,root,,test);
+connection other;
 source include/show_binlog_events.inc;
+connection default;
+disconnect other;
+
 drop table t1,t2,t3,tt1;
 
 -- source extra/binlog_tests/binlog_insert_delayed.test
@@ -243,15 +255,17 @@ reset master;
 drop table if exists t3;
 --enable_warnings
 create table t3 (a int(11) NOT NULL AUTO_INCREMENT, b text, PRIMARY KEY (a) ) engine=innodb;
-source include/show_master_status.inc;
+--let $binlog_file1= query_get_value(SHOW MASTER STATUS, File, 1)
+--echo File $binlog_file1
 let $it=4;
 while ($it)
 {
 insert into t3(b) values ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 dec $it;
 }
-# must show new binlog index after rotating;
-source include/show_master_status.inc;
+--let $binlog_file2= query_get_value(SHOW MASTER STATUS, File, 1)
+--echo *** show new binlog index after rotating ***
+--echo File $binlog_file2
 drop table t3;
 
 --echo #
@@ -298,7 +312,7 @@ BINLOG '
 
 # Show binlog events to check that server ids are correct.
 --replace_column 1 # 2 # 5 #
---replace_regex /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/
+--replace_regex /Server ver: .*, Binlog ver: .*/Server ver: #, Binlog ver: #/ /table_id: [0-9]+/table_id: #/ /SET @@SESSION.GTID_NEXT=.*$/SET @@SESSION.GTID_NEXT= 'GTID';/ /GROUPS: .*:(.*,.*)/GROUPS: GTID:(X,X)/
 SHOW BINLOG EVENTS;
 
 DROP TABLE t1;
@@ -343,7 +357,7 @@ SHOW SESSION VARIABLES LIKE "%_checks";
 --echo # INSERT INTO t1 VALUES(2)
 --echo # foreign_key_checks=1 and unique_checks=1
 --echo # It should not change current session's variables, even error happens
-call mtr.add_suppression("Slave SQL.*Could not execute Write_rows event on table test.t1; Duplicate entry .2. for key .PRIMARY., Error_code: 1062");
+call mtr.add_suppression("Slave SQL.*Could not execute Write_rows_v1 event on table test.t1; Duplicate entry .2. for key .PRIMARY., Error_code: 1062");
 --error 1062
 BINLOG '
 dfLtTBMBAAAAKQAAAKsBAAAAABcAAAAAAAEABHRlc3QAAnQxAAEDAAE=

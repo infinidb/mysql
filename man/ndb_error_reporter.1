@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBndb_error_reporter\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDB_ERROR_REPORTE" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBNDB_ERROR_REPORTE" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,8 +32,8 @@
 .SH "NAME"
 ndb_error_reporter \- NDB error\-reporting utility
 .SH "SYNOPSIS"
-.HP \w'\fBndb_error_reporter\ \fR\fB\fIconfig_file\fR\fR\fB\ [\fR\fB\fIuser_name\fR\fR\fB]\ [\fR\fB\fIoptions\fR\fR\fB]\fR\ 'u
-\fBndb_error_reporter \fR\fB\fIconfig_file\fR\fR\fB [\fR\fB\fIuser_name\fR\fR\fB] [\fR\fB\fIoptions\fR\fR\fB]\fR
+.HP \w'\fBndb_error_reporter\ \fR\fB\fIoptions\fR\fR\ 'u
+\fBndb_error_reporter \fR\fB\fIoptions\fR\fR
 .SH "DESCRIPTION"
 .PP
 \fBndb_error_reporter\fR
@@ -48,17 +48,17 @@ Options Common to MySQL Cluster Programs(1)\&.
 \fBndb_error_reporter\fR
 did not support the
 \fB\-\-help\fR
-option prior to MySQL Cluster NDB 6\&.3\&.52, MySQL Cluster NDB 7\&.0\&.40, and MySQL Cluster NDB 7\&.1\&.29 (Bug #11756666, Bug #48606)\&. The
+option prior to MySQL Cluster NDB 7\&.3\&.3 (Bug #11756666, Bug #48606)\&. The
 \fB\-\-connection\-timeout\fR
 \fB\-\-dry\-scp\fR, and
 \fB\-\-skip\-nodegroup\fR
-options were also added in these releases (Bug #16602002)\&.
+options were also added in this release (Bug #16602002)\&.
 .sp
 .it 1 an-trap
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.20.\ \&ndb_error_reporter Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.20.\ \&ndb_error_reporter Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -81,7 +81,7 @@ T}:T{
 Number of seconds to wait when connecting to nodes before timing out\&.
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.52, NDB 7\&.0\&.40, NDB 7\&.1\&.29
+ADDED: NDB 7\&.3\&.3
 T}
 T{
 .PP
@@ -90,7 +90,7 @@ T}:T{
 Disable scp with remote hosts; used only for testing\&.
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.52, NDB 7\&.0\&.40, NDB 7\&.1\&.29
+ADDED: NDB 7\&.3\&.3
 T}
 T{
 .PP
@@ -100,7 +100,7 @@ Include file system data in error report; can use a large amount of disk
             space
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -109,7 +109,7 @@ T}:T{
 Skip all nodes in the node group having this ID\&.
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.52, NDB 7\&.0\&.40, NDB 7\&.1\&.29
+ADDED: NDB 7\&.3\&.3
 T}
 .TE
 .sp 1
@@ -157,7 +157,7 @@ l l s s
 T{
 \fBIntroduced\fR
 T}:T{
-5\&.1\&.71\-ndb\-7\&.1\&.29
+5\&.6\&.14\-ndb\-7\&.3\&.3
 T}
 T{
 \fBCommand\-Line Format\fR
@@ -204,7 +204,7 @@ l l s s
 T{
 \fBIntroduced\fR
 T}:T{
-5\&.1\&.71\-ndb\-7\&.1\&.29
+5\&.6\&.14\-ndb\-7\&.3\&.3
 T}
 T{
 \fBCommand\-Line Format\fR
@@ -298,7 +298,7 @@ l l s s
 T{
 \fBIntroduced\fR
 T}:T{
-5\&.1\&.71\-ndb\-7\&.1\&.29
+5\&.6\&.14\-ndb\-7\&.3\&.3
 T}
 T{
 \fBCommand\-Line Format\fR
@@ -327,7 +327,7 @@ Skip all nodes belong to the node group having the supplied node group ID\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

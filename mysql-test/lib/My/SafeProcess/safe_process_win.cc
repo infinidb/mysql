@@ -1,5 +1,4 @@
-/* Copyright (c) 2007, 2008 MySQL AB, 2009, 2010 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 
 /*
@@ -56,6 +54,7 @@
 #include <stdio.h>
 #include <tlhelp32.h>
 #include <signal.h>
+#include <stdlib.h>
 
 static int verbose= 0;
 static char safe_process_name[32]= {0};
@@ -221,6 +220,10 @@ int main(int argc, const char** argv )
       {
         nocore= TRUE;
       }
+      else if ( strncmp (arg, "--env ", 6) == 0 )
+      {
+	putenv(strdup(arg+6));
+      }
       else
         die("Unknown option: %s", arg);
     }
@@ -253,6 +256,10 @@ int main(int argc, const char** argv )
     Make all processes associated with the job terminate when the
     last handle to the job is closed.
   */
+#ifndef JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+#define JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE  0x00002000
+#endif
+
   jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
   if (SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation,
                               &jeli, sizeof(jeli)) == 0)

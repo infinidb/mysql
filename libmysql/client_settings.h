@@ -1,4 +1,4 @@
-/* Copyright (c) 2003-2007 MySQL AB
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,33 +11,36 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#ifndef CLIENT_SETTINGS_INCLUDED
+#define CLIENT_SETTINGS_INCLUDED
+#else
+#error You have already included an client_settings.h and it should not be included twice
+#endif /* CLIENT_SETTINGS_INCLUDED */
 
 extern uint		mysql_port;
 extern char *	mysql_unix_port;
 
-#define CLIENT_CAPABILITIES (CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG |	  \
-                             CLIENT_TRANSACTIONS | \
-			     CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION)
+/*
+ Note: CLIENT_CAPABILITIES is also defined in sql/client_settings.h.
+ When adding capabilities here, consider if they should be also added to
+ the server's version.
+*/
+#define CLIENT_CAPABILITIES (CLIENT_LONG_PASSWORD | \
+                             CLIENT_LONG_FLAG |     \
+                             CLIENT_TRANSACTIONS |  \
+                             CLIENT_PROTOCOL_41 | \
+                             CLIENT_SECURE_CONNECTION | \
+                             CLIENT_MULTI_RESULTS | \
+                             CLIENT_PS_MULTI_RESULTS | \
+                             CLIENT_PLUGIN_AUTH | \
+                             CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | \
+                             CLIENT_CONNECT_ATTRS)
 
 sig_handler my_pipe_sig_handler(int sig);
 void read_user_name(char *name);
 my_bool handle_local_infile(MYSQL *mysql, const char *net_filename);
-
-/*
-  Let the user specify that we don't want SIGPIPE;  This doesn't however work
-  with threaded applications as we can have multiple read in progress.
-*/
-
-#if !defined(__WIN__) && defined(SIGPIPE) && !defined(THREAD)
-#define init_sigpipe_variables  sig_return old_signal_handler=(sig_return) 0;
-#define set_sigpipe(mysql)     if ((mysql)->client_flag & CLIENT_IGNORE_SIGPIPE) old_signal_handler=signal(SIGPIPE, my_pipe_sig_handler)
-#define reset_sigpipe(mysql) if ((mysql)->client_flag & CLIENT_IGNORE_SIGPIPE) signal(SIGPIPE,old_signal_handler);
-#else
-#define init_sigpipe_variables
-#define set_sigpipe(mysql)
-#define reset_sigpipe(mysql)
-#endif
 
 void mysql_read_default_options(struct st_mysql_options *options,
 				const char *filename,const char *group);
@@ -57,7 +60,7 @@ int cli_stmt_execute(MYSQL_STMT *stmt);
 int cli_read_binary_rows(MYSQL_STMT *stmt);
 int cli_unbuffered_fetch(MYSQL *mysql, char **row);
 const char * cli_read_statistics(MYSQL *mysql);
-int cli_read_change_user_result(MYSQL *mysql, char *buff, const char *passwd);
+int cli_read_change_user_result(MYSQL *mysql);
 
 #ifdef EMBEDDED_LIBRARY
 int init_embedded_server(int argc, char **argv, char **groups);

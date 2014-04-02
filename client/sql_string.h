@@ -1,5 +1,7 @@
-/*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+#ifndef CLIENT_SQL_STRING_INCLUDED
+#define CLIENT_SQL_STRING_INCLUDED
+
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,32 +14,30 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file is originally from the mysql distribution. Coded by monty */
 
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
-
-#ifndef NOT_FIXED_DEC
-#define NOT_FIXED_DEC			31
-#endif
+#include "m_ctype.h"
+#include "my_sys.h"
 
 class String;
-int sortcmp(const String *a,const String *b, CHARSET_INFO *cs);
+int sortcmp(const String *a,const String *b, const CHARSET_INFO *cs);
 String *copy_if_not_alloced(String *a,String *b,uint32 arg_length);
-uint32 copy_and_convert(char *to, uint32 to_length, CHARSET_INFO *to_cs,
-			const char *from, uint32 from_length,
-			CHARSET_INFO *from_cs, uint *errors);
+inline uint32 copy_and_convert(char *to, uint32 to_length,
+                               const CHARSET_INFO *to_cs,
+                               const char *from, uint32 from_length,
+                               const CHARSET_INFO *from_cs, uint *errors)
+{
+  return my_convert(to, to_length, to_cs, from, from_length, from_cs, errors);
+}
 
 class String
 {
   char *Ptr;
   uint32 str_length,Alloced_length;
   bool alloced;
-  CHARSET_INFO *str_charset;
+  const CHARSET_INFO *str_charset;
 public:
   String()
   { 
@@ -49,17 +49,17 @@ public:
     alloced=0; Alloced_length=0; (void) real_alloc(length_arg); 
     str_charset= &my_charset_bin;
   }
-  String(const char *str, CHARSET_INFO *cs)
+  String(const char *str, const CHARSET_INFO *cs)
   { 
     Ptr=(char*) str; str_length=(uint) strlen(str); Alloced_length=0; alloced=0;
     str_charset=cs;
   }
-  String(const char *str,uint32 len, CHARSET_INFO *cs)
+  String(const char *str,uint32 len, const CHARSET_INFO *cs)
   { 
     Ptr=(char*) str; str_length=len; Alloced_length=0; alloced=0;
     str_charset=cs;
   }
-  String(char *str,uint32 len, CHARSET_INFO *cs)
+  String(char *str,uint32 len, const CHARSET_INFO *cs)
   { 
     Ptr=(char*) str; Alloced_length=str_length=len; alloced=0;
     str_charset=cs;
@@ -82,9 +82,9 @@ public:
   { /* never called */ }
   ~String() { free(); }
 
-  inline void set_charset(CHARSET_INFO *charset_arg)
+  inline void set_charset(const CHARSET_INFO *charset_arg)
   { str_charset= charset_arg; }
-  inline CHARSET_INFO *charset() const { return str_charset; }
+  inline const CHARSET_INFO *charset() const { return str_charset; }
   inline uint32 length() const { return str_length;}
   inline uint32 alloced_length() const { return Alloced_length;}
   inline char& operator [] (uint32 i) const { return Ptr[i]; }
@@ -94,6 +94,9 @@ public:
   inline const char *ptr() const { return Ptr; }
   inline char *c_ptr()
   {
+    DBUG_ASSERT(!alloced || !Ptr || !Alloced_length || 
+                (Alloced_length >= (str_length + 1)));
+
     if (!Ptr || Ptr[str_length])		/* Should be safe */
       (void) realloc(str_length);
     return Ptr;
@@ -124,20 +127,20 @@ public:
       Alloced_length=0;
     str_charset=str.str_charset;
   }
-  inline void set(char *str,uint32 arg_length, CHARSET_INFO *cs)
+  inline void set(char *str,uint32 arg_length, const CHARSET_INFO *cs)
   {
     free();
     Ptr=(char*) str; str_length=Alloced_length=arg_length ; alloced=0;
     str_charset=cs;
   }
-  inline void set(const char *str,uint32 arg_length, CHARSET_INFO *cs)
+  inline void set(const char *str,uint32 arg_length, const CHARSET_INFO *cs)
   {
     free();
     Ptr=(char*) str; str_length=arg_length; Alloced_length=0 ; alloced=0;
     str_charset=cs;
   }
   bool set_ascii(const char *str, uint32 arg_length);
-  inline void set_quick(char *str,uint32 arg_length, CHARSET_INFO *cs)
+  inline void set_quick(char *str,uint32 arg_length, const CHARSET_INFO *cs)
   {
     if (!alloced)
     {
@@ -145,9 +148,9 @@ public:
     }
     str_charset=cs;
   }
-  bool set(longlong num, CHARSET_INFO *cs);
-  bool set(ulonglong num, CHARSET_INFO *cs);
-  bool set(double num,uint decimals, CHARSET_INFO *cs);
+  bool set(longlong num, const CHARSET_INFO *cs);
+  bool set(ulonglong num, const CHARSET_INFO *cs);
+  bool set(double num,uint decimals, const CHARSET_INFO *cs);
 
   /*
     PMG 2004.11.12
@@ -182,7 +185,7 @@ public:
     {
       alloced=0;
       Alloced_length=0;
-      my_free(Ptr,MYF(0));
+      my_free(Ptr);
       Ptr=0;
       str_length=0;				/* Safety */
     }
@@ -236,19 +239,21 @@ public:
 
   bool copy();					// Alloc string if not alloced
   bool copy(const String &s);			// Allocate new string
-  bool copy(const char *s,uint32 arg_length, CHARSET_INFO *cs);	// Allocate new string
+  /// Allocate new string
+  bool copy(const char *s,uint32 arg_length, const CHARSET_INFO *cs);
   static bool needs_conversion(uint32 arg_length,
-  			       CHARSET_INFO *cs_from, CHARSET_INFO *cs_to,
+  			       const CHARSET_INFO *cs_from, const CHARSET_INFO *cs_to,
 			       uint32 *offset);
   bool copy_aligned(const char *s, uint32 arg_length, uint32 offset,
-		    CHARSET_INFO *cs);
-  bool set_or_copy_aligned(const char *s, uint32 arg_length, CHARSET_INFO *cs);
-  bool copy(const char*s,uint32 arg_length, CHARSET_INFO *csfrom,
-	    CHARSET_INFO *csto, uint *errors);
+		    const CHARSET_INFO *cs);
+  bool set_or_copy_aligned(const char *s, uint32 arg_length,
+                           const CHARSET_INFO *cs);
+  bool copy(const char*s,uint32 arg_length, const CHARSET_INFO *csfrom,
+	    const CHARSET_INFO *csto, uint *errors);
   bool append(const String &s);
   bool append(const char *s);
   bool append(const char *s,uint32 arg_length);
-  bool append(const char *s,uint32 arg_length, CHARSET_INFO *cs);
+  bool append(const char *s,uint32 arg_length, const CHARSET_INFO *cs);
   bool append(IO_CACHE* file, uint32 arg_length);
   bool append_with_prefill(const char *s, uint32 arg_length, 
 			   uint32 full_length, char fill_char);
@@ -272,10 +277,10 @@ public:
   }
   bool fill(uint32 max_length,char fill);
   void strip_sp();
-  friend int sortcmp(const String *a,const String *b, CHARSET_INFO *cs);
+  friend int sortcmp(const String *a,const String *b, const CHARSET_INFO *cs);
   friend int stringcmp(const String *a,const String *b);
   friend String *copy_if_not_alloced(String *a,String *b,uint32 arg_length);
-  uint32 numchars();
+  uint32 numchars() const;
   int charpos(int i,uint32 offset=0);
 
   int reserve(uint32 space_needed)
@@ -364,3 +369,5 @@ public:
     return (s->alloced && Ptr >= s->Ptr && Ptr < s->Ptr + s->str_length);
   }
 };
+
+#endif /* CLIENT_SQL_STRING_INCLUDED */

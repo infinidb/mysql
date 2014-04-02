@@ -1,5 +1,4 @@
-/* Copyright (c) 2003-2005, 2007 MySQL AB
-   Use is subject to license terms.
+/* Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,24 +11,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
 #include <my_sys.h>            /* Needed for MY_ERRNO_ERANGE */
 #include <m_string.h>
 
-#undef  ULONGLONG_MAX
-/*
-  Needed under MetroWerks Compiler, since MetroWerks compiler does not
-  properly handle a constant expression containing a mod operator
-*/
-#if defined(__NETWARE__) && defined(__MWERKS__) 
-static ulonglong ulonglong_max= ~(ulonglong) 0;
-#define ULONGLONG_MAX ulonglong_max
-#else
-#define ULONGLONG_MAX		(~(ulonglong) 0)
-#endif /* __NETWARE__ && __MWERKS__ */
 #define MAX_NEGATIVE_NUMBER	((ulonglong) LL(0x8000000000000000))
 #define INIT_CNT  9
 #define LFACTOR   ULL(1000000000)

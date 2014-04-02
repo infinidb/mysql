@@ -1,6 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2000-2008 MySQL AB, 2008 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -89,9 +88,15 @@ pkglibdir_rel=`echo $pkglibdir | sed -e "s;^$basedir/;;"`
 fix_path pkglibdir $pkglibdir_rel lib/mysql lib
 
 plugindir='@pkgplugindir@'
+plugindir_rel=`echo $plugindir | sed -e "s;^$basedir/;;"`
+fix_path plugindir $plugindir_rel lib/mysql/plugin lib/plugin
 
 pkgincludedir='@pkgincludedir@'
-fix_path pkgincludedir include/mysql include
+if [ -f "$basedir/include/mysql/mysql.h" ]; then
+  pkgincludedir="$basedir/include/mysql"
+elif [ -f "$basedir/include/mysql.h" ]; then
+  pkgincludedir="$basedir/include"
+fi
 
 version='@VERSION@'
 socket='@MYSQL_UNIX_ADDR@'
@@ -105,41 +110,29 @@ fi
 
 # Create options 
 # We intentionally add a space to the beginning and end of lib strings, simplifies replace later
-libs=" $ldflags -L$pkglibdir -lmysqlclient @ZLIB_DEPS@ @NON_THREADED_LIBS@"
+libs=" $ldflags -L$pkglibdir @RPATH_OPTION@ -lmysqlclient @ZLIB_DEPS@ @NON_THREADED_LIBS@"
 libs="$libs @openssl_libs@ @STATIC_NSS_FLAGS@ "
-libs_r=" $ldflags -L$pkglibdir -lmysqlclient_r @ZLIB_DEPS@ @LIBS@ @openssl_libs@ "
-embedded_libs=" $ldflags -L$pkglibdir -lmysqld @LIBDL@ @ZLIB_DEPS@ @LIBS@ @WRAPLIBS@ @innodb_system_libs@ @openssl_libs@ "
-
-if [ -r "$pkglibdir/libmygcc.a" ]; then
-  # When linking against the static library with a different version of GCC
-  # from what was used to compile the library, some symbols may not be defined
-  # automatically.  We package the libmygcc.a from the build host, to provide
-  # definitions for those.  Bugs 4921, 19561, 19817, 21158, etc.
-  libs="$libs -lmygcc "
-  libs_r="$libs_r -lmygcc "
-  embedded_libs="$embedded_libs -lmygcc "
-fi
+libs_r=" $ldflags -L$pkglibdir @RPATH_OPTION@ -lmysqlclient_r @ZLIB_DEPS@ @CLIENT_LIBS@ @openssl_libs@ "
+embedded_libs=" $ldflags -L$pkglibdir @RPATH_OPTION@ -lmysqld @LIBDL@ @ZLIB_DEPS@ @LIBS@ @WRAPLIBS@ @openssl_libs@ "
+embedded_libs="$embedded_libs @QUOTED_CMAKE_CXX_LINK_FLAGS@"
 
 cflags="-I$pkgincludedir @CFLAGS@ " #note: end space!
+cxxflags="-I$pkgincludedir @CXXFLAGS@ " #note: end space!
 include="-I$pkgincludedir"
 
 # Remove some options that a client doesn't have to care about
-# FIXME until we have a --cxxflags, we need to remove -Xa
-#       and -xstrconst to make --cflags usable for Sun Forte C++
-# FIXME until we have a --cxxflags, we need to remove -AC99
-#       to make --cflags usable for HP C++ (aCC)
-for remove in DDBUG_OFF DSAFEMALLOC USAFEMALLOC DSAFE_MUTEX \
-              DPEDANTIC_SAFEMALLOC DUNIV_MUST_NOT_INLINE DFORCE_INIT_OF_VARS \
+for remove in DDBUG_OFF DSAFE_MUTEX DFORCE_INIT_OF_VARS \
               DEXTRA_DEBUG DHAVE_purify O 'O[0-9]' 'xO[0-9]' 'W[-A-Za-z]*' \
               'mtune=[-A-Za-z0-9]*' 'mcpu=[-A-Za-z0-9]*' 'march=[-A-Za-z0-9]*' \
-              Xa xstrconst "xc99=none" AC99 \
               unroll2 ip mp restrict
 do
   # The first option we might strip will always have a space before it because
   # we set -I$pkgincludedir as the first option
   cflags=`echo "$cflags"|sed -e "s/ -$remove  */ /g"` 
+  cxxflags=`echo "$cxxflags"|sed -e "s/ -$remove  */ /g"` 
 done
 cflags=`echo "$cflags"|sed -e 's/ *\$//'` 
+cxxflags=`echo "$cxxflags"|sed -e 's/ *\$//'` 
 
 # Same for --libs(_r)
 for remove in lmtmalloc static-libcxa i-static static-intel
@@ -160,6 +153,7 @@ usage () {
 Usage: $0 [OPTIONS]
 Options:
         --cflags         [$cflags]
+        --cxxflags       [$cxxflags]
         --include        [$include]
         --libs           [$libs]
         --libs_r         [$libs_r]
@@ -168,6 +162,10 @@ Options:
         --port           [$port]
         --version        [$version]
         --libmysqld-libs [$embedded_libs]
+        --variable=VAR   VAR is one of:
+                pkgincludedir [$pkgincludedir]
+                pkglibdir     [$pkglibdir]
+                plugindir     [$plugindir]
 EOF
         exit 1
 }
@@ -177,6 +175,7 @@ if test $# -le 0; then usage; fi
 while test $# -gt 0; do
         case $1 in
         --cflags)  echo "$cflags" ;;
+        --cxxflags)echo "$cxxflags";;
         --include) echo "$include" ;;
         --libs)    echo "$libs" ;;
         --libs_r)  echo "$libs_r" ;;
@@ -185,6 +184,15 @@ while test $# -gt 0; do
         --port)    echo "$port" ;;
         --version) echo "$version" ;;
         --embedded-libs | --embedded | --libmysqld-libs) echo "$embedded_libs" ;;
+        --variable=*)
+          var=`echo "$1" | sed 's,^[^=]*=,,'`
+          case "$var" in
+            pkgincludedir) echo "$pkgincludedir" ;;
+            pkglibdir) echo "$pkglibdir" ;;
+            plugindir) echo "$plugindir" ;;
+            *) usage ;;
+          esac
+          ;;
         *)         usage ;;
         esac
 

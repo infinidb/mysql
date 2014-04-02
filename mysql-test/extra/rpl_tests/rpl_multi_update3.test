@@ -18,6 +18,8 @@ eval CREATE TABLE t2 (
 ) ENGINE=$engine_type;
 
 INSERT INTO t1 VALUES (NULL, 0);
+
+--disable_warnings ONCE
 INSERT INTO t1 SELECT NULL, 0 FROM t1;
 
 INSERT INTO t2 VALUES (NULL, 0), (NULL,1);
@@ -25,11 +27,12 @@ INSERT INTO t2 VALUES (NULL, 0), (NULL,1);
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
 
+--disable_warnings ONCE
 UPDATE t2, (SELECT a FROM t1 ORDER BY a) AS t SET t2.b = t.a+5 ;
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 connection slave;
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
@@ -81,7 +84,7 @@ UPDATE t1 a, t2
   AND a.a4 = 'foo' 
   AND a.a5 = 'bar';
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 connection slave;
 SELECT * FROM t1;
 SELECT * FROM t2;
@@ -148,7 +151,7 @@ SET         a.x = b.x,
             ) 
 WHERE       b.x = 23;
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 connection slave;
 
 SELECT * FROM t1;
@@ -209,7 +212,7 @@ select "-- MASTER AFTER JOIN --" as "";
 select * from t1;
 select * from t2;
 
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 select "-- SLAVE AFTER JOIN --" as "";
 select * from t1;

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #define SHOW_VERSION "9.10"
 
 #include "client_priv.h"
+#include "my_default.h"
 #include <my_sys.h>
 #include <m_string.h>
 #include <mysql.h>
@@ -35,12 +36,15 @@ static my_bool tty_password= 0, opt_table_type= 0;
 static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static uint my_end_arg= 0;
 static uint opt_verbose=0;
-static char *default_charset= (char*) MYSQL_DEFAULT_CHARSET_NAME;
+static char *default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME;
+static char *opt_plugin_dir= 0, *opt_default_auth= 0;
+static my_bool opt_secure_auth= TRUE;
 
 #ifdef HAVE_SMEM 
 static char *shared_memory_base_name=0;
 #endif
 static uint opt_protocol=0;
+static char *opt_bind_addr = NULL;
 
 static void get_options(int *argc,char ***argv);
 static uint opt_mysql_port=0;
@@ -66,7 +70,12 @@ int main(int argc, char **argv)
   char *wild;
   MYSQL mysql;
   MY_INIT(argv[0]);
-  load_defaults("my",load_default_groups,&argc,&argv);
+
+  my_getopt_use_args_separator= TRUE;
+  if (load_defaults("my",load_default_groups,&argc,&argv))
+    exit(1);
+  my_getopt_use_args_separator= FALSE;
+
   get_options(&argc,&argv);
 
   wild=0;
@@ -111,19 +120,36 @@ int main(int argc, char **argv)
     mysql_options(&mysql,MYSQL_OPT_COMPRESS,NullS);
 #ifdef HAVE_OPENSSL
   if (opt_use_ssl)
+  {
     mysql_ssl_set(&mysql, opt_ssl_key, opt_ssl_cert, opt_ssl_ca,
 		  opt_ssl_capath, opt_ssl_cipher);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRL, opt_ssl_crl);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRLPATH, opt_ssl_crlpath);
+  }
   mysql_options(&mysql,MYSQL_OPT_SSL_VERIFY_SERVER_CERT,
                 (char*)&opt_ssl_verify_server_cert);
 #endif
   if (opt_protocol)
     mysql_options(&mysql,MYSQL_OPT_PROTOCOL,(char*)&opt_protocol);
+  if (opt_bind_addr)
+    mysql_options(&mysql,MYSQL_OPT_BIND,opt_bind_addr);
+  if (!opt_secure_auth)
+    mysql_options(&mysql, MYSQL_SECURE_AUTH,(char*)&opt_secure_auth);
 #ifdef HAVE_SMEM
   if (shared_memory_base_name)
     mysql_options(&mysql,MYSQL_SHARED_MEMORY_BASE_NAME,shared_memory_base_name);
 #endif
   mysql_options(&mysql, MYSQL_SET_CHARSET_NAME, default_charset);
 
+  if (opt_plugin_dir && *opt_plugin_dir)
+    mysql_options(&mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+
+  if (opt_default_auth && *opt_default_auth)
+    mysql_options(&mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
+
+  mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
+  mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
+                 "program_name", "mysqlshow");
   if (!(mysql_real_connect(&mysql,host,user,opt_password,
 			   (first_argument_uses_wildcards) ? "" :
                            argv[0],opt_mysql_port,opt_mysql_unix_port,
@@ -150,10 +176,9 @@ int main(int argc, char **argv)
     break;
   }
   mysql_close(&mysql);			/* Close & free connection */
-  if (opt_password)
-    my_free(opt_password,MYF(0));
+  my_free(opt_password);
 #ifdef HAVE_SMEM
-  my_free(shared_memory_base_name,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(shared_memory_base_name);
 #endif
   my_end(my_end_arg);
   exit(error ? 1 : 0);
@@ -162,10 +187,9 @@ int main(int argc, char **argv)
 
 static struct my_option my_long_options[] =
 {
-#ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Automatically close the screen on exit for Netware.",
-   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#endif
+  {"bind-address", 0, "IP address to bind to.",
+   (uchar**) &opt_bind_addr, (uchar**) &opt_bind_addr, 0, GET_STR,
+   REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"character-sets-dir", 'c', "Directory for character set files.",
    &charsets_dir, &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0,
    0, 0, 0, 0, 0},
@@ -187,6 +211,10 @@ static struct my_option my_long_options[] =
   {"debug-info", OPT_DEBUG_INFO, "Print some debug info at exit.",
    &debug_info_flag, &debug_info_flag,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"default_auth", OPT_DEFAULT_AUTH,
+   "Default authentication client-side plugin to use.",
+   &opt_default_auth, &opt_default_auth, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"help", '?', "Display this help and exit.", 0, 0, 0, GET_NO_ARG, NO_ARG,
    0, 0, 0, 0, 0, 0},
   {"host", 'h', "Connect to host.", &host, &host, 0, GET_STR,
@@ -199,7 +227,10 @@ static struct my_option my_long_options[] =
   {"password", 'p',
    "Password to use when connecting to server. If password is not given, it's "
    "solicited on the tty.",
-   0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+   0, 0, 0, GET_PASSWORD, OPT_ARG, 0, 0, 0, 0, 0, 0},
+  {"plugin_dir", OPT_PLUGIN_DIR, "Directory for client-side plugins.",
+   &opt_plugin_dir, &opt_plugin_dir, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"port", 'P', "Port number to use for connection or 0 for default to, in "
    "order of preference, my.cnf, $MYSQL_TCP_PORT, "
 #if MYSQL_PORT_DEFAULT == 0
@@ -216,6 +247,9 @@ static struct my_option my_long_options[] =
   {"protocol", OPT_MYSQL_PROTOCOL, 
    "The protocol to use for connection (tcp, socket, pipe, memory).",
    0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
+    " uses old (pre-4.1.1) protocol.", &opt_secure_auth,
+    &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", &shared_memory_base_name,
@@ -242,14 +276,11 @@ static struct my_option my_long_options[] =
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
-  
-#include <help_start.h>
 
 static void print_version(void)
 {
   printf("%s  Ver %s Distrib %s, for %s (%s)\n",my_progname,SHOW_VERSION,
 	 MYSQL_SERVER_VERSION,SYSTEM_TYPE,MACHINE_TYPE);
-  NETWARE_SET_SCREEN_MODE(1);
 }
 
 
@@ -271,18 +302,12 @@ are shown.");
   my_print_variables(my_long_options);
 }
 
-#include <help_end.h>
 
 static my_bool
 get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
 	       char *argument)
 {
   switch(optid) {
-#ifdef __NETWARE__
-  case OPT_AUTO_CLOSE:
-    setscreenmode(SCR_AUTOCLOSE_ON_EXIT);
-    break;
-#endif
   case 'v':
     opt_verbose++;
     break;
@@ -292,7 +317,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     if (argument)
     {
       char *start=argument;
-      my_free(opt_password,MYF(MY_ALLOW_ZERO_PTR));
+      my_free(opt_password);
       opt_password=my_strdup(argument,MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
       if (*start)

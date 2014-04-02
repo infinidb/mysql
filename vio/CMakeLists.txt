@@ -1,4 +1,4 @@
-# Copyright (c) 2006-2008 MySQL AB
+# Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,18 +11,17 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG -DSAFEMALLOC -DSAFE_MUTEX")
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include 
+${SSL_INCLUDE_DIRS})
+ADD_DEFINITIONS(${SSL_DEFINES})
 
-ADD_DEFINITIONS(-DUSE_SYMDIR)
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/extra/yassl/include)
+SET(VIO_SOURCES vio.c viosocket.c viossl.c viopipe.c vioshm.c viosslfactories.c)
+ADD_CONVENIENCE_LIBRARY(vio ${VIO_SOURCES})
+TARGET_LINK_LIBRARIES(vio ${LIBSOCKET})
 
-SET(VIO_SOURCES  vio.c viosocket.c viossl.c viosslfactories.c)
-
-IF(NOT SOURCE_SUBLIBS)
-  ADD_LIBRARY(vio ${VIO_SOURCES})
-  ADD_DEPENDENCIES(vio GenError)
-ENDIF(NOT SOURCE_SUBLIBS)
-
+INSTALL_DEBUG_SYMBOLS(vio)
+IF(MSVC)
+   INSTALL_DEBUG_TARGET(vio DESTINATION ${INSTALL_LIBDIR}/debug)
+ENDIF()

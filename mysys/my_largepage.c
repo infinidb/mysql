@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2004, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 
@@ -30,7 +27,7 @@
 
 static uint my_get_large_page_size_int(void);
 static uchar* my_large_malloc_int(size_t size, myf my_flags);
-static my_bool my_large_free_int(uchar* ptr, myf my_flags);
+static my_bool my_large_free_int(uchar* ptr);
 
 /* Gets the size of large pages from the OS */
 
@@ -73,7 +70,7 @@ uchar* my_large_malloc(size_t size, myf my_flags)
   to my_free_lock() in case of failure
  */
 
-void my_large_free(uchar* ptr, myf my_flags __attribute__((unused)))
+void my_large_free(uchar* ptr)
 {
   DBUG_ENTER("my_large_free");
   
@@ -82,9 +79,8 @@ void my_large_free(uchar* ptr, myf my_flags __attribute__((unused)))
     my_large_malloc_int(), i.e. my_malloc_lock() was used so we should free it
     with my_free_lock()
   */
-  if (!my_use_large_pages || !my_large_page_size ||
-      !my_large_free_int(ptr, my_flags))
-    my_free_lock(ptr, my_flags);
+  if (!my_use_large_pages || !my_large_page_size || !my_large_free_int(ptr))
+    my_free_lock(ptr);
 
   DBUG_VOID_RETURN;
 }
@@ -94,19 +90,20 @@ void my_large_free(uchar* ptr, myf my_flags __attribute__((unused)))
 
 uint my_get_large_page_size_int(void)
 {
-  FILE *f;
+  MYSQL_FILE *f;
   uint size = 0;
   char buf[256];
   DBUG_ENTER("my_get_large_page_size_int");
 
-  if (!(f = my_fopen("/proc/meminfo", O_RDONLY, MYF(MY_WME))))
+  if (!(f= mysql_file_fopen(key_file_proc_meminfo, "/proc/meminfo",
+                            O_RDONLY, MYF(MY_WME))))
     goto finish;
 
-  while (fgets(buf, sizeof(buf), f))
+  while (mysql_file_fgets(buf, sizeof(buf), f))
     if (sscanf(buf, "Hugepagesize: %u kB", &size))
       break;
 
-  my_fclose(f, MYF(MY_WME));
+  mysql_file_fclose(f, MYF(MY_WME));
   
 finish:
   DBUG_RETURN(size * 1024);
@@ -131,7 +128,7 @@ uchar* my_large_malloc_int(size_t size, myf my_flags)
   {
     if (my_flags & MY_WME)
       fprintf(stderr,
-              "Warning: Failed to allocate %lu bytesx from HugeTLB memory."
+              "Warning: Failed to allocate %lu bytes from HugeTLB memory."
               " errno %d\n", (ulong) size, errno);
 
     DBUG_RETURN(NULL);
@@ -159,7 +156,7 @@ uchar* my_large_malloc_int(size_t size, myf my_flags)
 
 /* Linux-specific large pages deallocator */
 
-my_bool my_large_free_int(uchar *ptr, myf my_flags __attribute__((unused)))
+my_bool my_large_free_int(uchar *ptr)
 {
   DBUG_ENTER("my_large_free_int");
   DBUG_RETURN(shmdt(ptr) == 0);

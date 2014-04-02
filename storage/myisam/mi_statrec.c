@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2002, 2004-2008 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 	/* Functions to handle fixed-length-records */
 
@@ -54,7 +54,7 @@ int _mi_write_static_record(MI_INFO *info, const uchar *record)
       if (info->s->base.pack_reclength != info->s->base.reclength)
       {
 	uint length=info->s->base.pack_reclength - info->s->base.reclength;
-	bzero(temp,length);
+	memset(temp, 0, length);
 	if (my_b_write(&info->rec_cache, temp,length))
 	  goto err;
       }
@@ -69,7 +69,7 @@ int _mi_write_static_record(MI_INFO *info, const uchar *record)
       if (info->s->base.pack_reclength != info->s->base.reclength)
       {
 	uint length=info->s->base.pack_reclength - info->s->base.reclength;
-	bzero(temp,length);
+	memset(temp, 0, length);
 	if (info->s->file_write(info, temp,length,
 		      info->state->data_file_length+
 		      info->s->base.reclength,
@@ -113,9 +113,6 @@ int _mi_delete_static_record(MI_INFO *info)
 int _mi_cmp_static_record(register MI_INFO *info, register const uchar *old)
 {
   DBUG_ENTER("_mi_cmp_static_record");
-
-  /* We are going to do changes; dont let anybody disturb */
-  dont_break();				/* Dont allow SIGHUP or SIGINT */
 
   if (info->opt_flag & WRITE_CACHE_USED)
   {
@@ -273,7 +270,12 @@ int _mi_read_rnd_static_record(MI_INFO *info, uchar *buf,
     DBUG_RETURN(error);
   }
 
-	/* Read record with cacheing */
+  /*
+    Read record with caching. If my_b_read() returns TRUE, less than the
+    requested bytes have been read. In this case rec_cache.error is
+    either -1 for a read error, or contains the number of bytes copied
+    into the buffer.
+  */
   error=my_b_read(&info->rec_cache,(uchar*) buf,share->base.reclength);
   if (info->s->base.pack_reclength != info->s->base.reclength && !error)
   {
@@ -282,7 +284,7 @@ int _mi_read_rnd_static_record(MI_INFO *info, uchar *buf,
 		    info->s->base.pack_reclength - info->s->base.reclength);
   }
   if (locked)
-    VOID(_mi_writeinfo(info,0));		/* Unlock keyfile */
+    (void) _mi_writeinfo(info,0);		/* Unlock keyfile */
   if (!error)
   {
     if (!buf[0])
@@ -293,8 +295,17 @@ int _mi_read_rnd_static_record(MI_INFO *info, uchar *buf,
     info->update|= HA_STATE_AKTIV | HA_STATE_KEY_CHANGED;
     DBUG_RETURN(0);
   }
-  /* my_errno should be set if rec_cache.error == -1 */
+  /* error is TRUE. my_errno should be set if rec_cache.error == -1 */
   if (info->rec_cache.error != -1 || my_errno == 0)
-    my_errno=HA_ERR_WRONG_IN_RECORD;
+  {
+    /*
+      If we could not get a full record, we either have a broken record,
+      or are at end of file.
+    */
+    if (info->rec_cache.error == 0)
+      my_errno= HA_ERR_END_OF_FILE;
+    else
+      my_errno= HA_ERR_WRONG_IN_RECORD;
+  }
   DBUG_RETURN(my_errno);			/* Something wrong (EOF?) */
 }

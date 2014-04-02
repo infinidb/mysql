@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -318,7 +318,7 @@ then
     cannot_find_file "$langdir/errmsg.sys"
     exit 1
   fi
-  mysqld_opt="--language=$langdir"
+  mysqld_opt="--lc-messages-dir=$langdir/.."
 fi
 
 # Try to determine the hostname
@@ -363,9 +363,15 @@ do
     mkdir -p $dir
     chmod 700 $dir
   fi
-  if test -w / -a ! -z "$user"
+  if test -n "$user"
   then
     chown $user $dir
+    if test $? -ne 0
+    then
+      echo "Cannot change ownership of the database directories to the '$user'"
+      echo "user.  Check that you have the necessary permissions and try again."
+      exit 1
+    fi
   fi
 done
 
@@ -387,7 +393,7 @@ fi
 # Configure mysqld command line
 mysqld_bootstrap="${MYSQLD_BOOTSTRAP-$mysqld}"
 mysqld_install_cmd_line="$mysqld_bootstrap $defaults $mysqld_opt --bootstrap \
-  --basedir=$basedir --datadir=$ldata --log-warnings=0 --loose-skip-innodb \
+  --basedir=$basedir --datadir=$ldata --log-warnings=0 \
   --loose-skip-ndbcluster $args --max_allowed_packet=8M \
   --default-storage-engine=myisam \
   --net_buffer_length=16K"
@@ -404,7 +410,7 @@ else
   echo
   echo "You can try to start the mysqld daemon with:"
   echo
-  echo "    shell> $mysqld --skip-grant &"
+  echo "    shell> $mysqld --skip-grant-tables &"
   echo
   echo "and use the command line tool $bindir/mysql"
   echo "to connect to the mysql database and look at the grant tables:"
@@ -420,8 +426,8 @@ else
   echo "describes problems on your OS.  Another information source are the"
   echo "MySQL email archives available at http://lists.mysql.com/."
   echo
-  echo "Please check all of the above before mailing us!  And remember, if"
-  echo "you do mail us, you MUST use the $scriptdir/mysqlbug script!"
+  echo "Please check all of the above before submitting a bug report"
+  echo "at http://bugs.mysql.com/"
   echo
   exit 1
 fi
@@ -472,7 +478,7 @@ then
   fi
 
   echo
-  echo "Please report any problems with the $scriptdir/mysqlbug script!"
+  echo "Please report any problems at http://bugs.mysql.com/"
   echo
 fi
 

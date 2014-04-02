@@ -1,5 +1,5 @@
 # -*- cperl -*-
-# Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2005, 2014, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,6 +41,12 @@ our $opt_with_ndbcluster_only;
 our $defaults_file;
 our $defaults_extra_file;
 our $quick_collect;
+# Set to 1 if you want the tests to override
+# default storage engine settings, and use MyISAM
+# as default.  (temporary option used in connection
+# with the change of default storage engine to InnoDB)
+our $default_myisam= 1;
+ 
 
 sub collect_option {
   my ($opt, $value)= @_;
@@ -70,19 +76,10 @@ my $skip_test_reg;
 
 # Related to adding InnoDB plugin combinations
 my $lib_innodb_plugin;
+my $do_innodb_plugin;
 
 # If "Quick collect", set to 1 once a test to run has been found.
 my $some_test_found;
-
-sub find_innodb_plugin {
-  $lib_innodb_plugin=
-    my_find_file($::basedir,
-		 ["storage/innodb_plugin", "storage/innodb_plugin/.libs",
-		  "lib/mysql/plugin", "lib/plugin"],
-		 ["ha_innodb_plugin.dll", "ha_innodb_plugin.so",
-		  "ha_innodb_plugin.sl"],
-		 NOT_REQUIRED);
-}
 
 sub init_pattern {
   my ($from, $what)= @_;
@@ -107,16 +104,29 @@ sub init_pattern {
 #
 ##############################################################################
 
-sub collect_test_cases ($$$) {
+sub collect_test_cases ($$$$) {
   my $opt_reorder= shift; # True if we're reordering tests
   my $suites= shift; # Semicolon separated list of test suites
   my $opt_cases= shift;
+  my $opt_skip_test_list= shift;
   my $cases= []; # Array of hash(one hash for each testcase)
+
+  # Unit tests off by default also if using --do-test or --start-from
+  $::opt_ctest= 0 if $::opt_ctest == -1 && ($do_test || $start_from);
 
   $do_test_reg= init_pattern($do_test, "--do-test");
   $skip_test_reg= init_pattern($skip_test, "--skip-test");
 
-  &find_innodb_plugin;
+  $lib_innodb_plugin=
+    my_find_file($::basedir,
+		 ["storage/innodb_plugin", "storage/innodb_plugin/.libs",
+		  "lib/mysql/plugin", "lib/plugin"],
+		 ["ha_innodb_plugin.dll", "ha_innodb_plugin.so",
+		  "ha_innodb_plugin.sl"],
+		 NOT_REQUIRED);
+  $do_innodb_plugin= ($::mysql_version_id >= 50100 &&
+		      !(IS_WINDOWS && $::opt_embedded_server) &&
+		      $lib_innodb_plugin);
 
   # If not reordering, we also shouldn't group by suites, unless
   # no test cases were named.
@@ -125,9 +135,9 @@ sub collect_test_cases ($$$) {
   {
     foreach my $suite (split(",", $suites))
     {
-      push(@$cases, collect_one_suite($suite, $opt_cases));
+      push(@$cases, collect_one_suite($suite, $opt_cases, $opt_skip_test_list));
       last if $some_test_found;
-      push(@$cases, collect_one_suite("i_".$suite, $opt_cases));
+      push(@$cases, collect_one_suite("i_".$suite, $opt_cases, $opt_skip_test_list));
     }
   }
 
@@ -259,6 +269,7 @@ sub collect_one_suite($)
 {
   my $suite= shift;  # Test suite name
   my $opt_cases= shift;
+  my $opt_skip_test_list= shift;
   my @cases; # Array of hash
 
   mtr_verbose("Collecting: $suite");
@@ -275,12 +286,18 @@ sub collect_one_suite($)
     }
     else
     {
-      $suitedir= my_find_dir($suitedir,
-			     ["suite",
-			      ".",
-			      "../internal/mysql-test/suite"
+      $suitedir= my_find_dir($::basedir,
+			     ["share/mysql-test/suite",
+			      "mysql-test/suite",
+			      "internal/mysql-test/suite",
+			      "mysql-test",
+			      # Look in storage engine specific suite dirs
+			      "storage/*/mtr",
+			      # Look in plugin specific suite dir
+			      "plugin/$suite/tests",
+			      "internal/plugin/$suite/tests",
 			     ],
-			     [$suite], ($suite =~ /^i_/));
+			     [$suite, "mtr"], ($suite =~ /^i_/));
       return unless $suitedir;
     }
     mtr_verbose("suitedir: $suitedir");
@@ -319,38 +336,47 @@ sub collect_one_suite($)
   # Build a hash of disabled testcases for this suite
   # ----------------------------------------------------------------------
   my %disabled;
-  if ( open(DISABLED, "$testdir/disabled.def" ) )
-  {
-    # $^O on Windows considered not generic enough
-    my $plat= (IS_WINDOWS) ? 'windows' : $^O;
+  my @disabled_collection= @{$opt_skip_test_list} if $opt_skip_test_list;
+  unshift (@disabled_collection, "$testdir/disabled.def");
+  for my $skip (@disabled_collection)
+    {
+      if ( open(DISABLED, $skip ) )
+	{
+	  # $^O on Windows considered not generic enough
+	  my $plat= (IS_WINDOWS) ? 'windows' : $^O;
 
-    while ( <DISABLED> )
-      {
-        chomp;
-        #diasble the test case if platform matches
-        if ( /\@/ )
-          {
-             if ( /\@$plat/ )
-               {
-        	  /^\s*(\S+)\s*\@$plat.*:\s*(.*?)\s*$/ ;
-                  $disabled{$1}= $2;
-               }
-             elsif ( /\@!(\S*)/ )
-               {
-                  if ( $1 ne $plat)
-                    {
-        	       /^\s*(\S+)\s*\@!.*:\s*(.*?)\s*$/ ;
-                       $disabled{$1}= $2;
-                    }
-               }
-          }
-       elsif ( /^\s*(\S+)\s*:\s*(.*?)\s*$/ )
-          {
-            $disabled{$1}= $2;
-          }
-      }
-    close DISABLED;
-  }
+	  while ( <DISABLED> )
+	    {
+	      chomp;
+	      #diasble the test case if platform matches
+	      if ( /\@/ )
+		{
+		  if ( /\@$plat/ )
+		    {
+		      /^\s*(\S+)\s*\@$plat.*:\s*(.*?)\s*$/ ;
+		      $disabled{$1}= $2 if not exists $disabled{$1};
+		    }
+		  elsif ( /\@!(\S*)/ )
+		    {
+		      if ( $1 ne $plat)
+			{
+			  /^\s*(\S+)\s*\@!.*:\s*(.*?)\s*$/ ;
+			  $disabled{$1}= $2 if not exists $disabled{$1};
+			}
+		    }
+		}
+	      elsif ( /^\s*(\S+)\s*:\s*(.*?)\s*$/ )
+		{
+		  chomp;
+		  if ( /^\s*(\S+)\s*:\s*(.*?)\s*$/ )
+		    {
+		      $disabled{$1}= $2 if not exists $disabled{$1};
+		    }
+		}
+	    }
+	  close DISABLED;
+	}
+    }
 
   # Read suite.opt file
   my $suite_opt_file=  "$testdir/suite.opt";
@@ -618,6 +644,12 @@ sub optimize_cases {
     foreach my $opt ( @{$tinfo->{master_opt}} ) {
       my $default_engine=
 	mtr_match_prefix($opt, "--default-storage-engine=");
+      my $default_tmp_engine=
+	mtr_match_prefix($opt, "--default-tmp-storage-engine=");
+
+      # Allow use of uppercase, convert to all lower case
+      $default_engine =~ tr/A-Z/a-z/;
+      $default_tmp_engine =~ tr/A-Z/a-z/;
 
       if (defined $default_engine){
 
@@ -639,6 +671,27 @@ sub optimize_cases {
 	  if ( $default_engine =~ /^ndb/i );
 	$tinfo->{'innodb_test'}= 1
 	  if ( $default_engine =~ /^innodb/i );
+      }
+      if (defined $default_tmp_engine){
+
+	#print " $tinfo->{name}\n";
+	#print " - The test asked to use '$default_tmp_engine' as temp engine\n";
+
+	#my $engine_value= $::mysqld_variables{$default_tmp_engine};
+	#print " - The mysqld_variables says '$engine_value'\n";
+
+	if ( ! exists $::mysqld_variables{$default_tmp_engine} and
+	     ! exists $builtin_engines{$default_tmp_engine} )
+	{
+	  $tinfo->{'skip'}= 1;
+	  $tinfo->{'comment'}=
+	    "'$default_tmp_engine' not supported";
+	}
+
+	$tinfo->{'ndb_test'}= 1
+	  if ( $default_tmp_engine =~ /^ndb/i );
+	$tinfo->{'innodb_test'}= 1
+	  if ( $default_tmp_engine =~ /^innodb/i );
       }
     }
 
@@ -934,18 +987,11 @@ sub collect_one_test_case {
   if ( $tinfo->{'ndb_test'} )
   {
     # This is a NDB test
-    if ( $::opt_skip_ndbcluster == 2 )
+    if ( $::ndbcluster_enabled == 0)
     {
-      # Ndb is not supported, skip it
+      # ndbcluster is disabled
       $tinfo->{'skip'}= 1;
-      $tinfo->{'comment'}= "No ndbcluster support or ndb tests not enabled";
-      return $tinfo;
-    }
-    elsif ( $::opt_skip_ndbcluster )
-    {
-      # All ndb test's should be skipped
-      $tinfo->{'skip'}= 1;
-      $tinfo->{'comment'}= "No ndbcluster tests(--skip-ndbcluster)";
+      $tinfo->{'comment'}= "ndbcluster disabled";
       return $tinfo;
     }
   }
@@ -976,47 +1022,21 @@ sub collect_one_test_case {
     {
       # innodb is not supported, skip it
       $tinfo->{'skip'}= 1;
+      # This comment is checked for running with innodb plugin (see above),
+      # please keep that in mind if changing the text.
       $tinfo->{'comment'}= "No innodb support";
-      return $tinfo;
+      # But continue processing if we may run it with innodb plugin
+      return $tinfo unless $do_innodb_plugin;
     }
   }
-  elsif ( $tinfo->{'innodb_plugin_test'} )
+  elsif ($default_myisam)
   {
-    # This is a test that needs the innodb plugin
-    if (!&find_innodb_plugin)
-    {
-      # innodb plugin is not supported, skip it
-      $tinfo->{'skip'}= 1;
-      $tinfo->{'comment'}= "No innodb plugin support";
-      return $tinfo;
-    }
-
-    my $sep= (IS_WINDOWS) ? ';' : ':';
-    my $plugin_filename= basename($lib_innodb_plugin);
-    my $plugin_list=
-      "innodb=$plugin_filename$sep" .
-      "innodb_trx=$plugin_filename$sep" .
-      "innodb_locks=$plugin_filename$sep" .
-      "innodb_lock_waits=$plugin_filename$sep" .
-      "innodb_cmp=$plugin_filename$sep" .
-      "innodb_cmp_reset=$plugin_filename$sep" .
-      "innodb_cmpmem=$plugin_filename$sep" .
-      "innodb_buffer_page=$plugin_filename$sep" .
-      "innodb_buffer_page_lru=$plugin_filename$sep" .
-      "innodb_buffer_pool_stats=$plugin_filename$sep" .
-      "innodb_cmpmem_reset=$plugin_filename";
-
-    foreach my $k ('master_opt', 'slave_opt') 
-    {
-      push(@{$tinfo->{$k}}, '--ignore-builtin-innodb');
-      push(@{$tinfo->{$k}}, '--plugin-dir=' . dirname($lib_innodb_plugin));
-      push(@{$tinfo->{$k}}, "--plugin-load=$plugin_list");
-    }
-  }
-  else
-  {
-    push(@{$tinfo->{'master_opt'}}, "--loose-skip-innodb");
-    push(@{$tinfo->{'slave_opt'}}, "--loose-skip-innodb");
+    # This is a temporary fix to allow non-innodb tests to run even if
+    # the default storage engine is innodb.
+    push(@{$tinfo->{'master_opt'}}, "--default-storage-engine=MyISAM");
+    push(@{$tinfo->{'slave_opt'}}, "--default-storage-engine=MyISAM");
+    push(@{$tinfo->{'master_opt'}}, "--default-tmp-storage-engine=MyISAM");
+    push(@{$tinfo->{'slave_opt'}}, "--default-tmp-storage-engine=MyISAM");
   }
 
   if ( $tinfo->{'need_binlog'} )
@@ -1065,6 +1085,13 @@ sub collect_one_test_case {
       $tinfo->{'comment'}= "No SSL support";
       return $tinfo;
     }
+  }
+
+  if ( $tinfo->{'not_windows'} && IS_WINDOWS )
+  {
+    $tinfo->{'skip'}= 1;
+    $tinfo->{'comment'}= "Test not supported on Windows";
+    return $tinfo;
   }
 
   # ----------------------------------------------------------------------
@@ -1138,7 +1165,6 @@ my @tags=
  ["include/have_log_bin.inc", "need_binlog", 1],
 
  ["include/have_innodb.inc", "innodb_test", 1],
- ["include/have_innodb_plugin.inc", "innodb_plugin_test", 1],
  ["include/big_test.inc", "big_test", 1],
  ["include/have_debug.inc", "need_debug", 1],
  ["include/have_ndb.inc", "ndb_test", 1],
@@ -1149,6 +1175,8 @@ my @tags=
  ["federated.inc", "federated_test", 1],
  ["include/not_embedded.inc", "not_embedded", 1],
  ["include/have_ssl.inc", "need_ssl", 1],
+ ["include/have_ssl_communication.inc", "need_ssl", 1],
+ ["include/not_windows.inc", "not_windows", 1],
 );
 
 
@@ -1218,7 +1246,7 @@ sub opts_from_file ($) {
   {
     chomp;
 
-    #    --set-variable=init_connect=set @a='a\\0c'
+    #    --init_connect=set @a='a\\0c'
     s/^\s+//;                           # Remove leading space
     s/\s+$//;                           # Remove ending space
 

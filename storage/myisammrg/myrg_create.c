@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2001, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+/* Copyright (c) 2000, 2001, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -13,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Create a MYMERGE_-file */
 
@@ -35,9 +33,10 @@ int myrg_create(const char *name, const char **table_names,
   DBUG_ENTER("myrg_create");
 
   errpos=0;
-  if ((file = my_create(fn_format(buff,name,"",MYRG_NAME_EXT,
-                                  MY_UNPACK_FILENAME|MY_APPEND_EXT),0,
-       O_RDWR | O_EXCL | O_NOFOLLOW,MYF(MY_WME))) < 0)
+  if ((file= mysql_file_create(rg_key_file_MRG,
+                               fn_format(buff, name, "", MYRG_NAME_EXT,
+                                         MY_UNPACK_FILENAME|MY_APPEND_EXT), 0,
+                               O_RDWR | O_EXCL | O_NOFOLLOW, MYF(MY_WME))) < 0)
     goto err;
   errpos=1;
   if (table_names)
@@ -49,8 +48,8 @@ int myrg_create(const char *name, const char **table_names,
 	fn_same(buff,name,4);
       *(end=strend(buff))='\n';
       end[1]=0;
-      if (my_write(file,(uchar*) buff,(uint) (end-buff+1),
-		   MYF(MY_WME | MY_NABP)))
+      if (mysql_file_write(file, (uchar*) buff, (uint) (end-buff+1),
+                           MYF(MY_WME | MY_NABP)))
 	goto err;
     }
   }
@@ -58,10 +57,11 @@ int myrg_create(const char *name, const char **table_names,
   {
     end=strxmov(buff,"#INSERT_METHOD=",
 		get_type(&merge_insert_method,insert_method-1),"\n",NullS);
-    if (my_write(file, (uchar*) buff,(uint) (end-buff),MYF(MY_WME | MY_NABP)))
+    if (mysql_file_write(file, (uchar*) buff, (uint) (end-buff),
+                         MYF(MY_WME | MY_NABP)))
         goto err;
   }
-  if (my_close(file,MYF(0)))
+  if (mysql_file_close(file, MYF(0)))
     goto err;
   DBUG_RETURN(0);
 
@@ -69,7 +69,7 @@ err:
   save_errno=my_errno ? my_errno : -1;
   switch (errpos) {
   case 1:
-    VOID(my_close(file,MYF(0)));
+    (void) mysql_file_close(file, MYF(0));
   }
   DBUG_RETURN(my_errno=save_errno);
 } /* myrg_create */

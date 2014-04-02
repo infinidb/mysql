@@ -1,6 +1,6 @@
 # truncate a giving file, all contents of the file are be cleared
 
-if (`SELECT 'x$file' = 'x'`)
+if (!$file)
 {
   --echo Please assign a file name to $file!!
   exit;
@@ -9,8 +9,8 @@ if (`SELECT 'x$file' = 'x'`)
 let TRUNCATE_FILE= $file;
 
 perl;
-use Env;
-Env::import('TRUNCATE_FILE');
-open FILE, '>', $TRUNCATE_FILE || die "Can not open file $file";
+my $filename = $ENV{'TRUNCATE_FILE'}; 
+$filename =~ s/\/\//\//;
+open FILE, '>', $filename || die "Can not open file $filename";
 close FILE;
 EOF

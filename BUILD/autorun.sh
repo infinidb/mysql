@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2005-2007 MySQL AB
+# Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -14,36 +14,14 @@
 #
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
 # MA 02110-1301, USA
 
-# Create MySQL autotools infrastructure
+# Create MySQL cmake configure wrapper
 
 die() { echo "$@"; exit 1; }
 
-# Handle "glibtoolize" (e.g., for native OS X autotools) as another
-# name for "libtoolize". Use the first one, either name, found in PATH.
-LIBTOOLIZE=libtoolize  # Default
-IFS="${IFS=   }"; save_ifs="$IFS"; IFS=':'
-for dir in $PATH
-do
-  if test -x $dir/glibtoolize
-  then
-    LIBTOOLIZE=glibtoolize
-    break
-  elif test -x $dir/libtoolize
-  then
-    break
-  fi
-done
-IFS="$save_ifs"
-
-aclocal || die "Can't execute aclocal" 
-autoheader || die "Can't execute autoheader"
-# --force means overwrite ltmain.sh script if it already exists 
-$LIBTOOLIZE --automake --force --copy || die "Can't execute libtoolize"
-  
-# --add-missing instructs automake to install missing auxiliary files
-# and --force to overwrite them if they already exist
-automake --add-missing --force  --copy || die "Can't execute automake"
-autoconf || die "Can't execute autoconf"
+# Use a configure script that will call CMake.
+path=`dirname $0`
+cp $path/cmake_configure.sh $path/../configure
+chmod +x $path/../configure

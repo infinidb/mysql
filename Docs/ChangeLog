@@ -1,0 +1,1424 @@
+------------------------------------------------------------
+revno: 5859
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Fri 2014-03-14 19:45:58 +0100
+message:
+  Bug#18402229 - Resolve mysql conflict with mysql-community-client
+------------------------------------------------------------
+revno: 5858
+committer: Bjorn Munch <bjorn.munch@oracle.com>
+branch nick: rel-5617
+timestamp: Thu 2014-03-13 16:37:01 +0100
+message:
+  Followup fix, mysql_install_db now required /dev/urandom, fix that
+------------------------------------------------------------
+revno: 5857
+committer: Bjorn Munch <bjorn.munch@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Thu 2014-03-13 14:51:44 +0100
+message:
+  Remove patches for fedora and oel related to latest commit
+------------------------------------------------------------
+revno: 5856
+committer: Bjorn Munch <bjorn.munch@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Thu 2014-03-13 14:27:11 +0100
+message:
+  Bug #18395378 MYSQL_INSTALL_DB HANGS ON SLES11
+  
+    Backporting part of change from trunk, using Perl instead of a
+    shell pipe to read from /dev/urandom
+------------------------------------------------------------
+revno: 5855 [merge]
+committer: Laasya Moduludu <laasya.moduludu@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Thu 2014-03-13 14:21:27 +0100
+message:
+  merge for 18383840
+    ------------------------------------------------------------
+    revno: 5853.1.1
+    committer: Mattias Jonsson <mattias.jonsson@oracle.com>
+    branch nick: test-5.6.17-release
+    timestamp: Thu 2014-03-13 09:30:14 +0100
+    message:
+      Bug#18383840: SEGV IN MEMCPY(), HA_PARTITION::POSITION
+      
+      post-push fix for:
+      Regression from bug#18167648: WRONG RESULTS WITH PARTITIONING,
+      INDEX_MERGE MYISAM AND NO PK INNODB
+      
+      The priority queue is setup in ha_partition::index_init() and also sets
+      m_sec_sort_by_rowid. But in case the index scan is only done on one partition,
+      due to pruning, the priority queue will not be used and the ref will not be
+      copied into the priority queue. So only checking m_sec_sort_by_rowid is not
+      enough to ensure that the ref is accessible.
+      
+      Fixed by checking that ordered scan is used.
+------------------------------------------------------------
+revno: 5854 [merge]
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Wed 2014-03-12 14:38:08 +0100
+message:
+  Bug#18389088 - Resolve conflict with mysql-libs-compat
+    ------------------------------------------------------------
+    revno: 2875.468.6
+    committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+    branch nick: mysql-5.5.37-release
+    timestamp: Wed 2014-03-12 14:30:20 +0100
+    message:
+      Bug#18389088 - Resolve conflict with mysql-libs-compat
+------------------------------------------------------------
+revno: 5853 [merge]
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Thu 2014-03-06 12:50:27 +0100
+message:
+  Corrected typo in changelog
+    ------------------------------------------------------------
+    revno: 2875.468.5
+    committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+    branch nick: mysql-5.5.37-release
+    timestamp: Thu 2014-03-06 12:45:07 +0100
+    message:
+      Corrected typo in changelog
+------------------------------------------------------------
+revno: 5852 [merge]
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6.17-release
+timestamp: Thu 2014-03-06 11:35:17 +0100
+message:
+  Bug#18327194 - Resolve confict issues during upgrade
+    ------------------------------------------------------------
+    revno: 2875.468.4
+    committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+    branch nick: mysql-5.5.37-release
+    timestamp: Thu 2014-03-06 11:23:15 +0100
+    message:
+      Bug#18327194 - Resolve confict issues during upgrade
+------------------------------------------------------------
+revno: 5851
+committer: Mattias Jonsson <mattias.jonsson@oracle.com>
+branch nick: topush-5.6.17
+timestamp: Wed 2014-03-05 10:07:38 +0100
+message:
+  Bug#18167648: WRONG RESULTS WITH PARTITIONING,
+  INDEX_MERGE AND NO PK
+  
+  Index merge intersect/union expects rowid-ordered-retrieval, sorted like
+  handler::cmp_ref compares records.
+  I.e. after sorting by KEY it should also be sorted by handler::ref (rowid).
+  
+  The partitioning engine only sorts by KEY, unless clustered primary key
+  exists, when it also sorts by PK in case the KEY values are compares as
+  equal.
+  
+  This means that for InnoDB tables without primary key or any other engine,
+  which not clusters by primary key, index merge intersect/union can return
+  wrong results.
+  
+  The fix is to also sort by handler::ref if KEY values compares as equal.
+  
+  To avoid extra sorting when not needed (where rowid-ordered-retrieval is not
+  needed, like ordinary secondary key scanning)
+  ha_extra(HA_EXTRA_SECONDARY_SORT_ROWID) is added for index merge
+  intersect/union.
+------------------------------------------------------------
+revno: 5850
+tags: clone-5.6.17-build
+committer: Chaithra Gopalareddy <chaithra.gopalareddy@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-03-03 15:58:21 +0530
+message:
+  
+  Post push fix for Bug#18014565
+------------------------------------------------------------
+revno: 5849
+committer: Chaithra Gopalareddy <chaithra.gopalareddy@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-28 15:01:41 +0530
+message:
+  Bug#18014565: WRONG RESULT COMPUTATION USING ALL() AND GROUP BY
+  
+  Problem:
+  Aggregation does not happen correctly because substitution for
+  subquery is created with wrong item.
+  
+  Analysis:
+  Currently while creating a substitution for ALL/ANY subqueries,
+  optimizer uses "real_item" instead of the ref_item.
+  If this happens to be a reference to an aggregate function
+  then it would be creating the substitution with SUM_FUNC_ITEM
+  rather than the REF_ITEM.
+  
+  If an aggregate function is present in having clause, optimizer
+  calls split_sum_func2 to add the aggregate functions
+  to the list of items in the select list.
+  
+  Ex: In the following query
+  select f1, sum(f2) as sum from t1 group by f1 having sum >
+                                                all (select 1);
+  
+  "sum" in having clause is a reference to sum(f2). So while
+  creating the substitution we create using the real_item of
+  "sum" which is sum(f2). In split_sum_func2 we add this
+  "sum(f2)" to the item list. As a result the item list now
+  becomes "sum(f2), f1, sum(f2)". This results in creation
+  of three fields in tmp_table. But both the sum(f2)'s would
+  be pointing to the same result_field. So, while aggregating
+  same result is added twice.
+  Before the fix for Bug#16095534, the type would remain
+  REF_ITEM and thereby optimizer would not be adding "sum"
+  to the select item list.
+  
+  Solution:
+  The problem addressed in Bug#16095534 exists only for Item_ref
+  objects created while resolving not for the ref objects created
+  during parsing. So use real_item only for such items.
+------------------------------------------------------------
+revno: 5848
+committer: Georgi Kodinov <georgi.kodinov@oracle.com>
+branch nick: x-5.6
+timestamp: Fri 2014-02-28 10:40:25 +0200
+message:
+  newline at the end of a new file added.
+------------------------------------------------------------
+revno: 5847
+committer: Sujatha Sivakumar <sujatha.sivakumar@oracle.com>
+branch nick: Bug17986385_mysql-5.6
+timestamp: Fri 2014-02-28 13:51:13 +0530
+message:
+  Bug#17986385:LOG-WARNINGS=2 UNUSABLE ON SLAVE WITH FILTERS
+  
+  Retaining the error log to identify the test behaviour.
+------------------------------------------------------------
+revno: 5846 [merge]
+committer: Satya Bodapati <satya.bodapati@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-28 12:47:32 +0530
+message:
+  Merge fix for BUG#18124788 from mysql-5.5 to mysql-5.6
+    ------------------------------------------------------------
+    revno: 2875.468.3
+    tags: clone-5.5.37-build
+    committer: Satya Bodapati <satya.bodapati@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Fri 2014-02-28 12:45:53 +0530
+    message:
+      Bug#18124788 - COMPRESSED TABLES REGRESSION FROM 5.6.13
+      
+      After incrementing the number of pending uncompression operations,
+      buffer pool zip mutex can be released immediately.
+      
+      Approved by Vasil. rb#4514
+------------------------------------------------------------
+revno: 5845 [merge]
+committer: Georgi Kodinov <georgi.kodinov@oracle.com>
+branch nick: B18295445-5.6
+timestamp: Thu 2014-02-27 12:27:19 +0200
+message:
+  merge
+    ------------------------------------------------------------
+    revno: 5843.1.1
+    committer: Georgi Kodinov <georgi.kodinov@oracle.com>
+    branch nick: B18295445-5.6
+    timestamp: Tue 2014-02-25 12:40:20 +0200
+    message:
+      Bug #18295445: BACKPORT aes_encrypt/decrypt  block mode and key length extensions to 5.6
+      
+      This is a backport of WL#6781 to 5.6.
+------------------------------------------------------------
+revno: 5844
+committer: Anitha Gopi <anitha.gopi@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-27 04:08:57 +0100
+message:
+  Removed --debug-server from embedded run commandline since there are no debug builds for embedded server
+------------------------------------------------------------
+revno: 5843
+committer: Nisha Gopalakrishnan <nisha.gopalakrishnan@oracle.com>
+branch nick: mysql-5.6-online
+timestamp: Wed 2014-02-26 19:16:46 +0530
+message:
+  BUG# 13975225: ONLINE OPTIMIZE TABLE FOR INNODB TABLES 
+  
+  Post push fix for test case innodb_mysql_sync on 5.6.
+------------------------------------------------------------
+revno: 5842
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Wed 2014-02-26 09:52:40 +0530
+message:
+  Bug#18144349 INNODB CANNOT USE THE DOUBLEWRITE BUFFER FOR THE FIRST PAGE OF
+  SYSTEM TABLESPACE
+  
+  Follow up patch to fix pb2 failures.  During recovery, if a data page is filled
+  with zeros, and its valid copy is available in the double write buffer, then we
+  recover the page from the double write buffer.  When this happens a warning was
+  issued.  This warning is causing many crash recovery tests to fail.  Also, the
+  usefulness of this warning has not been established.  So warning is removed.
+  
+  approved by Sunny via IM.
+------------------------------------------------------------
+revno: 5841 [merge]
+committer: Tor Didriksen <tor.didriksen@oracle.com>
+branch nick: 5.6-merge
+timestamp: Tue 2014-02-25 18:05:40 +0100
+message:
+  merge 5.5 => 5.6
+    ------------------------------------------------------------
+    revno: 2875.468.2
+    committer: Tor Didriksen <tor.didriksen@oracle.com>
+    branch nick: 5.5
+    timestamp: Tue 2014-02-25 09:07:44 +0100
+    message:
+      Bug#18235669 MYSQL_CONFIG TO PROVIDE R FLAG ON SOLARIS
+      
+      'mysql_config --libs' outputs -L/path/to/library
+      on SunOS we also want it to output '-R/path/to/library'
+      in order to find libraries at runtime.
+------------------------------------------------------------
+revno: 5840 [merge]
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-25 18:43:27 +0530
+message:
+  Bug 17926328 Null merge
+    ------------------------------------------------------------
+    revno: 2875.468.1
+    committer: sayantan dutta <sayantan.dutta@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Tue 2014-02-25 18:42:14 +0530
+    message:
+      Bug #17926328 - MTR SHOULD NOT WAIT FOR CHILDREN WHEN ABORTING TEST RUN ON WINDOWS
+------------------------------------------------------------
+revno: 5839 [merge]
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-25 18:38:13 +0530
+message:
+  Bug 17926328 Null merge
+    ------------------------------------------------------------
+    revno: 2875.437.354
+    committer: sayantan dutta <sayantan.dutta@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Tue 2014-02-25 18:36:04 +0530
+    message:
+      Bug #17926328 - MTR SHOULD NOT WAIT FOR CHILDREN WHEN ABORTING TEST RUN ON WINDOWS
+------------------------------------------------------------
+revno: 5838
+committer: Libing Song <libing.song@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-25 09:39:34 +0800
+message:
+  BUG#17632285 SLAVE CAN'T CONTINUE REPLICATION AFTER MASTER'S
+               CRASH RECOVERY
+  
+  Binary events might be sent to slaves before they are flushed
+  to disk on master, even sync_binlog is set to 1. It can cause
+  two problems if the master restarts after an OS crash.
+  * Replication cannot continue because the slaves are
+    requesting to replication the events don't exist on master.
+  * Data exists on slaves, but not exists on the master.
+  
+  The problems are expected on less durable settings(
+  sync_binlog != 1), but it should not happen on durable
+  setting(sync_binlog = 1).
+  
+  Since 5.6 binlog group commit implementation, binlog write
+  and sync have been protected by separate mutexes. So dump
+  threads can read the binary events simultaneously or even
+  before it is synced to disk.
+  
+  To fixing the problem on durable setting, LOCK_log is hold
+  in sync stage and it is released after the binary events are
+  synced to disk.
+------------------------------------------------------------
+revno: 5837
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-24 20:28:04 +0530
+message:
+  Bug #18161853 SEGV IN LOCK_REC_OTHER_TRX_HOLDS_EXPL()
+  
+  Problem:
+  
+  In the function lock_rec_other_trx_holds_expl(), the transaction list
+  trx_sys->rw_trx_list is traversed end to end without taking the
+  transaction subsystem mutex (trx_sys->mutex).  Because of this
+  segmentation faults are possible.
+  
+  Solution:
+  
+  Acquire the transaction subsystem mutex, and then traverse the transaction
+  list trx_sys->rw_trx_list.
+  
+  approved by Sunny over IM.
+------------------------------------------------------------
+revno: 5836
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-24 18:44:37 +0530
+message:
+  Follow-up fix : Bug #18145121 - DEPRECATED PERL SYNTAX IN MTR
+------------------------------------------------------------
+revno: 5835
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-24 16:55:33 +0530
+message:
+  Bug #18161853 SEGV IN LOCK_REC_OTHER_TRX_HOLDS_EXPL()
+  Reverting fix for this because it is causing deadlock issues in pb2.
+------------------------------------------------------------
+revno: 5834
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-24 15:20:56 +0530
+message:
+  Bug #18161853 SEGV IN LOCK_REC_OTHER_TRX_HOLDS_EXPL()
+  
+  Problem:
+  
+  In the function lock_rec_other_trx_holds_expl(), the transaction list
+  trx_sys->rw_trx_list is traversed end to end without taking the
+  transaction subsystem mutex (trx_sys->mutex).  Because of this
+  segmentation faults are possible.
+  
+  Solution:
+  
+  Acquire the transaction subsystem mutex, and then traverse the transaction
+  list trx_sys->rw_trx_list.
+  
+  approved by Sunny over IM.
+------------------------------------------------------------
+revno: 5833
+committer: Jon Olav Hauglid <jon.hauglid@oracle.com>
+branch nick: mysql-5.6-bug18054042
+timestamp: Fri 2014-02-21 12:57:32 +0100
+message:
+  Bug#18054042: MY_ATOMIC_* FUNCTIONS ALWAYS USE RW-LOCKS ON WINDOWS
+  
+  Due to a typo (#ifdef _MSV_VER rather than #ifdef _MSC_VER),
+  we always used our rw-lock backup implementation for my_atomic_*
+  functions rather than the native Windows implementation.
+  
+  This patch fixes the typo so that we again use proper atomics
+  on Windows.
+------------------------------------------------------------
+revno: 5832
+committer: Andrei Elkin <andrei.elkin@oracle.com>
+branch nick: 5.6-fixes4
+timestamp: Fri 2014-02-21 13:37:35 +0200
+message:
+  Bug18001777 post-push fixing.
+------------------------------------------------------------
+revno: 5831
+committer: Raghav Kapoor <raghav.kapoor@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-21 13:27:46 +0530
+message:
+  Post Push fix for failing tests in 5.6 after push of WL#7467
+------------------------------------------------------------
+revno: 5830
+committer: mithun <mithun.c.y@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-20 16:59:59 +0530
+message:
+  Bug #17080703: INCONSISTENT DATETIME CONVERSIONS WITH
+                 FRACTIONAL SECONDS
+  
+  ISSUE :
+  -------
+  A temporal literal string without delimiters and having > 14
+  digits was validated as a TIMESTAMP/DATETIME value with two
+  digit precision fractional seconds. For example, a 16 digit
+  string 'xxxxxxxxxxxxxxxx' is interpreted as
+  'XXXX-XX-XX XX:XX:XX.xx'. But fractional seconds should
+  always be separated from other parts of time. And, decimal
+  point is the only delimiter which separates the fractional
+  seconds from rest.
+  
+  SOLUTION :
+  ----------
+  Reject all time typed strings where the fractional seconds
+  are not separated by a decimal point.
+------------------------------------------------------------
+revno: 5829 [merge]
+committer: Raghav Kapoor <raghav.kapoor@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-20 15:01:54 +0530
+message:
+  WL#7467: Deprecate (5.6) and remove (5.7) ERROR_FOR_DIVISION_BY_ZERO,
+           NO_ZERO_DATE, NO_ZERO_IN_DATE SQL MODES and make their
+           functionality part of STRICT MODE
+  
+  This is 5.6 version of the patch.
+  
+  This patch adds Deprecation Warning when ERROR_FOR_DIVISION_BY_ZERO,
+  NO_ZERO_DATE, NO_ZERO_IN_DATE SQL MODES or any combination of 
+  them are explicitly set by the user.
+    ------------------------------------------------------------
+    revno: 5751.1.1
+    committer: Raghav Kapoor <raghav.kapoor@oracle.com>
+    branch nick: mysql-5.6
+    timestamp: Wed 2014-01-15 16:34:28 +0530
+    message:
+      WL#7467: Deprecate (5.6) and remove (5.7) ERROR_FOR_DIVISION_BY_ZERO,
+               NO_ZERO_DATE, NO_ZERO_IN_DATE SQL MODES and make their
+               functionality part of STRICT MODE
+      
+      This is 5.6 version of the patch.
+      
+      This patch adds Deprecation Warning when ERROR_FOR_DIVISION_BY_ZERO,
+      NO_ZERO_DATE, NO_ZERO_IN_DATE SQL MODES are explicitly set.
+------------------------------------------------------------
+revno: 5828
+committer: Shaohua Wang <shaohua.wang@oracle.com>
+branch nick: mysql-5.6-bugfix2
+timestamp: Wed 2014-02-19 18:15:08 +0800
+message:
+  BUG#18229433 FTS: INVALID MEMMOVE IN FTS_QUERY_FETCH_DOCUMENT CAUSE CRASH
+  
+  In fts_query_fetch_document, we do 'prev_len += cur_len + 1',
+  but we don't check if 'cur_len != UNIV_SQL_NULL', so cause
+  'memcpy(document_text + prev_len, data, cur_len);' to crash.
+  
+  rb://4702 approved by Jimmy.Yang
+------------------------------------------------------------
+revno: 5827
+committer: Shaohua Wang <shaohua.wang@oracle.com>
+branch nick: mysql-5.6-bugfix1
+timestamp: Wed 2014-02-19 17:03:14 +0800
+message:
+  Follow up fix for BUG#18180057: MANUAL DOES NOT EXPLAIN UPPER
+  LIMIT FOR INNODB_FT_RESULT_CACHE_LIMIT VALUE
+  
+  Build error in some 32-bit platform handler/ha_innodb.cc:15819:1:
+  error: this decimal constant is unsigned only in ISO C90 [-Werror]
+  
+  Approved by Jimmy.Yang in IM.
+------------------------------------------------------------
+revno: 5826
+committer: Shaohua Wang <shaohua.wang@oracle.com>
+branch nick: mysql-5.6-bugfix2
+timestamp: Wed 2014-02-19 16:41:14 +0800
+message:
+  Commit Message:
+  BUG#18233051 - FTS: FAILING ASSERTION: NUM_TOKEN < MAX_PROXIMITY_ITEM
+  
+  Analysis:
+  We don't check NUM_TOKEN < MAX_PROXIMITY_ITEM, so the assertion fails.
+  
+  Solution:
+  1. Return error if number of token in a phrase or proximity search;
+  2. Fix related problem in fts_proximity_get_positions.
+     the possible combination containing all the words in a proximity search
+     can be a large number greater than MAX_PROXIMITY_ITEM.
+  
+  rb://4686 approved by Jimmy.Yang
+------------------------------------------------------------
+revno: 5825
+committer: Sujatha Sivakumar <sujatha.sivakumar@oracle.com>
+branch nick: Bug17581990_mysql-5.6
+timestamp: Wed 2014-02-19 10:15:51 +0530
+message:
+  Bug#17581990:SLAVE SQL: COULD NOT EXECUTE QUERY EVENT.
+  DETAILED ERROR: ;, ERROR_CODE: 0
+  
+  Problem:
+  ========
+  Setting slave-skip-errors=all on the slave will make mysql
+  slave error log to grow continuously with the following
+  warnings.
+  
+  [Warning] Slave SQL: Could not execute Query event.
+  Detailed error: ;, Error_code: 0
+  
+  Analysis:
+  ========
+  This warning is generated during execution of Query event
+  from the following peace of code.
+  
+  else if ((expected_error == actual_error &&
+            !concurrency_error_code(expected_error)) ||
+           ignored_error_code(actual_error))
+  {
+    DBUG_PRINT("info",("error ignored"));
+    if (log_warnings > 1 && ignored_error_code(actual_error))
+      rli->report(WARNING_LEVEL, actual_error,...
+  
+  The warning mainly depends on two parameters named
+  "expected_error" and "actual_error". These two variables
+  are initialised to zero by default. During the execution
+  when there is no change in their values their values will
+  remain as zeroes.
+  
+  Condition1: becomes true
+  Condition2: It considers 0 as non concurrency related error
+  code causing condition 2 to become true.
+  condition3: 0 is considered as ignored error code.
+  Hence the whole condition becomes true and warning gets
+  generated.
+  
+  Fix:
+  ===
+  Having "actual == expected == 0" must not be considered as a
+  valid error condition. Hence if non zero value exists for
+  this variable only then it should be checked for ignored
+  error.
+------------------------------------------------------------
+revno: 5824 [merge]
+committer: Andrei Elkin <andrei.elkin@oracle.com>
+branch nick: 5.6-fixes4
+timestamp: Tue 2014-02-18 19:52:59 +0200
+message:
+  merging 5.6 repo with local Bug18001777 fixing branch.
+    ------------------------------------------------------------
+    revno: 5822.1.1
+    committer: Andrei Elkin <andrei.elkin@oracle.com>
+    branch nick: 5.6-fixes4
+    timestamp: Tue 2014-02-18 14:34:43 +0200
+    message:
+      Bug #18001777 MYSQL SLAVE SQL THREAD MEMORY hogging
+      
+      
+      Technically it's not a leak which the reporter admits himself, see
+      the bug report.
+      
+      Source code examination showed that the problem was in usage of an
+      incorrect mem-root. The main THD root of Coordinator thread was never
+      reset.
+      After discussion with reviewer a solution to dismantle the specific
+      root is decided. Instead array of pointers to database names of a
+      maximum size is allocated in the stack which is correct 'cos database
+      names do not get out scope of gets destructed while their pointers are
+      processed.
+      The fixes are verified on memory consumption to prove correctness of
+      the found suspect and the fixing method.
+------------------------------------------------------------
+revno: 5823
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-18 17:57:54 +0530
+message:
+  Follow up Fix: Bug #18145121 - DEPRECATED PERL SYNTAX IN MTR
+------------------------------------------------------------
+revno: 5822
+committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-18 16:11:54 +0530
+message:
+  Updated/added copyright header: Added Use is subject to license terms.
+------------------------------------------------------------
+revno: 5821 [merge]
+committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-17 18:25:18 +0530
+message:
+  Null merging the changes from 5.5
+    ------------------------------------------------------------
+    revno: 2875.437.353
+    committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Mon 2014-02-17 18:19:04 +0530
+    message:
+      Updated/added copyright header. Added line "use is subject to license terms" 
+      to copyright header.
+------------------------------------------------------------
+revno: 5820
+committer: Nisha Gopalakrishnan <nisha.gopalakrishnan@oracle.com>
+branch nick: mysql-5.6-13975225
+timestamp: Mon 2014-02-17 15:12:16 +0530
+message:
+  BUG# 13975227: ONLINE OPTIMIZE TABLE FOR INNODB TABLES
+  
+  Analysis:
+  --------
+  OPTIMIZE TABLE on INNODB or PARTITIONED INNODB tables
+  doesn't allow concurrent changes to the same table, thus
+  causing down time in user applications.
+  
+  OPTIMIZE TABLE for INNODB or PARTITIONED INNODB tables
+  uses ALTER TABLE FORCE operation internally to address
+  the fragmentation problem. This operations involves a table
+  copy and taking a strong lock on SQL-layer which blocks
+  all concurrent changes to the table. The downtime is high
+  while performing the operation for large tables.
+  
+  Fix:
+  ----
+  MySQL supports online rebuilding of tables within the storage
+  engine for INNODB or PARTITIONED INNODB tables starting from
+  MySQL 5.6.4. With this patch, the operations listed below
+  will trigger online rebuild of table.
+  a) OPTIMIZE TABLE.
+  b) ALTER TABLE FORCE and
+  c) ALTER TABLE ENGINE= INNODB(Same engine during creation)
+  
+  The online rebuild involves taking strong lock only for
+  brief interval of time thus reducing the downtime for
+  the operations. Concurrent changes to the table are
+  allowed and the time taken to complete the operation
+  is reduced considerably.
+  
+  Note that these operations will continue to use table
+  copy under any of the below conditions:
+  a) 'old_alter_table' system variable is turned ON.
+  b) 'skip-new' mysqld option is enabled and OPTIMIZE
+      TABLE operation is performed.
+  c) Algorithm COPY is explicitly specified for the
+     ALTER TABLE operations.
+------------------------------------------------------------
+revno: 5819 [merge]
+committer: Thirunarayanan B<thirunarayanan.balathandayuth@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-17 13:49:45 +0530
+message:
+  Bug #18010711	 UNIQUE PREFIX INDEX ON BINARY COLUMN:
+                    FAILING ASSERTION: FLEN == LEN
+  	Merge from 5.5
+    ------------------------------------------------------------
+    revno: 2875.437.352
+    committer: Thirunarayanan B<thirunarayanan.balathandayuth@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Mon 2014-02-17 13:45:34 +0530
+    message:
+      Bug #18010711	 UNIQUE PREFIX INDEX ON BINARY COLUMN:
+                        FAILING ASSERTION: FLEN == LEN
+      
+      Problem:
+             Broken invariant triggered when building a unique index on a
+      binary column and the input data contains duplicate keys. This was broken
+      in debug builds only.
+      
+      Fix:
+             Fixed length of the binary datatype can be greater than length of
+      the shorter prefix on which index is being created.
+------------------------------------------------------------
+revno: 5818
+committer: Erlend Dahl <erlend.dahl@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-14 10:48:42 +0100
+message:
+  This patch implements
+  
+  WL#7620: Deprecate and remove mysqlaccess 
+  WL#7034: Deprecate and remove mysql_convert_table_format
+  WL#7036: Deprecate and remove mysql_fix_extensions
+  WL#7621: Deprecate and remove mysql_find_rows.sh
+  WL#7033: Deprecate and remove mysql_setpermission
+  WL#7035: Deprecate and remove msql2mysql 
+  
+  See also 
+  
+  Bug#18179576, Bug#16699317, Bug#16699284, Bug#11746603, Bug#16699279 and Bug#16699248
+------------------------------------------------------------
+revno: 5817
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-14 13:42:36 +0530
+message:
+  Bug #18144349 INNODB CANNOT USE THE DOUBLEWRITE BUFFER FOR THE FIRST PAGE OF
+  SYSTEM TABLESPACE
+  
+  Problem:
+  
+  When the first page of any of the data files of the system tablespace is
+  corrupt, even if a clean copy of the same is available in the double write
+  buffer, the server does not start.
+  
+  Solution:
+  
+  When the first page of the data files of the system tablespace is corrupt,
+  try to restore from the doublewrite buffer.
+  
+  rb#4513 approved by Kevin. 
+------------------------------------------------------------
+revno: 5816
+committer: Sujatha Sivakumar <sujatha.sivakumar@oracle.com>
+branch nick: Bug17986385_mysql-5.6
+timestamp: Fri 2014-02-14 10:57:29 +0530
+message:
+  Bug#17986385:LOG-WARNINGS=2 UNUSABLE ON SLAVE WITH FILTERS
+  
+  Fixing a post push test issue.
+------------------------------------------------------------
+revno: 5815
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-13 17:25:34 +0530
+message:
+  Bug #18145121 - DEPRECATED PERL SYNTAX IN MTR
+------------------------------------------------------------
+revno: 5814
+committer: Manish Kumar<manish.4.kumar@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-13 15:25:14 +0530
+message:
+  WL#7205 - Making MTR rpl suite GTID_MODE agnostic
+  
+  Post push fix to address failing test cases on pb2 daily runs.
+------------------------------------------------------------
+revno: 5813
+committer: Shaohua Wang <shaohua.wang@oracle.com>
+branch nick: mysql-5.6-bugfix1
+timestamp: Thu 2014-02-13 11:33:41 +0800
+message:
+  BUG#18180057: MANUAL DOES NOT EXPLAIN UPPER LIMIT FOR 
+  INNODB_FT_RESULT_CACHE_LIMIT VALUE
+  
+  Analysis:
+  We set max value of fts_result_cache_limit to ~0UL(max value of ulong),
+  but ulong is 4 bytes on windows, the max value is 4294967295(2**32 -1),
+  which is not consistent with linux(2**64 -1).
+  
+  Solution:
+  We explicitly set the max value to 4294967295.
+  
+  rb://4651 approved by Jimmy.Yang 
+------------------------------------------------------------
+revno: 5812
+committer: Sujatha Sivakumar <sujatha.sivakumar@oracle.com>
+branch nick: Bug18165937_mysql-5.6
+timestamp: Wed 2014-02-12 17:49:51 +0530
+message:
+  Bug#18165937: HITTING CRASH WHEN SETTING SSL OPTIONS THROUGH 
+  CHANGE MASTER COMMAND
+        
+  Fixing a post push test failure.
+------------------------------------------------------------
+revno: 5811 [merge]
+committer: Vamsikrishna Bhagi <vamsikrishna.bhagi@oracle.com>
+branch nick: mysql-5.6
+timestamp: Wed 2014-02-12 16:41:09 +0530
+message:
+  Bug #18186103	 BUFFER OVERFLOW IN CLIENT
+  
+  Bazaar merge from mysql-5.5.
+    ------------------------------------------------------------
+    revno: 2875.437.351
+    committer: Vamsikrishna Bhagi <vamsikrishna.bhagi@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Wed 2014-02-12 15:17:37 +0530
+    message:
+      Bug #18186103  BUFFER OVERFLOW IN CLIENT
+      
+      Problem: While printing the Server version, mysql client
+               doesn't check for the buffer overflow in a
+               String variable.
+      
+      Solution: Used a different print function which checks the
+                allocated length before writing into the string.
+------------------------------------------------------------
+revno: 5810 [merge]
+committer: Neeraj Bisht <neeraj.x.bisht@oracle.com>
+branch nick: 5.6
+timestamp: Wed 2014-02-12 14:35:26 +0530
+message:
+  Bug#17075846 - UNQUOTED FILE NAMES FOR VARIABLE VALUES ARE
+  	       ACCEPTED BUT PARSED INCORRECTLY
+  		merge from 5.5 to 5.6
+    ------------------------------------------------------------
+    revno: 2875.437.350
+    committer: Neeraj Bisht <neeraj.x.bisht@oracle.com>
+    branch nick: 5.5
+    timestamp: Wed 2014-02-12 14:33:56 +0530
+    message:
+      Bug#17075846 - UNQUOTED FILE NAMES FOR VARIABLE VALUES ARE
+      	       ACCEPTED BUT PARSED INCORRECTLY
+      
+      When we are setting the value in a system variable, 
+      We can set it like 
+      
+      set sys_var="Iden1.Iden2";		//1
+      set sys_var='Iden1.Iden2';		//2
+      set sys_var=Iden1.Iden2;		//3
+      set sys_var=.ident1.ident2; 		//4
+      set sys_var=`Iden1.Iden2`;		//5
+      
+      
+      While parsing, for case 1(when ANSI_QUOTES is enable) and 2,
+      we will take as string literal(we will make item of type Item_string).
+      for case 3 & 4, taken as Item_field, where Iden1 is a table name and
+      iden2 is a field name.
+      for case 5, again Item_field type, where iden1.iden2 is taken as
+      field name.
+      
+      
+      Now in case 1, when we are assigning some value to system variable
+      (which can take string or enumerate type data), we are setting only 
+      field part.
+      This means only iden2 value will be set for system variable. This 
+      result in wrong result.
+      
+      Solution:
+      
+      (for string type) We need to Document that we are not allowed to set 
+      system variable which takes string as identifier, otherwise result 
+      in unexpected behaviour.
+      
+      (for enumerate type)
+      if we pass iden1.iden2, we will give an error ER_WRONG_TYPE_FOR_VAR
+      (Incorrect argument type to variable).
+------------------------------------------------------------
+revno: 5809 [merge]
+committer: sayantan dutta <sayantan.dutta@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-11 17:16:59 +0530
+message:
+  Bug 18027288 5.5 => 5.6
+    ------------------------------------------------------------
+    revno: 2875.437.349
+    committer: sayantan dutta <sayantan.dutta@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Tue 2014-02-11 17:15:50 +0530
+    message:
+      Bug #18027288 - MTR SUITE ABORTS WHEN A CLIENT TRIES TO CONNECT SERVER WITH A WRONG PORT NUMBER
+------------------------------------------------------------
+revno: 5808 [merge]
+committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-11 16:52:13 +0530
+message:
+  Merge from mysql-5.5 to mysql-5.6
+    ------------------------------------------------------------
+    revno: 2875.437.348
+    committer: Annamalai Gurusami <annamalai.gurusami@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Tue 2014-02-11 16:44:37 +0530
+    message:
+      Bug#18185930 UPD_NODE_INSERT_BLOB CAUSES BTR_EXTERN_OWNER_FLAG ASSERTION
+      
+      Problem:
+      
+      In the clustered index, when an update operation is done the overall
+      scenario (after rb#4479) is as follows:
+      
+      1.  Delete mark the old record that is to be updated.
+      2.  The old record disowns the blobs.
+      3.  Insert the new record into clustered index.
+      4.  For non-updated blobs, new record must own it. Verified by assert.
+      5.  For non-updated blobs, in new record marked as inherited.
+      
+      Scenario involving DB_LOCK_WAIT:
+      
+      If step 3 times out, then we will skip 1 and 2 and will continue from
+      step 3.  This skipping is achieved by the UPD_NODE_INSERT_BLOB state.
+      In this case, step 4 is not correct.  Because of step 1, the new
+      record need not own the blobs.  Hence the assert failure.
+      
+      Solution:
+      
+      The assert in step 4 is removed.  Instead code is added to ensure that
+      the record owns the blob.  
+      
+      Note:
+      
+      This is a regression caused by rb#4479.
+      
+      rb#4571 approved by Marko
+------------------------------------------------------------
+revno: 5807
+committer: Arun Kuruvila <arun.kuruvila@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-11 16:39:02 +0530
+message:
+  Bug #16204175 COLLATION NAME MISSING FROM LOG MESSAGES 
+                ABOUT LDML DEFINITION PROBLEMS
+  
+  Description: Follow up patch for the testcase failure in
+  pb2.
+------------------------------------------------------------
+revno: 5806 [merge]
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-11 08:44:10 +0100
+message:
+  Merge from 5.5 branch
+    ------------------------------------------------------------
+    revno: 2875.437.347
+    committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Tue 2014-02-11 08:27:00 +0100
+    message:
+      - Add support for el7 (with systemd enabled)
+      - Enable shared libmysqld by cmake option
+------------------------------------------------------------
+revno: 5805
+committer: Arun Kuruvila <arun.kuruvila@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-11 12:19:05 +0530
+message:
+  Bug #16204175 COLLATION NAME MISSING FROM LOG MESSAGES 
+                ABOUT LDML DEFINITION PROBLEMS
+  
+  Description: When trying to use an invalid user defined 
+  collation error information that can be found in SHOW
+  WARNINGS also gets logged to the error log, e.g.
+  2013-01-22 16:03:02 9130 [ERROR] Shift expected at ''
+  The error message is missing information about the actual
+  invalid collation
+  
+  Analysis: When a collation is defined with invalid grammar
+  rules, " expected at '' " error is logged to error log. But
+  collation name is missing in this error message. So for a
+  DBA looking at the error log it is impossible to tell where
+  the error actually is . So it is better to add collation
+  name along with the error message which is logged to the
+  error log.
+  
+  Fix: As a fix i added the collation name also to the error
+  message which is logged to the error log.
+------------------------------------------------------------
+revno: 5804
+committer: Sujatha Sivakumar <sujatha.sivakumar@oracle.com>
+branch nick: Bug17596226_mysql-5.6
+timestamp: Mon 2014-02-10 11:07:38 +0530
+message:
+  Bug#17596226:CRASH INJECTION SITE CRASH_COMMIT_BEFORE_UNLOG
+  EITHER MISPLACED, EITHER MISNAMED.
+  
+  Problem:
+  ========
+  MYSQL_BIN_LOG::ordered_commit() has a crash injection site
+  crash_commit_before_unlog near its end:
+   ...
+   finish_commit(...);
+  It looks as if this site ended up here by accident after the
+  5.6 group commit refactoring. The site is after
+  finish_commit() call, so the commit is already completed at
+  this point. Hence either Rename, move, or remove it.
+  
+  Fix:
+  ===
+  Since there is no test code which tests this crash injection
+  point the debug point is removed.
+------------------------------------------------------------
+revno: 5803 [merge]
+committer: Thirunarayanan B<thirunarayanan.balathandayuth@oracle.com>
+branch nick: mysql-5.6
+timestamp: Mon 2014-02-10 10:15:27 +0530
+message:
+  Bug #14049391   INNODB MISCALCULATES AUTO-INCREMENT AFTER DECREASING
+                          AUTO_INCREMENT_INCREMENT
+  	Merge from 5.5
+    ------------------------------------------------------------
+    revno: 2875.437.346
+    committer: Thirunarayanan B<thirunarayanan.balathandayuth@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Mon 2014-02-10 10:13:35 +0530
+    message:
+      Bug #14049391   INNODB MISCALCULATES AUTO-INCREMENT AFTER DECREASING
+                              AUTO_INCREMENT_INCREMENT
+      Problem:
+      =======
+      When auto_increment_increment system variable decreases,
+      immediate next value of auto increment column is not affected.
+      
+      Solution:
+      ========
+      	Get the previous inserted value of auto increment column by
+      subtracting the previous auto_increment_increment from next
+      auto increment value. After that calculate the current autoinc value
+      using newly changed auto_increment_increment variable.
+      
+      	Approved by Sunny [rb#4394]
+------------------------------------------------------------
+revno: 5802
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-07 10:43:59 +0100
+message:
+  - BUG 18187451 - PROBLEM WITH SCRIPTS/MYSQL_INSTALL_DB --USER=MYSQL 
+  - Removed mysql-embedded-check.c packaging/rpm-fedora/CMakeLists.txt
+  - Removed the patch steps from mysql-5.6.16-mysql-install.patch
+------------------------------------------------------------
+revno: 5801
+committer: Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-02-07 07:55:56 +0100
+message:
+  Enabled shared libmysqld by cmake option
+------------------------------------------------------------
+revno: 5800
+committer: Mattias Jonsson <mattias.jonsson@oracle.com>
+branch nick: topush-5.6
+timestamp: Thu 2014-02-06 16:59:45 +0100
+message:
+  Bug#16943907: FLUSH TABLES FOR EXPORT:
+  ASSERTION IN HA_PARTITION::EXTRA
+  
+  Too strict assert due to missing handling of
+  HA_EXTRA_EXPORT.
+  
+  Added handling of ha_partition::extra(HA_EXTRA_EXPORT).
+  
+  This also enables FLUSH TABLES t FOR EXPORT for
+  partitioned InnoDB tables. But it will still NOT support
+  ALTER TABLE t DISCARD TABLESPACE
+  or
+  ALTER TABLE t IMPORT TABLESPACE
+  
+  Approved by Kevin and Aditya (rb#3921).
+------------------------------------------------------------
+revno: 5799
+committer: Sven Sandberg <sven.sandberg@oracle.com>
+branch nick: 5.6
+timestamp: Thu 2014-02-06 13:15:55 +0100
+message:
+  Bug#18165937 HITTING CRASH WHEN SETTING SSL OPTIONS THROUGH CHANGE MASTER COMMAND
+  Problem:
+  The SSL_CRL options are not available with YASSL. Therefore,
+  there is an assertion in the SSL code to check that ssl_crl and
+  ssl_crlpath are not set by mistake when YASSL is enabled. This
+  assertion was hit from replication code because replication code
+  did not have a special case to set these to NULL when YASSL is
+  enabled.
+  Fix:
+  Replication code would set ssl_crl/ssl_crlpath in two places:
+   1. In connect_to_master, we fix the bug by setting these
+      variables to NULL when YASSL is enabled.
+   2. The options are also set in rpl_connect_master. However, it
+      turns out this function is not used anywhere. So here we fix
+      the bug by removing the dead code.
+------------------------------------------------------------
+revno: 5798 [merge]
+committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-06 14:22:28 +0530
+message:
+  Merging the changes for bug 18184414: WRONG COPYRIGHT TO FILE INCLUDE/MYSQL_VERSION.H.IN
+    ------------------------------------------------------------
+    revno: 2875.437.345
+    committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Thu 2014-02-06 14:11:38 +0530
+    message:
+      Fixing the bug 18184414: WRONG COPYRIGHT TO FILE INCLUDE/MYSQL_VERSION.H.IN
+------------------------------------------------------------
+revno: 5797 [merge]
+committer: Anirudh Mangipudi <anirudh.mangipudi@oracle.com>
+branch nick: mysql-5.6
+timestamp: Thu 2014-02-06 11:22:06 +0530
+message:
+  Bug#14211271 ISSUES WITH SSL ON DEBIAN WHEEZY I386 AND KFREEBSD-I386
+  
+  Problem:
+  It was reported that on Debian and KFreeBSD platforms, i386 architecture 
+  machines certain SSL tests are failing. main.ssl_connect  rpl.rpl_heartbeat_ssl
+  rpl.rpl_ssl1 rpl.rpl_ssl main.ssl_cipher, main.func_encrypt were the tests that
+  were reportedly failing (crashing). The reason for the crashes are said to be
+  due to the assembly code of yaSSL.
+  
+  Solution:
+  There was initially a workaround suggested i.e., to enable 
+  -DTAOCRYPT_DISABLE_X86ASM flag which would prevent the crash, but at an expense
+  of 4X reduction of speed. Since this was unacceptable, the fix was the 
+  functions using assembly, now input variables from the function call using 
+  extended inline assembly on GCC instead of relying on direct assembly code.
+    ------------------------------------------------------------
+    revno: 2875.437.344
+    committer: Anirudh Mangipudi <anirudh.mangipudi@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Thu 2014-02-06 11:16:55 +0530
+    message:
+      Bug#14211271 ISSUES WITH SSL ON DEBIAN WHEEZY I386 AND KFREEBSD-I386
+      
+      Problem:
+      It was reported that on Debian and KFreeBSD platforms, i386 architecture 
+      machines certain SSL tests are failing. main.ssl_connect  rpl.rpl_heartbeat_ssl
+      rpl.rpl_ssl1 rpl.rpl_ssl main.ssl_cipher, main.func_encrypt were the tests that
+       were reportedly failing (crashing). The reason for the crashes are said to be
+      due to the assembly code of yaSSL.
+      
+      Solution:
+      There was initially a workaround suggested i.e., to enable 
+      -DTAOCRYPT_DISABLE_X86ASM flag which would prevent the crash, but at an expense
+       of 4X reduction of speed. Since this was unacceptable, the fix was the 
+      functions using assembly, now input variables from the function call using 
+      extended inline assembly on GCC instead of relying on direct assembly code.
+------------------------------------------------------------
+revno: 5796
+committer: kevin.lewis@oracle.com
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-04 12:07:04 -0600
+message:
+  Bug#18175966 CANNOT BUILD MYSQL-5.6 AND MYSQL-TRUNK ON WINDOWS USING VS2008
+  
+  <stdint.h> is not needed in lexyy.cc in the mysql-5.6 branch.
+------------------------------------------------------------
+revno: 5795 [merge]
+committer: Kristofer Pettersson <kristofer.pettersson@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-04 16:35:59 +0100
+message:
+  Bug#17495562 WRONG DESCRIPTION OF LENGTH OF AUTH-PLUGIN-DATA IN PROTOCOL::HANDSHAKEV10
+   
+  Unclear requirements on how auth-plugin-data is sent to the client in the initial
+  server-packet leads to situations where the client can't authenticate to a server.
+  This patch introduces an incompatible change to fix this.
+    
+  A concrete example when this happens is when Connector/J 5.1.18 and 
+  server option  --default-authentication-plugin=sha256_password  is used.
+  
+  Background:
+  The sha256_password plugin wants to send a 20-bytes salt to the client
+  which is split into 8 + 12 bytes according to
+  http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeV10
+  
+  The 2nd part (12 bytes) + the auth-plugin-name looks like
+      ...KHe8SY[]bP9rsha256_password\0
+  If default-authentication-plugin would be left at its default value
+  "mysql_native_password" the same data would look like:
+      ...KHe8SY[]bP9r\0mysql_native_password\0
+   (note the extra \0 before mysql_native_password)
+   If a client connects that doesn't understand the CLIENT_PLUGIN_AUTH
+  capability (like C/J 5.1.18) they will read up to the terminating \0
+  and will use the scramble to authenticate.
+  Other older connectors like libmysql-5.1 always only read 12 bytes and
+  ignore everything after that. Therefore they are not affected by the
+  missing \0 character.
+  One could argue that reading always 12 bytes is the correct way, but
+  that doesn't match what the 5.1 (and earlier) server send:
+    ...KHe8SY[]bP9r\0
+  If it would be fixed size, there would be no need for the \0.
+  Whatever the original intent was there are two ways to parse this data:
+  1) read up to the \0 byte
+  2) read 12 bytes, ignore the rest
+  
+  All connectors that take the route of 1) break in the mysql-server
+  configuration described above.
+  
+  Bug has the PIG-stamp-of-approval.
+    ------------------------------------------------------------
+    revno: 5793.1.1
+    committer: Kristofer Pettersson <kristofer.pettersson@oracle.com>
+    branch nick: mysql-5.6
+    timestamp: Tue 2014-02-04 14:32:06 +0100
+    message:
+      Bug#17495562 WRONG DESCRIPTION OF LENGTH OF AUTH-PLUGIN-DATA IN PROTOCOL::HANDSHAKEV10
+       
+      Unclear requirements on how auth-plugin-data is sent to the client in the initial
+      server-packet leads to situations where the client can't authenticate to a server.
+      This patch introduces an incompatible change to fix this.
+        
+      A concrete example when this happens is when Connector/J 5.1.18 and 
+      server option  --default-authentication-plugin=sha256_password  is used.
+      
+      Background:
+      The sha256_password plugin wants to send a 20-bytes salt to the client
+      which is split into 8 + 12 bytes according to
+      http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeV10
+      
+      The 2nd part (12 bytes) + the auth-plugin-name looks like
+          ...KHe8SY[]bP9rsha256_password\0
+      If default-authentication-plugin would be left at its default value
+      "mysql_native_password" the same data would look like:
+          ...KHe8SY[]bP9r\0mysql_native_password\0
+       (note the extra \0 before mysql_native_password)
+       If a client connects that doesn't understand the CLIENT_PLUGIN_AUTH
+      capability (like C/J 5.1.18) they will read up to the terminating \0
+      and will use the scramble to authenticate.
+      Other older connectors like libmysql-5.1 always only read 12 bytes and
+      ignore everything after that. Therefore they are not affected by the
+      missing \0 character.
+      One could argue that reading always 12 bytes is the correct way, but
+      that doesn't match what the 5.1 (and earlier) server send:
+        ...KHe8SY[]bP9r\0
+      If it would be fixed size, there would be no need for the \0.
+      Whatever the original intent was there are two ways to parse this data:
+      1) read up to the \0 byte
+      2) read 12 bytes, ignore the rest
+      
+      All connectors that take the route of 1) break in the mysql-server
+      configuration described above.
+      
+      Bug has the PIG-stamp-of-approval.
+------------------------------------------------------------
+revno: 5794 [merge]
+committer: Tor Didriksen <tor.didriksen@oracle.com>
+branch nick: 5.6-merge
+timestamp: Tue 2014-02-04 15:37:20 +0100
+message:
+  merge 5.6 => trunk
+    ------------------------------------------------------------
+    revno: 2875.437.343
+    committer: Tor Didriksen <tor.didriksen@oracle.com>
+    branch nick: 5.5
+    timestamp: Tue 2014-02-04 15:34:36 +0100
+    message:
+      Bug#18123048 ENABLE BUILD OF SHARED LIBMYSQLD ON LINUX
+      
+      Added a new option: WITH_EMBEDDED_SHARED_LIBRARY
+------------------------------------------------------------
+revno: 5793 [merge]
+committer: Tor Didriksen <tor.didriksen@oracle.com>
+branch nick: 5.6-merge
+timestamp: Tue 2014-02-04 11:11:54 +0100
+message:
+  merge 5.5 => 5.6
+    ------------------------------------------------------------
+    revno: 2875.437.342
+    committer: Tor Didriksen <tor.didriksen@oracle.com>
+    branch nick: 5.5-review
+    timestamp: Tue 2014-02-04 09:01:06 +0100
+    message:
+      Bug#18173037 BUILD FAILURE WHEN USING -WERROR WITH ARGUEMNTS
+      
+      Don't strip away -Werror=xxx flags from CMAKE_C_FLAGS
+------------------------------------------------------------
+revno: 5792
+committer: Ole John Aske <ole.john.aske@oracle.com>
+branch nick: mysql-5.6
+timestamp: Tue 2014-02-04 09:20:23 +0100
+message:
+  Fix for bug#18164798 
+  
+  INFORMATION_SCHEMA-BIG FAILS WHEN COMPILED WITH NDB
+  
+  Ensure that 'ndb' specific rows are filtered out from the schema
+  result in addition to the 'innodb' filtering already being part of
+  this test.
+------------------------------------------------------------
+revno: 5791
+committer: Anirudh Mangipudi <anirudh.mangipudi@oracle.com>
+branch nick: 5.6
+timestamp: Tue 2014-02-04 10:40:01 +0530
+message:
+  Bug #17849978 BACKPORT 14492429 TO 5.6
+  Problem:
+  In mysql's C API functions (mysql_stmt_xxxxx) there is a connection loss 
+  happening when we are getting a result consisting of multiple result sets
+  from the the stored procedure that also has output parameters. Interestingly
+  the statement where the connection loss is happening completes it execution
+  but after that the connection is lost.
+  
+  Solution:
+  Problem was caused by missing SERVER_MORE_RESULTS_EXISTS flag in the last 
+  EOF_Packet of OUT parameters result set. It is fixed here by preserving the
+  SERVER_MORE_RESULTS_EXISTS and SERVER_PS_OUT_PARAMS flags in server_status
+  when reading the last EOF_packet of OUT parameters result set.
+------------------------------------------------------------
+revno: 5790 [merge]
+committer: Marc Alff <marc.alff@oracle.com>
+branch nick: mysql-5.6-push
+timestamp: Tue 2014-02-04 00:34:19 +0100
+message:
+  Merge to mysql-5.6
+    ------------------------------------------------------------
+    revno: 5788.1.1
+    committer: Marc Alff <marc.alff@oracle.com>
+    branch nick: mysql-5.6-bug17935314
+    timestamp: Mon 2014-02-03 16:50:31 +0100
+    message:
+      Bug#17935314 INCREMENT PERFORMANCE_SCHEMA_DIGEST_LOST WHEN AGGREGATING NULL
+      DIGESTS 
+      
+      Before this fix, when the table
+      performance_schema.events_statements_summary_by_digest
+      was already full,
+      the following happened when a new statement with a new digest was found:
+      - the NULL row in events_statements_summary_by_digest was updated
+      (as expected)
+      so that statement statistics were only partially collected,
+      - the Performance_schema_digest_lost status counter was not incremented
+      (questionable, given that statistics were not fully collected)
+      
+      With this fix, for the same scenario,
+      the counter Performance_schema_digest_lost is incremented,
+      to indicate that the table events_statements_summary_by_digest
+      is undersized for the application workload.
+------------------------------------------------------------
+revno: 5789 [merge]
+committer: Kent Boortz <kent.boortz@oracle.com>
+branch nick: mysql-5.6-new
+timestamp: Mon 2014-02-03 16:22:18 +0100
+message:
+  Bug#11751526 / Bug#42421 - MYSQL_INSTALL_DB.PL NOT RELOCATABLE ON WINDOWS
+    Merge from 5.5->5.6
+  
+    In addition, changes are
+      - Use the ".ini" file extension for config files on Windows
+      - Set the default system config file path
+      - In addition, search the top directory for config files on Windows
+    ------------------------------------------------------------
+    revno: 2875.437.341
+    committer: Kent Boortz <kent.boortz@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Mon 2014-02-03 16:04:44 +0100
+    message:
+      Bug#11751526 / Bug#42421 - MYSQL_INSTALL_DB.PL NOT RELOCATABLE ON WINDOWS
+        Corrected how to find "resolveip"
+------------------------------------------------------------
+revno: 5788
+committer: Astha Pareek <astha.pareek@oracle.com>
+branch nick: mysql-5.6-b17920923
+timestamp: Mon 2014-02-03 12:07:06 +0530
+message:
+  BUG#17920923 - BACKPORT PATCH FOR BUG#14511533 INTO 5.6
+        
+  Problem:
+  Server crash was observed when code first checked if 
+  semisync was enabled without lock, if so it takes the
+  lock and checks again. If semisync gets disabled
+  in-between the first and second check, an assert
+  incorrectly referenced a null pointer for active
+  transaction which leads to the crash. 
+      
+  Solution: 
+  The assert is relocated onto a position where
+  active_tranxs buffer is valid.
+------------------------------------------------------------
+revno: 5787
+committer: Manish Kumar<manish.4.kumar@oracle.com>
+branch nick: mysql-5.6
+timestamp: Sun 2014-02-02 16:15:34 +0530
+message:
+  WL#7205 - Making MTR rpl suite GTID_MODE agnostic
+        
+  Post push fix for the failing test on pb2.
+------------------------------------------------------------
+revno: 5786 [merge]
+committer: Laasya Moduludu <laasya.moduludu@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-01-31 14:41:15 +0100
+message:
+  Upmerge of the mysql-5.5.36 build
+    ------------------------------------------------------------
+    revno: 2875.437.340 [merge]
+    author: 
+    committer: Laasya Moduludu <laasya.moduludu@oracle.com>
+    branch nick: mysql-5.5
+    timestamp: Fri 2014-01-31 13:32:25 +0100
+    message:
+      Merge from mysql-5.5.36-release
+        ------------------------------------------------------------
+        revno: 2875.467.1
+        tags: mysql-5.5.36
+        committer: Murthy Narkedimilli <murthy.narkedimilli@oracle.com>
+        branch nick: mysql-5.5.36-release
+        timestamp: Wed 2014-01-08 11:09:04 +0100
+        message:
+          Updating the current copyright year in the welcome message for MySQL.
+------------------------------------------------------------
+revno: 5785 [merge]
+author: 
+committer: Vishal Chaudhary <vishal.chaudhary@oracle.com>
+branch nick: mysql-5.6
+timestamp: Fri 2014-01-31 13:51:48 +0100
+message:
+  Merge from mysql-5.6.16-release
+    ------------------------------------------------------------
+    revno: 5727.1.5
+    tags: mysql-5.6.16
+    committer: Anirudh Mangipudi <anirudh.mangipudi@oracle.com>
+    branch nick: mysql-5.6.16-release
+    timestamp: Thu 2014-01-09 20:13:58 +0530
+    message:
+      Bug#18047812: RESULT FILE MISMATCH DUE TO COPYRIGHT YEAR IN OUTPUT
+      Problem:
+      Copyright mismatch is causing test failure.
+      
+      Solution:
+      Replacing the present year (2014) as the copyright year.

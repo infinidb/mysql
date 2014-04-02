@@ -29,6 +29,7 @@ a
 1
 3
 ==== Test --base64-output=never on a binlog with row events ====
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
 /*!40019 SET @@session.max_insert_delayed_threads=0*/;
 /*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
 DELIMITER /*!*/;
@@ -47,10 +48,11 @@ SET @@session.collation_database=DEFAULT/*!*/;
 create table t1 (a int) engine= myisam
 /*!*/;
 # at 203
-DELIMITER ;
+<#>DELIMITER ;
 # End of log file
 ROLLBACK /* added by mysqlbinlog */;
 /*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
 ==== Test non-matching FD event and Row event ====
 BINLOG '
 4CdYRw8BAAAAYgAAAGYAAAAAAAQANS4xLjE1LW5kYi02LjEuMjQtZGVidWctbG9nAAAAAAAAAAAA
@@ -93,6 +95,7 @@ ERROR HY000: master may suffer from http://bugs.mysql.com/bug.php?id=37426 so sl
 drop table t1, char63_utf8, char128_utf8;
 call mtr.add_suppression("Slave SQL.*master suffers from this bug: http:..bugs.mysql.com.bug.php.id=37426.* Error_code: 1105");
 call mtr.add_suppression("Slave SQL.*Table definition on master and slave does not match: Column 1 size mismatch.* Error_code: 1535");
+call mtr.add_suppression("Slave SQL.*Column 1 of table .test.char128_utf8. cannot be converted.* Error_code: 1677");
 #
 # Bug #54393: crash and/or valgrind errors in 
 # mysql_client_binlog_statement
@@ -100,7 +103,8 @@ call mtr.add_suppression("Slave SQL.*Table definition on master and slave does n
 BINLOG '';
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
 BINLOG '123';
+ERROR HY000: Decoding of base64 string failed
 BINLOG '-2079193929';
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR HY000: Decoding of base64 string failed
 BINLOG 'xç↓%~∙D╒ƒ╡';
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR HY000: Decoding of base64 string failed

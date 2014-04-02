@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2002, 2004-2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,13 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file is included in all heap-files */
 
 #include <my_base.h>			/* This includes global */
 C_MODE_START
-#ifdef THREAD
 #include <my_pthread.h>
-#endif
 #include "heap.h"			/* Structs & some defines */
 #include "my_tree.h"
 
@@ -102,10 +100,12 @@ extern void hp_clear(HP_SHARE *info);
 extern void hp_clear_keys(HP_SHARE *info);
 extern uint hp_rb_pack_key(HP_KEYDEF *keydef, uchar *key, const uchar *old,
                            key_part_map keypart_map);
-#ifdef THREAD
-extern pthread_mutex_t THR_LOCK_heap;
-#else
-#define pthread_mutex_lock(A)
-#define pthread_mutex_unlock(A)
-#endif
+
+extern mysql_mutex_t THR_LOCK_heap;
+
+#ifdef HAVE_PSI_INTERFACE
+extern PSI_mutex_key hp_key_mutex_HP_SHARE_intern_lock;
+void init_heap_psi_keys();
+#endif /* HAVE_PSI_INTERFACE */
+
 C_MODE_END

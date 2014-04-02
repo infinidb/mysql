@@ -11,7 +11,7 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include "myisamdef.h"
 
@@ -968,7 +968,7 @@ int rtree_delete(MI_INFO *info, uint keynr, uchar *key, uint key_length)
           goto err1;
       }
       if (ReinsertList.pages)
-        my_free((uchar*) ReinsertList.pages, MYF(0));
+        my_free(ReinsertList.pages);
 
       /* check for redundant root (not leaf, 1 child) and eliminate */
       if ((old_root = info->s->state.key_root[keynr]) == HA_OFFSET_ERROR)

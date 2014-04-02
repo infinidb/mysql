@@ -20,16 +20,16 @@
 #         prevents logging slow queries in a connection 'extra'
 #
 # OBS: 
-#   This test only runs for statement binlogging format because on row format
-#   slow queries do not get slow query logged. 
-#   Note that due to the sleep() command the insert is written to the binary
-#   log in row format.
+#   This test only runs for statement binlogging format because on row
+#   format slow queries do not get slow query logged. Due to the
+#   sleep() command, the insert would be binlogged in row format if
+#   binlog_format=MIXED. Hence, we do not use binlog_format=MIXED.
 
 source include/master-slave.inc;
 source include/have_binlog_format_statement.inc;
 
-CALL mtr.add_suppression("Unsafe statement binlogged in statement format since BINLOG_FORMAT = STATEMENT");
-
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+call mtr.add_suppression("Slave SQL.*Request to stop slave SQL Thread received while applying a group that has non-transactional changes; waiting for completion of the group");
 
 # Prepare slave for different long_query_time we need to stop the slave 
 # and restart it as long_query_time variable is dynamic and, after 
@@ -62,7 +62,7 @@ eval $fast_query;
 --disable_warnings
 eval $slow_query;
 --enable_warnings
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 let $found_fast_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$fast_query'`;
 let $found_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
@@ -175,11 +175,12 @@ TRUNCATE mysql.slow_log;
 # clean up: drop tables, reset the variables back to the previous value,
 #           disconnect extra connections
 connection extra2;
+
 SET GLOBAL slow_query_log= @old_slow_query_log;
 
 connection master;
 DROP TABLE t1;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 
 source include/stop_slave.inc;
 
@@ -229,10 +230,10 @@ CREATE TABLE t1 (a int, b int);
 -- enable_warnings
 
 let $master_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
--- sync_slave_with_master
+--source include/sync_slave_sql_with_master.inc
 let $slave_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
 
-if (`SELECT $master_slow_query != $slave_slow_query`)
+if ($master_slow_query != $slave_slow_query)
 {
   -- connection master
   -- echo ***********************************************
@@ -249,7 +250,7 @@ if (`SELECT $master_slow_query != $slave_slow_query`)
   -- die "Assertion failed! Master and slave slow log contents differ. Bailing out!"
 }
 
-if (`SELECT $master_slow_query = $slave_slow_query`)
+if ($master_slow_query == $slave_slow_query)
 {
   -- echo ### Assertion is good. Both Master and Slave exhibit the 
   -- echo ### same number of queries in slow log: $master_slow_query
@@ -272,10 +273,10 @@ ALTER TABLE t1 ADD INDEX id1(a);
 -- enable_warnings
 
 let $master_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
--- sync_slave_with_master
+--source include/sync_slave_sql_with_master.inc
 let $slave_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
 
-if (`SELECT $master_slow_query != $slave_slow_query`)
+if ($master_slow_query != $slave_slow_query)
 {
   -- connection master
   -- echo ***********************************************
@@ -292,10 +293,53 @@ if (`SELECT $master_slow_query != $slave_slow_query`)
   -- die "Assertion failed! Master and slave slow log contents differ. Bailing out!"
 }
 
-if (`SELECT $master_slow_query = $slave_slow_query`)
+if ($master_slow_query == $slave_slow_query)
 {
   -- echo ### Assertion is good. Both Master and Slave exhibit the 
   -- echo ### same number of queries in slow log: $master_slow_query
+}
+
+-- echo ********************************************************************
+-- echo **** TRUNCATE the slow log then check whether runtime changes of
+-- echo **** log_slow_slave_statements work without slave restart.
+-- echo ********************************************************************
+
+SET @old_log_slow_slave_statements= @@global.log_slow_slave_statements;
+SET @@global.log_slow_slave_statements = off;
+TRUNCATE mysql.slow_log;
+
+-- connection master
+
+--disable_warnings
+-- eval $slow_query;
+--enable_warnings
+
+--source include/sync_slave_sql_with_master.inc
+-- connection slave
+
+let $slave_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
+if ($slave_slow_query)
+{
+  SELECT * FROM mysql.slow_log;
+  die "Assertion failed! Slow query FOUND in slow query log. Bailing out!";
+}
+
+SET @@global.log_slow_slave_statements = on;
+
+-- connection master
+
+--disable_warnings
+-- eval $slow_query;
+--enable_warnings
+
+--source include/sync_slave_sql_with_master.inc
+-- connection slave
+
+let $slave_slow_query= `SELECT count(*) = 1 FROM mysql.slow_log WHERE sql_text like '$slow_query'`;
+if (!$slave_slow_query)
+{
+  SELECT * FROM mysql.slow_log;
+  die "Assertion failed! Slow query NOT FOUND in slow query log. Bailing out!";
 }
 
 -- connection master
@@ -303,7 +347,8 @@ SET @@global.log_output= @old_log_output;
 SET @@global.long_query_time= @old_long_query_time;
 DROP TABLE t1;
 
--- sync_slave_with_master
+--source include/sync_slave_sql_with_master.inc
 SET @@global.log_output= @old_log_output;
 SET @@global.long_query_time= @old_long_query_time;
+SET @@global.log_slow_slave_statements= @old_log_slow_slave_statements;
 --source include/rpl_end.inc

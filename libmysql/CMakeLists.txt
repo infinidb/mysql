@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,121 +11,273 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-INCLUDE("${PROJECT_SOURCE_DIR}/win/mysql_manifest.cmake")
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG}   -DSAFEMALLOC -DSAFE_MUTEX")
+INCLUDE_DIRECTORIES(
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/libmysql
+  ${CMAKE_SOURCE_DIR}/regex
+  ${CMAKE_SOURCE_DIR}/sql
+  ${CMAKE_SOURCE_DIR}/strings
+  ${SSL_INCLUDE_DIRS}
+  ${SSL_INTERNAL_INCLUDE_DIRS}
+  ${ZLIB_INCLUDE_DIR})
+ADD_DEFINITIONS(${SSL_DEFINES})
 
-# Note that we don't link with the libraries "strings" or "mysys"
-# here, instead we recompile the files needed and include them
-# directly. This means we don't have to worry here about if these
-# libraries are compiled defining USE_TLS or not. Not that it *should*
-# have been a problem anyway, they don't use thread local storage.
+SET(CLIENT_API_FUNCTIONS
+get_tty_password
+handle_options
+load_defaults
+mysql_thread_end
+mysql_thread_init
+myodbc_remove_escape
+mysql_affected_rows
+mysql_autocommit
+mysql_stmt_bind_param
+mysql_stmt_bind_result
+mysql_change_user
+mysql_character_set_name
+mysql_close
+mysql_commit
+mysql_data_seek
+mysql_debug
+mysql_dump_debug_info
+mysql_eof
+mysql_errno
+mysql_error
+mysql_escape_string
+mysql_hex_string
+mysql_stmt_execute
+mysql_stmt_fetch
+mysql_stmt_fetch_column
+mysql_fetch_field
+mysql_fetch_field_direct
+mysql_fetch_fields
+mysql_fetch_lengths
+mysql_fetch_row
+mysql_field_count
+mysql_field_seek
+mysql_field_tell
+mysql_free_result
+mysql_get_client_info
+mysql_get_host_info
+mysql_get_proto_info
+mysql_get_server_info
+mysql_get_client_version
+mysql_get_ssl_cipher
+mysql_info
+mysql_init
+mysql_insert_id
+mysql_kill
+mysql_set_server_option
+mysql_list_dbs
+mysql_list_fields
+mysql_list_processes
+mysql_list_tables
+mysql_more_results
+mysql_next_result
+mysql_num_fields
+mysql_num_rows
+mysql_options
+mysql_stmt_param_count
+mysql_stmt_param_metadata
+mysql_ping
+mysql_stmt_result_metadata
+mysql_query
+mysql_read_query_result
+mysql_real_connect
+mysql_real_escape_string
+mysql_real_query
+mysql_refresh
+mysql_rollback
+mysql_row_seek
+mysql_row_tell
+mysql_select_db
+mysql_stmt_send_long_data
+mysql_send_query
+mysql_shutdown
+mysql_ssl_set
+mysql_stat
+mysql_stmt_affected_rows
+mysql_stmt_close
+mysql_stmt_reset
+mysql_stmt_data_seek
+mysql_stmt_errno
+mysql_stmt_error
+mysql_stmt_free_result
+mysql_stmt_num_rows
+mysql_stmt_row_seek
+mysql_stmt_row_tell
+mysql_stmt_store_result
+mysql_store_result
+mysql_thread_id
+mysql_thread_safe
+mysql_use_result
+mysql_warning_count
+mysql_stmt_sqlstate
+mysql_sqlstate
+mysql_get_server_version
+mysql_stmt_prepare
+mysql_stmt_init
+mysql_stmt_insert_id
+mysql_stmt_attr_get
+mysql_stmt_attr_set
+mysql_stmt_field_count
+mysql_set_local_infile_default
+mysql_set_local_infile_handler
+mysql_embedded
+mysql_server_init
+mysql_server_end
+mysql_set_character_set
+mysql_get_character_set_info
+mysql_stmt_next_result
+my_init
+mysql_client_find_plugin
+mysql_client_register_plugin
+mysql_load_plugin
+mysql_load_plugin_v
+mysql_options4
+mysql_plugin_options
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include 
-                    ${CMAKE_SOURCE_DIR}/libmysql
-                    ${CMAKE_SOURCE_DIR}/regex
-                    ${CMAKE_SOURCE_DIR}/sql
-                    ${CMAKE_SOURCE_DIR}/strings)
+CACHE INTERNAL "Functions exported by client API"
 
-# We include the source file listing instead of referencing the
-# libraries. At least with CMake 2.4 and Visual Studio 2005 a static
-# library created from other static libraries would not be complete,
-# i.e. the libraries listed in TARGET_LINK_LIBRARIES() were just
-# ignored.
+)
 
+SET(CLIENT_SOURCES
+  get_password.c 
+  libmysql.c
+  errmsg.c
+  ../sql-common/client.c 
+  ../sql-common/my_time.c 
+  ../sql-common/client_plugin.c 
+  ../sql-common/client_authentication.cc
+  ../sql/net_serv.cc
+  ../sql-common/pack.c 
+  ../sql/password.c
+)
 
-# Include and add the directory path
-SET(SOURCE_SUBLIBS TRUE)
-SET(LIB_SOURCES "")
+IF (WIN32 AND OPENSSL_APPLINK_C)
+  SET_SOURCE_FILES_PROPERTIES(
+    ../sql-common/client_authentication.cc
+    PROPERTIES COMPILE_FLAGS "-DHAVE_OPENSSL_APPLINK_C"
+  )
+ENDIF()
 
-INCLUDE(${CMAKE_SOURCE_DIR}/zlib/CMakeLists.txt)
-FOREACH(rpath ${ZLIB_SOURCES})
-  SET(LIB_SOURCES ${LIB_SOURCES} ../zlib/${rpath})
-ENDFOREACH(rpath)
+ADD_CONVENIENCE_LIBRARY(clientlib ${CLIENT_SOURCES})
+DTRACE_INSTRUMENT(clientlib)
+ADD_DEPENDENCIES(clientlib GenError)
 
-# FIXME only needed if build type is "Debug", but CMAKE_BUILD_TYPE is
-# not set during configure time.
-INCLUDE(${CMAKE_SOURCE_DIR}/dbug/CMakeLists.txt)
-FOREACH(rpath ${DBUG_SOURCES})
-  SET(LIB_SOURCES ${LIB_SOURCES} ../dbug/${rpath})
-ENDFOREACH(rpath)
+SET(LIBS clientlib dbug strings vio mysys mysys_ssl ${ZLIB_LIBRARY} ${SSL_LIBRARIES} ${LIBDL})
 
-INCLUDE(${CMAKE_SOURCE_DIR}/extra/yassl/taocrypt/CMakeLists.txt)
-FOREACH(rpath ${TAOCRYPT_SOURCES})
-  SET(LIB_SOURCES ${LIB_SOURCES} ../extra/yassl/taocrypt/${rpath})
-ENDFOREACH(rpath)
-
-INCLUDE(${CMAKE_SOURCE_DIR}/extra/yassl/CMakeLists.txt)
-FOREACH(rpath ${YASSL_SOURCES})
-  SET(LIB_SOURCES ${LIB_SOURCES} ../extra/yassl/${rpath})
-ENDFOREACH(rpath)
-
-SET(CLIENT_SOURCES   ../mysys/array.c ../strings/bchange.c ../strings/bmove.c 
-                     ../strings/bmove_upp.c ../mysys/charset-def.c ../mysys/charset.c
-                     ../sql-common/client.c ../strings/ctype-big5.c ../strings/ctype-bin.c 
-                     ../strings/ctype-cp932.c ../strings/ctype-czech.c ../strings/ctype-euc_kr.c 
-                     ../strings/ctype-eucjpms.c ../strings/ctype-extra.c ../strings/ctype-gb2312.c
-                     ../strings/ctype-gbk.c ../strings/ctype-latin1.c ../strings/ctype-mb.c 
-                     ../strings/ctype-simple.c ../strings/ctype-sjis.c ../strings/ctype-tis620.c 
-                     ../strings/ctype-uca.c ../strings/ctype-ucs2.c ../strings/ctype-ujis.c 
-                     ../strings/ctype-utf8.c ../strings/ctype-win1250ch.c ../strings/ctype.c 
-                     ../mysys/default.c errmsg.c ../mysys/errors.c
-                     ../mysys/hash.c ../mysys/my_sleep.c ../mysys/default_modify.c
-                     get_password.c ../strings/int2str.c ../strings/is_prefix.c 
-                     libmysql.c ../mysys/list.c ../strings/llstr.c
-                     ../strings/longlong2str.c manager.c ../mysys/mf_arr_appstr.c ../mysys/mf_cache.c
-                     ../mysys/mf_dirname.c ../mysys/mf_fn_ext.c ../mysys/mf_format.c 
-                     ../mysys/mf_iocache.c ../mysys/mf_iocache2.c ../mysys/mf_loadpath.c 
-                     ../mysys/mf_pack.c ../mysys/mf_path.c ../mysys/mf_tempfile.c ../mysys/mf_unixpath.c 
-                     ../mysys/mf_wcomp.c ../mysys/mulalloc.c ../mysys/my_access.c ../mysys/my_alloc.c 
-                     ../mysys/my_chsize.c ../mysys/my_compress.c ../mysys/my_create.c
-                     ../mysys/my_delete.c ../mysys/my_div.c ../mysys/my_error.c ../mysys/my_file.c 
-                     ../mysys/my_fopen.c ../mysys/my_fstream.c
-                     ../mysys/my_getopt.c ../mysys/my_getwd.c ../mysys/my_init.c ../mysys/my_lib.c
-                     ../mysys/my_malloc.c ../mysys/my_messnc.c ../mysys/my_net.c ../mysys/my_once.c 
-                     ../mysys/my_open.c ../mysys/my_pread.c  ../mysys/my_pthread.c ../mysys/my_read.c 
-                     ../mysys/my_realloc.c ../mysys/my_rename.c ../mysys/my_seek.c  
-                     ../mysys/my_static.c ../strings/my_strtoll10.c ../mysys/my_symlink.c 
-                     ../mysys/my_symlink2.c ../mysys/my_thr_init.c  ../sql-common/my_time.c 
-                     ../strings/my_vsnprintf.c ../mysys/my_wincond.c ../mysys/my_winthread.c 
-                     ../mysys/my_write.c ../sql/net_serv.cc ../sql-common/pack.c ../sql/password.c 
-                     ../mysys/safemalloc.c ../mysys/sha1.c ../strings/str2int.c
-                     ../strings/str_alloc.c ../strings/strcend.c ../strings/strcont.c ../strings/strend.c 
-                     ../strings/strfill.c ../mysys/string.c ../strings/strinstr.c ../strings/strmake.c 
-                     ../strings/strmov.c ../strings/strnlen.c ../strings/strnmov.c ../strings/strtod.c
-                     ../strings/strtoll.c ../strings/strtoull.c ../strings/strxmov.c ../strings/strxnmov.c 
-                     ../mysys/thr_mutex.c ../mysys/typelib.c ../vio/vio.c ../vio/viosocket.c 
-                     ../vio/viossl.c ../vio/viosslfactories.c ../strings/xml.c ../mysys/mf_qsort.c
-		     ../mysys/my_getsystime.c ../mysys/my_sync.c ${LIB_SOURCES})
-
-# Need to set USE_TLS for building the DLL, since __declspec(thread)
-# approach to thread local storage does not work properly in DLLs.
 #
-# The static library might be used to form another DLL, as is the case
-# with the ODBC driver, so it has to be compiled with USE_TLS as well.
+# On Windows platform client library includes the client-side 
+# Windows Native Authentication plugin.
 #
-# We create a third library without USE_TLS for internal use. We can't
-# be sure that some client application part of this build doesn't go
-# beond the documented API, and try access the Thread Local Storage.
-# The "_notls" means no Tls*() functions used, i.e. "static" TLS.
-
-ADD_LIBRARY(mysqlclient       STATIC ${CLIENT_SOURCES})
-ADD_DEPENDENCIES(mysqlclient GenError)
-TARGET_LINK_LIBRARIES(mysqlclient)
-
-ADD_LIBRARY(mysqlclient_notls STATIC ${CLIENT_SOURCES})
-ADD_DEPENDENCIES(mysqlclient_notls GenError)
-TARGET_LINK_LIBRARIES(mysqlclient_notls)
-
-ADD_LIBRARY(libmysql          SHARED ${CLIENT_SOURCES} dll.c libmysql.def)
 IF(WIN32)
-  SET_TARGET_PROPERTIES(libmysql mysqlclient PROPERTIES COMPILE_FLAGS "-DUSE_TLS")
-ENDIF(WIN32)
-ADD_DEPENDENCIES(libmysql GenError)
-TARGET_LINK_LIBRARIES(libmysql wsock32)
+  ADD_DEFINITIONS(-DAUTHENTICATION_WIN)
+  ADD_SUBDIRECTORY(authentication_win)
+  LIST(APPEND LIBS auth_win_client)
+ENDIF()
 
-IF(EMBED_MANIFESTS)
-  MYSQL_EMBED_MANIFEST("myTest" "asInvoker")
-ENDIF(EMBED_MANIFESTS)
+# Merge several convenience libraries into one big mysqlclient
+MERGE_LIBRARIES(mysqlclient STATIC ${LIBS} COMPONENT Development)
+
+# Visual Studio users need debug  static library for debug projects
+INSTALL_DEBUG_SYMBOLS(clientlib)
+IF(MSVC)
+ INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
+ INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
+ENDIF()
+
+MACRO(GET_TARGET_NAME target out_name)
+  GET_TARGET_PROPERTY(location ${target} LOCATION)
+  GET_FILENAME_COMPONENT(name ${location} NAME)
+  SET(${out_name} ${name})
+ENDMACRO()
+
+IF(UNIX)
+  MACRO(GET_VERSIONED_LIBNAME LIBNAME EXTENSION VERSION OUTNAME)
+    SET(DOT_VERSION ".${VERSION}")
+    IF(DOT_VERSION STREQUAL ".") 
+      SET(DOT_VERSION "")
+    ENDIF()
+    IF(APPLE)
+      SET(${OUTNAME} ${LIBNAME}${DOT_VERSION}${EXTENSION})
+    ELSE()
+      SET(${OUTNAME} ${LIBNAME}${EXTENSION}${DOT_VERSION})
+    ENDIF() 
+  ENDMACRO()
+ENDIF()
+
+IF(UNIX)
+  GET_TARGET_NAME(mysqlclient lib_name)
+  INSTALL_SYMLINK(mysqlclient
+    ${lib_name} ${CMAKE_STATIC_LIBRARY_PREFIX}mysqlclient_r.a
+    ${INSTALL_LIBDIR} Development)
+ENDIF()
+
+IF(NOT DISABLE_SHARED)
+  # Merge several convenience libraries into one big mysqlclient
+  # and link them together into shared library.
+  MERGE_LIBRARIES(libmysql SHARED ${LIBS}
+    EXPORTS ${CLIENT_API_FUNCTIONS}
+    COMPONENT SharedLibraries)
+  IF(UNIX)
+    # libtool compatability
+    IF(CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR APPLE)
+      SET(OS_SHARED_LIB_VERSION "${SHARED_LIB_MAJOR_VERSION}")
+    ELSE()
+      SET(OS_SHARED_LIB_VERSION
+        "${SHARED_LIB_MAJOR_VERSION}.${SHARED_LIB_MINOR_VERSION}.0")
+    ENDIF()
+    # Name of shared library is mysqlclient on Unix
+    SET_TARGET_PROPERTIES(libmysql PROPERTIES 
+      OUTPUT_NAME mysqlclient 
+      VERSION "${OS_SHARED_LIB_VERSION}" 
+      SOVERSION "${SHARED_LIB_MAJOR_VERSION}")
+    CONFIGURE_FILE(libmysql.ver.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
+    IF(LINK_FLAG_NO_UNDEFINED)
+      GET_TARGET_PROPERTY(libmysql_link_flags libmysql LINK_FLAGS)
+      IF(NOT libmysql_link_flag)
+        SET(libmysql_link_flags)
+      ENDIF()
+      SET(libmysql_link_flags
+        "${libmysql_link_flags} ${LINK_FLAG_NO_UNDEFINED}")
+      SET(libmysql_link_flags
+        "${libmysql_link_flags} -Wl,--version-script=libmysql.ver")
+      SET_TARGET_PROPERTIES(libmysql
+        PROPERTIES LINK_FLAGS "${libmysql_link_flags}")
+    ENDIF() 
+    # clean direct output needs to be set several targets have the same name
+    #(mysqlclient in this case)
+    SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+    SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+
+    # Install links to libmysqlclient.so (client_r)
+    GET_VERSIONED_LIBNAME(
+      "${CMAKE_SHARED_LIBRARY_PREFIX}mysqlclient_r"
+      "${CMAKE_SHARED_LIBRARY_SUFFIX}"
+      ""
+      linkname)
+    GET_TARGET_NAME(libmysql lib_name)
+    GET_FILENAME_COMPONENT(lib_name_we ${lib_name} NAME_WE)
+    INSTALL_SYMLINK(libmysql
+      ${lib_name} ${linkname}
+      ${INSTALL_LIBDIR} SharedLibraries)
+    SET(OS_SHARED_LIB_SYMLINKS
+      "${SHARED_LIB_MAJOR_VERSION}" "${OS_SHARED_LIB_VERSION}")
+    LIST(REMOVE_DUPLICATES OS_SHARED_LIB_SYMLINKS)
+    FOREACH(ver ${OS_SHARED_LIB_SYMLINKS})
+      GET_VERSIONED_LIBNAME(
+        "${CMAKE_SHARED_LIBRARY_PREFIX}mysqlclient_r"
+        "${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${ver}"
+        linkname)
+      GET_VERSIONED_LIBNAME(
+        ${lib_name_we} "${CMAKE_SHARED_LIBRARY_SUFFIX}" "${ver}" lib_name_ver)
+      INSTALL_SYMLINK(libmysql
+        ${lib_name_ver} ${linkname}
+        ${INSTALL_LIBDIR} SharedLibraries)
+    ENDFOREACH()
+  ENDIF()
+ENDIF()

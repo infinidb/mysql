@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 	/* Functions to compressed records */
 
@@ -152,7 +150,7 @@ my_bool _mi_read_pack_info(MI_INFO *info, pbool fix_keys)
 
   file=info->dfile;
   my_errno=0;
-  if (my_read(file,(uchar*) header,sizeof(header),MYF(MY_NABP)))
+  if (mysql_file_read(file, (uchar*) header, sizeof(header), MYF(MY_NABP)))
   {
     if (!my_errno)
       my_errno=HA_ERR_END_OF_FILE;
@@ -226,9 +224,9 @@ my_bool _mi_read_pack_info(MI_INFO *info, pbool fix_keys)
   tmp_buff=share->decode_tables+length;
   disk_cache= (uchar*) (tmp_buff+OFFSET_TABLE_SIZE);
 
-  if (my_read(file,disk_cache,
-	      (uint) (share->pack.header_length-sizeof(header)),
-	      MYF(MY_NABP)))
+  if (mysql_file_read(file, disk_cache,
+                      (uint) (share->pack.header_length-sizeof(header)),
+                      MYF(MY_NABP)))
     goto err2;
 
   huff_tree_bits=max_bit(trees ? trees-1 : 0);
@@ -300,9 +298,9 @@ my_bool _mi_read_pack_info(MI_INFO *info, pbool fix_keys)
 err3:
   my_errno=HA_ERR_WRONG_IN_RECORD;
 err2:
-  my_free((uchar*) share->decode_tables,MYF(0));
+  my_free(share->decode_tables);
 err1:
-  my_free((uchar*) share->decode_trees,MYF(0));
+  my_free(share->decode_trees);
 err0:
   DBUG_RETURN(1);
 }
@@ -686,7 +684,7 @@ static uint find_longest_bitstream(uint16 *table, uint16 *end)
       return OFFSET_TABLE_SIZE;
     }
     length2= find_longest_bitstream(next, end) + 1;
-    length=max(length,length2);
+    length= MY_MAX(length, length2);
   }
   return length;
 }
@@ -719,8 +717,8 @@ int _mi_read_pack_record(MI_INFO *info, my_off_t filepos, uchar *buf)
   if (_mi_pack_get_block_info(info, &info->bit_buff, &block_info,
                               &info->rec_buff, file, filepos))
     goto err;
-  if (my_read(file,(uchar*) info->rec_buff + block_info.offset ,
-	      block_info.rec_len - block_info.offset, MYF(MY_NABP)))
+  if (mysql_file_read(file, (uchar*) info->rec_buff + block_info.offset,
+                      block_info.rec_len - block_info.offset, MYF(MY_NABP)))
     goto panic;
   info->update|= HA_STATE_AKTIV;
   DBUG_RETURN(_mi_pack_rec_unpack(info, &info->bit_buff, buf,
@@ -821,12 +819,12 @@ static void uf_zerofill_skip_zero(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
 				   uchar *to, uchar *end)
 {
   if (get_bit(bit_buff))
-    bzero((char*) to,(uint) (end-to));
+    memset(to, 0, (end-to));
   else
   {
     end-=rec->space_length_bits;
     decode_bytes(rec,bit_buff,to,end);
-    bzero((char*) end,rec->space_length_bits);
+    memset(end, 0, rec->space_length_bits);
   }
 }
 
@@ -834,7 +832,7 @@ static void uf_skip_zero(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *to,
 			  uchar *end)
 {
   if (get_bit(bit_buff))
-    bzero((char*) to,(uint) (end-to));
+    memset(to, 0, (end-to));
   else
     decode_bytes(rec,bit_buff,to,end);
 }
@@ -843,7 +841,7 @@ static void uf_space_normal(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *to,
 			    uchar *end)
 {
   if (get_bit(bit_buff))
-    bfill((uchar*) to,(end-to),' ');
+    memset(to, ' ', end - to);
   else
     decode_bytes(rec,bit_buff,to,end);
 }
@@ -853,7 +851,7 @@ static void uf_space_endspace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
 {
   uint spaces;
   if (get_bit(bit_buff))
-    bfill((uchar*) to,(end-to),' ');
+    memset(to, ' ', end-to);
   else
   {
     if (get_bit(bit_buff))
@@ -865,7 +863,7 @@ static void uf_space_endspace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
       }
       if (to+spaces != end)
 	decode_bytes(rec,bit_buff,to,end-spaces);
-      bfill((uchar*) end-spaces,spaces,' ');
+      memset(end-spaces, ' ', spaces);
     }
     else
       decode_bytes(rec,bit_buff,to,end);
@@ -885,7 +883,7 @@ static void uf_endspace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
     }
     if (to+spaces != end)
       decode_bytes(rec,bit_buff,to,end-spaces);
-    bfill((uchar*) end-spaces,spaces,' ');
+    memset(end - spaces, ' ', spaces);
   }
   else
     decode_bytes(rec,bit_buff,to,end);
@@ -896,7 +894,7 @@ static void uf_space_endspace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *t
 {
   uint spaces;
   if (get_bit(bit_buff))
-    bfill((uchar*) to,(end-to),' ');
+    memset(to, ' ', end - to);
   else
   {
     if ((spaces=get_bits(bit_buff,rec->space_length_bits))+to > end)
@@ -906,7 +904,7 @@ static void uf_space_endspace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *t
     }
     if (to+spaces != end)
       decode_bytes(rec,bit_buff,to,end-spaces);
-    bfill((uchar*) end-spaces,spaces,' ');
+    memset(end - spaces, ' ', spaces);
   }
 }
 
@@ -921,7 +919,7 @@ static void uf_endspace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *to,
   }
   if (to+spaces != end)
     decode_bytes(rec,bit_buff,to,end-spaces);
-  bfill((uchar*) end-spaces,spaces,' ');
+  memset(end - spaces, ' ', spaces);
 }
 
 static void uf_space_prespace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
@@ -929,7 +927,7 @@ static void uf_space_prespace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
 {
   uint spaces;
   if (get_bit(bit_buff))
-    bfill((uchar*) to,(end-to),' ');
+    memset(to, ' ', end - to);
   else
   {
     if (get_bit(bit_buff))
@@ -939,7 +937,7 @@ static void uf_space_prespace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
 	bit_buff->error=1;
 	return;
       }
-      bfill((uchar*) to,spaces,' ');
+      memset(to, ' ', spaces);
       if (to+spaces != end)
 	decode_bytes(rec,bit_buff,to+spaces,end);
     }
@@ -960,7 +958,7 @@ static void uf_prespace_selected(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
       bit_buff->error=1;
       return;
     }
-    bfill((uchar*) to,spaces,' ');
+    memset(to, ' ', spaces);
     if (to+spaces != end)
       decode_bytes(rec,bit_buff,to+spaces,end);
   }
@@ -974,7 +972,7 @@ static void uf_space_prespace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *t
 {
   uint spaces;
   if (get_bit(bit_buff))
-    bfill((uchar*) to,(end-to),' ');
+    memset(to, ' ', end-to);
   else
   {
     if ((spaces=get_bits(bit_buff,rec->space_length_bits))+to > end)
@@ -982,7 +980,7 @@ static void uf_space_prespace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *t
       bit_buff->error=1;
       return;
     }
-    bfill((uchar*) to,spaces,' ');
+    memset(to, ' ', spaces);
     if (to+spaces != end)
       decode_bytes(rec,bit_buff,to+spaces,end);
   }
@@ -997,7 +995,7 @@ static void uf_prespace(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *to,
     bit_buff->error=1;
     return;
   }
-  bfill((uchar*) to,spaces,' ');
+  memset(to, ' ', spaces);
   if (to+spaces != end)
     decode_bytes(rec,bit_buff,to+spaces,end);
 }
@@ -1007,7 +1005,7 @@ static void uf_zerofill_normal(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *
 {
   end-=rec->space_length_bits;
   decode_bytes(rec,bit_buff,(uchar*) to,end);
-  bzero((char*) end,rec->space_length_bits);
+  memset(end, 0, rec->space_length_bits);
 }
 
 static void uf_constant(MI_COLUMNDEF *rec,
@@ -1033,14 +1031,14 @@ static void uf_zero(MI_COLUMNDEF *rec __attribute__((unused)),
 		    MI_BIT_BUFF *bit_buff __attribute__((unused)),
 		    uchar *to, uchar *end)
 {
-  bzero((char*) to,(uint) (end-to));
+  memset(to, 0, (end-to));
 }
 
 static void uf_blob(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
 		    uchar *to, uchar *end)
 {
   if (get_bit(bit_buff))
-    bzero((uchar*) to,(end-to));
+    memset(to, 0, (end-to));
   else
   {
     ulong length=get_bits(bit_buff,rec->space_length_bits);
@@ -1048,13 +1046,12 @@ static void uf_blob(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff,
     if (bit_buff->blob_pos+length > bit_buff->blob_end)
     {
       bit_buff->error=1;
-      bzero((uchar*) to,(end-to));
+      memset(to, 0, (end-to));
       return;
     }
     decode_bytes(rec,bit_buff,bit_buff->blob_pos,bit_buff->blob_pos+length);
-    _my_store_blob_length((uchar*) to,pack_length,length);
-    memcpy_fixed((char*) to+pack_length,(char*) &bit_buff->blob_pos,
-		 sizeof(char*));
+    _mi_store_blob_length((uchar*) to,pack_length,length);
+    memcpy(to+pack_length, &bit_buff->blob_pos, sizeof(char*));
     bit_buff->blob_pos+=length;
   }
 }
@@ -1341,9 +1338,9 @@ int _mi_read_rnd_pack_record(MI_INFO *info, uchar *buf,
   }
   else
   {
-    if (my_read(info->dfile,(uchar*) info->rec_buff + block_info.offset,
-		block_info.rec_len-block_info.offset,
-		MYF(MY_NABP)))
+    if (mysql_file_read(info->dfile,
+                        (uchar*) info->rec_buff + block_info.offset,
+                        block_info.rec_len-block_info.offset, MYF(MY_NABP)))
       goto err;
   }
   info->packed_length=block_info.rec_len;
@@ -1372,11 +1369,11 @@ uint _mi_pack_get_block_info(MI_INFO *myisam, MI_BIT_BUFF *bit_buff,
   {
     ref_length=myisam->s->pack.ref_length;
     /*
-      We can't use my_pread() here because mi_read_rnd_pack_record assumes
+      We can't use mysql_file_pread() here because mi_read_rnd_pack_record assumes
       position is ok
     */
-    VOID(my_seek(file,filepos,MY_SEEK_SET,MYF(0)));
-    if (my_read(file, header,ref_length,MYF(MY_NABP)))
+    mysql_file_seek(file, filepos, MY_SEEK_SET, MYF(0));
+    if (mysql_file_read(file, header, ref_length, MYF(MY_NABP)))
       return BLOCK_FATAL_ERROR;
     DBUG_DUMP("header",(uchar*) header,ref_length);
   }
@@ -1401,7 +1398,7 @@ uint _mi_pack_get_block_info(MI_INFO *myisam, MI_BIT_BUFF *bit_buff,
   info->filepos=filepos+head_length;
   if (file > 0)
   {
-    info->offset=min(info->rec_len, ref_length - head_length);
+    info->offset= MY_MIN(info->rec_len, ref_length - head_length);
     memcpy(*rec_buff_p, header + head_length, info->offset);
   }
   return 0;
@@ -1504,11 +1501,11 @@ my_bool _mi_memmap_file(MI_INFO *info)
 
     if (myisam_mmap_size != SIZE_T_MAX)
     {
-      pthread_mutex_lock(&THR_LOCK_myisam_mmap);
+      mysql_mutex_lock(&THR_LOCK_myisam_mmap);
       eom= data_file_length > myisam_mmap_size - myisam_mmap_used - MEMMAP_EXTRA_MARGIN;
       if (!eom)
         myisam_mmap_used+= data_file_length + MEMMAP_EXTRA_MARGIN;
-      pthread_mutex_unlock(&THR_LOCK_myisam_mmap);
+      mysql_mutex_unlock(&THR_LOCK_myisam_mmap);
     }
     else
       eom= data_file_length > myisam_mmap_size - MEMMAP_EXTRA_MARGIN;
@@ -1518,15 +1515,15 @@ my_bool _mi_memmap_file(MI_INFO *info)
       DBUG_PRINT("warning", ("File is too large for mmap"));
       DBUG_RETURN(0);
     }
-    if (my_seek(info->dfile,0L,MY_SEEK_END,MYF(0)) <
+    if (mysql_file_seek(info->dfile, 0L, MY_SEEK_END, MYF(0)) <
         share->state.state.data_file_length+MEMMAP_EXTRA_MARGIN)
     {
       DBUG_PRINT("warning",("File isn't extended for memmap"));
       if (myisam_mmap_size != SIZE_T_MAX)
       {
-        pthread_mutex_lock(&THR_LOCK_myisam_mmap);
+        mysql_mutex_lock(&THR_LOCK_myisam_mmap);
         myisam_mmap_used-= data_file_length + MEMMAP_EXTRA_MARGIN;
-        pthread_mutex_unlock(&THR_LOCK_myisam_mmap);
+        mysql_mutex_unlock(&THR_LOCK_myisam_mmap);
       }
       DBUG_RETURN(0);
     }
@@ -1536,9 +1533,9 @@ my_bool _mi_memmap_file(MI_INFO *info)
     {
       if (myisam_mmap_size != SIZE_T_MAX)
       {
-        pthread_mutex_lock(&THR_LOCK_myisam_mmap);
+        mysql_mutex_lock(&THR_LOCK_myisam_mmap);
         myisam_mmap_used-= data_file_length + MEMMAP_EXTRA_MARGIN;
-        pthread_mutex_unlock(&THR_LOCK_myisam_mmap);
+        mysql_mutex_unlock(&THR_LOCK_myisam_mmap);
       }
       DBUG_RETURN(0);
     }
@@ -1554,13 +1551,13 @@ void _mi_unmap_file(MI_INFO *info)
 {
   DBUG_ASSERT(info->s->options & HA_OPTION_COMPRESS_RECORD);
 
-  VOID(my_munmap((char*) info->s->file_map, (size_t) info->s->mmaped_length));
+  (void) my_munmap((char*) info->s->file_map, (size_t) info->s->mmaped_length);
 
   if (myisam_mmap_size != SIZE_T_MAX)
   {
-    pthread_mutex_lock(&THR_LOCK_myisam_mmap);
+    mysql_mutex_lock(&THR_LOCK_myisam_mmap);
     myisam_mmap_used-= info->s->mmaped_length;
-    pthread_mutex_unlock(&THR_LOCK_myisam_mmap);
+    mysql_mutex_unlock(&THR_LOCK_myisam_mmap);
   }
 }
 

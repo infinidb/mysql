@@ -1,7 +1,24 @@
-/******************************************************
-Sessions
+/*****************************************************************************
 
-(c) 1996 Innobase Oy
+Copyright (c) 1996, 2009, Oracle and/or its affiliates. All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+
+*****************************************************************************/
+
+/**************************************************//**
+@file include/usr0sess.h
+Sessions
 
 Created 6/25/1996 Heikki Tuuri
 *******************************************************/
@@ -19,33 +36,32 @@ Created 6/25/1996 Heikki Tuuri
 #include "data0data.h"
 #include "rem0rec.h"
 
-/*************************************************************************
-Opens a session. */
-
+/*********************************************************************//**
+Opens a session.
+@return	own: session object */
+UNIV_INTERN
 sess_t*
 sess_open(void);
 /*============*/
-					/* out, own: session object */
-/*************************************************************************
-Closes a session, freeing the memory occupied by it, if it is in a state
-where it should be closed. */
+/*********************************************************************//**
+Closes a session, freeing the memory occupied by it. */
+UNIV_INTERN
+void
+sess_close(
+/*=======*/
+	sess_t*		sess);		/* in, own: session object */
 
-ibool
-sess_try_close(
-/*===========*/
-				/* out: TRUE if closed */
-	sess_t*		sess);	/* in, own: session object */
-
-/* The session handle. All fields are protected by the kernel mutex */
-struct sess_struct{
-	ulint		state;		/* state of the session */
-	trx_t*		trx;		/* transaction object permanently
+/* The session handle. This data structure is only used by purge and is
+not really necessary. We should get rid of it. */
+struct sess_t{
+	ulint		state;		/*!< state of the session */
+	trx_t*		trx;		/*!< transaction object permanently
 					assigned for the session: the
 					transaction instance designated by the
 					trx id changes, but the memory
 					structure is preserved */
 	UT_LIST_BASE_NODE_T(que_t)
-			graphs;		/* query graphs belonging to this
+			graphs;		/*!< query graphs belonging to this
 					session */
 };
 

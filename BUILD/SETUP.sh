@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Library General Public
 # License along with this library; if not, write to the Free
-# Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA 02110-1301, USA
 
 ########################################################################
@@ -31,8 +31,8 @@ Usage: $0 [-h|-n] [configure-options]
   -h, --help              Show this help message.
   -n, --just-print        Don't actually run any commands; just print them.
   -c, --just-configure    Stop after running configure.
-  --with-debug=full       Build with full debug.
-  --warning-mode=[old|pedantic]
+  --with-debug=full       Build with full debug(no optimizations, keep call stack).
+  --warning-mode=[old|pedantic|maintainer]
                           Influences the debug flags. Old is default.
   --prefix=path           Build with prefix 'path'.
 
@@ -77,8 +77,9 @@ fi
 prefix="/usr/local/mysql"
 just_print=
 just_configure=
-full_debug=
 warning_mode=
+maintainer_mode=
+full_debug=
 
 parse_options "$@"
 
@@ -105,7 +106,21 @@ AM_MAKEFLAGS="-j 6"
 # Ex --with-ssl=/usr
 SSL_LIBRARY=--with-ssl
 
-if [ "x$warning_mode" != "xpedantic" ]; then
+if [ "x$warning_mode" = "xpedantic" ]; then
+  warnings="-W -Wall -ansi -pedantic -Wno-long-long -Wno-unused -D_POSIX_SOURCE"
+  c_warnings="$warnings"
+  cxx_warnings="$warnings -std=c++98"
+# NOTE: warning mode should not influence optimize/debug mode.
+# Please feel free to add a separate option if you don't feel it's an overkill.
+  debug_extra_cflags="-O0"
+# Reset CPU flags (-mtune), they don't work in -pedantic mode
+  check_cpu_cflags=""
+elif [ "x$warning_mode" = "xmaintainer" ]; then
+  c_warnings="-Wall -Wextra"
+  cxx_warnings="$c_warnings -Wno-unused-parameter"
+  maintainer_mode="--enable-mysql-maintainer-mode"
+  debug_extra_cflags="-g3"
+else
 # Both C and C++ warnings
   warnings="-Wall -Wextra -Wunused -Wwrite-strings"
 
@@ -118,17 +133,7 @@ if [ "x$warning_mode" != "xpedantic" ]; then
   cxx_warnings="$warnings -Wno-unused-parameter"
 # cxx_warnings="$cxx_warnings -Woverloaded-virtual -Wsign-promo"
   cxx_warnings="$cxx_warnings -Wnon-virtual-dtor"
-# Added unless --with-debug=full
   debug_extra_cflags="-O0 -g3 -gdwarf-2"
-else
-  warnings="-W -Wall -ansi -pedantic -Wno-long-long -Wno-unused -D_POSIX_SOURCE"
-  c_warnings="$warnings"
-  cxx_warnings="$warnings -std=c++98"
-# NOTE: warning mode should not influence optimize/debug mode.
-# Please feel free to add a separate option if you don't feel it's an overkill.
-  debug_extra_cflags="-O0"
-# Reset CPU flags (-mtune), they don't work in -pedantic mode
-  check_cpu_cflags=""
 fi
 
 # Set flags for various build configurations.
@@ -136,27 +141,28 @@ fi
 # Override -DFORCE_INIT_OF_VARS from debug_cflags. It enables the macro
 # LINT_INIT(), which is only useful for silencing spurious warnings
 # of static analysis tools. We want LINT_INIT() to be a no-op in Valgrind.
-valgrind_flags="-USAFEMALLOC -UFORCE_INIT_OF_VARS -DHAVE_purify "
+valgrind_flags="-UFORCE_INIT_OF_VARS -DHAVE_purify "
 valgrind_flags="$valgrind_flags -DMYSQL_SERVER_SUFFIX=-valgrind-max"
 valgrind_configs="--with-valgrind"
 #
 # Used in -debug builds
-debug_cflags="-DUNIV_MUST_NOT_INLINE -DEXTRA_DEBUG -DFORCE_INIT_OF_VARS "
-debug_cflags="$debug_cflags -DSAFEMALLOC -DPEDANTIC_SAFEMALLOC -DSAFE_MUTEX"
+debug_cflags="-DEXTRA_DEBUG -DFORCE_INIT_OF_VARS "
+debug_cflags="$debug_cflags -DSAFE_MUTEX"
 error_inject="--with-error-inject "
 #
 # Base C++ flags for all builds
-base_cxxflags="-felide-constructors -fno-exceptions -fno-rtti"
+base_cxxflags="-felide-constructors"
 #
 # Flags for optimizing builds.
 # Be as fast as we can be without losing our ability to backtrace.
 fast_cflags="-O3 -fno-omit-frame-pointer"
 
-debug_configs="--with-debug$full_debug"
+debug_configs="--with-debug"
 if [ -z "$full_debug" ]
 then
   debug_cflags="$debug_cflags $debug_extra_cflags"
 fi
+
 
 #
 # Configuration options.
@@ -164,12 +170,10 @@ fi
 base_configs="--prefix=$prefix --enable-assembler "
 base_configs="$base_configs --with-extra-charsets=complex "
 base_configs="$base_configs --enable-thread-safe-client "
-base_configs="$base_configs --with-big-tables"
+base_configs="$base_configs --with-big-tables $maintainer_mode"
 
-if test -d "$path/../cmd-line-utils/readline"
-then
-    base_configs="$base_configs --with-readline"
-elif test -d "$path/../cmd-line-utils/libedit"
+
+if test -d "$path/../cmd-line-utils/libedit"
 then
     base_configs="$base_configs --with-libedit"
 fi
@@ -209,7 +213,7 @@ if test -z "$CC" ; then
 fi
 
 if test -z "$CXX" ; then
-  CXX=gcc
+  CXX=g++
 fi
 
 # If ccache (a compiler cache which reduces build time)
@@ -244,7 +248,7 @@ gcov_compile_flags="$gcov_compile_flags -DMYSQL_SERVER_SUFFIX=-gcov -DHAVE_gcov"
 
 gcov_link_flags="-fprofile-arcs -ftest-coverage"
 
-gcov_configs="--disable-shared"
+gcov_configs="--with-gcov"
 
 # gprof
 

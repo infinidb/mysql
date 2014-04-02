@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2002, 2005, 2007 MySQL AB
+/* Copyright (c) 2000-2002, 2005-2007 MySQL AB
    Use is subject to license terms.
    
    This library is free software; you can redistribute it and/or
@@ -14,8 +14,7 @@
    You should have received a copy of the GNU Library General Public
    License along with this library; if not, write to the Free
    Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
-   MA 02110-1301, USA
-*/
+   MA 02110-1301, USA */
 
 /*  File   : strxnmov.c
     Author : Richard A. O'Keefe.

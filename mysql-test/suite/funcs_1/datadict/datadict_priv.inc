@@ -52,7 +52,7 @@ eval CREATE VIEW test.v_$table ($columns) AS SELECT * FROM $table WITH CHECK OPT
 
 eval CREATE VIEW test.v_$table ($columns) AS SELECT * FROM $table;
 
---error ER_DBACCESS_DENIED_ERROR
+--error ER_NON_UPDATABLE_TABLE
 eval UPDATE test.v_$TABLE SET TIME=NOW() WHERE id = 1;
 
 eval DROP VIEW test.v_$table;
@@ -88,13 +88,13 @@ eval ALTER TABLE $table DROP COLUMN $drop_column;
 --error ER_DBACCESS_DENIED_ERROR
 eval ALTER TABLE $table ADD COLUMN (my_column INT);
 
---error ER_UNKNOWN_TABLE
+--error ER_DBACCESS_DENIED_ERROR
 eval RENAME TABLE $table TO new_$table;
 
 --error ER_DBACCESS_DENIED_ERROR
 eval RENAME TABLE $table TO files;
 
---error ER_UNKNOWN_TABLE
+--error ER_DBACCESS_DENIED_ERROR
 eval CREATE TABLE new_$table AS SELECT * FROM $table;
 
 #----------------------------------------------------------------------

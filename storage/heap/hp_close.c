@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2002, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* close a heap-database */
 
@@ -24,9 +24,9 @@ int heap_close(HP_INFO *info)
 {
   int tmp;
   DBUG_ENTER("heap_close");
-  pthread_mutex_lock(&THR_LOCK_heap);
+  mysql_mutex_lock(&THR_LOCK_heap);
   tmp= hp_close(info);
-  pthread_mutex_unlock(&THR_LOCK_heap);
+  mysql_mutex_unlock(&THR_LOCK_heap);
   DBUG_RETURN(tmp);
 }
 
@@ -46,6 +46,6 @@ int hp_close(register HP_INFO *info)
     heap_open_list=list_delete(heap_open_list,&info->open_list);
   if (!--info->s->open_count && info->s->delete_on_close)
     hp_free(info->s);				/* Table was deleted */
-  my_free((uchar*) info,MYF(0));
+  my_free(info);
   DBUG_RETURN(error);
 }

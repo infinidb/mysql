@@ -1,5 +1,4 @@
-/* Copyright (c) 2000-2002 MySQL AB
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
    
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -14,8 +13,7 @@
    You should have received a copy of the GNU Library General Public
    License along with this library; if not, write to the Free
    Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
-   MA 02110-1301, USA
-*/
+   MA 02110-1301, USA */
 
 /*  File   : strend.c
     Author : Richard A. O'Keefe.
@@ -26,22 +24,10 @@
     is,  strend(s)-s  ==  strlen(s). This is useful for adding things at
     the end of strings.  It is redundant, because  strchr(s,'\0')  could
     be used instead, but this is clearer and faster.
-    Beware: the asm version works only if strlen(s) < 65535.
 */
 
 #include <my_global.h>
 #include "m_string.h"
-
-#if	VaxAsm
-
-char *strend(s)
-const char *s;
-{
-  asm("locc $0,$65535,*4(ap)");
-  asm("movl r1,r0");
-}
-
-#else	/* ~VaxAsm */
 
 char *strend(register const char *s)
 {
@@ -49,4 +35,3 @@ char *strend(register const char *s)
   return (char*) (s-1);
 }
 
-#endif	/* VaxAsm */

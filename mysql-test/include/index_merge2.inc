@@ -17,7 +17,7 @@
 
 --echo #---------------- Index merge test 2 -------------------------------------------
 
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 
 --disable_warnings
 drop table if exists t1,t2;
@@ -41,6 +41,12 @@ while ($1)
 }
 --enable_query_log
 
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
+
 # No primary key
 explain select * from t1 where key1 < 5 or key2 > 197;
 
@@ -59,6 +65,12 @@ alter table t1 add str1 char (255) not null,
 update t1 set str1='aaa', str2='bbb', str3=concat(key2, '-', key1 div 2, '_' ,if(key1 mod 2 = 0, 'a', 'A'));
 
 alter table t1 add primary key (str1, zeroval, str2, str3);
+
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
 
 explain select * from t1 where key1 < 5 or key2 > 197;
 
@@ -86,6 +98,13 @@ while ($1)
   dec $1;
 }
 --enable_query_log
+
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
+
 explain select pk from t1 where key1 = 1 and key2 = 1;
 select pk from t1 where key2 = 1 and key1 = 1;
 select pk from t1 ignore index(key1,key2) where key2 = 1 and key1 = 1;
@@ -122,12 +141,26 @@ insert into t1 (key1a, key1b, key2a, key2b, key3a, key3b)
 analyze table t1;
 select count(*) from t1;
 
+-- disable_query_log
+-- disable_result_log
+analyze table t2;
+-- enable_result_log
+-- enable_query_log
+
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 9 #
+}
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and  key2a = 2 and key2b is null;
 
 select count(*) from t1 where
   key1a = 2 and key1b is null and key2a = 2 and key2b is null;
 
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 9 #
+}
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and key3a = 2 and key3b is null;
 
@@ -338,6 +371,16 @@ alter table t1 add index i2(key2);
 alter table t1 add index i3(key3);
 update t1 set key2=key1,key3=key1;
 
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
+
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 9 #
+}
 # to test the bug, the following must use "sort_union":
 explain select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
 select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
@@ -362,6 +405,12 @@ INSERT INTO t1 VALUES
 (2, 1, 1, 1),
 (3, 1, 1, 1),
 (4, 0, 1, 1);
+
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
 
 EXPLAIN
 SELECT a
@@ -395,3 +444,40 @@ UPDATE t2 SET b = 'b' WHERE a = 1;
 SELECT * FROM t2;
 
 DROP TABLE t1, t2;
+
+--echo #
+--echo # BUG#13970015: ASSERT `MIN_ENDP || MAX_ENDP' FAILED IN
+--echo #               HANDLER::MULTI_RANGE_READ_INFO_CONST
+--echo #
+
+CREATE TABLE t1 (
+  pk INT NOT NULL,
+  col_int_key INT NOT NULL,
+  col_varchar_key VARCHAR(1) NOT NULL,
+  PRIMARY KEY (pk),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+);
+
+INSERT INTO t1 VALUES (1,1,'a'), (2,2,'b');
+
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
+
+EXPLAIN
+SELECT col_int_key
+FROM t1
+WHERE col_varchar_key >= 'l' OR 
+      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l') 
+         AND ((pk BETWEEN 141 AND 141) OR (col_int_key > 141)));
+
+SELECT col_int_key
+FROM t1
+WHERE col_varchar_key >= 'l' OR 
+      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l') 
+         AND ((pk BETWEEN 141 AND 141) OR (col_int_key > 141)));
+
+DROP TABLE t1;

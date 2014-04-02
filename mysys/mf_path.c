@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2003, 2006, 2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include <m_string.h>
@@ -42,7 +42,7 @@ char * my_path(char * to, const char *progname,
 		   ((prog=getenv("_")) != 0 &&
                     dirname_part(to, prog, &to_length))))
   {
-    VOID(intern_filename(to,to));
+    (void) intern_filename(to,to);
     if (!test_if_hard_path(to))
     {
       if (!my_getwd(curr_dir,FN_REFLEN,MYF(0)))
@@ -60,11 +60,11 @@ char * my_path(char * to, const char *progname,
       end= (char*) "/my/";
 #endif
     }
-    VOID(intern_filename(to,end));
+    (void) intern_filename(to,end);
     to=strend(to);
     if (to != start && to[-1] != FN_LIBCHAR)
       *to++ = FN_LIBCHAR;
-    VOID(strmov(to,own_pathname_part));
+    (void) strmov(to,own_pathname_part);
   }
   DBUG_PRINT("exit",("to: '%s'",start));
   DBUG_RETURN(start);
@@ -78,9 +78,6 @@ char * my_path(char * to, const char *progname,
 #define F_OK 0
 #define PATH_SEP ';'
 #define PROGRAM_EXTENSION ".exe"
-#elif defined(__NETWARE__)
-#define PATH_SEP ';'
-#define PROGRAM_EXTENSION ".nlm"
 #else
 #define PATH_SEP ':'
 #endif

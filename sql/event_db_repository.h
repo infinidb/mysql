@@ -1,6 +1,8 @@
 #ifndef _EVENT_DB_REPOSITORY_H_
 #define _EVENT_DB_REPOSITORY_H_
-/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+
+/*
+   Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,7 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 /**
   @addtogroup Event_Scheduler
@@ -92,7 +95,7 @@ public:
   bool
   load_named_event(THD *thd, LEX_STRING dbname, LEX_STRING name, Event_basic *et);
 
-  bool
+  static bool
   open_event_table(THD *thd, enum thr_lock_type lock_type, TABLE **table);
 
   bool
@@ -102,17 +105,12 @@ public:
   update_timing_fields_for_event(THD *thd,
                                  LEX_STRING event_db_name,
                                  LEX_STRING event_name,
-                                 bool update_last_executed,
                                  my_time_t last_executed,
-                                 bool update_status,
                                  ulonglong status);
 public:
   static bool
   check_system_tables(THD *thd);
 private:
-  void
-  drop_events_by_field(THD *thd, enum enum_events_table_field field,
-                       LEX_STRING field_value);
   bool
   index_read_for_db_for_i_s(THD *thd, TABLE *schema_table, TABLE *event_table,
                             const char *db);

@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2001-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,12 +10,22 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #ifndef _SQL_CACHE_H
 #define _SQL_CACHE_H
+
+#include "hash.h"
+#include "my_base.h"                            /* ha_rows */
+
+class MY_LOCALE;
+struct TABLE_LIST;
+class Time_zone;
+struct LEX;
+struct TABLE;
+typedef struct st_changed_table_list CHANGED_TABLE_LIST;
+typedef ulonglong sql_mode_t;
 
 /* Query cache */
 
@@ -67,6 +75,13 @@ struct Query_cache_table;
 struct Query_cache_query;
 struct Query_cache_result;
 class Query_cache;
+struct Query_cache_tls;
+struct LEX;
+class THD;
+
+typedef my_bool (*qc_engine_callback)(THD *thd, char *table_key,
+                                      uint key_length,
+                                      ulonglong *engine_data);
 
 /**
   This class represents a node in the linked chain of queries
@@ -138,9 +153,9 @@ struct Query_cache_block
 struct Query_cache_query
 {
   ulonglong limit_found_rows;
-  rw_lock_t lock;
+  mysql_rwlock_t lock;
   Query_cache_block *res;
-  NET *wri;
+  Query_cache_tls *wri;
   ulong len;
   uint8 tbls_type;
   unsigned int last_pkt_nr;
@@ -152,8 +167,8 @@ struct Query_cache_query
   inline void found_rows(ulonglong rows)   { limit_found_rows= rows; }
   inline Query_cache_block *result()	   { return res; }
   inline void result(Query_cache_block *p) { res= p; }
-  inline NET *writer()			   { return wri; }
-  inline void writer(NET *p)		   { wri= p; }
+  inline Query_cache_tls *writer()	   { return wri; }
+  inline void writer(Query_cache_tls *p)   { wri= p; }
   inline uint8 tables_type()               { return tbls_type; }
   inline void tables_type(uint8 type)      { tbls_type= type; }
   inline ulong length()			   { return len; }
@@ -278,12 +293,15 @@ private:
 #ifndef DBUG_OFF
   my_thread_id m_cache_lock_thread_id;
 #endif
-  pthread_cond_t COND_cache_status_changed;
+  mysql_cond_t COND_cache_status_changed;
   enum Cache_lock_status { UNLOCKED, LOCKED_NO_WAIT, LOCKED };
   Cache_lock_status m_cache_lock_status;
 
+  bool m_query_cache_is_disabled;
+
   void free_query_internal(Query_cache_block *point);
   void invalidate_table_internal(THD *thd, uchar *key, uint32 key_length);
+  void disable_query_cache(void) { m_query_cache_is_disabled= TRUE; }
 
 protected:
   /*
@@ -300,7 +318,7 @@ protected:
     is other threads that were going to do cache flush---they'll wait
     till the end of a flush operation.
   */
-  pthread_mutex_t structure_guard_mutex;
+  mysql_mutex_t structure_guard_mutex;
   uchar *cache;					// cache memory
   Query_cache_block *first_block;		// physical location block list
   Query_cache_block *queries_blocks;		// query list (LIFO)
@@ -352,7 +370,7 @@ protected:
   my_bool register_all_tables(Query_cache_block *block,
 			      TABLE_LIST *tables_used,
 			      TABLE_COUNTER_TYPE tables);
-  my_bool insert_table(uint key_len, char *key,
+  my_bool insert_table(uint key_len, const char *key,
 		       Query_cache_block_table *node,
 		       uint32 db_length, uint8 cache_type,
 		       qc_engine_callback callback,
@@ -410,7 +428,8 @@ protected:
     If query is cacheable return number tables in query
     (query without tables not cached)
   */
-  TABLE_COUNTER_TYPE is_cacheable(THD *thd, uint32 query_len, char *query,
+  TABLE_COUNTER_TYPE is_cacheable(THD *thd, size_t query_len,
+                                  const char *query,
                                   LEX *lex, TABLE_LIST *tables_used,
                                   uint8 *tables_type);
   TABLE_COUNTER_TYPE process_and_count_tables(THD *thd,
@@ -425,6 +444,8 @@ protected:
 	      ulong min_result_data_size = QUERY_CACHE_MIN_RESULT_DATA_SIZE,
 	      uint def_query_hash_size = QUERY_CACHE_DEF_QUERY_HASH_SIZE,
 	      uint def_table_hash_size = QUERY_CACHE_DEF_TABLE_HASH_SIZE);
+
+  bool is_disabled(void) { return m_query_cache_is_disabled; }
 
   /* initialize cache (mutex) */
   void init();
@@ -465,10 +486,13 @@ protected:
 
   void destroy();
 
-  friend void query_cache_init_query(NET *net);
-  friend void query_cache_insert(NET *net, const char *packet, ulong length);
-  friend void query_cache_end_of_result(THD *thd);
-  friend void query_cache_abort(NET *net);
+  void insert(Query_cache_tls *query_cache_tls,
+              const char *packet,
+              ulong length,
+              unsigned pkt_nr);
+
+  void end_of_result(THD *thd);
+  void abort(Query_cache_tls *query_cache_tls);
 
   /*
     The following functions are only used when debugging
@@ -494,11 +518,69 @@ protected:
   void unlock(void);
 };
 
-extern Query_cache query_cache;
-extern TYPELIB query_cache_type_typelib;
-void query_cache_init_query(NET *net);
-void query_cache_insert(NET *net, const char *packet, ulong length);
-void query_cache_end_of_result(THD *thd);
-void query_cache_abort(NET *net);
+#ifdef HAVE_QUERY_CACHE
+struct Query_cache_query_flags
+{
+  unsigned int client_long_flag:1;
+  unsigned int client_protocol_41:1;
+  unsigned int protocol_type:2;
+  unsigned int more_results_exists:1;
+  unsigned int in_trans:1;
+  unsigned int autocommit:1;
+  unsigned int pkt_nr;
+  uint character_set_client_num;
+  uint character_set_results_num;
+  uint collation_connection_num;
+  ha_rows limit;
+  Time_zone *time_zone;
+  sql_mode_t sql_mode;
+  ulong max_sort_length;
+  ulong group_concat_max_len;
+  ulong default_week_format;
+  ulong div_precision_increment;
+  MY_LOCALE *lc_time_names;
+};
+#define QUERY_CACHE_FLAGS_SIZE sizeof(Query_cache_query_flags)
+#include "sql_cache.h"
+#define query_cache_abort(A) query_cache.abort(A)
+#define query_cache_end_of_result(A) query_cache.end_of_result(A)
+#define query_cache_store_query(A, B) query_cache.store_query(A, B)
+#define query_cache_destroy() query_cache.destroy()
+#define query_cache_result_size_limit(A) query_cache.result_size_limit(A)
+#define query_cache_init() query_cache.init()
+#define query_cache_resize(A) query_cache.resize(A)
+#define query_cache_set_min_res_unit(A) query_cache.set_min_res_unit(A)
+#define query_cache_invalidate3(A, B, C) query_cache.invalidate(A, B, C)
+#define query_cache_invalidate1(A) query_cache.invalidate(A)
+#define query_cache_send_result_to_client(A, B, C) \
+  query_cache.send_result_to_client(A, B, C)
+#define query_cache_invalidate_by_MyISAM_filename_ref \
+  &query_cache_invalidate_by_MyISAM_filename
+/* note the "maybe": it's a read without mutex */
+#define query_cache_maybe_disabled(T)                                 \
+  (T->variables.query_cache_type == 0 || query_cache.query_cache_size == 0)
+#define query_cache_is_cacheable_query(L) \
+  (((L)->sql_command == SQLCOM_SELECT) && (L)->safe_to_cache_query && \
+   !(L)->describe)
+#else
+#define QUERY_CACHE_FLAGS_SIZE 0
+#define query_cache_store_query(A, B)
+#define query_cache_destroy()
+#define query_cache_result_size_limit(A)
+#define query_cache_init()
+#define query_cache_resize(A)
+#define query_cache_set_min_res_unit(A)
+#define query_cache_invalidate3(A, B, C)
+#define query_cache_invalidate1(A)
+#define query_cache_send_result_to_client(A, B, C) 0
+#define query_cache_invalidate_by_MyISAM_filename_ref NULL
 
+#define query_cache_abort(A)
+#define query_cache_end_of_result(A)
+#define query_cache_invalidate_by_MyISAM_filename_ref NULL
+#define query_cache_maybe_disabled(T) 1
+#define query_cache_is_cacheable_query(L) 0
+#endif /*HAVE_QUERY_CACHE*/
+
+extern Query_cache query_cache;
 #endif

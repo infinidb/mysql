@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBndbinfo_select_all\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDBINFO_SELECT_AL" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBNDBINFO_SELECT_AL" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,7 +39,7 @@ ndbinfo_select_all \- select from ndbinfo tables
 \fBndbinfo_select_all\fR
 is a client program that selects all rows and columns from one or more tables in the
 ndbinfo
-database\&. It is included with the MySQL Cluster distribution beginning with MySQL Cluster NDB 7\&.1\&.17\&.
+database\&. It is included with the MySQL Cluster distribution beginning with MySQL Cluster NDB 7\&.2\&.2\&.
 .PP
 Not all
 ndbinfo
@@ -53,8 +53,7 @@ logspaces,
 nodes,
 resources,
 threadblocks,
-threadstat,
-and
+threadstat, and
 transporters
 tables\&.
 .PP
@@ -121,7 +120,7 @@ Options Common to MySQL Cluster Programs(1)\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.11.\ \&ndbinfo_select_all Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.11.\ \&ndbinfo_select_all Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -144,7 +143,7 @@ T}:T{
 Set the delay in seconds between loops\&. Default is 5\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -155,7 +154,7 @@ T}:T{
 Set the number of times to perform the select\&. Default is 1\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -166,7 +165,7 @@ T}:T{
 Name of the database where the table located\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -177,7 +176,7 @@ T}:T{
 Set the degree of parallelism\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 .TE
 .sp 1
@@ -290,7 +289,7 @@ to set the time between loops\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

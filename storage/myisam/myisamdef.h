@@ -12,23 +12,20 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file is included by all internal myisam files */
 
 #include "myisam.h"			/* Structs & some defines */
 #include "myisampack.h"			/* packing of keys */
 #include <my_tree.h>
-#ifdef THREAD
 #include <my_pthread.h>
 #include <thr_lock.h>
-#else
-#include <my_no_pthread.h>
-#endif
+#include <mysql/psi/mysql_file.h>
 
-#if defined(my_write) && !defined(MAP_TO_USE_RAID)
-#undef my_write				/* undef map from my_nosys; We need test-if-disk full */
+/* undef map from my_nosys; We need test-if-disk full */
+#if defined(my_write)
+#undef my_write
 #endif
 
 typedef struct st_mi_status_info
@@ -131,9 +128,6 @@ typedef struct st_mi_base_info
   /* Extra allocation when using dynamic record format */
   uint extra_alloc_bytes;
   uint extra_alloc_procent;
-  /* Info about raid */
-  uint raid_type,raid_chunks;
-  ulong raid_chunksize;
   /* The following are from the header */
   uint key_parts,all_key_parts;
 } MI_BASE_INFO;
@@ -167,6 +161,7 @@ typedef struct st_mi_isam_share {	/* Shared between opens */
   MI_COLUMNDEF *rec;			/* Pointer to field information */
   MI_PACK    pack;			/* Data about packed records */
   MI_BLOB    *blobs;			/* Pointer to blobs */
+  LIST *in_use;                         /* List of threads using this table */
   char  *unique_file_name;		/* realpath() of index file */
   char  *data_file_name,		/* Resolved path names from symlinks */
         *index_file_name;
@@ -213,17 +208,15 @@ typedef struct st_mi_isam_share {	/* Shared between opens */
     not_flushed,
     temporary,delay_key_write,
     concurrent_insert;
-#ifdef THREAD
+
   THR_LOCK lock;
-  pthread_mutex_t intern_lock;		/* Locking for use with _locking */
-  rw_lock_t *key_root_lock;
-#endif
+  mysql_mutex_t intern_lock;            /* Locking for use with _locking */
+  mysql_rwlock_t *key_root_lock;
   my_off_t mmaped_length;
   uint     nonmmaped_inserts;           /* counter of writing in non-mmaped
                                            area */
-  rw_lock_t mmap_lock;
+  mysql_rwlock_t mmap_lock;
 } MYISAM_SHARE;
-
 
 typedef uint mi_bit_type;
 
@@ -233,6 +226,10 @@ typedef struct st_mi_bit_buff {		/* Used for packing of record */
   uchar *pos,*end,*blob_pos,*blob_end;
   uint error;
 } MI_BIT_BUFF;
+
+C_MODE_START
+typedef ICP_RESULT (*index_cond_func_t)(void *param);
+C_MODE_END
 
 struct st_myisam_info {
   MYISAM_SHARE *s;			/* Shared between open:s */
@@ -244,6 +241,7 @@ struct st_myisam_info {
   DYNAMIC_ARRAY *ft1_to_ft2;            /* used only in ft1->ft2 conversion */
   MEM_ROOT      ft_memroot;             /* used by the parser               */
   MYSQL_FTPARSER_PARAM *ftparser_param; /* share info between init/deinit   */
+  LIST in_use;                          /* Thread using this table          */
   char *filename;			/* parameter to open filename       */
   uchar *buff,				/* Temp area for key                */
 	*lastkey,*lastkey2;		/* Last used search key             */
@@ -296,12 +294,13 @@ struct st_myisam_info {
   my_bool page_changed;		/* If info->buff can't be used for rnext */
   my_bool buff_used;		/* If info->buff has to be reread for rnext */
   my_bool once_flags;           /* For MYISAMMRG */
+
+  index_cond_func_t index_cond_func;   /* Index condition function */
+  void *index_cond_func_arg;           /* parameter for the func */
 #ifdef __WIN__
   my_bool owned_by_merge;                       /* This MyISAM table is part of a merge union */
 #endif
-#ifdef THREAD
   THR_LOCK_DATA lock;
-#endif
   uchar  *rtree_recursion_state;	/* For RTREE */
   int     rtree_recursion_depth;
 };
@@ -327,9 +326,10 @@ typedef struct st_mi_sort_param
   */
   ulonglong unique[MI_MAX_KEY_SEG+1];
   ulonglong notnull[MI_MAX_KEY_SEG+1];
+  ulonglong sortbuff_size;
 
   my_off_t pos,max_pos,filepos,start_recpos;
-  uint key, key_length,real_key_length,sortbuff_size;
+  uint key, key_length,real_key_length;
   uint maxbuffers, keys, find_length, sort_keys_length;
   my_bool fix_datafile, master;
   my_bool calc_checksum;                /* calculate table checksum */
@@ -346,11 +346,11 @@ typedef struct st_mi_sort_param
   int (*key_read)(struct st_mi_sort_param *,void *);
   int (*key_write)(struct st_mi_sort_param *, const void *);
   void (*lock_in_memory)(MI_CHECK *);
-  NEAR int (*write_keys)(struct st_mi_sort_param *, register uchar **,
-                     uint , struct st_buffpek *, IO_CACHE *);
-  NEAR uint (*read_to_buffer)(IO_CACHE *,struct st_buffpek *, uint);
-  NEAR int (*write_key)(struct st_mi_sort_param *, IO_CACHE *,uchar *,
-                       uint, uint);
+  int (*write_keys)(struct st_mi_sort_param *, register uchar **,
+                    uint , struct st_buffpek *, IO_CACHE *);
+  uint (*read_to_buffer)(IO_CACHE *,struct st_buffpek *, uint);
+  int (*write_key)(struct st_mi_sort_param *, IO_CACHE *,uchar *,
+                   uint, uint);
 } MI_SORT_PARAM;
 
 	/* Some defines used by isam-funktions */
@@ -387,8 +387,10 @@ typedef struct st_mi_sort_param
 #define mi_putint(x,y,nod) { uint16 boh=(nod ? (uint16) 32768 : 0) + (uint16) (y);\
 			  mi_int2store(x,boh); }
 #define mi_test_if_nod(x) (x[0] & 128 ? info->s->base.key_reflength : 0)
+#define mi_report_crashed(A, B) _mi_report_crashed((A), (B), __FILE__, __LINE__)
 #define mi_mark_crashed(x) do{(x)->s->state.changed|= STATE_CRASHED; \
                               DBUG_PRINT("error", ("Marked table crashed")); \
+                              mi_report_crashed((x), 0); \
                            }while(0)
 #define mi_mark_crashed_on_repair(x) do{(x)->s->state.changed|= \
                                         STATE_CRASHED|STATE_CRASHED_ON_REPAIR; \
@@ -426,8 +428,6 @@ typedef struct st_mi_sort_param
 
 #define get_pack_length(length) ((length) >= 255 ? 3 : 1)
 
-#define portable_sizeof_char_ptr 8
-
 #define MI_MIN_BLOCK_LENGTH	20	/* Because of delete-link */
 #define MI_EXTEND_BLOCK_LENGTH	20	/* Don't use to small record-blocks */
 #define MI_SPLIT_LENGTH	((MI_EXTEND_BLOCK_LENGTH+4)*2)
@@ -462,20 +462,19 @@ typedef struct st_mi_sort_param
 #define MI_UNIQUE_HASH_TYPE	HA_KEYTYPE_ULONG_INT
 #define mi_unique_store(A,B)    mi_int4store((A),(B))
 
-#ifdef THREAD
-extern pthread_mutex_t THR_LOCK_myisam;
-#endif
-#if !defined(THREAD) || defined(DONT_USE_RW_LOCKS)
-#define rw_wrlock(A) {}
-#define rw_rdlock(A) {}
-#define rw_unlock(A) {}
+extern mysql_mutex_t THR_LOCK_myisam;
+
+#if defined(DONT_USE_RW_LOCKS)
+#define mysql_rwlock_wrlock(A) {}
+#define mysql_rwlock_rdlock(A) {}
+#define mysql_rwlock_unlock(A) {}
 #endif
 
 	/* Some extern variables */
 
 extern LIST *myisam_open_list;
-extern uchar NEAR myisam_file_magic[],NEAR myisam_pack_file_magic[];
-extern uint NEAR myisam_read_vec[],NEAR myisam_readnext_vec[];
+extern uchar myisam_file_magic[], myisam_pack_file_magic[];
+extern uint myisam_read_vec[], myisam_readnext_vec[];
 extern uint myisam_quick_table_bits;
 extern File myisam_log_file;
 extern ulong myisam_pid;
@@ -543,10 +542,6 @@ void _mi_store_static_key(MI_KEYDEF *keyinfo,  uchar *key_pos,
 			   MI_KEY_PARAM *s_temp);
 void _mi_store_var_pack_key(MI_KEYDEF *keyinfo,  uchar *key_pos,
 			     MI_KEY_PARAM *s_temp);
-#ifdef NOT_USED
-void _mi_store_pack_key(MI_KEYDEF *keyinfo,  uchar *key_pos,
-			 MI_KEY_PARAM *s_temp);
-#endif
 void _mi_store_bin_pack_key(MI_KEYDEF *keyinfo,  uchar *key_pos,
 			    MI_KEY_PARAM *s_temp);
 
@@ -699,7 +694,7 @@ extern uint _mi_rec_pack(MI_INFO *info,uchar *to,const uchar *from);
 extern uint _mi_pack_get_block_info(MI_INFO *myisam, MI_BIT_BUFF *bit_buff,
                                     MI_BLOCK_INFO *info, uchar **rec_buff_p,
                                     File file, my_off_t filepos);
-extern void _my_store_blob_length(uchar *pos,uint pack_length,uint length);
+extern void _mi_store_blob_length(uchar *pos,uint pack_length,uint length);
 extern void _myisam_log(enum myisam_log_commands command,MI_INFO *info,
 		       const uchar *buffert,uint length);
 extern void _myisam_log_command(enum myisam_log_commands command,
@@ -768,24 +763,47 @@ void mi_setup_functions(register MYISAM_SHARE *share);
 my_bool mi_dynmap_file(MI_INFO *info, my_off_t size);
 int mi_munmap_file(MI_INFO *info);
 void mi_remap_file(MI_INFO *info, my_off_t size);
+void _mi_report_crashed(MI_INFO *file, const char *message,
+                        const char *sfile, uint sline);
+
+int mi_check_index_cond(register MI_INFO *info, uint keynr, uchar *record);
 
     /* Functions needed by mi_check */
 volatile int *killed_ptr(MI_CHECK *param);
-void mi_check_print_error _VARARGS((MI_CHECK *param, const char *fmt,...));
-void mi_check_print_warning _VARARGS((MI_CHECK *param, const char *fmt,...));
-void mi_check_print_info _VARARGS((MI_CHECK *param, const char *fmt,...));
+void mi_check_print_error(MI_CHECK *param, const char *fmt,...);
+void mi_check_print_warning(MI_CHECK *param, const char *fmt,...);
+void mi_check_print_info(MI_CHECK *param, const char *fmt,...);
 int flush_pending_blocks(MI_SORT_PARAM *param);
 int sort_ft_buf_flush(MI_SORT_PARAM *sort_param);
 int thr_write_keys(MI_SORT_PARAM *sort_param);
-#ifdef THREAD
 pthread_handler_t thr_find_all_keys(void *arg);
-#endif
 int flush_blocks(MI_CHECK *param, KEY_CACHE *key_cache, File file);
 
 int sort_write_record(MI_SORT_PARAM *sort_param);
-int _create_index_by_sort(MI_SORT_PARAM *info,my_bool no_messages, ulong);
+int _create_index_by_sort(MI_SORT_PARAM *info, my_bool no_messages, ulonglong);
 
+extern void mi_set_index_cond_func(MI_INFO *info, index_cond_func_t func,
+                                   void *func_arg);
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef HAVE_PSI_INTERFACE
+C_MODE_START
+extern PSI_mutex_key mi_key_mutex_MYISAM_SHARE_intern_lock,
+  mi_key_mutex_MI_SORT_INFO_mutex, mi_key_mutex_MI_CHECK_print_msg;
+
+extern PSI_rwlock_key mi_key_rwlock_MYISAM_SHARE_key_root_lock,
+  mi_key_rwlock_MYISAM_SHARE_mmap_lock;
+
+extern PSI_cond_key mi_key_cond_MI_SORT_INFO_cond;
+
+extern PSI_file_key mi_key_file_datatmp, mi_key_file_dfile, mi_key_file_kfile,
+  mi_key_file_log;
+
+extern PSI_thread_key mi_key_thread_find_all_keys;
+
+void init_myisam_psi_keys();
+C_MODE_END
+#endif /* HAVE_PSI_INTERFACE */
 

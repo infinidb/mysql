@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2007 MySQL AB
+/* Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,13 +13,17 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
-#include <mysql_priv.h>
+#include <my_global.h>
+#include <sql_priv.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <mysql_version.h>
 #include <mysql/plugin.h>
-#include <my_global.h>
 #include <my_dir.h>
+#include "my_pthread.h"                         // pthread_handler_t
+#include "my_sys.h"                             // my_write, my_malloc
+#include "m_string.h"                           // strlen
+#include "sql_plugin.h"                         // st_plugin_int
 
 /*
   Disable __attribute__() on non-gcc compilers.
@@ -42,7 +46,6 @@ pthread_handler_t mysql_heartbeat(void *p)
   DBUG_ENTER("mysql_heartbeat");
   struct mysql_heartbeat_context *con= (struct mysql_heartbeat_context *)p;
   char buffer[HEART_STRING_BUFFER];
-  unsigned int x= 0;
   time_t result;
   struct tm tm_tmp;
 
@@ -61,7 +64,6 @@ pthread_handler_t mysql_heartbeat(void *p)
                 tm_tmp.tm_min,
                 tm_tmp.tm_sec);
     my_write(con->heartbeat_file, (uchar*) buffer, strlen(buffer), MYF(0));
-    x++;
   }
 
   DBUG_RETURN(0);
@@ -156,6 +158,7 @@ static int daemon_example_plugin_deinit(void *p)
     (struct mysql_heartbeat_context *)plugin->data;
   time_t result= time(NULL);
   struct tm tm_tmp;
+  void *dummy_retval;
 
   pthread_cancel(con->heartbeat_thread);
 
@@ -169,9 +172,16 @@ static int daemon_example_plugin_deinit(void *p)
               tm_tmp.tm_min,
               tm_tmp.tm_sec);
   my_write(con->heartbeat_file, (uchar*) buffer, strlen(buffer), MYF(0));
+
+  /*
+    Need to wait for the hearbeat thread to terminate before closing
+    the file it writes to and freeing the memory it uses
+  */
+  pthread_join(con->heartbeat_thread, &dummy_retval);
+
   my_close(con->heartbeat_file, MYF(0));
 
-  my_free((char *)con, MYF(0));
+  my_free(con);
 
   DBUG_RETURN(0);
 }
@@ -197,6 +207,7 @@ mysql_declare_plugin(daemon_example)
   0x0100 /* 1.0 */,
   NULL,                       /* status variables                */
   NULL,                       /* system variables                */
-  NULL                        /* config options                  */
+  NULL,                       /* config options                  */
+  0,                          /* flags                           */
 }
 mysql_declare_plugin_end;

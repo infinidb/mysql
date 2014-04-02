@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include <my_dir.h> /* for stat */
@@ -65,7 +63,7 @@ int my_copy(const char *from, const char *to, myf MyFlags)
   from_file=to_file= -1;
   DBUG_ASSERT(!(MyFlags & (MY_FNABP | MY_NABP))); /* for my_read/my_write */
   if (MyFlags & MY_HOLD_ORIGINAL_MODES)		/* Copy stat if possible */
-    new_file_stat= test(my_stat((char*) to, &new_stat_buff, MYF(0)));
+    new_file_stat= MY_TEST(my_stat((char*) to, &new_stat_buff, MYF(0)));
 
   if ((from_file=my_open(from,O_RDONLY | O_SHARE,MyFlags)) >= 0)
   {
@@ -100,6 +98,10 @@ int my_copy(const char *from, const char *to, myf MyFlags)
     if (my_close(from_file,MyFlags) | my_close(to_file,MyFlags))
       DBUG_RETURN(-1);				/* Error on close */
 
+    /* Reinitialize closed fd, so they won't be closed again. */
+    from_file= -1;
+    to_file= -1;
+
     /* Copy modes if possible */
 
     if (MyFlags & MY_HOLD_ORIGINAL_MODES && !new_file_stat)
@@ -109,38 +111,46 @@ int my_copy(const char *from, const char *to, myf MyFlags)
     {
       my_errno= errno;
       if (MyFlags & (MY_FAE+MY_WME))
-        my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from, errno);
+      {
+        char  errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from,
+                 errno, my_strerror(errbuf, sizeof(errbuf), errno));
+      }
       goto err;
     }
-#if !defined(__WIN__) && !defined(__NETWARE__)
+#if !defined(__WIN__)
     /* Copy ownership */
-    if (chown(to, stat_buff.st_uid,stat_buff.st_gid))
+    if (chown(to, stat_buff.st_uid, stat_buff.st_gid))
     {
       my_errno= errno;
       if (MyFlags & (MY_FAE+MY_WME))
-        my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from, errno);
+      {
+        char  errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from,
+                 errno, my_strerror(errbuf, sizeof(errbuf), errno));
+      }
       goto err;
     }
 #endif
-#if !defined(VMS) && !defined(__ZTC__)
+
     if (MyFlags & MY_COPYTIME)
     {
       struct utimbuf timep;
       timep.actime  = stat_buff.st_atime;
       timep.modtime = stat_buff.st_mtime;
-      VOID(utime((char*) to, &timep)); /* last accessed and modified times */
+      (void) utime((char*) to, &timep); /* last accessed and modified times */
     }
-#endif
+
     DBUG_RETURN(0);
   }
 
 err:
-  if (from_file >= 0) VOID(my_close(from_file,MyFlags));
+  if (from_file >= 0) (void) my_close(from_file,MyFlags);
   if (to_file >= 0)
   {
-    VOID(my_close(to_file, MyFlags));
+    (void) my_close(to_file, MyFlags);
     /* attempt to delete the to-file we've partially written */
-    VOID(my_delete(to, MyFlags));
+    (void) my_delete(to, MyFlags);
   }
   DBUG_RETURN(-1);
 } /* my_copy */

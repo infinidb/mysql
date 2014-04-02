@@ -1,4 +1,6 @@
-/* Copyright (c) 2008 Sun Microsystems, Inc.
+#ifndef MESSAGE_INCLUDED
+#define MESSAGE_INCLUDED
+/* Copyright (c) 2008, 2009 Sun Microsystems, Inc.
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -22,6 +24,8 @@
   mc.exe can be installed with Windows SDK, some Visual Studio distributions 
   do not include it.
 */
+
+
 //
 //  Values are 32 bit values layed out as follows:
 //
@@ -68,4 +72,6 @@
 //  
 //
 #define MSG_DEFAULT                      0xC0000064L
+
+#endif /* MESSAGE_INCLUDED */
 

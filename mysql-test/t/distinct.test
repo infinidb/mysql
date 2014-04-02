@@ -84,21 +84,41 @@ insert into t4 select * from t3;
 insert into t3 select * from t4;
 
 explain select distinct t1.a from t1,t3 where t1.a=t3.a;
-#flush status;
-select distinct t1.a from t1,t3 where t1.a=t3.a;
-#show status like 'Handler%';
-#flush status;
-select distinct 1 from t1,t3 where t1.a=t3.a;
-#show status like 'Handler%';
 
-explain SELECT distinct t1.a from t1;
-explain SELECT distinct t1.a from t1 order by a desc;
-explain SELECT t1.a from t1 group by a order by a desc;
-explain SELECT distinct t1.a from t1 order by a desc limit 1;
-explain SELECT distinct a from t3 order by a desc limit 2;
-explain SELECT distinct a,b from t3 order by a+1;
-explain SELECT distinct a,b from t3 order by a limit 2;
-explain SELECT a,b from t3 group by a,b order by a+1;
+# This query uses the "not used in distinct" optimization (search for
+# not_used_in_distinct in code); it means that when we have a partial
+# record for t1, and we find a match in t3, we have a combination
+# rec_t1|rec_t3_a, and thus (DISTINCT is used and the SELECT list does
+# not contain columns of t2) we have rec_t1 in the result set; we don't
+# need to explore more records of t3, as all it would do is producing
+# more rec_t1|rec_t3_x, which would all be eliminated (due to
+# DISTINCT).
+# Without this optimization, the first query does ~200 read_next instead
+# of 4.
+flush status;
+select distinct t1.a from t1,t3 where t1.a=t3.a;
+show status like 'Handler_read%';
+flush status;
+select distinct 1 from t1,t3 where t1.a=t3.a;
+show status like 'Handler_read%';
+
+let $iteration=2;
+let $q_type= explain;
+# First EXPLAIN query, then execute query
+while($iteration)
+{
+  eval $q_type SELECT distinct t1.a from t1;
+  eval $q_type SELECT distinct t1.a from t1 order by a desc;
+  eval $q_type SELECT t1.a from t1 group by a order by a desc;
+  eval $q_type SELECT distinct t1.a from t1 order by a desc limit 1;
+  eval $q_type SELECT distinct a from t3 order by a desc limit 2;
+  eval $q_type SELECT distinct a,b from t3 order by a+1;
+  eval $q_type SELECT distinct a,b from t3 order by a limit 2;
+  eval $q_type SELECT a,b from t3 group by a,b order by a+1;
+
+  let $q_type=;
+  dec $iteration;
+}
 
 drop table t1,t2,t3,t4;
 
@@ -614,3 +634,131 @@ SET @@sort_buffer_size = @old_sort_buffer_size;
 SET @@max_heap_table_size = @old_max_heap_table_size;
 
 --echo End of 5.1 tests
+
+
+--echo #
+--echo # Bug #11744875: 4082: integer lengths cause truncation with distinct concat and innodb
+--echo #
+
+CREATE TABLE t1 (a INT(1), b INT(1));
+INSERT INTO t1 VALUES (1111, 2222), (3333, 4444);
+SELECT DISTINCT CONCAT(a,b) AS c FROM t1 ORDER BY 1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#16539979 BASIC SELECT COUNT(DISTINCT ID) IS BROKEN.
+--echo # Bug#17867117 ERROR RESULT WHEN "COUNT + DISTINCT + CASE WHEN" NEED MERGE_WALK 
+--echo #
+
+SET @tmp_table_size_save= @@tmp_table_size;
+SET @@tmp_table_size= 1024;
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 SELECT a+8 FROM t1;
+INSERT INTO t1 SELECT a+16 FROM t1;
+INSERT INTO t1 SELECT a+32 FROM t1;
+INSERT INTO t1 SELECT a+64 FROM t1;
+INSERT INTO t1 VALUE(NULL);
+SELECT COUNT(DISTINCT a) FROM t1;
+SELECT COUNT(DISTINCT (a+0)) FROM t1;
+DROP TABLE t1;
+
+create table tb(
+id int auto_increment primary key,
+v varchar(32))
+engine=myisam charset=gbk;
+insert into tb(v) values("aaa");
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+
+update tb set v=concat(v, id);
+select count(distinct case when id<=64 then id end) from tb;
+select count(distinct case when id<=63 then id end) from tb;
+drop table tb;
+
+SET @@tmp_table_size= @tmp_table_size_save;
+
+--echo End of 5.5 tests
+
+--echo #
+--echo # Bug#13335170 - ASSERT IN
+--echo # PLAN_CHANGE_WATCHDOG::~PLAN_CHANGE_WATCHDOG() ON SELECT DISTINCT 
+--echo #
+
+CREATE TABLE t1 (
+  col_int_key int(11) NOT NULL,
+  col_time_key time NOT NULL,
+  col_datetime_key datetime NOT NULL,
+  KEY col_int_key (col_int_key),
+  KEY col_time_key (col_time_key),
+  KEY col_datetime_key (col_datetime_key)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (7,'06:17:39','2003-08-21 00:00:00');
+
+SELECT DISTINCT col_int_key
+FROM t1
+WHERE col_int_key IN  ( 18, 6, 84, 4, 0, 2, 8, 3, 7, 9, 1 )  
+  AND col_datetime_key BETWEEN '2001-08-04' AND '2003-06-13'  
+ORDER BY col_time_key
+LIMIT 3;
+
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#13540692: WRONG NULL HANDLING WITH RIGHT JOIN + 
+--echo #               DISTINCT OR ORDER BY
+--echo #
+
+CREATE TABLE t1 (
+  a INT,
+  b INT NOT NULL
+);
+INSERT INTO t1 VALUES (1,2), (3,3);
+
+let $query=
+SELECT DISTINCT subselect.b
+FROM t1 LEFT JOIN 
+     (SELECT it_b.* FROM t1 as it_a LEFT JOIN t1 as it_b ON true) AS subselect 
+     ON t1.a = subselect.b
+;
+
+--echo
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#13538387: WRONG RESULT ON SELECT DISTINCT + LEFT JOIN + 
+--echo #               LIMIT + MIX OF MYISAM AND INNODB
+--echo #
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (2),(3);
+
+CREATE TABLE t2 (b INT);
+
+CREATE TABLE t3 (
+  a INT,
+  b INT,
+  PRIMARY KEY (b)
+);
+INSERT INTO t3 VALUES (2001,1), (2007,2);
+
+let $query=
+SELECT DISTINCT t3.a AS t3_date
+FROM t1
+     LEFT JOIN t2 ON false
+     LEFT JOIN t3 ON t2.b = t3.b
+LIMIT 1;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1,t2,t3;

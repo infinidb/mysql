@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Return error-text for system error messages and handler messages */
 
@@ -31,7 +30,7 @@
 #endif
 #include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
-static my_bool verbose, print_all_codes;
+static my_bool verbose;
 
 #include "../include/my_base.h"
 #include "../mysys/my_handler_errors.h"
@@ -65,11 +64,6 @@ static struct my_option my_long_options[] =
   {"ndb", 257, "Ndbcluster storage engine specific error codes.", &ndb_code,
    &ndb_code, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-#ifdef HAVE_SYS_ERRLIST
-  {"all", 'a', "Print all the error messages and the number.",
-   &print_all_codes, &print_all_codes, 0, GET_BOOL, NO_ARG,
-   0, 0, 0, 0, 0, 0},
-#endif
   {"silent", 's', "Only print the error message.", 0, 0, 0, GET_NO_ARG, NO_ARG,
    0, 0, 0, 0, 0, 0},
   {"verbose", 'v', "Print error code and message (default).", &verbose,
@@ -79,32 +73,6 @@ static struct my_option my_long_options[] =
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
-
-typedef struct ha_errors {
-  int errcode;
-  const char *msg;
-} HA_ERRORS;
-
-
-static HA_ERRORS ha_errlist[]=
-{
-  { -30999, "DB_INCOMPLETE: Sync didn't finish"},
-  { -30998, "DB_KEYEMPTY: Key/data deleted or never created"},
-  { -30997, "DB_KEYEXIST: The key/data pair already exists"},
-  { -30996, "DB_LOCK_DEADLOCK: Deadlock"},
-  { -30995, "DB_LOCK_NOTGRANTED: Lock unavailable"},
-  { -30994, "DB_NOSERVER: Server panic return"},
-  { -30993, "DB_NOSERVER_HOME: Bad home sent to server"},
-  { -30992, "DB_NOSERVER_ID: Bad ID sent to server"},
-  { -30991, "DB_NOTFOUND: Key/data pair not found (EOF)"},
-  { -30990, "DB_OLD_VERSION: Out-of-date version"},
-  { -30989, "DB_RUNRECOVERY: Panic return"},
-  { -30988, "DB_VERIFY_BAD: Verify failed; bad format"},
-  { 0,NullS },
-};
-
-
-#include <help_start.h>
 
 static void print_version(void)
 {
@@ -123,8 +91,6 @@ static void usage(void)
   my_print_help(my_long_options);
   my_print_variables(my_long_options);
 }
-
-#include <help_end.h>
 
 
 static my_bool
@@ -156,7 +122,7 @@ static int get_options(int *argc,char ***argv)
   if ((ho_error=handle_options(argc, argv, my_long_options, get_one_option)))
     exit(ho_error);
 
-  if (!*argc && !print_all_codes)
+  if (!*argc)
   {
     usage();
     return 1;
@@ -167,12 +133,10 @@ static int get_options(int *argc,char ***argv)
 
 static const char *get_ha_error_msg(int code)
 {
-  HA_ERRORS *ha_err_ptr;
-
   /*
     If you got compilation error here about compile_time_assert array, check
     that every HA_ERR_xxx constant has a corresponding error message in
-    handler_error_messages[] list (check mysys/ma_handler_errors.h and
+    handler_error_messages[] list (check mysys/my_handler_errors.h and
     include/my_base.h).
   */
   compile_time_assert(HA_ERR_FIRST + array_elements(handler_error_messages) ==
@@ -180,42 +144,48 @@ static const char *get_ha_error_msg(int code)
   if (code >= HA_ERR_FIRST && code <= HA_ERR_LAST)
     return handler_error_messages[code - HA_ERR_FIRST];
 
-  for (ha_err_ptr=ha_errlist ; ha_err_ptr->errcode ;ha_err_ptr++)
-    if (ha_err_ptr->errcode == code)
-      return ha_err_ptr->msg;
   return NullS;
 }
 
+typedef struct
+{
+  const char *name;
+  uint        code;
+  const char *text;
+} st_error;
 
-/*
-  Register handler error messages for usage with my_error()
+static st_error global_error_names[] =
+{
+#include <mysqld_ername.h>
+  { 0, 0, 0 }
+};
 
-  NOTES
-    This is safe to call multiple times as my_error_register()
-    will ignore calls to register already registered error numbers.
+/**
+  Lookup an error by code in the global_error_names array.
+  @param code the code to lookup
+  @param [out] name_ptr the error name, when found
+  @param [out] msg_ptr the error text, when found
+  @return 1 when found, otherwise 0
 */
-void my_handler_error_register(void)
+int get_ER_error_msg(uint code, const char **name_ptr, const char **msg_ptr)
 {
-  /*
-    If you got compilation error here about compile_time_assert array, check
-    that every HA_ERR_xxx constant has a corresponding error message in
-    handler_error_messages[] list (check mysys/ma_handler_errors.h and
-    include/my_base.h).
-  */
-  compile_time_assert(HA_ERR_FIRST + array_elements(handler_error_messages) ==
-                      HA_ERR_LAST + 1);
-  my_error_register(handler_error_messages, HA_ERR_FIRST,
-                    HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
+  st_error *tmp_error;
+
+  tmp_error= & global_error_names[0];
+
+  while (tmp_error->name != NULL)
+  {
+    if (tmp_error->code == code)
+    {
+      *name_ptr= tmp_error->name;
+      *msg_ptr= tmp_error->text;
+      return 1;
+    }
+    tmp_error++;
+  }
+
+  return 0;
 }
-
-
-void my_handler_error_unregister(void)
-{
-  my_error_unregister(HA_ERR_FIRST,
-                      HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
-}
-
-
 
 #if defined(__WIN__)
 static my_bool print_win_error_msg(DWORD error, my_bool verbose)
@@ -237,12 +207,45 @@ static my_bool print_win_error_msg(DWORD error, my_bool verbose)
 }
 #endif
 
+/*
+  Register handler error messages for usage with my_error()
 
+  NOTES
+    This is safe to call multiple times as my_error_register()
+    will ignore calls to register already registered error numbers.
+*/
+
+static const char **get_handler_error_messages()
+{
+  return handler_error_messages;
+}
+
+void my_handler_error_register(void)
+{
+  /*
+    If you got compilation error here about compile_time_assert array, check
+    that every HA_ERR_xxx constant has a corresponding error message in
+    handler_error_messages[] list (check mysys/ma_handler_errors.h and
+    include/my_base.h).
+  */
+  compile_time_assert(HA_ERR_FIRST + array_elements(handler_error_messages) ==
+                      HA_ERR_LAST + 1);
+  my_error_register(get_handler_error_messages, HA_ERR_FIRST,
+                    HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
+}
+
+
+void my_handler_error_unregister(void)
+{
+  my_error_unregister(HA_ERR_FIRST,
+                      HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
+}
 
 int main(int argc,char *argv[])
 {
   int error,code,found;
   const char *msg;
+  const char *name;
   char *unknown_error = 0;
 #if defined(__WIN__)
   my_bool skip_win_message= 0;
@@ -255,25 +258,9 @@ int main(int argc,char *argv[])
   my_handler_error_register();
 
   error=0;
-#ifdef HAVE_SYS_ERRLIST
-  if (print_all_codes)
-  {
-    HA_ERRORS *ha_err_ptr;
-    for (code=1 ; code < sys_nerr ; code++)
-    {
-      if (sys_errlist[code][0])
-      {						/* Skip if no error-text */
-	printf("%3d = %s\n",code,sys_errlist[code]);
-      }
-    }
-    for (ha_err_ptr=ha_errlist ; ha_err_ptr->errcode ;ha_err_ptr++)
-      printf("%3d = %s\n",ha_err_ptr->errcode,ha_err_ptr->msg);
-  }
-  else
-#endif
   {
     /*
-      On some system, like NETWARE, strerror(unknown_error) returns a
+      On some system, like Linux, strerror(unknown_error) returns a
       string 'Unknown Error'.  To avoid printing it we try to find the
       error string by asking for an impossible big error message.
 
@@ -345,6 +332,14 @@ int main(int argc,char *argv[])
         found= 1;
         if (verbose)
           printf("MySQL error code %3d: %s\n", code, msg);
+        else
+          puts(msg);
+      }
+      if (get_ER_error_msg(code, & name, & msg))
+      {
+        found= 1;
+        if (verbose)
+          printf("MySQL error code %3d (%s): %s\n", code, name, msg);
         else
           puts(msg);
       }

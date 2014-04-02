@@ -12,48 +12,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
+#include "sql_alloc.h"
+#include "my_global.h"
+#include "my_sys.h"
+#include "m_string.h" /* for TRASH */
 
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
-
-/* mysql standard class memory allocator */
-
-class Sql_alloc
-{
-public:
-  static void *operator new(size_t size) throw ()
-  {
-    return sql_alloc(size);
-  }
-  static void *operator new[](size_t size) throw ()
-  {
-    return sql_alloc(size);
-  }
-  static void *operator new[](size_t size, MEM_ROOT *mem_root) throw ()
-  { return alloc_root(mem_root, size); }
-  static void *operator new(size_t size, MEM_ROOT *mem_root) throw ()
-  { return alloc_root(mem_root, size); }
-  static void operator delete(void *ptr, size_t size) { TRASH(ptr, size); }
-  static void operator delete(void *ptr, MEM_ROOT *mem_root)
-  { /* never called */ }
-  static void operator delete[](void *ptr, MEM_ROOT *mem_root)
-  { /* never called */ }
-  static void operator delete[](void *ptr, size_t size) { TRASH(ptr, size); }
-#ifdef HAVE_purify
-  bool dummy;
-  inline Sql_alloc() :dummy(0) {}
-  inline ~Sql_alloc() {}
-#else
-  inline Sql_alloc() {}
-  inline ~Sql_alloc() {}
-#endif
-
-};
+#include "my_sys.h"                    /* alloc_root, TRASH, MY_WME,
+                                          MY_FAE, MY_ALLOW_ZERO_PTR */
+#include "m_string.h"
+#include "thr_malloc.h"                         /* sql_alloc */
 
 
 /**
@@ -155,6 +125,21 @@ struct list_node :public Sql_alloc
 
 
 extern MYSQL_PLUGIN_IMPORT list_node end_of_list;
+
+/**
+  Comparison function for list sorting.
+
+  @param n1   Info of 1st node
+  @param n2   Info of 2nd node
+  @param arg  Additional info
+
+  @return
+    -1  n1 < n2
+     0  n1 == n2
+     1  n1 > n2
+*/
+
+typedef int (*Node_cmp_func)(void *n1, void *n2, void *arg);
 
 class base_list :public Sql_alloc
 {
@@ -283,6 +268,38 @@ public:
     }
   }
   /**
+    @brief
+    Sort the list
+
+    @param cmp  node comparison function
+    @param arg  additional info to be passed to comparison function
+
+    @details
+    The function sorts list nodes by an exchange sort algorithm.
+    The order of list nodes isn't changed, values of info fields are
+    swapped instead. Due to this, list iterators that are initialized before
+    sort could be safely used after sort, i.e they wouldn't cause a crash.
+    As this isn't an effective algorithm the list to be sorted is supposed to
+    be short.
+  */
+  void sort(Node_cmp_func cmp, void *arg)
+  {
+    if (elements < 2)
+      return;
+    for (list_node *n1= first; n1 && n1 != &end_of_list; n1= n1->next)
+    {
+      for (list_node *n2= n1->next; n2 && n2 != &end_of_list; n2= n2->next)
+      {
+        if ((*cmp)(n1->info, n2->info, arg) > 0)
+        {
+          void *tmp= n1->info;
+          n1->info= n2->info;
+          n2->info= tmp;
+        }
+      }
+    }
+  }
+  /**
     Swap two lists.
   */
   inline void swap(base_list &rhs)
@@ -295,7 +312,7 @@ public:
   inline list_node* first_node() { return first;}
   inline void *head() { return first->info; }
   inline void **head_ref() { return first != &end_of_list ? &first->info : 0; }
-  inline bool is_empty() { return first == &end_of_list ; }
+  inline bool is_empty() const { return first == &end_of_list ; }
   inline list_node *last_ref() { return &end_of_list; }
   friend class base_list_iterator;
   friend class error_list;
@@ -359,7 +376,6 @@ protected:
       last= &new_node->next;
   }
 };
-
 
 class base_list_iterator
 {
@@ -457,10 +473,15 @@ public:
   inline List(const List<T> &tmp) :base_list(tmp) {}
   inline List(const List<T> &tmp, MEM_ROOT *mem_root) :
     base_list(tmp, mem_root) {}
-  inline bool push_back(T *a) { return base_list::push_back(a); }
+  /*
+    Typecasting to (void *) it's necessary if we want to declare List<T> with
+    constant T parameter (like List<const char>), since the untyped storage
+    is "void *", and assignment of const pointer to "void *" is a syntax error.
+  */
+  inline bool push_back(T *a) { return base_list::push_back((void *) a); }
   inline bool push_back(T *a, MEM_ROOT *mem_root)
-  { return base_list::push_back(a, mem_root); }
-  inline bool push_front(T *a) { return base_list::push_front(a); }
+  { return base_list::push_back((void *) a, mem_root); }
+  inline bool push_front(T *a) { return base_list::push_front((void *) a); }
   inline T* head() {return (T*) base_list::head(); }
   inline T** head_ref() {return (T**) base_list::head_ref(); }
   inline T* pop()  {return (T*) base_list::pop(); }
@@ -477,6 +498,8 @@ public:
     }
     empty();
   }
+
+  using base_list::sort;
 };
 
 
@@ -518,41 +541,43 @@ public:
 };
 
 
+template <typename T> class base_ilist;
+template <typename T> class base_ilist_iterator;
+
 /*
   A simple intrusive list which automaticly removes element from list
   on delete (for THD element)
+  NOTE: this inherently unsafe, since we rely on <T> to have
+  the same layout as ilink<T> (see base_ilist::sentinel).
+  Please consider using a different strategy for linking objects.
 */
 
-struct ilink
+template <typename T>
+class ilink
 {
-  struct ilink **prev,*next;
-  static void *operator new(size_t size) throw ()
-  {
-    return (void*)my_malloc((uint)size, MYF(MY_WME | MY_FAE));
-  }
-  static void operator delete(void* ptr_arg, size_t size)
-  {
-     my_free((uchar*)ptr_arg, MYF(MY_WME|MY_ALLOW_ZERO_PTR));
-  }
+  T **prev, *next;
+public:
+  ilink() : prev(NULL), next(NULL) {}
 
-  inline ilink()
-  {
-    prev=0; next=0;
-  }
-  inline void unlink()
+  void unlink()
   {
     /* Extra tests because element doesn't have to be linked */
     if (prev) *prev= next;
     if (next) next->prev=prev;
-    prev=0 ; next=0;
+    prev= NULL;
+    next= NULL;
   }
+
   virtual ~ilink() { unlink(); }		/*lint -e1740 */
+
+  friend class base_ilist<T>;
+  friend class base_ilist_iterator<T>;
 };
 
 
 /* Needed to be able to have an I_List of char* strings in mysqld.cc. */
 
-class i_string: public ilink
+class i_string: public ilink<i_string>
 {
 public:
   const char* ptr;
@@ -561,7 +586,7 @@ public:
 };
 
 /* needed for linked list of two strings for replicate-rewrite-db */
-class i_string_pair: public ilink
+class i_string_pair: public ilink<i_string_pair>
 {
 public:
   const char* key;
@@ -574,58 +599,95 @@ public:
 
 template <class T> class I_List_iterator;
 
-/*
-  WARNING: copy constructor of this class does not create a usable
-  copy, as its members may point at each other.
-*/
 
+template<typename T>
 class base_ilist
 {
+  T *first;
+  ilink<T> sentinel;
 public:
-  struct ilink *first,last;
-  inline void empty() { first= &last; last.prev= &first; }
+  void empty() {
+    first= static_cast<T*>(&sentinel);
+    sentinel.prev= &first;
+  }
   base_ilist() { empty(); }
-  inline bool is_empty() {  return first == &last; }
-  inline void append(ilink *a)
+  bool is_empty() const { return first == static_cast<const T*>(&sentinel); }
+
+  /// Pushes new element in front of list.
+  void push_front(T *a)
   {
     first->prev= &a->next;
-    a->next=first; a->prev= &first; first=a;
+    a->next= first;
+    a->prev= &first;
+    first= a;
   }
-  inline void push_back(ilink *a)
+
+  /// Pushes new element to the end of the list, i.e. in front of the sentinel.
+  void push_back(T *a)
   {
-    *last.prev= a;
-    a->next= &last;
-    a->prev= last.prev;
-    last.prev= &a->next;
+    *sentinel.prev= a;
+    a->next= static_cast<T*>(&sentinel);
+    a->prev= sentinel.prev;
+    sentinel.prev= &a->next;
   }
-  inline struct ilink *get()
+
+  // Unlink first element, and return it.
+  T *get()
   {
-    struct ilink *first_link=first;
-    if (first_link == &last)
-      return 0;
-    first_link->unlink();			// Unlink from list
+    if (is_empty())
+      return NULL;
+    T *first_link= first;
+    first_link->unlink();
     return first_link;
   }
-  inline struct ilink *head()
+
+  T *head() { return is_empty() ? NULL : first; }
+
+  /**
+    Moves list elements to new owner, and empties current owner (i.e. this).
+
+    @param[in,out]  new_owner  The new owner of the list elements.
+                               Should be empty in input.
+  */
+
+  void move_elements_to(base_ilist *new_owner)
   {
-    return (first != &last) ? first : 0;
+    DBUG_ASSERT(new_owner->is_empty());
+    new_owner->first= first;
+    new_owner->sentinel= sentinel;
+    empty();
   }
-  friend class base_list_iterator;
+
+  friend class base_ilist_iterator<T>;
+ private:
+  /*
+    We don't want to allow copying of this class, as that would give us
+    two list heads containing the same elements.
+    So we declare, but don't define copy CTOR and assignment operator.
+  */
+  base_ilist(const base_ilist&);
+  void operator=(const base_ilist&);
 };
 
 
+template<typename T>
 class base_ilist_iterator
 {
-  base_ilist *list;
-  struct ilink **el,*current;
+  base_ilist<T> *list;
+  T **el, *current;
 public:
-  base_ilist_iterator(base_ilist &list_par) :list(&list_par),
-    el(&list_par.first),current(0) {}
-  void *next(void)
+  base_ilist_iterator(base_ilist<T> &list_par) :
+    list(&list_par),
+    el(&list_par.first),
+    current(NULL)
+  {}
+
+  T *next(void)
   {
     /* This is coded to allow push_back() while iterating */
     current= *el;
-    if (current == &list->last) return 0;
+    if (current == static_cast<T*>(&list->sentinel))
+      return NULL;
     el= &current->next;
     return current;
   }
@@ -633,27 +695,30 @@ public:
 
 
 template <class T>
-class I_List :private base_ilist
+class I_List :private base_ilist<T>
 {
 public:
-  I_List() :base_ilist()	{}
-  inline void empty()		{ base_ilist::empty(); }
-  inline bool is_empty()        { return base_ilist::is_empty(); } 
-  inline void append(T* a)	{ base_ilist::append(a); }
-  inline void push_back(T* a)	{ base_ilist::push_back(a); }
-  inline T* get()		{ return (T*) base_ilist::get(); }
-  inline T* head()		{ return (T*) base_ilist::head(); }
+  using base_ilist<T>::empty;
+  using base_ilist<T>::is_empty;
+  using base_ilist<T>::get;
+  using base_ilist<T>::push_front;
+  using base_ilist<T>::push_back;
+  using base_ilist<T>::head;
+  void move_elements_to(I_List<T>* new_owner) {
+    base_ilist<T>::move_elements_to(new_owner);
+  }
 #ifndef _lint
   friend class I_List_iterator<T>;
 #endif
 };
 
 
-template <class T> class I_List_iterator :public base_ilist_iterator
+template <class T> 
+class I_List_iterator :public base_ilist_iterator<T>
 {
 public:
-  I_List_iterator(I_List<T> &a) : base_ilist_iterator(a) {}
-  inline T* operator++(int) { return (T*) base_ilist_iterator::next(); }
+  I_List_iterator(I_List<T> &a) : base_ilist_iterator<T>(a) {}
+  inline T* operator++(int) { return base_ilist_iterator<T>::next(); }
 };
 
 /**
@@ -682,5 +747,8 @@ list_copy_and_replace_each_value(List<T> &list, MEM_ROOT *mem_root)
   while ((el= it++))
     it.replace(el->clone(mem_root));
 }
+
+void free_list(I_List <i_string_pair> *list);
+void free_list(I_List <i_string> *list);
 
 #endif // INCLUDES_MYSQL_SQL_LIST_H

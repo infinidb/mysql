@@ -1,5 +1,4 @@
-# Copyright (c) 2006-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,10 +11,8 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-INCLUDE("${PROJECT_SOURCE_DIR}/storage/mysql_storage_engine.cmake")
+SET(EXAMPLE_PLUGIN_DYNAMIC "ha_example")
 SET(EXAMPLE_SOURCES ha_example.cc)
-MYSQL_STORAGE_ENGINE(EXAMPLE)
+MYSQL_ADD_PLUGIN(example ${EXAMPLE_SOURCES} STORAGE_ENGINE MODULE_ONLY)

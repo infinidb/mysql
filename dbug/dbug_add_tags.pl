@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2002 MySQL AB
+# Copyright (c) 2002 MySQL AB, 2009 Sun Microsystems, Inc.
+# Use is subject to license terms.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,7 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 die "No files specified\n" unless $ARGV[0];
 
@@ -22,7 +23,7 @@ $ctags="exctags -x -f - --c-types=f -u";
 sub get_tag {
   local $.; local $_=<TAGS>;
   ($symbol, $line)= /^(.*\S)\s+function\s+(\d+)/;
-  $symbol=$1 if /\s(\S+)\s*\(/;
+  $symbol=$1 if /[\s*]([^\s*]+)\s*\(/;
   $line=1e50 unless $line;
 }
 
@@ -66,7 +67,7 @@ while($src=shift)
       $skip=!$semicolon;
       $semicolon= /;\s*$/;
       print && next if $skip ||
-        (/^\s+\w+((::\w+)?|<\w+>)\s+\**\w+/ && !/^\s*return/);
+        (/^\s+\w+((::\w+)?|<\w+>)\s+\**\w+/ && !/^\s*return\b/);
       last if /DBUG_ENTER/;
       print "$tab  DBUG_ENTER(\"$symbol\");\n";
       print "\n" unless $_ eq "\n";

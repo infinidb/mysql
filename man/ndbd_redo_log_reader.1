@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBndbd_redo_log_reader\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDBD_REDO_LOG_REA" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBNDBD_REDO_LOG_REA" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,7 +39,7 @@ Reads a redo log file, checking it for errors, printing its contents in a human\
 \fBndbd_redo_log_reader\fR
 is intended for use primarily by MySQL Cluster developers and Support personnel in debugging and diagnosing problems\&.
 .PP
-This utility was made available as part of default builds beginning with MySQL Cluster NDB 6\&.1\&.3\&. It remains under development, and its syntax and behavior are subject to change in future releases\&. For this reason, it should be considered experimental at this time\&.
+This utility remains under development, and its syntax and behavior are subject to change in future MySQL Cluster releases\&.
 .PP
 The C++ source files for
 \fBndbd_redo_log_reader\fR
@@ -55,7 +55,7 @@ Options Common to MySQL Cluster Programs(1)\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.22.\ \&ndbd_redo_log_reader Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.22.\ \&ndbd_redo_log_reader Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -77,7 +77,7 @@ T}:T{
 Do not print records
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -86,7 +86,7 @@ T}:T{
 Do not check records for errors
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -95,7 +95,7 @@ T}:T{
 Print usage information
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.53, 5\&.1\&.72\-ndb\-7\&.0\&.41, 5\&.1\&.72\-ndb\-7\&.1\&.30
+ADDED: NDB 7\&.3\&.4
 T}
 .TE
 .sp 1
@@ -213,7 +213,7 @@ l l s s.
 T{
 \fBIntroduced\fR
 T}:T{
-5\&.1\&.72\-ndb\-6\&.3\&.53, 5\&.1\&.72\-ndb\-7\&.0\&.41, 5\&.1\&.72\-ndb\-7\&.1\&.30
+5\&.6\&.15\-ndb\-7\&.3\&.4
 T}
 T{
 \fBCommand\-Line Format\fR
@@ -224,7 +224,7 @@ T}
 .sp 1
 \fB\-\-help\fR: Print usage information\&.
 .sp
-Added in MySQL Cluster NDB 6\&.3\&.53, MySQL Cluster NDB 7\&.0\&.41, and MySQL Cluster NDB 7\&.1\&.30\&. (Bug #11749591, Bug #36805)
+Added in MySQL Cluster NDB 7\&.3\&.4\&. (Bug #11749591, Bug #36805)
 .RE
 .PP
 Like
@@ -239,7 +239,7 @@ must be run on a cluster data node, since it accesses the data node file system 
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

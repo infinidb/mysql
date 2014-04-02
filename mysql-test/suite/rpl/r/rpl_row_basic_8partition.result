@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 DROP TABLE IF EXISTS t1;
 SET @@BINLOG_FORMAT = ROW;
@@ -39,6 +42,7 @@ t1	CREATE TABLE `t1` (
  PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
  PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
 --- On slave --
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -120,6 +124,7 @@ t1	CREATE TABLE `t1` (
  PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
  PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -207,6 +212,7 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
  PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -282,6 +288,7 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
  PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -362,6 +369,7 @@ t1	CREATE TABLE `t1` (
 /*!50100 PARTITION BY HASH ( YEAR(t))
 PARTITIONS 4 */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -433,6 +441,7 @@ t1	CREATE TABLE `t1` (
 /*!50100 PARTITION BY HASH ( YEAR(t))
 PARTITIONS 4 */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -512,6 +521,7 @@ t1	CREATE TABLE `t1` (
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -585,6 +595,7 @@ t1	CREATE TABLE `t1` (
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -658,6 +669,7 @@ t1	CREATE TABLE `t1` (
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
+include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

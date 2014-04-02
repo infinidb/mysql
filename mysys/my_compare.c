@@ -11,11 +11,17 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   
+#include <my_global.h>
+#include <m_ctype.h>
+#include <my_base.h>
+#include <my_compare.h>
+#include <my_sys.h>
 
-#include "my_compare.h"
+#define CMP_NUM(a,b)    (((a) < (b)) ? -1 : ((a) == (b)) ? 0 : 1)
 
-int ha_compare_text(CHARSET_INFO *charset_info, uchar *a, uint a_length,
+int ha_compare_text(const CHARSET_INFO *charset_info, uchar *a, uint a_length,
 		    uchar *b, uint b_length, my_bool part_key,
 		    my_bool skip_end_space)
 {
@@ -30,7 +36,7 @@ int ha_compare_text(CHARSET_INFO *charset_info, uchar *a, uint a_length,
 static int compare_bin(uchar *a, uint a_length, uchar *b, uint b_length,
                        my_bool part_key, my_bool skip_end_space)
 {
-  uint length= min(a_length,b_length);
+  uint length= MY_MIN(a_length, b_length);
   uchar *end= a+ length;
   int flag;
 
@@ -158,7 +164,7 @@ int ha_key_cmp(register HA_KEYSEG *keyseg, register uchar *a,
         continue;                               /* To next key part */
       }
     }
-    end= a+ min(keyseg->length,key_length);
+    end= a + MY_MIN(keyseg->length, key_length);
     next_key_length=key_length-keyseg->length;
 
     switch ((enum ha_base_keytype) keyseg->type) {
@@ -261,7 +267,6 @@ int ha_key_cmp(register HA_KEYSEG *keyseg, register uchar *a,
           return ((keyseg->flag & HA_REVERSE_SORT) ? -flag : flag);
         a+=a_length;
         b+=b_length;
-        break;
       }
       break;
     case HA_KEYTYPE_INT8:
@@ -467,3 +472,5 @@ end:
   }
   return 0;
 } /* ha_key_cmp */
+
+

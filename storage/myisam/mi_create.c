@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Create a MyISAM table */
 
@@ -21,12 +20,8 @@
 #include "sp_defs.h"
 #include <my_bit.h>
 
-#if defined(MSDOS) || defined(__WIN__)
 #ifdef __WIN__
 #include <fcntl.h>
-#else
-#include <process.h>			/* Prototype for getpid */
-#endif
 #endif
 #include <m_ctype.h>
 
@@ -48,6 +43,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
        base_pos,long_varchar_count,varchar_length,
        max_key_block_length,unique_key_parts,fulltext_keys,offset;
   uint aligned_key_start, block_length;
+  uint internal_table= flags & HA_CREATE_INTERNAL_TABLE;
   ulong reclength, real_reclength,min_pack_length;
   char filename[FN_REFLEN],linkname[FN_REFLEN], *linkname_ptr;
   ulong pack_reclength;
@@ -67,7 +63,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 
   if (!ci)
   {
-    bzero((char*) &tmp_create_info,sizeof(tmp_create_info));
+    memset(&tmp_create_info, 0, sizeof(tmp_create_info));
     ci=&tmp_create_info;
   }
 
@@ -75,9 +71,10 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
   {
     DBUG_RETURN(my_errno=HA_WRONG_CREATE_OPTION);
   }
+
   errpos=0;
   options=0;
-  bzero((uchar*) &share,sizeof(share));
+  memset(&share, 0, sizeof(share));
 
   if (flags & HA_DONT_TOUCH_DATA)
   {
@@ -137,7 +134,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	pack_reclength++;
         min_pack_length++;
         /* We must test for 257 as length includes pack-length */
-        if (test(rec->length >= 257))
+        if (MY_TEST(rec->length >= 257))
 	{
 	  long_varchar_count++;
 	  pack_reclength+= 2;			/* May be packed on 3 bytes */
@@ -196,7 +193,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
   packed=(packed+7)/8;
   if (pack_reclength != INT_MAX32)
     pack_reclength+= reclength+packed +
-      test(test_all_bits(options, HA_OPTION_CHECKSUM | HA_OPTION_PACK_RECORD));
+      MY_TEST(test_all_bits(options, HA_OPTION_CHECKSUM | HA_OPTION_PACK_RECORD));
   min_pack_length+=packed;
 
   if (!ci->data_file_length && ci->max_rows)
@@ -439,8 +436,8 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     block_length= (keydef->block_length ? 
                    my_round_up_to_next_power(keydef->block_length) :
                    myisam_block_size);
-    block_length= max(block_length, MI_MIN_KEY_BLOCK_LENGTH);
-    block_length= min(block_length, MI_MAX_KEY_BLOCK_LENGTH);
+    block_length= MY_MAX(block_length, MI_MIN_KEY_BLOCK_LENGTH);
+    block_length= MY_MIN(block_length, MI_MAX_KEY_BLOCK_LENGTH);
 
     keydef->block_length= (uint16) MI_BLOCK_SIZE(length-real_length_diff,
                                                  pointer,MI_MAX_KEYPTR_SIZE,
@@ -466,7 +463,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     key_del[i]=HA_OFFSET_ERROR;
 
   unique_key_parts=0;
-  offset=reclength-uniques*MI_UNIQUE_HASH_LENGTH;
   for (i=0, uniquedef=uniquedefs ; i < uniques ; i++ , uniquedef++)
   {
     uniquedef->key=keys+i;
@@ -529,7 +525,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     got from MYI file header (see also myisampack.c:save_state)
   */
   share.base.key_reflength=
-    mi_get_pointer_length(max(ci->key_file_length,tmp),3);
+    mi_get_pointer_length(MY_MAX(ci->key_file_length, tmp), 3);
   share.base.keys= share.state.header.keys= keys;
   share.state.header.uniques= uniques;
   share.state.header.fulltext_keys= fulltext_keys;
@@ -548,17 +544,12 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
   share.base.records=ci->max_rows;
   share.base.reloc=  ci->reloc_rows;
   share.base.reclength=real_reclength;
-  share.base.pack_reclength=reclength+ test(options & HA_OPTION_CHECKSUM);
+  share.base.pack_reclength=reclength+ MY_TEST(options & HA_OPTION_CHECKSUM);
   share.base.max_pack_length=pack_reclength;
   share.base.min_pack_length=min_pack_length;
   share.base.pack_bits=packed;
   share.base.fields=fields;
   share.base.pack_fields=packed;
-#ifdef USE_RAID
-  share.base.raid_type=ci->raid_type;
-  share.base.raid_chunks=ci->raid_chunks;
-  share.base.raid_chunksize=ci->raid_chunksize;
-#endif
 
   /* max_data_file_length and max_key_file_length are recalculated on open */
   if (options & HA_OPTION_TMP_TABLE)
@@ -567,12 +558,13 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
   share.base.min_block_length=
     (share.base.pack_reclength+3 < MI_EXTEND_BLOCK_LENGTH &&
      ! share.base.blobs) ?
-    max(share.base.pack_reclength,MI_MIN_BLOCK_LENGTH) :
+    MY_MAX(share.base.pack_reclength, MI_MIN_BLOCK_LENGTH) :
     MI_EXTEND_BLOCK_LENGTH;
   if (! (flags & HA_DONT_TOUCH_DATA))
     share.state.create_time= (long) time((time_t*) 0);
 
-  pthread_mutex_lock(&THR_LOCK_myisam);
+  if (!internal_table)
+    mysql_mutex_lock(&THR_LOCK_myisam);
 
   /*
     NOTE: For test_if_reopen() we need a real path name. Hence we need
@@ -629,7 +621,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     NOTE: The filename is compared against unique_file_name of every
     open table. Hence we need a real path here.
   */
-  if (test_if_reopen(filename))
+  if (!internal_table && test_if_reopen(filename))
   {
     my_printf_error(0, "MyISAM table '%s' is in use "
                     "(most likely by a MERGE table). Try FLUSH TABLES.",
@@ -638,27 +630,15 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     goto err;
   }
 
-  if ((file= my_create_with_symlink(linkname_ptr, filename, 0, create_mode,
-				    MYF(MY_WME | create_flag))) < 0)
+  if ((file= mysql_file_create_with_symlink(mi_key_file_kfile,
+                                            linkname_ptr, filename, 0,
+                                            create_mode,
+                                            MYF(MY_WME | create_flag))) < 0)
     goto err;
   errpos=1;
 
   if (!(flags & HA_DONT_TOUCH_DATA))
   {
-#ifdef USE_RAID
-    if (share.base.raid_type)
-    {
-      (void) fn_format(filename, name, "", MI_NAME_DEXT,
-                       MY_UNPACK_FILENAME | MY_APPEND_EXT);
-      if ((dfile=my_raid_create(filename, 0, create_mode,
-				share.base.raid_type,
-				share.base.raid_chunks,
-				share.base.raid_chunksize,
-				MYF(MY_WME | MY_RAID))) < 0)
-	goto err;
-    }
-    else
-#endif
     {
       if (ci->data_file_name)
       {
@@ -694,8 +674,10 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
         create_flag=(flags & HA_CREATE_KEEP_FILES) ? 0 : MY_DELETE_OLD;
       }
       if ((dfile=
-	   my_create_with_symlink(linkname_ptr, filename, 0, create_mode,
-				  MYF(MY_WME | create_flag))) < 0)
+           mysql_file_create_with_symlink(mi_key_file_dfile,
+                                          linkname_ptr, filename, 0,
+                                          create_mode,
+                                          MYF(MY_WME | create_flag))) < 0)
 	goto err;
     }
     errpos=3;
@@ -706,9 +688,9 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
       mi_base_info_write(file, &share.base))
     goto err;
 #ifndef DBUG_OFF
-  if ((uint) my_tell(file,MYF(0)) != base_pos+ MI_BASE_INFO_SIZE)
+  if ((uint) mysql_file_tell(file, MYF(0)) != base_pos + MI_BASE_INFO_SIZE)
   {
-    uint pos=(uint) my_tell(file,MYF(0));
+    uint pos=(uint) mysql_file_tell(file, MYF(0));
     DBUG_PRINT("warning",("base_length: %d  != used_length: %d",
 			  base_pos+ MI_BASE_INFO_SIZE, pos));
   }
@@ -746,9 +728,9 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 #endif
   }
   /* Create extra keys for unique definitions */
-  offset=reclength-uniques*MI_UNIQUE_HASH_LENGTH;
-  bzero((char*) &tmp_keydef,sizeof(tmp_keydef));
-  bzero((char*) &tmp_keyseg,sizeof(tmp_keyseg));
+  offset= real_reclength - uniques * MI_UNIQUE_HASH_LENGTH;
+  memset(&tmp_keydef, 0, sizeof(tmp_keydef));
+  memset(&tmp_keyseg, 0, sizeof(tmp_keyseg));
   for (i=0; i < uniques ; i++)
   {
     tmp_keydef.keysegs=1;
@@ -803,9 +785,9 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
       goto err;
 
 #ifndef DBUG_OFF
-  if ((uint) my_tell(file,MYF(0)) != info_length)
+  if ((uint) mysql_file_tell(file, MYF(0)) != info_length)
   {
-    uint pos= (uint) my_tell(file,MYF(0));
+    uint pos= (uint) mysql_file_tell(file, MYF(0));
     DBUG_PRINT("warning",("info_length: %d  != used_length: %d",
 			  info_length, pos));
   }
@@ -813,50 +795,54 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 
 	/* Enlarge files */
   DBUG_PRINT("info", ("enlarge to keystart: %lu", (ulong) share.base.keystart));
-  if (my_chsize(file,(ulong) share.base.keystart,0,MYF(0)))
+  if (mysql_file_chsize(file, (ulong) share.base.keystart, 0, MYF(0)))
     goto err;
 
   if (! (flags & HA_DONT_TOUCH_DATA))
   {
 #ifdef USE_RELOC
-    if (my_chsize(dfile,share.base.min_pack_length*ci->reloc_rows,0,MYF(0)))
+    if (mysql_file_chsize(dfile, share.base.min_pack_length*ci->reloc_rows,
+                          0, MYF(0)))
       goto err;
 #endif
     errpos=2;
-    if (my_close(dfile,MYF(0)))
+    if (mysql_file_close(dfile, MYF(0)))
       goto err;
   }
   errpos=0;
-  pthread_mutex_unlock(&THR_LOCK_myisam);
-  if (my_close(file,MYF(0)))
+  if (!internal_table)
+    mysql_mutex_unlock(&THR_LOCK_myisam);
+  if (mysql_file_close(file, MYF(0)))
     goto err_no_lock;
-  my_free((char*) rec_per_key_part,MYF(0));
+  my_free(rec_per_key_part);
   DBUG_RETURN(0);
 
 err:
-  pthread_mutex_unlock(&THR_LOCK_myisam);
+  if (!internal_table)
+    mysql_mutex_unlock(&THR_LOCK_myisam);
 
 err_no_lock:
   save_errno=my_errno;
   switch (errpos) {
   case 3:
-    VOID(my_close(dfile,MYF(0)));
+    (void) mysql_file_close(dfile, MYF(0));
     /* fall through */
   case 2:
-    /* QQ: Tõnu should add a call to my_raid_delete() here */
   if (! (flags & HA_DONT_TOUCH_DATA))
-    my_delete_with_symlink(fn_format(filename,name,"",MI_NAME_DEXT,
-                                     MY_UNPACK_FILENAME | MY_APPEND_EXT),
-			   MYF(0));
+    mysql_file_delete_with_symlink(mi_key_file_dfile,
+                                   fn_format(filename, name, "", MI_NAME_DEXT,
+                                             MY_UNPACK_FILENAME | MY_APPEND_EXT),
+                                   MYF(0));
     /* fall through */
   case 1:
-    VOID(my_close(file,MYF(0)));
+    (void) mysql_file_close(file, MYF(0));
     if (! (flags & HA_DONT_TOUCH_DATA))
-      my_delete_with_symlink(fn_format(filename,name,"",MI_NAME_IEXT,
-                                       MY_UNPACK_FILENAME | MY_APPEND_EXT),
-			     MYF(0));
+      mysql_file_delete_with_symlink(mi_key_file_kfile,
+                                     fn_format(filename, name, "", MI_NAME_IEXT,
+                                               MY_UNPACK_FILENAME | MY_APPEND_EXT),
+                                     MYF(0));
   }
-  my_free((char*) rec_per_key_part, MYF(0));
+  my_free(rec_per_key_part);
   DBUG_RETURN(my_errno=save_errno);		/* return the fatal errno */
 }
 

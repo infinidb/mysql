@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBmysqlhotcopy\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBMYSQLHOTCOPY\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQLHOTCOPY\FR" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -52,7 +52,7 @@ works only for backing up
 MyISAM
 and
 ARCHIVE
-tables\&. It runs on Unix and NetWare\&.
+tables\&. It runs on Unix\&.
 .PP
 To use
 \fBmysqlhotcopy\fR, you must have read access to the files for the tables that you are backing up, the
@@ -364,6 +364,27 @@ The TCP/IP port number to use when connecting to the local server\&.
 .sp -1
 .IP \(bu 2.3
 .\}
+.\" mysqlhotcopy: old_server option
+.\" old_server option: mysqlhotcopy
+\fB\-\-old_server\fR
+.sp
+In MySQL 5\&.6,
+\fBmysqlhotcopy\fR
+uses
+FLUSH TABLES \fItbl_list\fR WITH READ LOCK
+to flush and lock tables\&. Use the
+\fB\-\-old_server\fR
+option if the server is older than 5\&.5\&.3, which is when that statement was introduced\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 .\" mysqlhotcopy: quiet option
 .\" quiet option: mysqlhotcopy
 \fB\-\-quiet\fR,
@@ -432,9 +453,7 @@ Reset the binary log after locking all the tables\&.
 .\" resetslave option: mysqlhotcopy
 \fB\-\-resetslave\fR
 .sp
-Reset the
-master\&.info
-file after locking all the tables\&.
+Reset the master info repository file or table after locking all the tables\&.
 .RE
 .sp
 .RS 4
@@ -523,7 +542,7 @@ shell> \fBperldoc mysqlhotcopy\fR
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

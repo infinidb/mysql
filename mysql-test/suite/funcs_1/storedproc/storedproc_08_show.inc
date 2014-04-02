@@ -8,7 +8,7 @@
 
 --vertical_results
 
---replace_column 16 <modified> 17 <created>
+--replace_column 24 <modified> 25 <created>
 SELECT * FROM information_schema.routines where routine_schema = 'db_storedproc';
 
 

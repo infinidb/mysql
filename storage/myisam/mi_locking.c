@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   locking of isam-tables.
@@ -46,11 +44,12 @@ int mi_lock_database(MI_INFO *info, int lock_type)
     ++share->w_locks;
     ++share->tot_locks;
     info->lock_type= lock_type;
+    info->s->in_use= list_add(info->s->in_use, &info->in_use);
     DBUG_RETURN(0);
   }
 
   error= 0;
-  pthread_mutex_lock(&share->intern_lock);
+  mysql_mutex_lock(&share->intern_lock);
   if (share->kfile >= 0)		/* May only be false on windows */
   {
     switch (lock_type) {
@@ -89,11 +88,11 @@ int mi_lock_database(MI_INFO *info, int lock_type)
         (info->s->nonmmaped_inserts > MAX_NONMAPPED_INSERTS))
     {
       if (info->s->concurrent_insert)
-        rw_wrlock(&info->s->mmap_lock);
+        mysql_rwlock_wrlock(&info->s->mmap_lock);
       mi_remap_file(info, info->s->state.state.data_file_length);
       info->s->nonmmaped_inserts= 0;
       if (info->s->concurrent_insert)
-        rw_unlock(&info->s->mmap_lock);
+        mysql_rwlock_unlock(&info->s->mmap_lock);
     }
 #endif
 	  share->state.process= share->last_process=share->this_process;
@@ -104,9 +103,9 @@ int mi_lock_database(MI_INFO *info, int lock_type)
 	  share->changed=0;
 	  if (myisam_flush)
 	  {
-	    if (my_sync(share->kfile, MYF(0)))
+            if (mysql_file_sync(share->kfile, MYF(0)))
 	      error= my_errno;
-	    if (my_sync(info->dfile, MYF(0)))
+            if (mysql_file_sync(info->dfile, MYF(0)))
 	      error= my_errno;
 	  }
 	  else
@@ -135,6 +134,7 @@ int mi_lock_database(MI_INFO *info, int lock_type)
       }
       info->opt_flag&= ~(READ_CACHE_USED | WRITE_CACHE_USED);
       info->lock_type= F_UNLCK;
+      info->s->in_use= list_delete(info->s->in_use, &info->in_use);
       break;
     case F_RDLCK:
       if (info->lock_type == F_WRLCK)
@@ -170,15 +170,16 @@ int mi_lock_database(MI_INFO *info, int lock_type)
 	if (mi_state_info_read_dsk(share->kfile, &share->state, 1))
 	{
 	  error=my_errno;
-	  VOID(my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,MYF(MY_SEEK_NOT_DONE)));
+	  (void) my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,MYF(MY_SEEK_NOT_DONE));
 	  my_errno=error;
 	  break;
 	}
       }
-      VOID(_mi_test_if_changed(info));
+      (void) _mi_test_if_changed(info);
       share->r_locks++;
       share->tot_locks++;
       info->lock_type=lock_type;
+      info->s->in_use= list_add(info->s->in_use, &info->in_use);
       break;
     case F_WRLCK:
       if (info->lock_type == F_RDLCK)
@@ -212,26 +213,27 @@ int mi_lock_database(MI_INFO *info, int lock_type)
 	    if (mi_state_info_read_dsk(share->kfile, &share->state, 1))
 	    {
 	      error=my_errno;
-	      VOID(my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,
-			   info->lock_wait | MY_SEEK_NOT_DONE));
+	      (void) my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,
+			   info->lock_wait | MY_SEEK_NOT_DONE);
 	      my_errno=error;
 	      break;
 	    }
 	  }
 	}
       }
-      VOID(_mi_test_if_changed(info));
+      (void) _mi_test_if_changed(info);
         
       info->lock_type=lock_type;
       info->invalidator=info->s->invalidator;
       share->w_locks++;
       share->tot_locks++;
+      info->s->in_use= list_add(info->s->in_use, &info->in_use);
       break;
     default:
       break;				/* Impossible */
     }
   }
-#ifdef __WIN__
+#ifdef _WIN32
   else
   {
     /*
@@ -246,7 +248,7 @@ int mi_lock_database(MI_INFO *info, int lock_type)
     }
   }
 #endif
-  pthread_mutex_unlock(&share->intern_lock);
+  mysql_mutex_unlock(&share->intern_lock);
   DBUG_RETURN(error);
 } /* mi_lock_database */
 
@@ -402,14 +404,14 @@ int _mi_readinfo(register MI_INFO *info, int lock_type, int check_keybuffer)
       if (mi_state_info_read_dsk(share->kfile, &share->state, 1))
       {
 	int error=my_errno ? my_errno : -1;
-	VOID(my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,
-		     MYF(MY_SEEK_NOT_DONE)));
+	(void) my_lock(share->kfile,F_UNLCK,0L,F_TO_EOF,
+		     MYF(MY_SEEK_NOT_DONE));
 	my_errno=error;
 	DBUG_RETURN(1);
       }
     }
     if (check_keybuffer)
-      VOID(_mi_test_if_changed(info));
+      (void) _mi_test_if_changed(info);
     info->invalidator=info->s->invalidator;
   }
   else if (lock_type == F_WRLCK && info->lock_type == F_RDLCK)
@@ -445,11 +447,11 @@ int _mi_writeinfo(register MI_INFO *info, uint operation)
       share->state.update_count= info->last_loop= ++info->this_loop;
       if ((error=mi_state_info_write(share->kfile, &share->state, 1)))
 	olderror=my_errno;
-#ifdef __WIN__
+#ifdef _WIN32
       if (myisam_flush)
       {
-	_commit(share->kfile);
-	_commit(info->dfile);
+        mysql_file_sync(share->kfile, 0);
+        mysql_file_sync(info->dfile, 0);
       }
 #endif
     }
@@ -477,7 +479,7 @@ int _mi_test_if_changed(register MI_INFO *info)
   {						/* Keyfile has changed */
     DBUG_PRINT("info",("index file changed"));
     if (share->state.process != share->this_process)
-      VOID(flush_key_blocks(share->key_cache, share->kfile, FLUSH_RELEASE));
+      (void) flush_key_blocks(share->key_cache, share->kfile, FLUSH_RELEASE);
     share->last_process=share->state.process;
     info->last_unique=	share->state.unique;
     info->last_loop=	share->state.update_count;
@@ -529,9 +531,9 @@ int _mi_mark_file_changed(MI_INFO *info)
     {
       mi_int2store(buff,share->state.open_count);
       buff[2]=1;				/* Mark that it's changed */
-      DBUG_RETURN(my_pwrite(share->kfile,buff,sizeof(buff),
-                            sizeof(share->state.header),
-                            MYF(MY_NABP)));
+      DBUG_RETURN(mysql_file_pwrite(share->kfile, buff, sizeof(buff),
+                                    sizeof(share->state.header),
+                                    MYF(MY_NABP)));
     }
   }
   DBUG_RETURN(0);
@@ -558,12 +560,12 @@ int _mi_decrement_open_count(MI_INFO *info)
     {
       share->state.open_count--;
       mi_int2store(buff,share->state.open_count);
-      write_error=my_pwrite(share->kfile,buff,sizeof(buff),
-			    sizeof(share->state.header),
-			    MYF(MY_NABP));
+      write_error= mysql_file_pwrite(share->kfile, buff, sizeof(buff),
+                                     sizeof(share->state.header),
+                                     MYF(MY_NABP));
     }
     if (!lock_error)
       lock_error=mi_lock_database(info,old_lock);
   }
-  return test(lock_error || write_error);
+  return MY_TEST(lock_error || write_error);
 }

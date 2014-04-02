@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,6 +19,7 @@
 
 use Getopt::Long;
 use POSIX qw(strftime getcwd);
+use File::Path qw(mkpath);
 
 $|=1;
 $VER="2.16";
@@ -98,20 +99,6 @@ sub main
     push @defaults_options, (shift @ARGV);
   }
 
-  # Handle deprecated --config-file option: convert to --defaults-extra-file
-  foreach my $arg (@ARGV)
-  {
-    if ($arg =~ m/^--config-file=(.*)/)
-    {
-      # Put it at the beginning of the list, so it has lower precedence
-      # than a correct --defaults-extra-file option
-
-      unshift @defaults_options, "--defaults-extra-file=$1";
-      print "WARNING: --config-file is deprecated and will be removed\n";
-      print "in MySQL 5.6.  Please use --defaults-extra-file instead\n";
-    }
-  }
-
   foreach (@defaults_options)
   {
     $_ = quote_shell_word($_);
@@ -119,11 +106,6 @@ sub main
 
   # Add [mysqld_multi] options to front of @ARGV, ready for GetOptions()
   unshift @ARGV, defaults_for_group('mysqld_multi');
-
-  # The --config-file option can be ignored; if passed on the command
-  # line, it's already handled; if specified in the configuration file,
-  # it's redundant and not useful
-  @ARGV= grep { not /^--config-file=/ } @ARGV;
 
   # We've already handled --no-defaults, --defaults-file, etc.
   if (!GetOptions("help", "example", "version", "mysqld=s", "mysqladmin=s",
@@ -164,6 +146,7 @@ sub main
   usage() if (!defined($ARGV[0]) ||
 	      (!($ARGV[0] =~ m/^start$/i) &&
 	       !($ARGV[0] =~ m/^stop$/i) &&
+	       !($ARGV[0] =~ m/^reload$/i) &&
 	       !($ARGV[0] =~ m/^report$/i)));
 
   if (!$opt_no_log)
@@ -177,7 +160,7 @@ sub main
     print strftime "%a %b %e %H:%M:%S %Y", localtime;
     print "\n";
   }
-  if ($ARGV[0] =~ m/^start$/i)
+  if (($ARGV[0] =~ m/^start$/i) || ($ARGV[0] =~ m/^reload$/i))
   {
     if (!defined(($mysqld= my_which($opt_mysqld))) && $opt_verbose)
     {
@@ -186,7 +169,11 @@ sub main
       print "This is OK, if you are using option \"mysqld=...\" in ";
       print "groups [mysqldN] separately for each.\n\n";
     }
-    start_mysqlds();
+    if ($ARGV[0] =~ m/^start$/i) {
+      start_mysqlds();
+    } elsif ($ARGV[0] =~ m/^reload$/i) {
+      reload_mysqlds();
+    }
   }
   else
   {
@@ -342,6 +329,39 @@ sub start_mysqlds()
     $com= "$mysqld";
     for ($j = 0, $tmp= ""; defined($options[$j]); $j++)
     {
+      if ("--datadir=" eq substr($options[$j], 0, 10)) {
+        $datadir = $options[$j];
+        $datadir =~ s/\-\-datadir\=//;
+        eval { mkpath($datadir) };
+        if ($@) {
+          print "FATAL ERROR: Cannot create data directory $datadir: $!\n";
+          exit(1);
+        }
+        if (! -d $datadir."/mysql") {
+          if (-w $datadir) {
+            print "\n\nInstalling new database in $datadir\n\n";
+            $install_cmd="@bindir@/mysql_install_db ";
+            $install_cmd.="--user=mysql ";
+            $install_cmd.="--datadir=$datadir";
+            system($install_cmd);
+          } else {
+            print "\n";
+            print "FATAL ERROR: Tried to create mysqld under group [$groups[$i]],\n";
+            print "but the data directory is not writable.\n";
+            print "data directory used: $datadir\n";
+            exit(1);
+          }
+        }
+
+        if (! -d $datadir."/mysql") {
+          print "\n";
+          print "FATAL ERROR: Tried to start mysqld under group [$groups[$i]],\n";
+          print "but no data directory was found or could be created.\n";
+          print "data directory used: $datadir\n";
+          exit(1);
+        }
+      }
+
       if ("--mysqladmin=" eq substr($options[$j], 0, 13))
       {
 	# catch this and ignore
@@ -406,6 +426,58 @@ sub start_mysqlds()
 }
 
 ####
+#### reload multiple servers
+####
+
+sub reload_mysqlds()
+{
+  my (@groups, $com, $tmp, $i, @options, $j);
+
+  if (!$opt_no_log)
+  {
+    w2log("\nReloading MySQL servers\n","$opt_log",0,0);
+  }
+  else
+  {
+    print "\nReloading MySQL servers\n";
+  }
+  @groups = &find_groups($groupids);
+  for ($i = 0; defined($groups[$i]); $i++)
+  {
+    $mysqld_server = $mysqld;
+    @options = defaults_for_group($groups[$i]);
+
+    for ($j = 0, $tmp= ""; defined($options[$j]); $j++)
+    {
+      if ("--mysqladmin=" eq substr($options[$j], 0, 13))
+      {
+        # catch this and ignore
+      }
+      elsif ("--mysqld=" eq substr($options[$j], 0, 9))
+      {
+        $options[$j] =~ s/\-\-mysqld\=//;
+        $mysqld_server = $options[$j];
+      }
+      elsif ("--pid-file=" eq substr($options[$j], 0, 11))
+      {
+        $options[$j] =~ s/\-\-pid-file\=//;
+        $pid_file = $options[$j];
+      }
+    }
+    $com = "killproc -p $pid_file -HUP $mysqld_server";
+    system($com);
+
+    $com = "touch $pid_file";
+    system($com);
+  }
+  if (!$i && !$opt_no_log)
+  {
+    w2log("No MySQL servers to be reloaded (check your GNRs)",
+         "$opt_log", 0, 0);
+  }
+}
+
+###
 #### stop multiple servers
 ####
 
@@ -768,7 +840,7 @@ sub usage
 $my_progname version $VER by Jani Tolonen
 
 Description:
-$my_progname can be used to start, or stop any number of separate
+$my_progname can be used to start, reload, or stop any number of separate
 mysqld processes running in different TCP/IP ports and UNIX sockets.
 
 $my_progname can read group [mysqld_multi] from my.cnf file. You may
@@ -781,21 +853,21 @@ from both [mysqld_multi] and [mysqld#], a group that is tried to be
 used, $my_progname will abort with an error.
 
 $my_progname will search for groups named [mysqld#] from my.cnf (or
-the given --config-file=...), where '#' can be any positive integer
-starting from 1. These groups should be the same as the regular
+the given --defaults-extra-file=...), where '#' can be any positive 
+integer starting from 1. These groups should be the same as the regular
 [mysqld] group, but with those port, socket and any other options
 that are to be used with each separate mysqld process. The number
 in the group name has another function; it can be used for starting,
-stopping, or reporting any specific mysqld server.
+reloading, stopping, or reporting any specific mysqld server.
 
-Usage: $my_progname [OPTIONS] {start|stop|report} [GNR,GNR,GNR...]
-or     $my_progname [OPTIONS] {start|stop|report} [GNR-GNR,GNR,GNR-GNR,...]
+Usage: $my_progname [OPTIONS] {start|reload|stop|report} [GNR,GNR,GNR...]
+or     $my_progname [OPTIONS] {start|reload|stop|report} [GNR-GNR,GNR,GNR-GNR,...]
 
-The GNR means the group number. You can start, stop or report any GNR,
+The GNR means the group number. You can start, reload, stop or report any GNR,
 or several of them at the same time. (See --example) The GNRs list can
 be comma separated or a dash combined. The latter means that all the
 GNRs between GNR1-GNR2 will be affected. Without GNR argument all the
-groups found will either be started, stopped, or reported. Note that
+groups found will either be started, reloaded, stopped, or reported. Note that
 syntax for specifying GNRs must appear without spaces.
 
 Options:
@@ -808,7 +880,6 @@ These options must be given before any others:
                    standard system-wide and user-specific files
 Using:  @{[join ' ', @defaults_options]}
 
---config-file=...  Deprecated, please use --defaults-extra-file instead
 --example          Give an example of a config file with extra information.
 --help             Print this help and exit.
 --log=...          Log file. Full path to and the name for the log file. NOTE:

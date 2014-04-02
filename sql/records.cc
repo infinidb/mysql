@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
-
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /**
   @file
@@ -23,7 +20,15 @@
   Functions for easy reading of records, possible through a cache
 */
 
-#include "mysql_priv.h"
+#include "records.h"
+#include "sql_priv.h"
+#include "records.h"
+#include "sql_list.h"
+#include "filesort.h"            // filesort_free_buffers
+#include "opt_range.h"                          // SQL_SELECT
+#include "sql_class.h"                          // THD
+#include "sql_select.h"          // JOIN_TAB
+
 
 static int rr_quick(READ_RECORD *info);
 int rr_sequential(READ_RECORD *info);
@@ -33,14 +38,15 @@ static int rr_unpack_from_buffer(READ_RECORD *info);
 static int rr_from_pointers(READ_RECORD *info);
 static int rr_from_cache(READ_RECORD *info);
 static int init_rr_cache(THD *thd, READ_RECORD *info);
-static int rr_cmp(uchar *a,uchar *b);
 static int rr_index_first(READ_RECORD *info);
+static int rr_index_last(READ_RECORD *info);
 static int rr_index(READ_RECORD *info);
+static int rr_index_desc(READ_RECORD *info);
 
 
 /**
-  Initialize READ_RECORD structure to perform full index scan (in forward
-  direction) using read_record.read_record() interface.
+  Initialize READ_RECORD structure to perform full index scan in desired 
+  direction using read_record.read_record() interface
 
     This function has been added at late stage and is used only by
     UPDATE/DELETE. Other statements perform index scans using
@@ -52,25 +58,36 @@ static int rr_index(READ_RECORD *info);
   @param print_error  If true, call table->file->print_error() if an error
                       occurs (except for end-of-records error)
   @param idx          index to scan
+  @param reverse      Scan in the reverse direction
+
+  @retval true   error
+  @retval false  success
 */
 
-void init_read_record_idx(READ_RECORD *info, THD *thd, TABLE *table,
-                          bool print_error, uint idx)
+bool init_read_record_idx(READ_RECORD *info, THD *thd, TABLE *table,
+                          bool print_error, uint idx, bool reverse)
 {
+  int error;
   empty_record(table);
-  bzero((char*) info,sizeof(*info));
+  memset(info, 0, sizeof(*info));
   info->thd= thd;
   info->table= table;
-  info->file=  table->file;
   info->record= table->record[0];
   info->print_error= print_error;
   info->unlock_row= rr_unlock_row;
 
   table->status=0;			/* And it's always found */
-  if (!table->file->inited)
-    table->file->ha_index_init(idx, 1);
+  if (!table->file->inited &&
+      (error= table->file->ha_index_init(idx, 1)))
+  {
+    if (print_error)
+      table->file->print_error(error, MYF(0));
+    return true;
+  }
+
   /* read_record will be changed to rr_index in rr_index_first */
-  info->read_record= rr_index_first;
+  info->read_record= reverse ? rr_index_last : rr_index_first;
+  return false;
 }
 
 
@@ -157,25 +174,28 @@ void init_read_record_idx(READ_RECORD *info, THD *thd, TABLE *table,
   rr_sequential:
   --------------
     This is the most basic access method of a table using rnd_init,
-    rnd_next and rnd_end. No indexes are used.
+    ha_rnd_next and rnd_end. No indexes are used.
+
+  @retval true   error
+  @retval false  success
 */
-void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
+bool init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
 		      SQL_SELECT *select,
 		      int use_record_cache, bool print_error, 
                       bool disable_rr_cache)
 {
+  int error= 0;
   IO_CACHE *tempfile;
   DBUG_ENTER("init_read_record");
 
-  bzero((char*) info,sizeof(*info));
+  memset(info, 0, sizeof(*info));
   info->thd=thd;
   info->table=table;
-  info->file= table->file;
   info->forms= &info->table;		/* Only one table */
   
   if (table->s->tmp_table == NON_TRANSACTIONAL_TMP_TABLE &&
       !table->sort.addon_field)
-    VOID(table->file->extra(HA_EXTRA_MMAP));
+    (void) table->file->extra(HA_EXTRA_MMAP);
   
   if (table->sort.addon_field)
   {
@@ -215,8 +235,9 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
     info->io_cache=tempfile;
     reinit_io_cache(info->io_cache,READ_CACHE,0L,0,0);
     info->ref_pos=table->file->ref;
-    if (!table->file->inited)
-      table->file->ha_rnd_init(0);
+    if (!table->file->inited &&
+        (error= table->file->ha_rnd_init(0)))
+      goto err;
 
     /*
       table->sort.addon_field is checked because if we use addon fields,
@@ -225,7 +246,6 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
     */
     if (!disable_rr_cache &&
         !table->sort.addon_field &&
-        ! (specialflag & SPECIAL_SAFE_MODE) &&
 	thd->variables.read_rnd_buff_size &&
 	!(table->file->ha_table_flags() & HA_FAST_KEY_READ) &&
 	(table->db_stat & HA_READ_ONLY ||
@@ -238,11 +258,10 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
 	!table->s->blob_fields &&
         info->ref_length <= MAX_REFLENGTH)
     {
-      if (! init_rr_cache(thd, info))
-      {
-	DBUG_PRINT("info",("using rr_from_cache"));
-	info->read_record=rr_from_cache;
-      }
+      if (init_rr_cache(thd, info))
+        DBUG_RETURN(true);
+      DBUG_PRINT("info",("using rr_from_cache"));
+      info->read_record=rr_from_cache;
     }
   }
   else if (select && select->quick)
@@ -253,7 +272,8 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
   else if (table->sort.record_pointers)
   {
     DBUG_PRINT("info",("using record_pointers"));
-    table->file->ha_rnd_init(0);
+    if ((error= table->file->ha_rnd_init(0)))
+      goto err;
     info->cache_pos=table->sort.record_pointers;
     info->cache_end=info->cache_pos+ 
                     table->sort.found_records*info->ref_length;
@@ -264,7 +284,8 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
   {
     DBUG_PRINT("info",("using rr_sequential"));
     info->read_record=rr_sequential;
-    table->file->ha_rnd_init(1);
+    if ((error= table->file->ha_rnd_init(1)))
+      goto err;
     /* We can use record cache if we don't update dynamic length tables */
     if (!table->no_cache &&
 	(use_record_cache > 0 ||
@@ -272,17 +293,26 @@ void init_read_record(READ_RECORD *info,THD *thd, TABLE *table,
 	 !(table->s->db_options_in_use & HA_OPTION_PACK_RECORD) ||
 	 (use_record_cache < 0 &&
 	  !(table->file->ha_table_flags() & HA_NOT_DELETE_WITH_CACHE))))
-      VOID(table->file->extra_opt(HA_EXTRA_CACHE,
-				  thd->variables.read_buff_size));
+      (void) table->file->extra_opt(HA_EXTRA_CACHE,
+				  thd->variables.read_buff_size);
   }
-  /* Condition pushdown to storage engine */
-  if (thd->variables.engine_condition_pushdown && 
+  /* 
+    Do condition pushdown for UPDATE/DELETE.
+    TODO: Remove this from here as it causes two condition pushdown calls 
+    when we're running a SELECT and the condition cannot be pushed down.
+  */
+  if (thd->optimizer_switch_flag(OPTIMIZER_SWITCH_ENGINE_CONDITION_PUSHDOWN) &&
       select && select->cond && 
       (select->cond->used_tables() & table->map) &&
       !table->file->pushed_cond)
     table->file->cond_push(select->cond);
 
-  DBUG_VOID_RETURN;
+  DBUG_RETURN(false);
+
+err:
+  if (print_error)
+    table->file->print_error(error, MYF(0));     
+  DBUG_RETURN(true);
 } /* init_read_record */
 
 
@@ -291,15 +321,19 @@ void end_read_record(READ_RECORD *info)
 {                   /* free cache if used */
   if (info->cache)
   {
-    my_free_lock((char*) info->cache,MYF(0));
+    my_free_lock(info->cache);
     info->cache=0;
   }
-  if (info->table)
+  if (info->table && info->table->key_read)
+  {
+    info->table->set_keyread(FALSE);
+  }
+  if (info->table && info->table->is_created())
   {
     filesort_free_buffers(info->table,0);
-    (void) info->file->extra(HA_EXTRA_NO_CACHE);
+    (void) info->table->file->extra(HA_EXTRA_NO_CACHE);
     if (info->read_record != rr_quick) // otherwise quick_range does it
-      (void) info->file->ha_index_or_rnd_end();
+      (void) info->table->file->ha_index_or_rnd_end();
     info->table=0;
   }
 }
@@ -357,8 +391,31 @@ static int rr_quick(READ_RECORD *info)
 
 static int rr_index_first(READ_RECORD *info)
 {
-  int tmp= info->file->index_first(info->record);
+  int tmp= info->table->file->ha_index_first(info->record);
   info->read_record= rr_index;
+  if (tmp)
+    tmp= rr_handle_error(info, tmp);
+  return tmp;
+}
+
+
+/**
+  Reads last row in an index scan.
+
+  @param info  	Scan info
+
+  @retval
+    0   Ok
+  @retval
+    -1   End of records
+  @retval
+    1   Error
+*/
+
+static int rr_index_last(READ_RECORD *info)
+{
+  int tmp= info->table->file->ha_index_last(info->record);
+  info->read_record= rr_index_desc;
   if (tmp)
     tmp= rr_handle_error(info, tmp);
   return tmp;
@@ -383,7 +440,32 @@ static int rr_index_first(READ_RECORD *info)
 
 static int rr_index(READ_RECORD *info)
 {
-  int tmp= info->file->index_next(info->record);
+  int tmp= info->table->file->ha_index_next(info->record);
+  if (tmp)
+    tmp= rr_handle_error(info, tmp);
+  return tmp;
+}
+
+
+/**
+  Reads index sequentially from the last row to the first.
+
+  Read the prev index record (in backward direction) and translate return
+  value.
+
+  @param info  Scan info
+
+  @retval
+    0   Ok
+  @retval
+    -1   End of records
+  @retval
+    1   Error
+*/
+
+static int rr_index_desc(READ_RECORD *info)
+{
+  int tmp= info->table->file->ha_index_prev(info->record);
   if (tmp)
     tmp= rr_handle_error(info, tmp);
   return tmp;
@@ -393,10 +475,10 @@ static int rr_index(READ_RECORD *info)
 int rr_sequential(READ_RECORD *info)
 {
   int tmp;
-  while ((tmp=info->file->rnd_next(info->record)))
+  while ((tmp=info->table->file->ha_rnd_next(info->record)))
   {
     /*
-      rnd_next can return RECORD_DELETED for MyISAM when one thread is
+      ha_rnd_next can return RECORD_DELETED for MyISAM when one thread is
       reading and another deleting without locks.
     */
     if (info->thd->killed || (tmp != HA_ERR_RECORD_DELETED))
@@ -416,7 +498,7 @@ static int rr_from_tempfile(READ_RECORD *info)
   {
     if (my_b_read(info->io_cache,info->ref_pos,info->ref_length))
       return -1;					/* End of file */
-    if (!(tmp=info->file->rnd_pos(info->record,info->ref_pos)))
+    if (!(tmp=info->table->file->ha_rnd_pos(info->record,info->ref_pos)))
       break;
     /* The following is extremely unlikely to happen */
     if (tmp == HA_ERR_RECORD_DELETED ||
@@ -467,7 +549,7 @@ static int rr_from_pointers(READ_RECORD *info)
     cache_pos= info->cache_pos;
     info->cache_pos+= info->ref_length;
 
-    if (!(tmp=info->file->rnd_pos(info->record,cache_pos)))
+    if (!(tmp=info->table->file->ha_rnd_pos(info->record,cache_pos)))
       break;
 
     /* The following is extremely unlikely to happen */
@@ -530,15 +612,20 @@ static int init_rr_cache(THD *thd, READ_RECORD *info)
 					   info->struct_length+1,
 					   MYF(0))))
     DBUG_RETURN(1);
-#ifdef HAVE_purify
-  // Avoid warnings in qsort
-  bzero(info->cache,rec_cache_size+info->cache_records* info->struct_length+1);
-#endif
+
   DBUG_PRINT("info",("Allocated buffert for %d records",info->cache_records));
   info->read_positions=info->cache+rec_cache_size;
   info->cache_pos=info->cache_end=info->cache;
   DBUG_RETURN(0);
 } /* init_rr_cache */
+
+
+static int rr_cmp(const void *p_ref_length, const void *a, const void *b)
+{
+  size_t ref_length= *(static_cast<size_t*>(const_cast<void*>(p_ref_length)));
+  DBUG_ASSERT(ref_length <= MAX_REFLENGTH);
+  return memcmp(a, b, ref_length);
+}
 
 
 static int rr_from_cache(READ_RECORD *info)
@@ -589,8 +676,9 @@ static int rr_from_cache(READ_RECORD *info)
       int3store(ref_position,(long) i);
       ref_position+=3;
     }
-    my_qsort(info->read_positions, length, info->struct_length,
-             (qsort_cmp) rr_cmp);
+    size_t ref_length= info->ref_length;
+    my_qsort2(info->read_positions, length, info->struct_length,
+              rr_cmp, &ref_length);
 
     position=info->read_positions;
     for (i=0 ; i < length ; i++)
@@ -600,12 +688,13 @@ static int rr_from_cache(READ_RECORD *info)
       record=uint3korr(position);
       position+=3;
       record_pos=info->cache+record*info->reclength;
-      if ((error=(int16) info->file->rnd_pos(record_pos,info->ref_pos)))
+      error= (int16) info->table->file->ha_rnd_pos(record_pos, info->ref_pos);
+      if (error)
       {
 	record_pos[info->error_offset]=1;
 	shortstore(record_pos,error);
 	DBUG_PRINT("error",("Got error: %d:%d when reading row",
-			    my_errno, error));
+			    my_errno, (int) error));
       }
       else
 	record_pos[info->error_offset]=0;
@@ -615,25 +704,15 @@ static int rr_from_cache(READ_RECORD *info)
 } /* rr_from_cache */
 
 
-static int rr_cmp(uchar *a,uchar *b)
+/**
+  The default implementation of unlock-row method of READ_RECORD,
+  used in all access methods.
+*/
+
+void rr_unlock_row(st_join_table *tab)
 {
-  if (a[0] != b[0])
-    return (int) a[0] - (int) b[0];
-  if (a[1] != b[1])
-    return (int) a[1] - (int) b[1];
-  if (a[2] != b[2])
-    return (int) a[2] - (int) b[2];
-#if MAX_REFLENGTH == 4
-  return (int) a[3] - (int) b[3];
-#else
-  if (a[3] != b[3])
-    return (int) a[3] - (int) b[3];
-  if (a[4] != b[4])
-    return (int) a[4] - (int) b[4];
-  if (a[5] != b[5])
-    return (int) a[5] - (int) b[5];
-  if (a[6] != b[6])
-    return (int) a[6] - (int) b[6];
-  return (int) a[7] - (int) b[7];
-#endif
+  READ_RECORD *info= &tab->read_record;
+  info->table->file->unlock_row();
 }
+
+

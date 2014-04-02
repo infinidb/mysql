@@ -173,9 +173,9 @@ INSERT INTO t2 values (1),(2),(3);
 INSERT INTO t3 VALUES (1,'1'),(2,'2'),(1,'1'),(2,'2');
 explain SELECT distinct t3.a FROM t3,t2,t1 WHERE t3.a=t1.b AND t1.a=t2.a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	PRIMARY	NULL	NULL	NULL	4	Using temporary
-1	SIMPLE	t3	ref	a	a	5	test.t1.b	2	Using where; Using index
-1	SIMPLE	t2	index	a	a	4	NULL	5	Using where; Using index; Distinct; Using join buffer
+1	SIMPLE	t1	ALL	PRIMARY	NULL	NULL	NULL	4	Using where; Using temporary
+1	SIMPLE	t3	ref	a	a	5	test.t1.b	2	Using index
+1	SIMPLE	t2	index	a	a	4	NULL	5	Using where; Using index; Distinct; Using join buffer (Block Nested Loop)
 SELECT distinct t3.a FROM t3,t2,t1 WHERE t3.a=t1.b AND t1.a=t2.a;
 a
 1
@@ -190,29 +190,49 @@ insert into t3 select * from t4;
 explain select distinct t1.a from t1,t3 where t1.a=t3.a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	4	Using index; Using temporary
-1	SIMPLE	t3	ref	a	a	5	test.t1.a	11	Using where; Using index; Distinct
+1	SIMPLE	t3	ref	a	a	5	test.t1.a	11	Using index; Distinct
+flush status;
 select distinct t1.a from t1,t3 where t1.a=t3.a;
 a
 1
 2
+show status like 'Handler_read%';
+Variable_name	Value
+Handler_read_first	1
+Handler_read_key	4
+Handler_read_last	0
+Handler_read_next	4
+Handler_read_prev	0
+Handler_read_rnd	0
+Handler_read_rnd_next	3
+flush status;
 select distinct 1 from t1,t3 where t1.a=t3.a;
 1
 1
+show status like 'Handler_read%';
+Variable_name	Value
+Handler_read_first	1
+Handler_read_key	1
+Handler_read_last	0
+Handler_read_next	0
+Handler_read_prev	0
+Handler_read_rnd	0
+Handler_read_rnd_next	2
 explain SELECT distinct t1.a from t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	4	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	4	Using index
 explain SELECT distinct t1.a from t1 order by a desc;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	4	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	4	Using index
 explain SELECT t1.a from t1 group by a order by a desc;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	4	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	4	Using index
 explain SELECT distinct t1.a from t1 order by a desc limit 1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	1	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	1	Using index
 explain SELECT distinct a from t3 order by a desc limit 2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t3	index	NULL	a	5	NULL	40	Using index
+1	SIMPLE	t3	index	a	a	5	NULL	40	Using index
 explain SELECT distinct a,b from t3 order by a+1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t3	ALL	NULL	NULL	NULL	NULL	204	Using temporary; Using filesort
@@ -222,6 +242,43 @@ id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 explain SELECT a,b from t3 group by a,b order by a+1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t3	ALL	NULL	NULL	NULL	NULL	204	Using temporary; Using filesort
+ SELECT distinct t1.a from t1;
+a
+1
+2
+3
+4
+ SELECT distinct t1.a from t1 order by a desc;
+a
+4
+3
+2
+1
+ SELECT t1.a from t1 group by a order by a desc;
+a
+4
+3
+2
+1
+ SELECT distinct t1.a from t1 order by a desc limit 1;
+a
+4
+ SELECT distinct a from t3 order by a desc limit 2;
+a
+2
+1
+ SELECT distinct a,b from t3 order by a+1;
+a	b
+1	1
+2	2
+ SELECT distinct a,b from t3 order by a limit 2;
+a	b
+1	1
+2	2
+ SELECT a,b from t3 group by a,b order by a+1;
+a	b
+1	1
+2	2
 drop table t1,t2,t3,t4;
 CREATE TABLE t1 (name varchar(255));
 INSERT INTO t1 VALUES ('aa'),('ab'),('ac'),('ad'),('ae');
@@ -300,12 +357,12 @@ WHERE
 AND ((t1.id=j_lj_t3.id AND t3_lj.id IS NULL) OR (t1.id=t3.id AND t3.idx=2));
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	index	id	id	4	NULL	2	Using index; Using temporary
-1	SIMPLE	t2	index	id	id	8	NULL	1	Using index; Distinct; Using join buffer
-1	SIMPLE	t3	index	id	id	8	NULL	1	Using index; Distinct; Using join buffer
-1	SIMPLE	j_lj_t2	index	id	id	4	NULL	2	Using where; Using index; Distinct; Using join buffer
-1	SIMPLE	t2_lj	ref	id	id	4	test.j_lj_t2.id	1	Using where; Using index; Distinct
-1	SIMPLE	j_lj_t3	index	id	id	4	NULL	2	Using where; Using index; Distinct; Using join buffer
-1	SIMPLE	t3_lj	ref	id	id	4	test.j_lj_t3.id	1	Using where; Using index; Distinct
+1	SIMPLE	t2	index	id	id	8	NULL	1	Using index; Distinct; Using join buffer (Block Nested Loop)
+1	SIMPLE	t3	index	id	id	8	NULL	1	Using index; Distinct; Using join buffer (Block Nested Loop)
+1	SIMPLE	j_lj_t2	index	id	id	4	NULL	2	Using where; Using index; Distinct; Using join buffer (Block Nested Loop)
+1	SIMPLE	t2_lj	index	id	id	8	NULL	1	Using where; Using index; Distinct; Using join buffer (Block Nested Loop)
+1	SIMPLE	j_lj_t3	index	id	id	4	NULL	2	Using where; Using index; Distinct; Using join buffer (Block Nested Loop)
+1	SIMPLE	t3_lj	index	id	id	8	NULL	1	Using where; Using index; Distinct; Using join buffer (Block Nested Loop)
 SELECT DISTINCT
 t1.id
 from
@@ -508,14 +565,14 @@ CREATE TABLE t1(a INT PRIMARY KEY, b INT);
 INSERT INTO t1 VALUES (1,1), (2,1), (3,1);
 EXPLAIN SELECT DISTINCT a FROM t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	3	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	3	Using index
 EXPLAIN SELECT DISTINCT a,b FROM t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	NULL
 EXPLAIN SELECT DISTINCT t1_1.a, t1_1.b FROM t1 t1_1, t1 t1_2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1_1	ALL	NULL	NULL	NULL	NULL	3	Using temporary
-1	SIMPLE	t1_2	index	NULL	PRIMARY	4	NULL	3	Using index; Distinct; Using join buffer
+1	SIMPLE	t1_2	index	NULL	PRIMARY	4	NULL	3	Using index; Distinct; Using join buffer (Block Nested Loop)
 EXPLAIN SELECT DISTINCT t1_1.a, t1_1.b FROM t1 t1_1, t1 t1_2
 WHERE t1_1.a = t1_2.a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
@@ -523,7 +580,7 @@ id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1_2	eq_ref	PRIMARY	PRIMARY	4	test.t1_1.a	1	Using index; Distinct
 EXPLAIN SELECT a FROM t1 GROUP BY a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	3	Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	4	NULL	3	Using index
 EXPLAIN SELECT a,b FROM t1 GROUP BY a,b;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using filesort
@@ -535,19 +592,19 @@ PRIMARY KEY (a,b));
 INSERT INTO t2 VALUES (1,1,1,50), (1,2,3,40), (2,1,3,4);
 EXPLAIN SELECT DISTINCT a FROM t2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	index	NULL	PRIMARY	8	NULL	3	Using index
+1	SIMPLE	t2	index	PRIMARY	PRIMARY	8	NULL	3	Using index
 EXPLAIN SELECT DISTINCT a,a FROM t2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	index	NULL	PRIMARY	8	NULL	3	Using index
+1	SIMPLE	t2	index	PRIMARY	PRIMARY	8	NULL	3	Using index
 EXPLAIN SELECT DISTINCT b,a FROM t2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	index	NULL	PRIMARY	8	NULL	3	Using index
+1	SIMPLE	t2	index	PRIMARY	PRIMARY	8	NULL	3	Using index
 EXPLAIN SELECT DISTINCT a,c FROM t2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	3	Using temporary
 EXPLAIN SELECT DISTINCT c,a,b FROM t2;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	3	
+1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	3	NULL
 EXPLAIN SELECT DISTINCT a,b,d FROM t2 GROUP BY c,b,d;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	3	Using temporary; Using filesort
@@ -604,7 +661,7 @@ INSERT INTO t1 SELECT a + 4, a + 104 FROM t1;
 INSERT INTO t1 SELECT a + 8, a + 108 FROM t1;
 EXPLAIN SELECT DISTINCT a,a FROM t1 WHERE b < 12 ORDER BY a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	8	NULL	16	Using where; Using index
+1	SIMPLE	t1	index	PRIMARY	PRIMARY	8	NULL	16	Using where; Using index
 SELECT DISTINCT a,a FROM t1 WHERE b < 12 ORDER BY a;
 a	a
 DROP TABLE t1;
@@ -708,7 +765,7 @@ CREATE TABLE t1 (a INT, UNIQUE (a));
 INSERT INTO t1 VALUES (4),(null),(2),(1),(null),(3);
 EXPLAIN SELECT DISTINCT a FROM t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	a	5	NULL	6	Using index
+1	SIMPLE	t1	index	a	a	5	NULL	6	Using index
 SELECT DISTINCT a FROM t1;
 a
 NULL
@@ -718,7 +775,7 @@ NULL
 4
 EXPLAIN SELECT a FROM t1 GROUP BY a;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	a	5	NULL	6	Using index
+1	SIMPLE	t1	index	a	a	5	NULL	6	Using index
 SELECT a FROM t1 GROUP BY a;
 a
 NULL
@@ -753,7 +810,7 @@ INSERT INTO t1(a, b, c) VALUES (1, 1, 1),
 (1, 2, 3);
 EXPLAIN SELECT DISTINCT a, b, d, c FROM t1;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	NULL	PRIMARY	16	NULL	7	Using index for group-by; Using temporary
+1	SIMPLE	t1	index	PRIMARY,a	a	16	NULL	6	Using index
 SELECT DISTINCT a, b, d, c FROM t1;
 a	b	d	c
 1	1	0	1
@@ -794,3 +851,134 @@ DROP TABLE t1;
 SET @@sort_buffer_size = @old_sort_buffer_size;
 SET @@max_heap_table_size = @old_max_heap_table_size;
 End of 5.1 tests
+#
+# Bug #11744875: 4082: integer lengths cause truncation with distinct concat and innodb
+#
+CREATE TABLE t1 (a INT(1), b INT(1));
+INSERT INTO t1 VALUES (1111, 2222), (3333, 4444);
+SELECT DISTINCT CONCAT(a,b) AS c FROM t1 ORDER BY 1;
+c
+11112222
+33334444
+DROP TABLE t1;
+#
+# Bug#16539979 BASIC SELECT COUNT(DISTINCT ID) IS BROKEN.
+# Bug#17867117 ERROR RESULT WHEN "COUNT + DISTINCT + CASE WHEN" NEED MERGE_WALK 
+#
+SET @tmp_table_size_save= @@tmp_table_size;
+SET @@tmp_table_size= 1024;
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 SELECT a+8 FROM t1;
+INSERT INTO t1 SELECT a+16 FROM t1;
+INSERT INTO t1 SELECT a+32 FROM t1;
+INSERT INTO t1 SELECT a+64 FROM t1;
+INSERT INTO t1 VALUE(NULL);
+SELECT COUNT(DISTINCT a) FROM t1;
+COUNT(DISTINCT a)
+128
+SELECT COUNT(DISTINCT (a+0)) FROM t1;
+COUNT(DISTINCT (a+0))
+128
+DROP TABLE t1;
+create table tb(
+id int auto_increment primary key,
+v varchar(32))
+engine=myisam charset=gbk;
+insert into tb(v) values("aaa");
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+insert into tb(v) (select v from tb);
+update tb set v=concat(v, id);
+select count(distinct case when id<=64 then id end) from tb;
+count(distinct case when id<=64 then id end)
+64
+select count(distinct case when id<=63 then id end) from tb;
+count(distinct case when id<=63 then id end)
+63
+drop table tb;
+SET @@tmp_table_size= @tmp_table_size_save;
+End of 5.5 tests
+#
+# Bug#13335170 - ASSERT IN
+# PLAN_CHANGE_WATCHDOG::~PLAN_CHANGE_WATCHDOG() ON SELECT DISTINCT 
+#
+CREATE TABLE t1 (
+col_int_key int(11) NOT NULL,
+col_time_key time NOT NULL,
+col_datetime_key datetime NOT NULL,
+KEY col_int_key (col_int_key),
+KEY col_time_key (col_time_key),
+KEY col_datetime_key (col_datetime_key)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (7,'06:17:39','2003-08-21 00:00:00');
+SELECT DISTINCT col_int_key
+FROM t1
+WHERE col_int_key IN  ( 18, 6, 84, 4, 0, 2, 8, 3, 7, 9, 1 )  
+AND col_datetime_key BETWEEN '2001-08-04' AND '2003-06-13'  
+ORDER BY col_time_key
+LIMIT 3;
+col_int_key
+DROP TABLE t1;
+#
+# BUG#13540692: WRONG NULL HANDLING WITH RIGHT JOIN + 
+#               DISTINCT OR ORDER BY
+#
+CREATE TABLE t1 (
+a INT,
+b INT NOT NULL
+);
+INSERT INTO t1 VALUES (1,2), (3,3);
+
+EXPLAIN SELECT DISTINCT subselect.b
+FROM t1 LEFT JOIN 
+(SELECT it_b.* FROM t1 as it_a LEFT JOIN t1 as it_b ON true) AS subselect 
+ON t1.a = subselect.b
+;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	Using temporary
+1	PRIMARY	<derived2>	ref	<auto_key0>	<auto_key0>	5	test.t1.a	2	NULL
+2	DERIVED	it_a	ALL	NULL	NULL	NULL	NULL	2	NULL
+2	DERIVED	it_b	ALL	NULL	NULL	NULL	NULL	2	Using where; Using join buffer (Block Nested Loop)
+SELECT DISTINCT subselect.b
+FROM t1 LEFT JOIN 
+(SELECT it_b.* FROM t1 as it_a LEFT JOIN t1 as it_b ON true) AS subselect 
+ON t1.a = subselect.b
+;
+b
+NULL
+3
+DROP TABLE t1;
+#
+# BUG#13538387: WRONG RESULT ON SELECT DISTINCT + LEFT JOIN + 
+#               LIMIT + MIX OF MYISAM AND INNODB
+#
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (2),(3);
+CREATE TABLE t2 (b INT);
+CREATE TABLE t3 (
+a INT,
+b INT,
+PRIMARY KEY (b)
+);
+INSERT INTO t3 VALUES (2001,1), (2007,2);
+EXPLAIN SELECT DISTINCT t3.a AS t3_date
+FROM t1
+LEFT JOIN t2 ON false
+LEFT JOIN t3 ON t2.b = t3.b
+LIMIT 1;
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t2	system	NULL	NULL	NULL	NULL	0	const row not found
+1	SIMPLE	t3	const	PRIMARY	NULL	NULL	NULL	1	Using temporary
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	Distinct
+SELECT DISTINCT t3.a AS t3_date
+FROM t1
+LEFT JOIN t2 ON false
+LEFT JOIN t3 ON t2.b = t3.b
+LIMIT 1;
+t3_date
+NULL
+DROP TABLE t1,t2,t3;

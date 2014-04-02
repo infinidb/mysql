@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,16 +11,20 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#include "sql_priv.h"
+/*
+  It is necessary to include set_var.h instead of item.h because there
+  are dependencies on include order for set_var.h and item.h. This
+  will be resolved later.
 */
-
-#ifdef __GNUC__
-#pragma implementation
-#endif
-
-#include "mysql_priv.h"
+#include "sql_class.h"                          // set_var.h: THD
+#include "sql_parse.h"                          // check_stack_overrun 
+#include "set_var.h"
 #include "my_xml.h"
 #include "sp_pcontext.h"
+#include "sql_class.h"                          // THD
 
 /*
   TODO: future development directions:
@@ -104,7 +107,7 @@ typedef struct my_xpath_st
   Item *rootelement;     /* The root element                          */
   String *context_cache; /* last context provider                     */
   String *pxml;          /* Parsed XML, an array of MY_XML_NODE       */
-  CHARSET_INFO *cs;      /* character set/collation string comparison */
+  const CHARSET_INFO *cs;/* character set/collation string comparison */
   int error;
 } MY_XPATH;
 
@@ -189,7 +192,7 @@ public:
     fltend= (MY_XPATH_FLT*) (res->ptr() + res->length());
     String active;
     active.alloc(numnodes);
-    bzero((char*) active.ptr(), numnodes);
+    memset(const_cast<char*>(active.ptr()), 0, numnodes);
     for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
     {
       MY_XML_NODE *node;
@@ -220,6 +223,9 @@ public:
   {
     max_length= MAX_BLOB_WIDTH;
     collation.collation= pxml->charset();
+    // To avoid premature evaluation, mark all nodeset functions as non-const.
+    used_tables_cache= RAND_TABLE_BIT;
+    const_item_cache= false;
   }
   const char *func_name() const { return "nodeset"; }
 };
@@ -578,7 +584,7 @@ String * Item_nodeset_func_union::val_nodeset(String *nodeset)
   String both_str;
   both_str.alloc(num_nodes);
   char *both= (char*) both_str.ptr();
-  bzero((void*)both, num_nodes);
+  memset(both, 0, num_nodes);
   MY_XPATH_FLT *flt;
 
   fltbeg= (MY_XPATH_FLT*) s0->ptr();
@@ -665,7 +671,7 @@ String *Item_nodeset_func_ancestorbyname::val_nodeset(String *nodeset)
   prepare(nodeset);
   active_str.alloc(numnodes);
   active= (char*) active_str.ptr();
-  bzero((void*)active, numnodes);
+  memset(active, 0, numnodes);
   uint pos= 0;
 
   for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
@@ -707,7 +713,7 @@ String *Item_nodeset_func_parentbyname::val_nodeset(String *nodeset)
   prepare(nodeset);
   active_str.alloc(numnodes);
   active= (char*) active_str.ptr();
-  bzero((void*)active, numnodes);
+  memset(active, 0, numnodes);
   for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
   {
     uint j= nodebeg[flt->num].parent;
@@ -1165,7 +1171,7 @@ static Item *create_func_string_length(MY_XPATH *xpath, Item **args, uint nargs)
 
 static Item *create_func_round(MY_XPATH *xpath, Item **args, uint nargs)
 {
-  return new Item_func_round(args[0], new Item_int((char*)"0",0,1),0);
+  return new Item_func_round(args[0], new Item_int_0(), 0);
 }
 
 
@@ -1331,7 +1337,7 @@ my_xpath_lex_init(MY_XPATH_LEX *lex,
 static void
 my_xpath_init(MY_XPATH *xpath)
 {
-  bzero((void*)xpath, sizeof(xpath[0]));
+  memset(xpath, 0, sizeof(xpath[0]));
 }
 
 
@@ -1543,6 +1549,7 @@ static int my_xpath_parse_VariableReference(MY_XPATH *xpath);
 
     [1] LocationPath ::=   RelativeLocationPath
                          | AbsoluteLocationPath
+    [3] RelativeLocationPath ::= RelativeLocationPath '/' Step
 
   RETURN
     1 - success
@@ -1652,6 +1659,12 @@ static int my_xpath_parse_RelativeLocationPath(MY_XPATH *xpath)
   [4] Step ::=   AxisSpecifier NodeTest Predicate*
                | AbbreviatedStep
   [8] Predicate ::= '[' PredicateExpr ']'
+  [9] PredicateExpr ::= Expr (RECURSIVE)
+  [14] Expr ::= OrExpr
+
+  reduced to:
+
+  [8b] Predicate ::= '[' OrExpr ']' (RECURSIVE)
 
   RETURN
     1 - success
@@ -1832,10 +1845,16 @@ static int my_xpath_parse_AbbreviatedStep(MY_XPATH *xpath)
   SYNOPSYS
 
   [15] PrimaryExpr ::= VariableReference	
-                       | '(' Expr ')'	
+                       | '(' Expr ')'   (RECURSIVE)
                        | Literal	
                        | Number	
                        | FunctionCall
+  [14] Expr ::= OrExpr
+
+  reduced to:
+
+  [15b] PrimaryExpr ::= '(' OrExpr ')'  (RECURSIVE)
+
   RETURN
     1 - success
     0 - failure
@@ -1871,7 +1890,12 @@ static int my_xpath_parse_PrimaryExpr(MY_XPATH *xpath)
 
   SYNOPSYS
     [16] FunctionCall ::= FunctionName '(' ( Argument ( ',' Argument )* )? ')'
-    [17] Argument      ::= Expr
+    [17] Argument      ::= Expr (RECURSIVE)
+    [14] Expr ::= OrExpr
+ 
+    reduced to:
+ 
+    [16b] FunctionCall ::= FunctionName '(' ( OrExpr ( ',' OrExpr )* )? ')' (RECURSIVE)
 
   RETURN
     1 - success
@@ -1967,6 +1991,9 @@ static int my_xpath_parse_UnionExpr(MY_XPATH *xpath)
 static int
 my_xpath_parse_FilterExpr_opt_slashes_RelativeLocationPath(MY_XPATH *xpath)
 {
+  Item *context= xpath->context;
+  int rc;
+
   if (!my_xpath_parse_FilterExpr(xpath))
     return 0;
 
@@ -1980,8 +2007,22 @@ my_xpath_parse_FilterExpr_opt_slashes_RelativeLocationPath(MY_XPATH *xpath)
     return 0;
   }
 
-  my_xpath_parse_term(xpath, MY_XPATH_LEX_SLASH);
-  return my_xpath_parse_RelativeLocationPath(xpath);
+  /*
+    The context for the next relative path is the nodeset
+    returned by FilterExpr
+  */
+  xpath->context= xpath->item;
+
+  /* treat double slash (//) as /descendant-or-self::node()/ */
+  if (my_xpath_parse_term(xpath, MY_XPATH_LEX_SLASH))
+    xpath->context= new Item_nodeset_func_descendantbyname(xpath->context,
+                                                           "*", 1, xpath->pxml, 1);
+  rc= my_xpath_parse_RelativeLocationPath(xpath);
+
+  /* push back the context and restore the item */
+  xpath->item= xpath->context;
+  xpath->context= context;
+  return rc;
 }
 static int my_xpath_parse_PathExpr(MY_XPATH *xpath)
 {
@@ -2026,6 +2067,12 @@ static int my_xpath_parse_FilterExpr(MY_XPATH *xpath)
 */
 static int my_xpath_parse_OrExpr(MY_XPATH *xpath)
 {
+  THD *thd= current_thd;
+  uchar stack_top;
+
+  if (check_stack_overrun(thd, STACK_MIN_SIZE, &stack_top))
+   return 1;
+
   if (!my_xpath_parse_AndExpr(xpath))
     return 0;
 
@@ -2466,17 +2513,18 @@ my_xpath_parse_VariableReference(MY_XPATH *xpath)
   name.str= (char*) xpath->prevtok.beg;
   
   if (user_var)
-    xpath->item= new Item_func_get_user_var(name);
+    xpath->item= new Item_func_get_user_var(Name_string(name, false));
   else
   {
-    sp_variable_t *spv;
+    sp_variable *spv;
     sp_pcontext *spc;
     LEX *lex;
     if ((lex= current_thd->lex) &&
-        (spc= lex->spcont) &&
-        (spv= spc->find_variable(&name)))
+        (spc= lex->get_sp_current_parsing_ctx()) &&
+        (spv= spc->find_variable(name, false)))
     {
-      Item_splocal *splocal= new Item_splocal(name, spv->offset, spv->type, 0);
+      Item_splocal *splocal= new Item_splocal(Name_string(name, false),
+                                              spv->offset, spv->type, 0);
 #ifndef DBUG_OFF
       if (splocal)
         splocal->m_sp= lex->sphead;
@@ -2565,13 +2613,9 @@ my_xpath_parse(MY_XPATH *xpath, const char *str, const char *strend)
 
 void Item_xml_str_func::fix_length_and_dec()
 {
-  String *xp, tmp;
-  MY_XPATH xpath;
-  int rc;
-
   nodeset_func= 0;
 
-  if (agg_arg_charsets(collation, args, arg_count, MY_COLL_CMP_CONV, 1))
+  if (agg_arg_charsets_for_comparison(collation, args, arg_count))
     return;
 
   if (collation.collation->mbminlen > 1)
@@ -2583,22 +2627,34 @@ void Item_xml_str_func::fix_length_and_dec()
     return;
   }
 
-  if (!args[1]->const_item())
+  if (!args[1]->const_during_execution())
   {
     my_printf_error(ER_UNKNOWN_ERROR,
                     "Only constant XPATH queries are supported", MYF(0));
     return;
   }
 
-  if (!(xp= args[1]->val_str(&tmp)))
+  if (args[1]->const_item())
+    parse_xpath(args[1]);
+
+  max_length= MAX_BLOB_WIDTH;
+}
+
+void Item_xml_str_func::parse_xpath(Item* xpath_expr)
+{
+  String *xp, tmp;
+  MY_XPATH xpath;
+
+  if (!(xp= xpath_expr->val_str(&tmp)))
     return;
+
   my_xpath_init(&xpath);
   xpath.cs= collation.collation;
   xpath.debug= 0;
   xpath.pxml= &pxml;
   pxml.set_charset(collation.collation);
 
-  rc= my_xpath_parse(&xpath, xp->ptr(), xp->ptr() + xp->length());
+  int rc= my_xpath_parse(&xpath, xp->ptr(), xp->ptr() + xp->length());
 
   if (!rc)
   {
@@ -2612,7 +2668,6 @@ void Item_xml_str_func::fix_length_and_dec()
   nodeset_func= xpath.item;
   if (nodeset_func)
     nodeset_func->fix_fields(current_thd, &nodeset_func);
-  max_length= MAX_BLOB_WIDTH;
 }
 
 
@@ -2780,7 +2835,7 @@ String *Item_xml_str_func::parse_xml(String *raw_xml, String *parsed_xml_buf)
                 my_xml_error_lineno(&p) + 1,
                 (ulong) my_xml_error_pos(&p) + 1,
                 my_xml_error_string(&p));
-    push_warning_printf(current_thd, MYSQL_ERROR::WARN_LEVEL_WARN,
+    push_warning_printf(current_thd, Sql_condition::WARN_LEVEL_WARN,
                         ER_WRONG_VALUE,
                         ER(ER_WRONG_VALUE), "XML", buf);
   }
@@ -2794,6 +2849,8 @@ String *Item_func_xml_extractvalue::val_str(String *str)
 {
   String *res;
   null_value= 0;
+  if (!nodeset_func)
+    parse_xpath(args[1]);
   if (!nodeset_func ||
       !(res= args[0]->val_str(str)) || 
       !parse_xml(res, &pxml) ||
@@ -2811,6 +2868,8 @@ String *Item_func_xml_update::val_str(String *str)
   String *res, *nodeset, *rep;
 
   null_value= 0;
+  if (!nodeset_func)
+    parse_xpath(args[1]);
   if (!nodeset_func || 
       !(res= args[0]->val_str(str)) ||
       !(rep= args[2]->val_str(&tmp_value3)) ||

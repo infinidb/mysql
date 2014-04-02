@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2002-2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "heapdef.h"
 
@@ -63,7 +63,12 @@ int heap_rkey(HP_INFO *info, uchar *record, int inx, const uchar *key,
       info->update= 0;
       DBUG_RETURN(my_errno);
     }
-    if (!(keyinfo->flag & HA_NOSAME) || (keyinfo->flag & HA_END_SPACE_KEY))
+    /*
+      If key is unique and can accept NULL values, we still
+      need to copy it to info->lastkey, which in turn is used
+      to search subsequent records.
+    */
+    if (!(keyinfo->flag & HA_NOSAME) || (keyinfo->flag & HA_NULL_PART_KEY))
       memcpy(info->lastkey, key, (size_t) keyinfo->length);
   }
   memcpy(record, pos, (size_t) share->reclength);

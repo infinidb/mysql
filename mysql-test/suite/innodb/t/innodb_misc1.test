@@ -1,18 +1,3 @@
-#######################################################################
-#                                                                     #
-# Please, DO NOT TOUCH this file as well as the innodb.result file.   #
-# These files are to be modified ONLY BY INNOBASE guys.               #
-#                                                                     #
-# Use innodb_mysql.[test|result] files instead.                       #
-#                                                                     #
-# If nevertheless you need to make some changes here, please, forward #
-# your commit message                                                 #
-# To: innodb_dev_ww@oracle.com                                        #
-# Cc: dev-innodb@mysql.com                                            #
-# (otherwise your changes may be erased).                             #
-#                                                                     #
-#######################################################################
-
 -- source include/have_innodb.inc
 
 let $MYSQLD_DATADIR= `select @@datadir`;
@@ -124,6 +109,7 @@ FOREIGN KEY (id) REFERENCES t1 (id)
 
 INSERT INTO t1 (id) VALUES (NULL);
 SELECT * FROM t1;
+--error ER_TRUNCATE_ILLEGAL_FK
 TRUNCATE t1;
 INSERT INTO t1 (id) VALUES (NULL);
 SELECT * FROM t1;
@@ -131,6 +117,7 @@ SELECT * FROM t1;
 # continued from above; test that doing a slow TRUNCATE on a table with 0
 # rows resets autoincrement columns
 DELETE FROM t1;
+--error ER_TRUNCATE_ILLEGAL_FK
 TRUNCATE t1;
 INSERT INTO t1 (id) VALUES (NULL);
 SELECT * FROM t1;
@@ -142,7 +129,7 @@ CREATE TABLE t1
  id INT PRIMARY KEY
 ) ENGINE=InnoDB;
 
---error 1005,1005
+--error ER_CANNOT_ADD_FOREIGN
 CREATE TEMPORARY TABLE t2
 (
  id INT NOT NULL PRIMARY KEY,
@@ -175,13 +162,9 @@ create table t7 (col1 text, index(col1(767)))
 create table t8 (col1 blob, index(col1(767)))
  character set = latin1 engine = innodb;
 
-# multi-column indexes are allowed to be longer
-create table t9 (col1 varchar(512), col2 varchar(512), index(col1, col2))
- character set = latin1 engine = innodb;
+# multi-column tests can be found in innodb_16k, innodb_8k & innodb_4k
 
-show create table t9;
-
-drop table t1, t2, t3, t4, t5, t6, t7, t8, t9;
+drop table t1, t2, t3, t4, t5, t6, t7, t8;
 
 # these should have their index length trimmed
 create table t1 (col1 varchar(768), index(col1))
@@ -198,16 +181,16 @@ show create table t1;
 drop table t1, t2, t3, t4;
 
 # these should be refused
---error 1071
+--error ER_TOO_LONG_KEY
 create table t1 (col1 varchar(768) primary key)
  character set = latin1 engine = innodb;
---error 1071
+--error ER_TOO_LONG_KEY
 create table t2 (col1 varbinary(768) primary key)
  character set = latin1 engine = innodb;
---error 1071
+--error ER_TOO_LONG_KEY
 create table t3 (col1 text, primary key(col1(768)))
  character set = latin1 engine = innodb;
---error 1071
+--error ER_TOO_LONG_KEY
 create table t4 (col1 blob, primary key(col1(768)))
  character set = latin1 engine = innodb;
 
@@ -296,9 +279,7 @@ disconnect b;
 
 set foreign_key_checks=0;
 create table t2 (a int primary key, b int, foreign key (b) references t1(a)) engine = innodb;
-# Embedded server doesn't chdir to data directory
---replace_result $MYSQLTEST_VARDIR . mysqld.1/data/ ''
--- error 1005
+--error ER_CANNOT_ADD_FOREIGN
 create table t1(a char(10) primary key, b varchar(20)) engine = innodb;
 set foreign_key_checks=1;
 drop table t2;
@@ -308,9 +289,7 @@ drop table t2;
 
 set foreign_key_checks=0;
 create table t1(a varchar(10) primary key) engine = innodb DEFAULT CHARSET=latin1;
-# Embedded server doesn't chdir to data directory
---replace_result $MYSQLTEST_VARDIR . mysqld.1/data/ ''
--- error 1005
+--error ER_CANNOT_ADD_FOREIGN
 create table t2 (a varchar(10), foreign key (a) references t1(a)) engine = innodb DEFAULT CHARSET=utf8;
 set foreign_key_checks=1;
 drop table t1;
@@ -369,35 +348,24 @@ update t2 set a=2;
 update t3 set a=2;
 -- error 1452
 update t4 set a=2;
--- error 1451
+-- error ER_TRUNCATE_ILLEGAL_FK
 truncate t1;
--- error 1451
+-- error ER_TRUNCATE_ILLEGAL_FK
 truncate t3;
 truncate t2;
 truncate t4;
+-- error ER_TRUNCATE_ILLEGAL_FK
 truncate t1;
+-- error ER_TRUNCATE_ILLEGAL_FK
 truncate t3;
 
 drop table t4,t3,t2,t1;
 
-
 #
 # Test that we can create a large (>1K) key
+# Moved to innodb_16k, innodb_8k, and innodb_4k
+# since each page size has its own maximum key length.
 #
-create table t1 (a varchar(255) character set utf8,
-                 b varchar(255) character set utf8,
-                 c varchar(255) character set utf8,
-                 d varchar(255) character set utf8,
-                 key (a,b,c,d)) engine=innodb;
-drop table t1;
---error ER_TOO_LONG_KEY
-create table t1 (a varchar(255) character set utf8,
-                 b varchar(255) character set utf8,
-                 c varchar(255) character set utf8,
-                 d varchar(255) character set utf8,
-                 e varchar(255) character set utf8,
-                 key (a,b,c,d,e)) engine=innodb;
-
 
 # test the padding of BINARY types and collations (Bug #14189)
 
@@ -488,93 +456,99 @@ DROP TABLE t2,t1;
 #
 # Test case for bug #16229: MySQL/InnoDB uses full explicit table locks in trigger processing
 #
-
-connect (a,localhost,root,,);
-connect (b,localhost,root,,);
-connection a;
-create table t1(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-insert into t1(a) values (1),(2),(3);
-commit;
-connection b;
-set autocommit = 0;
-update t1 set b = 5 where a = 2;
-connection a;
-delimiter |;
-create trigger t1t before insert on t1 for each row begin set NEW.b = NEW.a * 10 + 5, NEW.c = NEW.a / 10; end |
-delimiter ;|
-set autocommit = 0;
-connection a;
-insert into t1(a) values (10),(20),(30),(40),(50),(60),(70),(80),(90),(100),
-(11),(21),(31),(41),(51),(61),(71),(81),(91),(101),
-(12),(22),(32),(42),(52),(62),(72),(82),(92),(102),
-(13),(23),(33),(43),(53),(63),(73),(83),(93),(103),
-(14),(24),(34),(44),(54),(64),(74),(84),(94),(104);
-connection b;
-commit;
-connection a;
-commit;
-drop trigger t1t;
-drop table t1;
-disconnect a;
-disconnect b;
+## the following cannot be tested after the introduction of metadata locks
+## because the create trigger command blocks and waits for connection b to
+## commit
+## begin disabled_mdl
+#connect (a,localhost,root,,);
+#connect (b,localhost,root,,);
+#connection a;
+#create table t1(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#insert into t1(a) values (1),(2),(3);
+#commit;
+#delimiter |;
+## in 5.5+, this needs to be created before the UPDATE due to meta-data locking
+#create trigger t1t before insert on t1 for each row begin set NEW.b = NEW.a * 10 + 5, NEW.c = NEW.a / 10; end |
+#delimiter ;|
+#connection b;
+#set autocommit = 0;
+#update t1 set b = 5 where a = 2;
+#connection a;
+#set autocommit = 0;
+#connection a;
+#insert into t1(a) values (10),(20),(30),(40),(50),(60),(70),(80),(90),(100),
+#(11),(21),(31),(41),(51),(61),(71),(81),(91),(101),
+#(12),(22),(32),(42),(52),(62),(72),(82),(92),(102),
+#(13),(23),(33),(43),(53),(63),(73),(83),(93),(103),
+#(14),(24),(34),(44),(54),(64),(74),(84),(94),(104);
+#connection b;
+#commit;
+#connection a;
+#commit;
+#drop trigger t1t;
+#drop table t1;
+#disconnect a;
+#disconnect b;
+##
+## Another trigger test
+##
+#connect (a,localhost,root,,);
+#connect (b,localhost,root,,);
+#connection a;
+#create table t1(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#create table t2(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#create table t3(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#create table t4(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#create table t5(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
+#insert into t1(a) values (1),(2),(3);
+#insert into t2(a) values (1),(2),(3);
+#insert into t3(a) values (1),(2),(3);
+#insert into t4(a) values (1),(2),(3);
+#insert into t3(a) values (5),(7),(8);
+#insert into t4(a) values (5),(7),(8);
+#insert into t5(a) values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12);
 #
-# Another trigger test
+#delimiter |;
+#create trigger t1t before insert on t1 for each row begin
+#    INSERT INTO t2 SET a = NEW.a;
+#end |
 #
-connect (a,localhost,root,,);
-connect (b,localhost,root,,);
-connection a;
-create table t1(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-create table t2(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-create table t3(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-create table t4(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-create table t5(a int not null, b int, c int, d int, primary key(a)) engine=innodb;
-insert into t1(a) values (1),(2),(3);
-insert into t2(a) values (1),(2),(3);
-insert into t3(a) values (1),(2),(3);
-insert into t4(a) values (1),(2),(3);
-insert into t3(a) values (5),(7),(8);
-insert into t4(a) values (5),(7),(8);
-insert into t5(a) values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12);
-
-delimiter |;
-create trigger t1t before insert on t1 for each row begin 
-    INSERT INTO t2 SET a = NEW.a;
-end |
-
-create trigger t2t before insert on t2 for each row begin
-    DELETE FROM t3 WHERE a = NEW.a;
-end |
-
-create trigger t3t before delete on t3 for each row begin  
-    UPDATE t4 SET b = b + 1 WHERE a = OLD.a;
-end |
-
-create trigger t4t before update on t4 for each row begin
-    UPDATE t5 SET b = b + 1 where a = NEW.a;
-end |
-delimiter ;|
-commit;
-set autocommit = 0;
-update t1 set b = b + 5 where a = 1;
-update t2 set b = b + 5 where a = 1;
-update t3 set b = b + 5 where a = 1;
-update t4 set b = b + 5 where a = 1;
-insert into t5(a) values(20);
-connection b;
-set autocommit = 0;
-insert into t1(a) values(7);
-insert into t2(a) values(8);
-delete from t2 where a = 3;
-update t4 set b = b + 1 where a = 3;
-commit;
-drop trigger t1t;
-drop trigger t2t;
-drop trigger t3t;
-drop trigger t4t;
-drop table t1, t2, t3, t4, t5;
-connection default;
-disconnect a;
-disconnect b;
+#create trigger t2t before insert on t2 for each row begin
+#    DELETE FROM t3 WHERE a = NEW.a;
+#end |
+#
+#create trigger t3t before delete on t3 for each row begin
+#    UPDATE t4 SET b = b + 1 WHERE a = OLD.a;
+#end |
+#
+#create trigger t4t before update on t4 for each row begin
+#    UPDATE t5 SET b = b + 1 where a = NEW.a;
+#end |
+#delimiter ;|
+#commit;
+#set autocommit = 0;
+#update t1 set b = b + 5 where a = 1;
+#update t2 set b = b + 5 where a = 1;
+#update t3 set b = b + 5 where a = 1;
+#update t4 set b = b + 5 where a = 1;
+#insert into t5(a) values(20);
+#connection b;
+#set autocommit = 0;
+#insert into t1(a) values(7);
+#insert into t2(a) values(8);
+#delete from t2 where a = 3;
+#update t4 set b = b + 1 where a = 3;
+#commit;
+#connection a;
+#drop trigger t1t;
+#drop trigger t2t;
+#drop trigger t3t;
+#drop trigger t4t;
+#drop table t1, t2, t3, t4, t5;
+#connection default;
+#disconnect a;
+#disconnect b;
+## end disabled_mdl
 
 #
 # Test that cascading updates leading to duplicate keys give the correct
@@ -599,7 +573,7 @@ INSERT INTO t1 VALUES ('other', 'anyvalue');
 INSERT INTO t2 VALUES ('old');
 INSERT INTO t2 VALUES ('other');
 
---error ER_FOREIGN_DUPLICATE_KEY
+--error ER_FOREIGN_DUPLICATE_KEY_WITH_CHILD_INFO
 UPDATE t1 SET field1 = 'other' WHERE field2 = 'somevalu';
 
 DROP TABLE t2;
@@ -668,7 +642,7 @@ create table t1(a int not null, b int, primary key(a)) engine=innodb;
 insert into t1 values(1,1),(2,2),(3,1),(4,2),(5,1),(6,2),(7,3);
 commit;
 SET binlog_format='MIXED';
-set autocommit = 0; 
+set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t1 set b = 5 where b = 1;
 connection b;
@@ -676,7 +650,7 @@ SET binlog_format='MIXED';
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 #
-# X-lock to record (7,3) should be released in a update 
+# X-lock to record (7,3) should be released in a update
 #
 select * from t1 where a = 7 and b = 3 for update;
 connection a;
@@ -699,7 +673,7 @@ connection a;
 create table t1(a int not null, b int, primary key(a)) engine=innodb;
 insert into t1 values(1,1),(2,2),(3,1),(4,2),(5,1),(6,2);
 commit;
-set autocommit = 0; 
+set autocommit = 0;
 select * from t1 lock in share mode;
 update t1 set b = 5 where b = 1;
 connection b;
@@ -756,7 +730,7 @@ disconnect b;
 drop table t1, t2, t3;
 
 #
-# Consistent read should not be used if 
+# Consistent read should not be used if
 #
 # (a) isolation level is serializable OR
 # (b) select ... lock in share mode OR
@@ -884,7 +858,7 @@ connection i;
 reap;
 
 connection j;
---error 1205
+--error ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT
 reap;
 
 connection a;
@@ -904,7 +878,7 @@ disconnect j;
 drop table t1, t2, t3, t5, t6, t8, t9;
 
 # bug 18934, "InnoDB crashes when table uses column names like DB_ROW_ID"
---error 1005
+--error ER_WRONG_COLUMN_NAME
 CREATE TABLE t1 (DB_ROW_ID int) engine=innodb;
 
 #
@@ -921,8 +895,8 @@ CREATE TABLE t2 (
   b VARCHAR(128) NOT NULL,
   c TEXT NOT NULL,
   PRIMARY KEY  (a,b),
-  KEY idx_t2_b_c (b,c(200)),
-  CONSTRAINT t_fk FOREIGN KEY (a) REFERENCES t1 (a) 
+  KEY idx_t2_b_c (b,c(100)),
+  CONSTRAINT t_fk FOREIGN KEY (a) REFERENCES t1 (a)
    ON DELETE CASCADE
  ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
 
@@ -977,12 +951,12 @@ CREATE TABLE t2 (a INT, INDEX(a)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 ALTER TABLE t2 ADD FOREIGN KEY (a) REFERENCES t1 (a) ON DELETE SET NULL;
-# mysqltest first does replace_regex, then replace_result
---replace_regex /'[^']*test\/#sql-[0-9a-f_]*'/'#sql-temporary'/
-# Embedded server doesn't chdir to data directory
---replace_result $MYSQLD_DATADIR ./ master-data/ ''
---error 1025
+# NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
+SET @old_sql_mode = @@sql_mode;
+SET @@sql_mode = 'STRICT_TRANS_TABLES';
+--error ER_FK_COLUMN_NOT_NULL
 ALTER TABLE t2 MODIFY a INT NOT NULL;
+SET @@sql_mode = @old_sql_mode;
 DELETE FROM t1;
 DROP TABLE t2,t1;
 
@@ -1021,7 +995,9 @@ DROP TABLE t1,t2;
 #
 # Bug #21101 (Prints wrong error message if max row size is too large)
 #
---error 1118
+SET innodb_strict_mode=ON;
+--replace_result 8126 {checked_valid} 4030 {checked_valid} 1982 {checked_valid}
+--error ER_TOO_BIG_ROWSIZE
 CREATE TABLE t1 (
 	c01 CHAR(255), c02 CHAR(255), c03 CHAR(255), c04 CHAR(255),
 	c05 CHAR(255), c06 CHAR(255), c07 CHAR(255), c08 CHAR(255),
@@ -1032,6 +1008,7 @@ CREATE TABLE t1 (
 	c25 CHAR(255), c26 CHAR(255), c27 CHAR(255), c28 CHAR(255),
 	c29 CHAR(255), c30 CHAR(255), c31 CHAR(255), c32 CHAR(255)
 	) ENGINE = InnoDB;
+SET innodb_strict_mode=OFF;
 
 #
 # Bug #31860 InnoDB assumes AUTOINC values can only be positive.
@@ -1044,7 +1021,7 @@ INSERT INTO t1 VALUES(-10);
 SELECT * FROM t1;
 #
 # NOTE: The server really needs to be restarted at this point
-# for the test to be useful.  
+# for the test to be useful.
 #
 # Without the fix InnoDB would trip over an assertion here.
 INSERT INTO t1 VALUES(NULL);
@@ -1052,7 +1029,7 @@ INSERT INTO t1 VALUES(NULL);
 SELECT * FROM t1;
 DROP TABLE t1;
 
-# 
+#
 # Bug #21409 Incorrect result returned when in READ-COMMITTED with
 # query_cache ON
 #
@@ -1113,11 +1090,14 @@ drop table t1;
 # Bug #32440 InnoDB free space info does not appear in SHOW TABLE STATUS or
 # I_S
 #
+set @save_innodb_file_per_table= @@global.innodb_file_per_table;
+set @@global.innodb_file_per_table=0;
 create table t1 (id int) comment='this is a comment' engine=innodb;
 select table_comment, data_free > 0 as data_free_is_set
   from information_schema.tables
   where table_schema='test' and table_name = 't1';
 drop table t1;
+set @@global.innodb_file_per_table= @save_innodb_file_per_table;
 
 #
 # Bug 34920 test
@@ -1189,18 +1169,3 @@ DISCONNECT c1;
 CONNECTION default;
 
 SET GLOBAL innodb_thread_concurrency = @innodb_thread_concurrency_orig;
-
-#######################################################################
-#                                                                     #
-# Please, DO NOT TOUCH this file as well as the innodb.result file.   #
-# These files are to be modified ONLY BY INNOBASE guys.               #
-#                                                                     #
-# Use innodb_mysql.[test|result] files instead.                       #
-#                                                                     #
-# If nevertheless you need to make some changes here, please, forward #
-# your commit message                                                 #
-# To: innodb_dev_ww@oracle.com                                        #
-# Cc: dev-innodb@mysql.com                                            #
-# (otherwise your changes may be erased).                             #
-#                                                                     #
-#######################################################################

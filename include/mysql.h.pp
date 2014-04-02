@@ -11,6 +11,7 @@ enum enum_server_command
   COM_TABLE_DUMP, COM_CONNECT_OUT, COM_REGISTER_SLAVE,
   COM_STMT_PREPARE, COM_STMT_EXECUTE, COM_STMT_SEND_LONG_DATA, COM_STMT_CLOSE,
   COM_STMT_RESET, COM_SET_OPTION, COM_STMT_FETCH, COM_DAEMON,
+  COM_BINLOG_DUMP_GTID,
   COM_END
 };
 struct st_vio;
@@ -27,15 +28,15 @@ typedef struct st_net {
   unsigned int *return_status;
   unsigned char reading_or_writing;
   char save_char;
-  my_bool unused0;
-  my_bool unused;
-  my_bool compress;
   my_bool unused1;
-  unsigned char *query_cache_query;
+  my_bool unused2;
+  my_bool compress;
+  my_bool unused3;
+  unsigned char *unused;
   unsigned int last_errno;
   unsigned char error;
-  my_bool unused2;
-  my_bool return_errno;
+  my_bool unused4;
+  my_bool unused5;
   char last_error[512];
   char sqlstate[5 +1];
   void *extension;
@@ -49,6 +50,9 @@ enum enum_field_types { MYSQL_TYPE_DECIMAL, MYSQL_TYPE_TINY,
    MYSQL_TYPE_DATETIME, MYSQL_TYPE_YEAR,
    MYSQL_TYPE_NEWDATE, MYSQL_TYPE_VARCHAR,
    MYSQL_TYPE_BIT,
+   MYSQL_TYPE_TIMESTAMP2,
+   MYSQL_TYPE_DATETIME2,
+   MYSQL_TYPE_TIME2,
                         MYSQL_TYPE_NEWDECIMAL=246,
    MYSQL_TYPE_ENUM=247,
    MYSQL_TYPE_SET=248,
@@ -85,18 +89,15 @@ enum enum_mysql_set_option
 my_bool my_net_init(NET *net, Vio* vio);
 void my_net_local_init(NET *net);
 void net_end(NET *net);
-  void net_clear(NET *net, my_bool clear_buffer);
+void net_clear(NET *net, my_bool check_buffer);
 my_bool net_realloc(NET *net, size_t length);
 my_bool net_flush(NET *net);
 my_bool my_net_write(NET *net,const unsigned char *packet, size_t len);
 my_bool net_write_command(NET *net,unsigned char command,
      const unsigned char *header, size_t head_len,
      const unsigned char *packet, size_t len);
-int net_real_write(NET *net,const unsigned char *packet, size_t len);
+my_bool net_write_packet(NET *net, const unsigned char *packet, size_t length);
 unsigned long my_net_read(NET *net);
-struct sockaddr;
-int my_connect(my_socket s, const struct sockaddr *name, unsigned int namelen,
-        unsigned int timeout);
 struct rand_struct {
   unsigned long seed1,seed2,max_value;
   double max_value_dbl;
@@ -130,13 +131,13 @@ void create_random_string(char *to, unsigned int length, struct rand_struct *ran
 void hash_password(unsigned long *to, const char *password, unsigned int password_len);
 void make_scrambled_password_323(char *to, const char *password);
 void scramble_323(char *to, const char *message, const char *password);
-my_bool check_scramble_323(const char *, const char *message,
+my_bool check_scramble_323(const unsigned char *reply, const char *message,
                            unsigned long *salt);
 void get_salt_from_password_323(unsigned long *res, const char *password);
 void make_password_from_salt_323(char *to, const unsigned long *salt);
 void make_scrambled_password(char *to, const char *password);
 void scramble(char *to, const char *message, const char *password);
-my_bool check_scramble(const char *reply, const char *message,
+my_bool check_scramble(const unsigned char *reply, const char *message,
                        const unsigned char *hash_stage2);
 void get_salt_from_password(unsigned char *res, const char *password);
 void make_password_from_salt(char *to, const unsigned char *hash_stage2);
@@ -227,11 +228,15 @@ typedef struct st_typelib {
 extern my_ulonglong find_typeset(char *x, TYPELIB *typelib,int *error_position);
 extern int find_type_or_exit(const char *x, TYPELIB *typelib,
                              const char *option);
-extern int find_type(char *x, const TYPELIB *typelib, unsigned int full_name);
+extern int find_type(const char *x, const TYPELIB *typelib, unsigned int flags);
 extern void make_type(char *to,unsigned int nr,TYPELIB *typelib);
 extern const char *get_type(TYPELIB *typelib,unsigned int nr);
 extern TYPELIB *copy_typelib(MEM_ROOT *root, TYPELIB *from);
 extern TYPELIB sql_protocol_typelib;
+my_ulonglong find_set_from_flags(const TYPELIB *lib, unsigned int default_name,
+                              my_ulonglong cur_set, my_ulonglong default_set,
+                              const char *str, unsigned int length,
+                              char **err_pos, unsigned int *err_len);
 typedef struct st_mysql_rows {
   struct st_mysql_rows *next;
   MYSQL_ROW data;
@@ -258,8 +263,18 @@ enum mysql_option
   MYSQL_OPT_USE_REMOTE_CONNECTION, MYSQL_OPT_USE_EMBEDDED_CONNECTION,
   MYSQL_OPT_GUESS_CONNECTION, MYSQL_SET_CLIENT_IP, MYSQL_SECURE_AUTH,
   MYSQL_REPORT_DATA_TRUNCATION, MYSQL_OPT_RECONNECT,
-  MYSQL_OPT_SSL_VERIFY_SERVER_CERT
+  MYSQL_OPT_SSL_VERIFY_SERVER_CERT, MYSQL_PLUGIN_DIR, MYSQL_DEFAULT_AUTH,
+  MYSQL_OPT_BIND,
+  MYSQL_OPT_SSL_KEY, MYSQL_OPT_SSL_CERT,
+  MYSQL_OPT_SSL_CA, MYSQL_OPT_SSL_CAPATH, MYSQL_OPT_SSL_CIPHER,
+  MYSQL_OPT_SSL_CRL, MYSQL_OPT_SSL_CRLPATH,
+  MYSQL_OPT_CONNECT_ATTR_RESET, MYSQL_OPT_CONNECT_ATTR_ADD,
+  MYSQL_OPT_CONNECT_ATTR_DELETE,
+  MYSQL_SERVER_PUBLIC_KEY,
+  MYSQL_ENABLE_CLEARTEXT_PLUGIN,
+  MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS
 };
+struct st_mysql_options_extention;
 struct st_mysql_options {
   unsigned int connect_timeout, read_timeout, write_timeout;
   unsigned int port, protocol;
@@ -276,12 +291,15 @@ struct st_mysql_options {
   unsigned long max_allowed_packet;
   my_bool use_ssl;
   my_bool compress,named_pipe;
-  my_bool rpl_probe;
-  my_bool rpl_parse;
-  my_bool no_master_reads;
-  my_bool separate_thread;
+  my_bool unused1;
+  my_bool unused2;
+  my_bool unused3;
+  my_bool unused4;
   enum mysql_option methods_to_use;
-  char *client_ip;
+  union {
+    char *client_ip;
+    char *bind_address;
+  } ci;
   my_bool secure_auth;
   my_bool report_data_truncation;
   int (*local_infile_init)(void **, const char *, void *);
@@ -289,7 +307,7 @@ struct st_mysql_options {
   void (*local_infile_end)(void *);
   int (*local_infile_error)(void *, char *, unsigned int);
   void *local_infile_userdata;
-  void *extension;
+  struct st_mysql_options_extention *extension;
 };
 enum mysql_status
 {
@@ -300,10 +318,6 @@ enum mysql_protocol_type
 {
   MYSQL_PROTOCOL_DEFAULT, MYSQL_PROTOCOL_TCP, MYSQL_PROTOCOL_SOCKET,
   MYSQL_PROTOCOL_PIPE, MYSQL_PROTOCOL_MEMORY
-};
-enum mysql_rpl_type
-{
-  MYSQL_RPL_MASTER, MYSQL_RPL_SLAVE, MYSQL_RPL_ADMIN
 };
 typedef struct character_set
 {
@@ -344,10 +358,8 @@ typedef struct st_mysql
   my_bool free_me;
   my_bool reconnect;
   char scramble[20 +1];
-  my_bool rpl_pivot;
-  struct st_mysql* master, *next_slave;
-  struct st_mysql* last_used_slave;
-  struct st_mysql* last_used_con;
+  my_bool unused1;
+  void *unused2, *unused3, *unused4, *unused5;
   LIST *stmts;
   const struct st_mysql_methods *methods;
   void *thd;
@@ -371,20 +383,6 @@ typedef struct st_mysql_res {
   my_bool unbuffered_fetch_cancelled;
   void *extension;
 } MYSQL_RES;
-typedef struct st_mysql_manager
-{
-  NET net;
-  char *host, *user, *passwd;
-  char *net_buf, *net_buf_pos, *net_data_end;
-  unsigned int port;
-  int cmd_status;
-  int last_errno;
-  int net_buf_size;
-  my_bool free_me;
-  my_bool eof;
-  char last_error[256];
-  void *extension;
-} MYSQL_MANAGER;
 typedef struct st_mysql_parameters
 {
   unsigned long *p_max_allowed_packet;
@@ -437,14 +435,6 @@ int mysql_real_query(MYSQL *mysql, const char *q,
      unsigned long length);
 MYSQL_RES * mysql_store_result(MYSQL *mysql);
 MYSQL_RES * mysql_use_result(MYSQL *mysql);
-my_bool mysql_master_query(MYSQL *mysql, const char *q,
-        unsigned long length);
-my_bool mysql_master_send_query(MYSQL *mysql, const char *q,
-      unsigned long length);
-my_bool mysql_slave_query(MYSQL *mysql, const char *q,
-       unsigned long length);
-my_bool mysql_slave_send_query(MYSQL *mysql, const char *q,
-            unsigned long length);
 void mysql_get_character_set_info(MYSQL *mysql,
                            MY_CHARSET_INFO *charset);
 void
@@ -459,22 +449,6 @@ mysql_set_local_infile_handler(MYSQL *mysql,
                                void *);
 void
 mysql_set_local_infile_default(MYSQL *mysql);
-void mysql_enable_rpl_parse(MYSQL* mysql);
-void mysql_disable_rpl_parse(MYSQL* mysql);
-int mysql_rpl_parse_enabled(MYSQL* mysql);
-void mysql_enable_reads_from_master(MYSQL* mysql);
-void mysql_disable_reads_from_master(MYSQL* mysql);
-my_bool mysql_reads_from_master_enabled(MYSQL* mysql);
-enum mysql_rpl_type mysql_rpl_query_type(const char* q, int len);
-my_bool mysql_rpl_probe(MYSQL* mysql);
-int mysql_set_master(MYSQL* mysql, const char* host,
-      unsigned int port,
-      const char* user,
-      const char* passwd);
-int mysql_add_slave(MYSQL* mysql, const char* host,
-     unsigned int port,
-     const char* user,
-     const char* passwd);
 int mysql_shutdown(MYSQL *mysql,
                                        enum mysql_enum_shutdown_level
                                        shutdown_level);
@@ -498,6 +472,8 @@ MYSQL_RES * mysql_list_tables(MYSQL *mysql,const char *wild);
 MYSQL_RES * mysql_list_processes(MYSQL *mysql);
 int mysql_options(MYSQL *mysql,enum mysql_option option,
           const void *arg);
+int mysql_options4(MYSQL *mysql,enum mysql_option option,
+                                       const void *arg1, const void *arg2);
 void mysql_free_result(MYSQL_RES *result);
 void mysql_data_seek(MYSQL_RES *result,
      my_ulonglong offset);
@@ -521,18 +497,6 @@ void mysql_debug(const char *debug);
 void myodbc_remove_escape(MYSQL *mysql,char *name);
 unsigned int mysql_thread_safe(void);
 my_bool mysql_embedded(void);
-MYSQL_MANAGER* mysql_manager_init(MYSQL_MANAGER* con);
-MYSQL_MANAGER* mysql_manager_connect(MYSQL_MANAGER* con,
-           const char* host,
-           const char* user,
-           const char* passwd,
-           unsigned int port);
-void mysql_manager_close(MYSQL_MANAGER* con);
-int mysql_manager_command(MYSQL_MANAGER* con,
-      const char* cmd, int cmd_len);
-int mysql_manager_fetch_line(MYSQL_MANAGER* con,
-        char* res_buf,
-       int res_buf_size);
 my_bool mysql_read_query_result(MYSQL *mysql);
 enum enum_mysql_stmt_state
 {
@@ -563,6 +527,7 @@ typedef struct st_mysql_bind
   my_bool is_null_value;
   void *extension;
 } MYSQL_BIND;
+struct st_mysql_stmt_extension;
 typedef struct st_mysql_stmt
 {
   MEM_ROOT mem_root;
@@ -592,7 +557,7 @@ typedef struct st_mysql_stmt
   unsigned char bind_result_done;
   my_bool unbuffered_fetch_cancelled;
   my_bool update_max_length;
-  void *extension;
+  struct st_mysql_stmt_extension *extension;
 } MYSQL_STMT;
 enum enum_stmt_attr_type
 {
@@ -600,34 +565,6 @@ enum enum_stmt_attr_type
   STMT_ATTR_CURSOR_TYPE,
   STMT_ATTR_PREFETCH_ROWS
 };
-typedef struct st_mysql_methods
-{
-  my_bool (*read_query_result)(MYSQL *mysql);
-  my_bool (*advanced_command)(MYSQL *mysql,
-         enum enum_server_command command,
-         const unsigned char *header,
-         unsigned long header_length,
-         const unsigned char *arg,
-         unsigned long arg_length,
-         my_bool skip_check,
-                              MYSQL_STMT *stmt);
-  MYSQL_DATA *(*read_rows)(MYSQL *mysql,MYSQL_FIELD *mysql_fields,
-      unsigned int fields);
-  MYSQL_RES * (*use_result)(MYSQL *mysql);
-  void (*fetch_lengths)(unsigned long *to,
-   MYSQL_ROW column, unsigned int field_count);
-  void (*flush_use_result)(MYSQL *mysql);
-  MYSQL_FIELD * (*list_fields)(MYSQL *mysql);
-  my_bool (*read_prepare_result)(MYSQL *mysql, MYSQL_STMT *stmt);
-  int (*stmt_execute)(MYSQL_STMT *stmt);
-  int (*read_binary_rows)(MYSQL_STMT *stmt);
-  int (*unbuffered_fetch)(MYSQL *mysql, char **row);
-  void (*free_embedded_thd)(MYSQL *mysql);
-  const char *(*read_statistics)(MYSQL *mysql);
-  my_bool (*next_result)(MYSQL *mysql);
-  int (*read_change_user_result)(MYSQL *mysql, char *buff, const char *passwd);
-  int (*read_rows_from_cursor)(MYSQL_STMT *stmt);
-} MYSQL_METHODS;
 MYSQL_STMT * mysql_stmt_init(MYSQL *mysql);
 int mysql_stmt_prepare(MYSQL_STMT *stmt, const char *query,
                                unsigned long length);
@@ -671,4 +608,5 @@ my_bool mysql_rollback(MYSQL * mysql);
 my_bool mysql_autocommit(MYSQL * mysql, my_bool auto_mode);
 my_bool mysql_more_results(MYSQL *mysql);
 int mysql_next_result(MYSQL *mysql);
+int mysql_stmt_next_result(MYSQL_STMT *stmt);
 void mysql_close(MYSQL *sock);

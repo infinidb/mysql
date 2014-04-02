@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: Options Common to MySQL Cluster Programs
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "OPTIONS COMMON TO MY" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "OPTIONS COMMON TO MY" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -97,7 +97,7 @@ The options in the following table are common to all MySQL Cluster executables (
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.29.\ \&Common MySQL Cluster Program Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.30.\ \&Common MySQL Cluster Program Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -109,7 +109,6 @@ T}:T{
 Added / Removed
 T}
 .T&
-l l l
 l l l
 l l l
 l l l
@@ -130,7 +129,7 @@ T}:T{
 Display help message and exit
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -145,7 +144,7 @@ Set connection string for connecting to ndb_mgmd\&. Syntax:
             Overrides entries specified in NDB_CONNECTSTRING or my\&.cnf\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -155,7 +154,7 @@ Set the host (and port, if desired) for connecting to the management
             server
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -164,17 +163,7 @@ T}:T{
 Set node id for this node
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
-T}
-T{
-.PP
---ndb-shm
-T}:T{
-Allow for optimization using shared memory connections where available
-            (was EXPERIMENTAL, later REMOVED)
-T}:T{
-.PP
-REMOVED: NDB 7\&.0\&.16, NDB 7\&.1\&.5
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -183,7 +172,7 @@ T}:T{
 Select nodes for transactions in a more optimal way
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -192,7 +181,7 @@ T}:T{
 Directory where character sets are
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -202,7 +191,7 @@ Enable output from debug calls\&. Can be used only for versions compiled
             with debugging enabled
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -211,7 +200,7 @@ T}:T{
 Write core on errors (defaults to TRUE in debug builds)
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -222,7 +211,7 @@ T}:T{
 Output version information and exit
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 .TE
 .sp 1
@@ -647,59 +636,10 @@ Prints the MySQL Cluster version number of the executable\&. The version number 
 See
 Section\ \&17.5.5, \(lqPerforming a Rolling Restart of a MySQL Cluster\(rq), for more information\&.
 .RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb-shm option (MySQL Cluster programs; OBSOLETE)
-\fB\-\-ndb\-shm\fR
-.TS
-allbox tab(:);
-l l s s
-l l s s
-l l s s
-^ l l s
-^ l l s.
-T{
-\fBRemoved\fR
-T}:T{
-5\&.1\&.47\-ndb\-7\&.1\&.5
-T}
-T{
-\fBCommand\-Line Format\fR
-T}:T{
-\-\-ndb\-shm
-T}
-T{
-\ \&
-T}:T{
-\fBPermitted Values\fR
-T}
-:T{
-\fBType\fR
-T}:T{
-boolean
-T}
-:T{
-\fBDefault\fR
-T}:T{
-FALSE
-T}
-.TE
-.sp 1
-In older versions of MySQL Cluster, this experimental option allowed the application to use shared memory for optimization when available\&.
-\fB\-\-ndb\-shm\fR
-was removed from all MySQL Cluster programs beginning with MySQL Cluster NDB 7\&.0\&.16 and MySQL Cluster 7\&.1\&.5\&.
-.RE
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

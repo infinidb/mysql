@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -372,22 +372,28 @@
 
 
 #define MYSQL_SERVER 1
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "sql_servers.h"         // FOREIGN_SERVER, get_server_by_name
+#include "sql_class.h"           // SSV
+#include "sql_analyse.h"         // append_escaped
 #include <mysql/plugin.h>
-
-#ifdef USE_PRAGMA_IMPLEMENTATION
-#pragma implementation                          // gcc: Class implementation
-#endif
 
 #include "ha_federated.h"
+#include "probes_mysql.h"
 
 #include "m_string.h"
+#include "key.h"                                // key_copy
 
 #include <mysql/plugin.h>
+
+#include <algorithm>
+
+using std::min;
+using std::max;
 
 /* Variables for federated share methods */
 static HASH federated_open_tables;              // To track open tables
-pthread_mutex_t federated_mutex;                // To init the hash
+mysql_mutex_t federated_mutex;                // To init the hash
 static char ident_quote_char= '`';              // Character for quoting
                                                 // identifiers
 static char value_quote_char= '\'';             // Character for quoting
@@ -426,6 +432,25 @@ static uchar *federated_get_key(FEDERATED_SHARE *share, size_t *length,
   return (uchar*) share->share_key;
 }
 
+#ifdef HAVE_PSI_INTERFACE
+static PSI_mutex_key fe_key_mutex_federated, fe_key_mutex_FEDERATED_SHARE_mutex;
+
+static PSI_mutex_info all_federated_mutexes[]=
+{
+  { &fe_key_mutex_federated, "federated", PSI_FLAG_GLOBAL},
+  { &fe_key_mutex_FEDERATED_SHARE_mutex, "FEDERATED_SHARE::mutex", 0}
+};
+
+static void init_federated_psi_keys(void)
+{
+  const char* category= "federated";
+  int count;
+
+  count= array_elements(all_federated_mutexes);
+  mysql_mutex_register(category, all_federated_mutexes, count);
+}
+#endif /* HAVE_PSI_INTERFACE */
+
 /*
   Initialize the federated handler.
 
@@ -441,6 +466,11 @@ static uchar *federated_get_key(FEDERATED_SHARE *share, size_t *length,
 int federated_db_init(void *p)
 {
   DBUG_ENTER("federated_db_init");
+
+#ifdef HAVE_PSI_INTERFACE
+  init_federated_psi_keys();
+#endif /* HAVE_PSI_INTERFACE */
+
   handlerton *federated_hton= (handlerton *)p;
   federated_hton->state= SHOW_OPTION_YES;
   federated_hton->db_type= DB_TYPE_FEDERATED_DB;
@@ -456,15 +486,16 @@ int federated_db_init(void *p)
   federated_hton->commit= 0;
   federated_hton->rollback= 0;
 
-  if (pthread_mutex_init(&federated_mutex, MY_MUTEX_INIT_FAST))
+  if (mysql_mutex_init(fe_key_mutex_federated,
+                       &federated_mutex, MY_MUTEX_INIT_FAST))
     goto error;
-  if (!hash_init(&federated_open_tables, &my_charset_bin, 32, 0, 0,
-                    (hash_get_key) federated_get_key, 0, 0))
+  if (!my_hash_init(&federated_open_tables, &my_charset_bin, 32, 0, 0,
+                    (my_hash_get_key) federated_get_key, 0, 0))
   {
     DBUG_RETURN(FALSE);
   }
 
-  VOID(pthread_mutex_destroy(&federated_mutex));
+  mysql_mutex_destroy(&federated_mutex);
 error:
   DBUG_RETURN(TRUE);
 }
@@ -482,8 +513,8 @@ error:
 
 int federated_done(void *p)
 {
-  hash_free(&federated_open_tables);
-  VOID(pthread_mutex_destroy(&federated_mutex));
+  my_hash_free(&federated_open_tables);
+  mysql_mutex_destroy(&federated_mutex);
 
   return 0;
 }
@@ -546,8 +577,8 @@ static int parse_url_error(FEDERATED_SHARE *share, TABLE *table, int error_num)
   size_t buf_len;
   DBUG_ENTER("ha_federated parse_url_error");
 
-  buf_len= min(table->s->connect_string.length,
-               FEDERATED_QUERY_BUFFER_SIZE-1);
+  buf_len= min<size_t>(table->s->connect_string.length,
+                       FEDERATED_QUERY_BUFFER_SIZE-1);
   strmake(buf, table->s->connect_string.str, buf_len);
   my_error(error_num, MYF(0), buf);
   DBUG_RETURN(error_num);
@@ -572,8 +603,7 @@ int get_connection(MEM_ROOT *mem_root, FEDERATED_SHARE *share)
        get_server_by_name(mem_root, share->connection_string, &server_buffer)))
   {
     DBUG_PRINT("info", ("get_server_by_name returned > 0 error condition!"));
-    /* need to come up with error handling */
-    error_num=1;
+    error_num= ER_FOREIGN_DATA_STRING_INVALID_CANT_CREATE;
     goto error;
   }
   DBUG_PRINT("info", ("get_server_by_name returned server at %lx",
@@ -794,7 +824,7 @@ static int parse_url(MEM_ROOT *mem_root, FEDERATED_SHARE *share, TABLE *table,
         user:@hostname:port/db/table
         Then password is a null string, so set to NULL
       */
-      if ((share->password[0] == '\0'))
+      if (share->password[0] == '\0')
         share->password= NULL;
     }
     else
@@ -872,7 +902,7 @@ ha_federated::ha_federated(handlerton *hton,
   mysql(0), stored_result(0)
 {
   trx_next= 0;
-  bzero(&bulk_insert, sizeof(bulk_insert));
+  memset(&bulk_insert, 0, sizeof(bulk_insert));
 }
 
 
@@ -1283,7 +1313,7 @@ bool ha_federated::create_where_from_key(String *to,
     }
 
     for (key_part= key_info->key_part,
-         remainder= key_info->key_parts,
+         remainder= key_info->user_defined_key_parts,
          length= ranges[i]->length,
          ptr= ranges[i]->key; ;
          remainder--,
@@ -1432,7 +1462,7 @@ prepare_for_next_key_part:
         ptr was incremented by 1. Since store_length still counts null-byte,
         we need to subtract 1 from store_length.
       */
-      ptr+= store_length - test(key_part->null_bit);
+      ptr+= store_length - MY_TEST(key_part->null_bit);
       if (tmp.append(STRING_WITH_LEN(" AND ")))
         goto err;
 
@@ -1483,7 +1513,7 @@ static FEDERATED_SHARE *get_share(const char *table_name, TABLE *table)
 
   init_alloc_root(&mem_root, 256, 0);
 
-  pthread_mutex_lock(&federated_mutex);
+  mysql_mutex_lock(&federated_mutex);
 
   tmp_share.share_key= table_name;
   tmp_share.share_key_length= (uint) strlen(table_name);
@@ -1491,10 +1521,10 @@ static FEDERATED_SHARE *get_share(const char *table_name, TABLE *table)
     goto error;
 
   /* TODO: change tmp_share.scheme to LEX_STRING object */
-  if (!(share= (FEDERATED_SHARE *) hash_search(&federated_open_tables,
-                                               (uchar*) tmp_share.share_key,
-                                               tmp_share.
-                                               share_key_length)))
+  if (!(share= (FEDERATED_SHARE *) my_hash_search(&federated_open_tables,
+                                                  (uchar*) tmp_share.share_key,
+                                                  tmp_share.
+                                                  share_key_length)))
   {
     query.set_charset(system_charset_info);
     query.append(STRING_WITH_LEN("SELECT "));
@@ -1525,18 +1555,19 @@ static FEDERATED_SHARE *get_share(const char *table_name, TABLE *table)
     if (my_hash_insert(&federated_open_tables, (uchar*) share))
       goto error;
     thr_lock_init(&share->lock);
-    pthread_mutex_init(&share->mutex, MY_MUTEX_INIT_FAST);
+    mysql_mutex_init(fe_key_mutex_FEDERATED_SHARE_mutex,
+                     &share->mutex, MY_MUTEX_INIT_FAST);
   }
   else
     free_root(&mem_root, MYF(0)); /* prevents memory leak */
 
   share->use_count++;
-  pthread_mutex_unlock(&federated_mutex);
+  mysql_mutex_unlock(&federated_mutex);
 
   DBUG_RETURN(share);
 
 error:
-  pthread_mutex_unlock(&federated_mutex);
+  mysql_mutex_unlock(&federated_mutex);
   free_root(&mem_root, MYF(0));
   DBUG_RETURN(NULL);
 }
@@ -1553,15 +1584,15 @@ static int free_share(FEDERATED_SHARE *share)
   MEM_ROOT mem_root= share->mem_root;
   DBUG_ENTER("free_share");
 
-  pthread_mutex_lock(&federated_mutex);
+  mysql_mutex_lock(&federated_mutex);
   if (!--share->use_count)
   {
-    hash_delete(&federated_open_tables, (uchar*) share);
+    my_hash_delete(&federated_open_tables, (uchar*) share);
     thr_lock_delete(&share->lock);
-    VOID(pthread_mutex_destroy(&share->mutex));
+    mysql_mutex_destroy(&share->mutex);
     free_root(&mem_root, MYF(0));
   }
-  pthread_mutex_unlock(&federated_mutex);
+  mysql_mutex_unlock(&federated_mutex);
 
   DBUG_RETURN(0);
 }
@@ -1662,43 +1693,6 @@ int ha_federated::close(void)
     table->in_use->clear_error();
 
   DBUG_RETURN(free_share(share));
-}
-
-/*
-
-  Checks if a field in a record is SQL NULL.
-
-  SYNOPSIS
-    field_in_record_is_null()
-      table     TABLE pointer, MySQL table object
-      field     Field pointer, MySQL field object
-      record    char pointer, contains record
-
-    DESCRIPTION
-      This method uses the record format information in table to track
-      the null bit in record.
-
-    RETURN VALUE
-      1    if NULL
-      0    otherwise
-*/
-
-static inline uint field_in_record_is_null(TABLE *table,
-                                    Field *field,
-                                    char *record)
-{
-  int null_offset;
-  DBUG_ENTER("ha_federated::field_in_record_is_null");
-
-  if (!field->null_ptr)
-    DBUG_RETURN(0);
-
-  null_offset= (uint) ((char*)field->null_ptr - (char*)table->record[0]);
-
-  if (record[null_offset] & field->null_bit)
-    DBUG_RETURN(1);
-
-  DBUG_RETURN(0);
 }
 
 
@@ -1814,8 +1808,6 @@ int ha_federated::write_row(uchar *buf)
   values_string.length(0);
   insert_field_value_string.length(0);
   ha_statistic_increment(&SSV::ha_write_count);
-  if (table->timestamp_field_type & TIMESTAMP_AUTO_SET_ON_INSERT)
-    table->timestamp_field->set_time();
 
   /*
     start both our field and field values strings
@@ -2088,12 +2080,12 @@ int ha_federated::repair(THD* thd, HA_CHECK_OPT* check_opt)
 
   Keep in mind that the server can do updates based on ordering if an ORDER BY
   clause was used. Consecutive ordering is not guaranteed.
-  Currently new_data will not have an updated auto_increament record, or
-  and updated timestamp field. You can do these for federated by doing these:
-  if (table->timestamp_on_update_now)
-    update_timestamp(new_row+table->timestamp_on_update_now-1);
-  if (table->next_number_field && record == table->record[0])
-    update_auto_increment();
+
+  Currently new_data will not have an updated AUTO_INCREMENT record. You can
+  do this for federated by doing the following:
+
+    if (table->next_number_field && record == table->record[0])
+      update_auto_increment();
 
   Called from sql_select.cc, sql_acl.cc, sql_update.cc, and sql_insert.cc.
 */
@@ -2112,7 +2104,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *new_data)
     this? Because we only are updating one record, and LIMIT enforces
     this.
   */
-  bool has_a_primary_key= test(table->s->primary_key != MAX_KEY);
+  bool has_a_primary_key= MY_TEST(table->s->primary_key != MAX_KEY);
   
   /*
     buffers for following strings
@@ -2192,7 +2184,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *new_data)
       size_t field_name_length= strlen((*field)->field_name);
       append_ident(&where_string, (*field)->field_name, field_name_length,
                    ident_quote_char);
-      if (field_in_record_is_null(table, *field, (char*) old_data))
+      if ((*field)->is_null_in_record(old_data))
         where_string.append(STRING_WITH_LEN(" IS NULL "));
       else
       {
@@ -2315,6 +2307,22 @@ int ha_federated::delete_row(const uchar *buf)
   DBUG_RETURN(0);
 }
 
+int ha_federated::index_read_idx_map(uchar *buf, uint index, const uchar *key,
+                                key_part_map keypart_map,
+                                enum ha_rkey_function find_flag)
+{
+  int error= index_init(index, 0);
+  if (error)
+    return error;
+  error= index_read_map(buf, key, keypart_map, find_flag);
+  if(!error && stored_result)
+  {
+    uchar *dummy_arg=NULL;
+    position(dummy_arg);
+  }
+  int error1= index_end();
+  return error ?  error : error1;
+}
 
 /*
   Positions an index cursor to the index specified in the handle. Fetches the
@@ -2326,12 +2334,16 @@ int ha_federated::delete_row(const uchar *buf)
 int ha_federated::index_read(uchar *buf, const uchar *key,
                              uint key_len, ha_rkey_function find_flag)
 {
+  int rc;
   DBUG_ENTER("ha_federated::index_read");
 
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
   free_result();
-  DBUG_RETURN(index_read_idx_with_result_set(buf, active_index, key,
-                                             key_len, find_flag,
-                                             &stored_result));
+  rc= index_read_idx_with_result_set(buf, active_index, key,
+                                     key_len, find_flag,
+                                     &stored_result);
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -2482,6 +2494,7 @@ int ha_federated::read_range_first(const key_range *start_key,
                    sizeof(sql_query_buffer),
                    &my_charset_bin);
   DBUG_ENTER("ha_federated::read_range_first");
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
 
   DBUG_ASSERT(!(start_key == NULL && end_key == NULL));
 
@@ -2502,28 +2515,39 @@ int ha_federated::read_range_first(const key_range *start_key,
     retval= HA_ERR_END_OF_FILE;
     goto error;
   }
-  
-  DBUG_RETURN(read_next(table->record[0], stored_result));
+
+  retval= read_next(table->record[0], stored_result);
+  MYSQL_INDEX_READ_ROW_DONE(retval);
+  DBUG_RETURN(retval);
 
 error:
   table->status= STATUS_NOT_FOUND;
+  MYSQL_INDEX_READ_ROW_DONE(retval);
   DBUG_RETURN(retval);
 }
 
 
 int ha_federated::read_range_next()
 {
+  int retval;
   DBUG_ENTER("ha_federated::read_range_next");
-  DBUG_RETURN(rnd_next(table->record[0]));
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  retval= rnd_next_int(table->record[0]);
+  MYSQL_INDEX_READ_ROW_DONE(retval);
+  DBUG_RETURN(retval);
 }
 
 
 /* Used to read forward through the index.  */
 int ha_federated::index_next(uchar *buf)
 {
+  int retval;
   DBUG_ENTER("ha_federated::index_next");
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
   ha_statistic_increment(&SSV::ha_read_next_count);
-  DBUG_RETURN(read_next(buf, stored_result));
+  retval= read_next(buf, stored_result);
+  MYSQL_INDEX_READ_ROW_DONE(retval);
+  DBUG_RETURN(retval);
 }
 
 
@@ -2616,7 +2640,18 @@ int ha_federated::index_end(void)
 
 int ha_federated::rnd_next(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_federated::rnd_next");
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       TRUE);
+  rc= rnd_next_int(buf);
+  MYSQL_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
+}
+
+int ha_federated::rnd_next_int(uchar *buf)
+{
+  DBUG_ENTER("ha_federated::rnd_next_int");
 
   if (stored_result == 0)
   {
@@ -2638,7 +2673,7 @@ int ha_federated::rnd_next(uchar *buf)
   format
 
   SYNOPSIS
-    field_in_record_is_null()
+    ha_federated::read_next()
       buf       byte pointer to record 
       result    mysql result set 
 
@@ -2701,9 +2736,9 @@ void ha_federated::position(const uchar *record __attribute__ ((unused)))
 
   position_called= TRUE;
   /* Store result set address. */
-  memcpy_fixed(ref, &stored_result, sizeof(MYSQL_RES *));
+  memcpy(ref, &stored_result, sizeof(MYSQL_RES *));
   /* Store data cursor position. */
-  memcpy_fixed(ref + sizeof(MYSQL_RES *), &current_position,
+  memcpy(ref + sizeof(MYSQL_RES *), &current_position,
                sizeof(MYSQL_ROW_OFFSET));
   DBUG_VOID_RETURN;
 }
@@ -2721,18 +2756,23 @@ void ha_federated::position(const uchar *record __attribute__ ((unused)))
 int ha_federated::rnd_pos(uchar *buf, uchar *pos)
 {
   MYSQL_RES *result;
+  int ret_val;
   DBUG_ENTER("ha_federated::rnd_pos");
-  
+
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       FALSE);
   ha_statistic_increment(&SSV::ha_read_rnd_count);
 
   /* Get stored result set. */
-  memcpy_fixed(&result, pos, sizeof(MYSQL_RES *));
+  memcpy(&result, pos, sizeof(MYSQL_RES *));
   DBUG_ASSERT(result);
   /* Set data cursor position. */
-  memcpy_fixed(&result->data_cursor, pos + sizeof(MYSQL_RES *),
-               sizeof(MYSQL_ROW_OFFSET));
+  memcpy(&result->data_cursor, pos + sizeof(MYSQL_RES *),
+         sizeof(MYSQL_ROW_OFFSET));
   /* Read a row. */
-  DBUG_RETURN(read_next(buf, result));
+  ret_val= read_next(buf, result);
+  MYSQL_READ_ROW_DONE(ret_val);
+  DBUG_RETURN(ret_val);
 }
 
 
@@ -2855,7 +2895,7 @@ int ha_federated::info(uint flag)
   }
 
   if (flag & HA_STATUS_AUTO)
-    stats.auto_increment_value= mysql->last_used_con->insert_id;
+    stats.auto_increment_value= mysql->insert_id;
 
   mysql_free_result(result);
 
@@ -2986,6 +3026,16 @@ int ha_federated::delete_all_rows()
 
 
 /*
+  Used to manually truncate the table via a delete of all rows in a table.
+*/
+
+int ha_federated::truncate()
+{
+  return delete_all_rows();
+}
+
+
+/*
   The idea with handler::store_lock() is the following:
 
   The statement decided which locks we should need for the table
@@ -3084,7 +3134,7 @@ int ha_federated::real_connect()
     to establish Federated connection to guard against a trivial
     Denial of Service scenerio.
   */
-  safe_mutex_assert_not_owner(&LOCK_open);
+  mysql_mutex_assert_not_owner(&LOCK_open);
 
   DBUG_ASSERT(mysql == NULL);
 
@@ -3224,7 +3274,7 @@ MYSQL_RES *ha_federated::store_result(MYSQL *mysql_arg)
   DBUG_ENTER("ha_federated::store_result");
   if (result)
   {
-    (void) insert_dynamic(&results, (uchar*) &result);
+    (void) insert_dynamic(&results, &result);
   }
   position_called= FALSE;
   DBUG_RETURN(result);
@@ -3415,6 +3465,7 @@ mysql_declare_plugin(federated)
   0x0100 /* 1.0 */,
   NULL,                       /* status variables                */
   NULL,                       /* system variables                */
-  NULL                        /* config options                  */
+  NULL,                       /* config options                  */
+  0,                          /* flags                           */
 }
 mysql_declare_plugin_end;

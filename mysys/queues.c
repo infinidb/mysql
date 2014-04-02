@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2003, 2005-2008 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Code for generell handling of priority Queues.
@@ -194,11 +194,8 @@ int resize_queue(QUEUE *queue, uint max_elements)
 void delete_queue(QUEUE *queue)
 {
   DBUG_ENTER("delete_queue");
-  if (queue->root)
-  {
-    my_free((uchar*) queue->root,MYF(0));
-    queue->root=0;
-  }
+  my_free(queue->root);
+  queue->root= NULL;
   DBUG_VOID_RETURN;
 }
 
@@ -373,8 +370,8 @@ void queue_fix(QUEUE *queue)
    A test program for the priority queue implementation.
    It can also be used to benchmark changes of the implementation
    Build by doing the following in the directory mysys
-   make test_priority_queue
-   ./test_priority_queue
+   make queues
+   ./queues
 
    Written by Mikael Ronström, 2005
  */
@@ -384,11 +381,11 @@ static uint tot_no_parts= 0;
 static uint tot_no_loops= 0;
 static uint expected_part= 0;
 static uint expected_num= 0;
-static bool max_ind= 0;
-static bool fix_used= 0;
+static my_bool max_ind= 0;
+static my_bool fix_used= 0;
 static ulonglong start_time= 0;
 
-static bool is_divisible_by(uint num, uint divisor)
+static my_bool is_divisible_by(uint num, uint divisor)
 {
   uint quotient= num / divisor;
   if (quotient * divisor == num)
@@ -482,6 +479,7 @@ static int test_compare(void *null_arg, uchar *a, uchar *b)
   uint a_num= (*(uint*)a) & 0x3FFFFF;
   uint b_num= (*(uint*)b) & 0x3FFFFF;
   uint a_part, b_part;
+  (void) null_arg;
   if (a_num > b_num)
     return +1;
   if (a_num < b_num)
@@ -495,7 +493,7 @@ static int test_compare(void *null_arg, uchar *a, uchar *b)
   return 0;
 }
 
-bool check_num(uint num_part)
+my_bool check_num(uint num_part)
 {
   uint part= num_part >> 22;
   uint num= num_part & 0x3FFFFF;
@@ -546,7 +544,7 @@ void perform_insert(QUEUE *queue)
   }
 }
 
-bool perform_ins_del(QUEUE *queue, bool max_ind)
+my_bool perform_ins_del(QUEUE *queue, my_bool max_ind)
 {
   uint i= 0, no_loops= tot_no_loops, j= tot_no_parts;
   do
@@ -574,10 +572,10 @@ bool perform_ins_del(QUEUE *queue, bool max_ind)
   return FALSE;
 }
 
-bool do_test(uint no_parts, uint l_max_ind, bool l_fix_used)
+my_bool do_test(uint no_parts, uint l_max_ind, my_bool l_fix_used)
 {
   QUEUE queue;
-  bool result;
+  my_bool result;
   max_ind= l_max_ind;
   fix_used= l_fix_used;
   init_queue(&queue, no_parts, 0, max_ind, test_compare, NULL);

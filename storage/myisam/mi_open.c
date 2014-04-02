@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,25 +11,28 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/* open a isam-database */
+/*
+  open a isam-database
+
+  Internal temporary tables
+  -------------------------
+  Since only single instance of internal temporary table is required by
+  optimizer, such tables are not registered on myisam_open_list. In effect
+  it means (a) THR_LOCK_myisam is not held while such table is being created,
+  opened or closed; (b) no iteration through myisam_open_list while opening a
+  table. This optimization gives nice scalability benefit in concurrent
+  environment. MEMORY internal temporary tables are optimized similarly.
+*/
 
 #include "fulltext.h"
 #include "sp_defs.h"
 #include "rt_index.h"
 #include <m_ctype.h>
 
-#if defined(MSDOS) || defined(__WIN__)
 #ifdef __WIN__
 #include <fcntl.h>
-#else
-#include <process.h>			/* Prototype for getpid */
-#endif
-#endif
-#ifdef VMS
-#include "static.c"
 #endif
 
 static void setup_key_functions(MI_KEYDEF *keyinfo);
@@ -79,10 +81,11 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   int lock_error,kfile,open_mode,save_errno,have_rtree=0, realpath_err;
   uint i,j,len,errpos,head_length,base_pos,offset,info_length,keys,
     key_parts,unique_key_parts,fulltext_keys,uniques;
+  uint internal_table= open_flags & HA_OPEN_INTERNAL_TABLE;
   char name_buff[FN_REFLEN], org_name[FN_REFLEN], index_name[FN_REFLEN],
        data_name[FN_REFLEN];
   uchar *disk_cache, *disk_pos, *end_pos;
-  MI_INFO info,*m_info,*old_info;
+  MI_INFO info, *m_info, *old_info= NULL;
   MYISAM_SHARE share_buff,*share;
   ulong rec_per_key_part[HA_MAX_POSSIBLE_KEY*MI_MAX_KEY_SEG];
   my_off_t key_root[HA_MAX_POSSIBLE_KEY],key_del[MI_MAX_KEY_BLOCK_SIZE];
@@ -94,7 +97,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   lock_error=1;
   errpos=0;
   head_length=sizeof(share_buff.state.header);
-  bzero((uchar*) &info,sizeof(info));
+  memset(&info, 0, sizeof(info));
 
   realpath_err= my_realpath(name_buff,
                   fn_format(org_name,name,"",MI_NAME_IEXT,4),MYF(0));
@@ -105,11 +108,16 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     DBUG_RETURN (NULL);
   }
 
-  pthread_mutex_lock(&THR_LOCK_myisam);
-  if (!(old_info=test_if_reopen(name_buff)))
+  if (!internal_table)
+  {
+    mysql_mutex_lock(&THR_LOCK_myisam);
+    old_info= test_if_reopen(name_buff);
+  }
+
+  if (!old_info)
   {
     share= &share_buff;
-    bzero((uchar*) &share_buff,sizeof(share_buff));
+    memset(&share_buff, 0, sizeof(share_buff));
     share_buff.state.rec_per_key_part=rec_per_key_part;
     share_buff.state.key_root=key_root;
     share_buff.state.key_del=key_del;
@@ -122,17 +130,21 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
                       my_errno= HA_ERR_CRASHED;
                       goto err;
                     });
-    if ((kfile=my_open(name_buff,(open_mode=O_RDWR) | O_SHARE,MYF(0))) < 0)
+    if ((kfile= mysql_file_open(mi_key_file_kfile,
+                                name_buff,
+                                (open_mode= O_RDWR) | O_SHARE, MYF(0))) < 0)
     {
       if ((errno != EROFS && errno != EACCES) ||
 	  mode != O_RDONLY ||
-	  (kfile=my_open(name_buff,(open_mode=O_RDONLY) | O_SHARE,MYF(0))) < 0)
+          (kfile= mysql_file_open(mi_key_file_kfile,
+                                  name_buff,
+                                  (open_mode= O_RDONLY) | O_SHARE, MYF(0))) < 0)
 	goto err;
     }
     share->mode=open_mode;
     errpos=1;
-    if (my_read(kfile, share->state.header.file_version, head_length,
-		MYF(MY_NABP)))
+    if (mysql_file_read(kfile, share->state.header.file_version, head_length,
+                        MYF(MY_NABP)))
     {
       my_errno= HA_ERR_NOT_A_TABLE;
       goto err;
@@ -183,7 +195,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     end_pos=disk_cache+info_length;
     errpos=2;
 
-    VOID(my_seek(kfile,0L,MY_SEEK_SET,MYF(0)));
+    mysql_file_seek(kfile, 0L, MY_SEEK_SET, MYF(0));
     if (!(open_flags & HA_OPEN_TMP_TABLE))
     {
       if ((lock_error=my_lock(kfile,F_RDLCK,0L,F_TO_EOF,
@@ -193,7 +205,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	goto err;
     }
     errpos=3;
-    if (my_read(kfile,disk_cache,info_length,MYF(MY_NABP)))
+    if (mysql_file_read(kfile, disk_cache, info_length, MYF(MY_NABP)))
     {
       my_errno=HA_ERR_CRASHED;
       goto err;
@@ -237,7 +249,8 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     }
 
     /* sanity check */
-    if (share->base.keystart > 65535 || share->base.rec_reflength > 8)
+    if (share->base.keystart > 65535 || 
+        share->base.rec_reflength > 8 || share->base.key_reflength > 7) 
     {
       my_errno=HA_ERR_CRASHED;
       goto err;
@@ -265,25 +278,6 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     set_if_smaller(max_data_file_length, INT_MAX32);
     set_if_smaller(max_key_file_length, INT_MAX32);
 #endif
-#if USE_RAID && SYSTEM_SIZEOF_OFF_T == 4
-    set_if_smaller(max_key_file_length, INT_MAX32);
-    if (!share->base.raid_type)
-    {
-      set_if_smaller(max_data_file_length, INT_MAX32);
-    }
-    else
-    {
-      set_if_smaller(max_data_file_length,
-		     (ulonglong) share->base.raid_chunks << 31);
-    }
-#elif !defined(USE_RAID)
-    if (share->base.raid_type)
-    {
-      DBUG_PRINT("error",("Table uses RAID but we don't have RAID support"));
-      my_errno=HA_ERR_UNSUPPORTED;
-      goto err;
-    }
-#endif
     share->base.max_data_file_length=(my_off_t) max_data_file_length;
     share->base.max_key_file_length=(my_off_t) max_key_file_length;
 
@@ -310,10 +304,8 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 			 &share->state.key_root,keys*sizeof(my_off_t),
 			 &share->state.key_del,
 			 (share->state.header.max_block_size_index*sizeof(my_off_t)),
-#ifdef THREAD
-			 &share->key_root_lock,sizeof(rw_lock_t)*keys,
-#endif
-			 &share->mmap_lock,sizeof(rw_lock_t),
+                         &share->key_root_lock, sizeof(mysql_rwlock_t)*keys,
+                         &share->mmap_lock, sizeof(mysql_rwlock_t),
 			 NullS))
       goto err;
     errpos=4;
@@ -330,7 +322,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     strmov(share->index_file_name,  index_name);
     strmov(share->data_file_name,   data_name);
 
-    share->blocksize=min(IO_SIZE,myisam_block_size);
+    share->blocksize= MY_MIN(IO_SIZE, myisam_block_size);
     {
       HA_KEYSEG *pos=share->keyparts;
       uint32 ftkey_nr= 1;
@@ -368,6 +360,12 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	  }
 	  else if (pos->type == HA_KEYTYPE_BINARY)
 	    pos->charset= &my_charset_bin;
+          if (!(share->keyinfo[i].flag & HA_SPATIAL) &&
+              pos->start > share->base.reclength)
+          {
+            my_errno= HA_ERR_CRASHED;
+            goto err;
+          }
 	}
 	if (share->keyinfo[i].flag & HA_SPATIAL)
 	{
@@ -484,7 +482,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 
     if (! lock_error)
     {
-      VOID(my_lock(kfile,F_UNLCK,0L,F_TO_EOF,MYF(MY_SEEK_NOT_DONE)));
+      (void) my_lock(kfile,F_UNLCK,0L,F_TO_EOF,MYF(MY_SEEK_NOT_DONE));
       lock_error=1;			/* Database unlocked */
     }
 
@@ -503,7 +501,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     share->base.margin_key_file_length=(share->base.max_key_file_length -
 					(keys ? MI_INDEX_BLOCK_MARGIN *
 					 share->blocksize * keys : 0));
-    share->blocksize=min(IO_SIZE,myisam_block_size);
+    share->blocksize= MY_MIN(IO_SIZE, myisam_block_size);
     share->data_file_type=STATIC_RECORD;
     if (share->options & HA_OPTION_COMPRESS_RECORD)
     {
@@ -512,9 +510,9 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
       info.s=share;
       if (_mi_read_pack_info(&info,
 			     (pbool)
-			     test(!(share->options &
-				    (HA_OPTION_PACK_RECORD |
-				     HA_OPTION_TEMP_COMPRESS_RECORD)))))
+			     MY_TEST(!(share->options &
+                                       (HA_OPTION_PACK_RECORD |
+                                        HA_OPTION_TEMP_COMPRESS_RECORD)))))
 	goto err;
     }
     else if (share->options & HA_OPTION_PACK_RECORD)
@@ -522,12 +520,13 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     my_afree(disk_cache);
     mi_setup_functions(share);
     share->is_log_table= FALSE;
-#ifdef THREAD
     thr_lock_init(&share->lock);
-    VOID(pthread_mutex_init(&share->intern_lock,MY_MUTEX_INIT_FAST));
+    mysql_mutex_init(mi_key_mutex_MYISAM_SHARE_intern_lock,
+                     &share->intern_lock, MY_MUTEX_INIT_FAST);
     for (i=0; i<keys; i++)
-      VOID(my_rwlock_init(&share->key_root_lock[i], NULL));
-    VOID(my_rwlock_init(&share->mmap_lock, NULL));
+      mysql_rwlock_init(mi_key_rwlock_MYISAM_SHARE_key_root_lock,
+                        &share->key_root_lock[i]);
+    mysql_rwlock_init(mi_key_rwlock_MYISAM_SHARE_mmap_lock, &share->mmap_lock);
     if (!thr_lock_inited)
     {
       /* Probably a single threaded program; Don't use concurrent inserts */
@@ -550,7 +549,6 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	share->lock.check_status=mi_check_status;
       }
     }
-#endif
     /*
       Memory mapping can only be requested after initializing intern_lock.
     */
@@ -613,7 +611,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   info.ft1_to_ft2=0;
   info.errkey= -1;
   info.page_changed=1;
-  pthread_mutex_lock(&share->intern_lock);
+  mysql_mutex_lock(&share->intern_lock);
   info.read_record=share->read_record;
   share->reopen++;
   share->write_flag=MYF(MY_NABP | MY_WAIT_IF_FULL);
@@ -637,25 +635,26 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
       myisam_delay_key_write)
     share->delay_key_write=1;
   info.state= &share->state.state;	/* Change global values by default */
-  pthread_mutex_unlock(&share->intern_lock);
+  mysql_mutex_unlock(&share->intern_lock);
 
   /* Allocate buffer for one record */
 
-  /* prerequisites: bzero(info) && info->s=share; are met. */
+  /* prerequisites: memset(&info, 0) && info->s=share; are met. */
   if (!mi_alloc_rec_buff(&info, -1, &info.rec_buff))
     goto err;
-  bzero(info.rec_buff, mi_get_rec_buff_len(&info, info.rec_buff));
+  memset(info.rec_buff, 0, mi_get_rec_buff_len(&info, info.rec_buff));
 
   *m_info=info;
-#ifdef THREAD
   thr_lock_data_init(&share->lock,&m_info->lock,(void*) m_info);
-#endif
-  m_info->open_list.data=(void*) m_info;
-  myisam_open_list=list_add(myisam_open_list,&m_info->open_list);
 
-  pthread_mutex_unlock(&THR_LOCK_myisam);
+  if (!internal_table)
+  {
+    m_info->open_list.data= (void*) m_info;
+    myisam_open_list= list_add(myisam_open_list, &m_info->open_list);
+    mysql_mutex_unlock(&THR_LOCK_myisam);
+  }
 
-  bzero(info.buff, share->base.max_key_block_length * 2);
+  memset(info.buff, 0, share->base.max_key_block_length * 2);
 
   if (myisam_log_file >= 0)
   {
@@ -672,31 +671,32 @@ err:
     mi_report_error(save_errno, name);
   switch (errpos) {
   case 6:
-    my_free((uchar*) m_info,MYF(0));
+    my_free(m_info);
     /* fall through */
   case 5:
-    VOID(my_close(info.dfile,MYF(0)));
+    (void) mysql_file_close(info.dfile, MYF(0));
     if (old_info)
       break;					/* Don't remove open table */
     /* fall through */
   case 4:
-    my_free((uchar*) share,MYF(0));
+    my_free(share);
     /* fall through */
   case 3:
     if (! lock_error)
-      VOID(my_lock(kfile, F_UNLCK, 0L, F_TO_EOF, MYF(MY_SEEK_NOT_DONE)));
+      (void) my_lock(kfile, F_UNLCK, 0L, F_TO_EOF, MYF(MY_SEEK_NOT_DONE));
     /* fall through */
   case 2:
     my_afree(disk_cache);
     /* fall through */
   case 1:
-    VOID(my_close(kfile,MYF(0)));
+    (void) mysql_file_close(kfile, MYF(0));
     /* fall through */
   case 0:
   default:
     break;
   }
-  pthread_mutex_unlock(&THR_LOCK_myisam);
+  if (!internal_table)
+    mysql_mutex_unlock(&THR_LOCK_myisam);
   my_errno=save_errno;
   DBUG_RETURN (NULL);
 } /* mi_open */
@@ -716,10 +716,10 @@ uchar *mi_alloc_rec_buff(MI_INFO *info, ulong length, uchar **buf)
     if (length == (ulong) -1)
     {
       if (info->s->options & HA_OPTION_COMPRESS_RECORD)
-        length= max(info->s->base.pack_reclength, info->s->max_pack_length);
+        length= MY_MAX(info->s->base.pack_reclength, info->s->max_pack_length);
       else
         length= info->s->base.pack_reclength;
-      length= max(length, info->s->base.max_key_length);
+      length= MY_MAX(length, info->s->base.max_key_length);
       /* Avoid unnecessary realloc */
       if (newptr && length == old_length)
 	return newptr;
@@ -880,7 +880,7 @@ uint mi_state_info_write(File file, MI_STATE_INFO *state, uint pWrite)
 	key_blocks=state->header.max_block_size_index;
   DBUG_ENTER("mi_state_info_write");
 
-  memcpy_fixed(ptr,&state->header,sizeof(state->header));
+  memcpy(ptr, &state->header, sizeof(state->header));
   ptr+=sizeof(state->header);
 
   /* open_count must be first because of _mi_mark_file_changed ! */
@@ -929,17 +929,17 @@ uint mi_state_info_write(File file, MI_STATE_INFO *state, uint pWrite)
   }
 
   if (pWrite & 1)
-    DBUG_RETURN(my_pwrite(file, buff, (size_t) (ptr-buff), 0L,
-			  MYF(MY_NABP | MY_THREADSAFE)) != 0);
-  DBUG_RETURN(my_write(file, buff, (size_t) (ptr-buff),
-		       MYF(MY_NABP)) != 0);
+    DBUG_RETURN(mysql_file_pwrite(file, buff, (size_t) (ptr-buff), 0L,
+                                  MYF(MY_NABP | MY_THREADSAFE)) != 0);
+  DBUG_RETURN(mysql_file_write(file, buff, (size_t) (ptr-buff),
+                               MYF(MY_NABP)) != 0);
 }
 
 
 uchar *mi_state_info_read(uchar *ptr, MI_STATE_INFO *state)
 {
   uint i,keys,key_parts,key_blocks;
-  memcpy_fixed(&state->header,ptr, sizeof(state->header));
+  memcpy(&state->header, ptr, sizeof(state->header));
   ptr +=sizeof(state->header);
   keys=(uint) state->header.keys;
   key_parts=mi_uint2korr(state->header.key_parts);
@@ -997,10 +997,10 @@ uint mi_state_info_read_dsk(File file, MI_STATE_INFO *state, my_bool pRead)
   {
     if (pRead)
     {
-      if (my_pread(file, buff, state->state_length,0L, MYF(MY_NABP)))
+      if (mysql_file_pread(file, buff, state->state_length, 0L, MYF(MY_NABP)))
 	return 1;
     }
-    else if (my_read(file, buff, state->state_length,MYF(MY_NABP)))
+    else if (mysql_file_read(file, buff, state->state_length, MYF(MY_NABP)))
       return 1;
     mi_state_info_read(buff, state);
   }
@@ -1039,11 +1039,8 @@ uint mi_base_info_write(File file, MI_BASE_INFO *base)
   mi_int2store(ptr,base->max_key_length);		ptr +=2;
   mi_int2store(ptr,base->extra_alloc_bytes);		ptr +=2;
   *ptr++= base->extra_alloc_procent;
-  *ptr++= base->raid_type;
-  mi_int2store(ptr,base->raid_chunks);			ptr +=2;
-  mi_int4store(ptr,base->raid_chunksize);		ptr +=4;
-  bzero(ptr,6);						ptr +=6; /* extra */
-  return my_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
+  memset(ptr, 0, 13);					ptr +=13; /* extra */
+  return mysql_file_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
 }
 
 
@@ -1073,17 +1070,8 @@ uchar *my_n_base_info_read(uchar *ptr, MI_BASE_INFO *base)
   base->max_key_length = mi_uint2korr(ptr);		ptr +=2;
   base->extra_alloc_bytes = mi_uint2korr(ptr);		ptr +=2;
   base->extra_alloc_procent = *ptr++;
-  base->raid_type= *ptr++;
-  base->raid_chunks= mi_uint2korr(ptr);			ptr +=2;
-  base->raid_chunksize= mi_uint4korr(ptr);		ptr +=4;
-  /* TO BE REMOVED: Fix for old RAID files */
-  if (base->raid_type == 0)
-  {
-    base->raid_chunks=0;
-    base->raid_chunksize=0;
-  }
 
-  ptr+=6;
+  ptr+=13;
   return ptr;
 }
 
@@ -1103,7 +1091,7 @@ uint mi_keydef_write(File file, MI_KEYDEF *keydef)
   mi_int2store(ptr,keydef->keylength);		ptr +=2;
   mi_int2store(ptr,keydef->minlength);		ptr +=2;
   mi_int2store(ptr,keydef->maxlength);		ptr +=2;
-  return my_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
+  return mysql_file_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
 }
 
 uchar *mi_keydef_read(uchar *ptr, MI_KEYDEF *keydef)
@@ -1135,10 +1123,10 @@ int mi_keyseg_write(File file, const HA_KEYSEG *keyseg)
   ulong pos;
 
   *ptr++= keyseg->type;
-  *ptr++= keyseg->language;
+  *ptr++= keyseg->language & 0xFF; /* Collation ID, low byte */
   *ptr++= keyseg->null_bit;
   *ptr++= keyseg->bit_start;
-  *ptr++= keyseg->bit_end;
+  *ptr++= keyseg->language >> 8; /* Collation ID, high byte */
   *ptr++= keyseg->bit_length;
   mi_int2store(ptr,keyseg->flag);	ptr+=2;
   mi_int2store(ptr,keyseg->length);	ptr+=2;
@@ -1147,7 +1135,7 @@ int mi_keyseg_write(File file, const HA_KEYSEG *keyseg)
   mi_int4store(ptr, pos);
   ptr+=4;
   
-  return my_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
+  return mysql_file_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
 }
 
 
@@ -1157,12 +1145,13 @@ uchar *mi_keyseg_read(uchar *ptr, HA_KEYSEG *keyseg)
    keyseg->language	= *ptr++;
    keyseg->null_bit	= *ptr++;
    keyseg->bit_start	= *ptr++;
-   keyseg->bit_end	= *ptr++;
+   keyseg->language	+= ((uint16) (*ptr++)) << 8;
    keyseg->bit_length   = *ptr++;
    keyseg->flag		= mi_uint2korr(ptr);  ptr +=2;
    keyseg->length	= mi_uint2korr(ptr);  ptr +=2;
    keyseg->start	= mi_uint4korr(ptr);  ptr +=4;
    keyseg->null_pos	= mi_uint4korr(ptr);  ptr +=4;
+   keyseg->bit_end= 0;
    keyseg->charset=0;				/* Will be filled in later */
    if (keyseg->null_bit)
      /* We adjust bit_pos if null_bit is last in the byte */
@@ -1188,7 +1177,7 @@ uint mi_uniquedef_write(File file, MI_UNIQUEDEF *def)
   *ptr++=  (uchar) def->key;
   *ptr++ = (uchar) def->null_are_equal;
 
-  return my_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
+  return mysql_file_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
 }
 
 uchar *mi_uniquedef_read(uchar *ptr, MI_UNIQUEDEF *def)
@@ -1212,7 +1201,7 @@ uint mi_recinfo_write(File file, MI_COLUMNDEF *recinfo)
   mi_int2store(ptr,recinfo->length);	ptr +=2;
   *ptr++ = recinfo->null_bit;
   mi_int2store(ptr,recinfo->null_pos);	ptr+= 2;
-  return my_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
+  return mysql_file_write(file, buff, (size_t) (ptr-buff), MYF(MY_NABP)) != 0;
 }
 
 uchar *mi_recinfo_read(uchar *ptr, MI_COLUMNDEF *recinfo)
@@ -1225,7 +1214,7 @@ uchar *mi_recinfo_read(uchar *ptr, MI_COLUMNDEF *recinfo)
 }
 
 /**************************************************************************
-Open data file with or without RAID
+Open data file.
 We can't use dup() here as the data file descriptors need to have different
 active seek-positions.
 
@@ -1253,27 +1242,18 @@ int mi_open_datafile(MI_INFO *info, MYISAM_SHARE *share, const char *org_name,
       data_name= real_data_name;
     }
   }
-#ifdef USE_RAID
-  if (share->base.raid_type)
-  {
-    info->dfile=my_raid_open(data_name,
-			     share->mode | O_SHARE,
-			     share->base.raid_type,
-			     share->base.raid_chunks,
-			     share->base.raid_chunksize,
-			     MYF(MY_WME | MY_RAID));
-  }
-  else
-#endif
-    info->dfile=my_open(data_name, share->mode | O_SHARE, MYF(MY_WME));
+  info->dfile= mysql_file_open(mi_key_file_dfile,
+                               data_name, share->mode | O_SHARE, MYF(MY_WME));
   return info->dfile >= 0 ? 0 : 1;
 }
 
 
 int mi_open_keyfile(MYISAM_SHARE *share)
 {
-  if ((share->kfile=my_open(share->unique_file_name, share->mode | O_SHARE,
-                            MYF(MY_WME))) < 0)
+  if ((share->kfile= mysql_file_open(mi_key_file_kfile,
+                                     share->unique_file_name,
+                                     share->mode | O_SHARE,
+                                     MYF(MY_WME))) < 0)
     return 1;
   return 0;
 }

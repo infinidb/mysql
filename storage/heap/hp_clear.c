@@ -1,4 +1,5 @@
-/* Copyright (c) 2000-2002, 2004-2007 MySQL AB
+/* Copyright (c) 2000-2002, 2004-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   remove all records from database
@@ -31,8 +32,8 @@ void hp_clear(HP_SHARE *info)
   DBUG_ENTER("hp_clear");
 
   if (info->block.levels)
-    VOID(hp_free_level(&info->block,info->block.levels,info->block.root,
-			(uchar*) 0));
+    (void) hp_free_level(&info->block,info->block.levels,info->block.root,
+			(uchar*) 0);
   info->block.levels=0;
   hp_clear_keys(info);
   info->records= info->deleted= 0;
@@ -94,7 +95,7 @@ void hp_clear_keys(HP_SHARE *info)
     {
       HP_BLOCK *block= &keyinfo->block;
       if (block->levels)
-        VOID(hp_free_level(block,block->levels,block->root,(uchar*) 0));
+        (void) hp_free_level(block,block->levels,block->root,(uchar*) 0);
       block->levels=0;
       block->last_allocated=0;
       keyinfo->hash_buckets= 0;

@@ -1,4 +1,5 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
+/* Copyright (c) 2000-2003, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Extra functions we want to do with a database
@@ -75,12 +76,17 @@ int myrg_reset(MYRG_INFO *info)
   MYRG_TABLE *file;
   DBUG_ENTER("myrg_reset");
 
-  if (!info->children_attached)
-    DBUG_RETURN(1);
   info->cache_in_use=0;
   info->current_table=0;
   info->last_used_table= info->open_tables;
-  
+
+  /*
+    This is normally called with detached children.
+    Return OK as this is the normal case.
+  */
+  if (!info->children_attached)
+    DBUG_RETURN(0);
+
   for (file=info->open_tables ; file != info->end_table ; file++)
   {
     int error;

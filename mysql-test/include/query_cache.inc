@@ -15,7 +15,7 @@
 #               main code went into include/query_cache.inc
 #
 
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 
 # Initialise
 --disable_warnings
@@ -118,7 +118,7 @@ drop table t3,t2,t1;
 
 # Establish connection1
 connect (connection1,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 SET @@autocommit=1;
 
 connection default;
@@ -126,10 +126,10 @@ connection default;
 # This should be 'YES'.
 SHOW VARIABLES LIKE 'have_query_cache';
 
-SET GLOBAL query_cache_size = 200000;
+SET GLOBAL query_cache_size = 204800;
 flush status;
 SET @@autocommit=1;
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 eval CREATE TABLE t2 (s1 int, s2 varchar(1000), key(s1))$partitions_s1;
 INSERT INTO t2 VALUES (1,repeat('a',10)),(2,repeat('a',10)),(3,repeat('a',10)),(4,repeat('a',10));
 COMMIT;

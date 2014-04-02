@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
   @file ha_example.cc
@@ -89,14 +87,11 @@
     -Brian
 */
 
-#ifdef USE_PRAGMA_IMPLEMENTATION
-#pragma implementation        // gcc: Class implementation
-#endif
-
-#define MYSQL_SERVER 1
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "sql_class.h"           // MYSQL_HANDLERTON_INTERFACE_VERSION
 #include "ha_example.h"
-#include <mysql/plugin.h>
+#include "probes_mysql.h"
+#include "sql_plugin.h"
 
 static handler *example_create_handler(handlerton *hton,
                                        TABLE_SHARE *table, 
@@ -104,27 +99,34 @@ static handler *example_create_handler(handlerton *hton,
 
 handlerton *example_hton;
 
-/* Variables for example share methods */
+/* Interface to mysqld, to check system tables supported by SE */
+static const char* example_system_database();
+static bool example_is_supported_system_table(const char *db,
+                                      const char *table_name,
+                                      bool is_sql_layer_system_table);
+#ifdef HAVE_PSI_INTERFACE
+static PSI_mutex_key ex_key_mutex_Example_share_mutex;
 
-/* 
-   Hash used to track the number of open tables; variable for example share
-   methods
-*/
-static HASH example_open_tables;
-
-/* The mutex used to init the hash; variable for example share methods */
-pthread_mutex_t example_mutex;
-
-/**
-  @brief
-  Function we use in the creation of our hash to get key.
-*/
-
-static uchar* example_get_key(EXAMPLE_SHARE *share, size_t *length,
-                             my_bool not_used __attribute__((unused)))
+static PSI_mutex_info all_example_mutexes[]=
 {
-  *length=share->table_name_length;
-  return (uchar*) share->table_name;
+  { &ex_key_mutex_Example_share_mutex, "Example_share::mutex", 0}
+};
+
+static void init_example_psi_keys()
+{
+  const char* category= "example";
+  int count;
+
+  count= array_elements(all_example_mutexes);
+  mysql_mutex_register(category, all_example_mutexes, count);
+}
+#endif
+
+Example_share::Example_share()
+{
+  thr_lock_init(&lock);
+  mysql_mutex_init(ex_key_mutex_Example_share_mutex,
+                   &mutex, MY_MUTEX_INIT_FAST);
 }
 
 
@@ -132,30 +134,18 @@ static int example_init_func(void *p)
 {
   DBUG_ENTER("example_init_func");
 
-  example_hton= (handlerton *)p;
-  VOID(pthread_mutex_init(&example_mutex,MY_MUTEX_INIT_FAST));
-  (void) hash_init(&example_open_tables,system_charset_info,32,0,0,
-                   (hash_get_key) example_get_key,0,0);
+#ifdef HAVE_PSI_INTERFACE
+  init_example_psi_keys();
+#endif
 
-  example_hton->state=   SHOW_OPTION_YES;
-  example_hton->create=  example_create_handler;
-  example_hton->flags=   HTON_CAN_RECREATE;
+  example_hton= (handlerton *)p;
+  example_hton->state=                     SHOW_OPTION_YES;
+  example_hton->create=                    example_create_handler;
+  example_hton->flags=                     HTON_CAN_RECREATE;
+  example_hton->system_database=   example_system_database;
+  example_hton->is_supported_system_table= example_is_supported_system_table;
 
   DBUG_RETURN(0);
-}
-
-
-static int example_done_func(void *p)
-{
-  int error= 0;
-  DBUG_ENTER("example_done_func");
-
-  if (example_open_tables.records)
-    error= 1;
-  hash_free(&example_open_tables);
-  pthread_mutex_destroy(&example_mutex);
-
-  DBUG_RETURN(error);
 }
 
 
@@ -167,71 +157,26 @@ static int example_done_func(void *p)
   they are needed to function.
 */
 
-static EXAMPLE_SHARE *get_share(const char *table_name, TABLE *table)
+Example_share *ha_example::get_share()
 {
-  EXAMPLE_SHARE *share;
-  uint length;
-  char *tmp_name;
+  Example_share *tmp_share;
 
-  pthread_mutex_lock(&example_mutex);
-  length=(uint) strlen(table_name);
+  DBUG_ENTER("ha_example::get_share()");
 
-  if (!(share=(EXAMPLE_SHARE*) hash_search(&example_open_tables,
-                                           (uchar*) table_name,
-                                           length)))
+  lock_shared_ha_data();
+  if (!(tmp_share= static_cast<Example_share*>(get_ha_share_ptr())))
   {
-    if (!(share=(EXAMPLE_SHARE *)
-          my_multi_malloc(MYF(MY_WME | MY_ZEROFILL),
-                          &share, sizeof(*share),
-                          &tmp_name, length+1,
-                          NullS)))
-    {
-      pthread_mutex_unlock(&example_mutex);
-      return NULL;
-    }
+    tmp_share= new Example_share;
+    if (!tmp_share)
+      goto err;
 
-    share->use_count=0;
-    share->table_name_length=length;
-    share->table_name=tmp_name;
-    strmov(share->table_name,table_name);
-    if (my_hash_insert(&example_open_tables, (uchar*) share))
-      goto error;
-    thr_lock_init(&share->lock);
-    pthread_mutex_init(&share->mutex,MY_MUTEX_INIT_FAST);
+    set_ha_share_ptr(static_cast<Handler_share*>(tmp_share));
   }
-  share->use_count++;
-  pthread_mutex_unlock(&example_mutex);
-
-  return share;
-
-error:
-  pthread_mutex_destroy(&share->mutex);
-  my_free(share, MYF(0));
-
-  return NULL;
+err:
+  unlock_shared_ha_data();
+  DBUG_RETURN(tmp_share);
 }
 
-
-/**
-  @brief
-  Free lock controls. We call this whenever we close a table. If the table had
-  the last reference to the share, then we free memory associated with it.
-*/
-
-static int free_share(EXAMPLE_SHARE *share)
-{
-  pthread_mutex_lock(&example_mutex);
-  if (!--share->use_count)
-  {
-    hash_delete(&example_open_tables, (uchar*) share);
-    thr_lock_delete(&share->lock);
-    pthread_mutex_destroy(&share->mutex);
-    my_free(share, MYF(0));
-  }
-  pthread_mutex_unlock(&example_mutex);
-
-  return 0;
-}
 
 static handler* example_create_handler(handlerton *hton,
                                        TABLE_SHARE *table, 
@@ -272,6 +217,65 @@ const char **ha_example::bas_ext() const
   return ha_example_exts;
 }
 
+/*
+  Following handler function provides access to
+  system database specific to SE. This interface
+  is optional, so every SE need not implement it.
+*/
+const char* ha_example_system_database= NULL;
+const char* example_system_database()
+{
+  return ha_example_system_database;
+}
+
+/*
+  List of all system tables specific to the SE.
+  Array element would look like below,
+     { "<database_name>", "<system table name>" },
+  The last element MUST be,
+     { (const char*)NULL, (const char*)NULL }
+
+  This array is optional, so every SE need not implement it.
+*/
+static st_system_tablename ha_example_system_tables[]= {
+  {(const char*)NULL, (const char*)NULL}
+};
+
+/**
+  @brief Check if the given db.tablename is a system table for this SE.
+
+  @param db                         Database name to check.
+  @param table_name                 table name to check.
+  @param is_sql_layer_system_table  if the supplied db.table_name is a SQL
+                                    layer system table.
+
+  @return
+    @retval TRUE   Given db.table_name is supported system table.
+    @retval FALSE  Given db.table_name is not a supported system table.
+*/
+static bool example_is_supported_system_table(const char *db,
+                                              const char *table_name,
+                                              bool is_sql_layer_system_table)
+{
+  st_system_tablename *systab;
+
+  // Does this SE support "ALL" SQL layer system tables ?
+  if (is_sql_layer_system_table)
+    return false;
+
+  // Check if this is SE layer system tables
+  systab= ha_example_system_tables;
+  while (systab && systab->db)
+  {
+    if (systab->db == db &&
+        strcmp(systab->tablename, table_name) == 0)
+      return true;
+    systab++;
+  }
+
+  return false;
+}
+
 
 /**
   @brief
@@ -293,7 +297,7 @@ int ha_example::open(const char *name, int mode, uint test_if_locked)
 {
   DBUG_ENTER("ha_example::open");
 
-  if (!(share = get_share(name, table)))
+  if (!(share = get_share()))
     DBUG_RETURN(1);
   thr_lock_data_init(&share->lock,&lock,NULL);
 
@@ -303,8 +307,7 @@ int ha_example::open(const char *name, int mode, uint test_if_locked)
 
 /**
   @brief
-  Closes a table. We call the free_share() function to free any resources
-  that we have allocated in the "shared" structure.
+  Closes a table.
 
   @details
   Called from sql_base.cc, sql_select.cc, and table.cc. In sql_select.cc it is
@@ -320,7 +323,7 @@ int ha_example::open(const char *name, int mode, uint test_if_locked)
 int ha_example::close(void)
 {
   DBUG_ENTER("ha_example::close");
-  DBUG_RETURN(free_share(share));
+  DBUG_RETURN(0);
 }
 
 
@@ -330,26 +333,26 @@ int ha_example::close(void)
   is happening. buf() is a byte array of data. You can use the field
   information to extract the data from the native byte array type.
 
-    @details
+  @details
   Example of this would be:
-    @code
+  @code
   for (Field **field=table->field ; *field ; field++)
   {
     ...
   }
-    @endcode
+  @endcode
 
   See ha_tina.cc for an example of extracting all of the data as strings.
   ha_berekly.cc has an example of how to store it intact by "packing" it
   for ha_berkeley's own native storage type.
 
-  See the note for update_row() on auto_increments and timestamps. This
-  case also applies to write_row().
+  See the note for update_row() on auto_increments. This case also applies to
+  write_row().
 
   Called from item_sum.cc, item_sum.cc, sql_acl.cc, sql_insert.cc,
   sql_insert.cc, sql_select.cc, sql_table.cc, sql_udf.cc, and sql_update.cc.
 
-    @see
+  @see
   item_sum.cc, item_sum.cc, sql_acl.cc, sql_insert.cc,
   sql_insert.cc, sql_select.cc, sql_table.cc, sql_udf.cc and sql_update.cc
 */
@@ -357,7 +360,13 @@ int ha_example::close(void)
 int ha_example::write_row(uchar *buf)
 {
   DBUG_ENTER("ha_example::write_row");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  /*
+    Example of a successful write_row. We don't store the data
+    anywhere; they are thrown away. A real implementation will
+    probably need to do something with 'buf'. We report a success
+    here, to pretend that the insert was successful.
+  */
+  DBUG_RETURN(0);
 }
 
 
@@ -368,19 +377,20 @@ int ha_example::write_row(uchar *buf)
   Keep in mind that the server can do updates based on ordering if an ORDER BY
   clause was used. Consecutive ordering is not guaranteed.
 
-    @details
-  Currently new_data will not have an updated auto_increament record, or
-  and updated timestamp field. You can do these for example by doing:
-    @code
-  if (table->timestamp_field_type & TIMESTAMP_AUTO_SET_ON_UPDATE)
-    table->timestamp_field->set_time();
+  @details
+  Currently new_data will not have an updated auto_increament record. You can
+  do this for example by doing:
+
+  @code
+
   if (table->next_number_field && record == table->record[0])
     update_auto_increment();
-    @endcode
+
+  @endcode
 
   Called from sql_select.cc, sql_acl.cc, sql_update.cc, and sql_insert.cc.
 
-    @see
+  @see
   sql_select.cc, sql_acl.cc, sql_update.cc and sql_insert.cc
 */
 int ha_example::update_row(const uchar *old_data, uchar *new_data)
@@ -430,8 +440,12 @@ int ha_example::index_read_map(uchar *buf, const uchar *key,
                                enum ha_rkey_function find_flag
                                __attribute__((unused)))
 {
+  int rc;
   DBUG_ENTER("ha_example::index_read");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -442,8 +456,12 @@ int ha_example::index_read_map(uchar *buf, const uchar *key,
 
 int ha_example::index_next(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_example::index_next");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -454,8 +472,12 @@ int ha_example::index_next(uchar *buf)
 
 int ha_example::index_prev(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_example::index_prev");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -463,16 +485,20 @@ int ha_example::index_prev(uchar *buf)
   @brief
   index_first() asks for the first key in the index.
 
-    @details
+  @details
   Called from opt_range.cc, opt_sum.cc, sql_handler.cc, and sql_select.cc.
 
-    @see
+  @see
   opt_range.cc, opt_sum.cc, sql_handler.cc and sql_select.cc
 */
 int ha_example::index_first(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_example::index_first");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -480,16 +506,20 @@ int ha_example::index_first(uchar *buf)
   @brief
   index_last() asks for the last key in the index.
 
-    @details
+  @details
   Called from opt_range.cc, opt_sum.cc, sql_handler.cc, and sql_select.cc.
 
-    @see
+  @see
   opt_range.cc, opt_sum.cc, sql_handler.cc and sql_select.cc
 */
 int ha_example::index_last(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_example::index_last");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -499,17 +529,17 @@ int ha_example::index_last(uchar *buf)
   scan. See the example in the introduction at the top of this file to see when
   rnd_init() is called.
 
-    @details
+  @details
   Called from filesort.cc, records.cc, sql_handler.cc, sql_select.cc, sql_table.cc,
   and sql_update.cc.
 
-    @see
+  @see
   filesort.cc, records.cc, sql_handler.cc, sql_select.cc, sql_table.cc and sql_update.cc
 */
 int ha_example::rnd_init(bool scan)
 {
   DBUG_ENTER("ha_example::rnd_init");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  DBUG_RETURN(0);
 }
 
 int ha_example::rnd_end()
@@ -526,17 +556,22 @@ int ha_example::rnd_end()
   The Field structure for the table is the key to getting data into buf
   in a manner that will allow the server to understand it.
 
-    @details
+  @details
   Called from filesort.cc, records.cc, sql_handler.cc, sql_select.cc, sql_table.cc,
   and sql_update.cc.
 
-    @see
+  @see
   filesort.cc, records.cc, sql_handler.cc, sql_select.cc, sql_table.cc and sql_update.cc
 */
 int ha_example::rnd_next(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_example::rnd_next");
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       TRUE);
+  rc= HA_ERR_END_OF_FILE;
+  MYSQL_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -545,11 +580,11 @@ int ha_example::rnd_next(uchar *buf)
   position() is called after each call to rnd_next() if the data needs
   to be ordered. You can do something like the following to store
   the position:
-    @code
+  @code
   my_store_ptr(ref, ref_length, current_position);
-    @endcode
+  @endcode
 
-    @details
+  @details
   The server uses ref to store data. ref_length in the above case is
   the size needed to store current_position. ref is just a byte array
   that the server will maintain. If you are using offsets to mark rows, then
@@ -558,7 +593,7 @@ int ha_example::rnd_next(uchar *buf)
 
   Called from filesort.cc, sql_select.cc, sql_delete.cc, and sql_update.cc.
 
-    @see
+  @see
   filesort.cc, sql_select.cc, sql_delete.cc and sql_update.cc
 */
 void ha_example::position(const uchar *record)
@@ -575,16 +610,21 @@ void ha_example::position(const uchar *record)
   ref. You can use ha_get_ptr(pos,ref_length) to retrieve whatever key
   or position you saved when position() was called.
 
-    @details
+  @details
   Called from filesort.cc, records.cc, sql_insert.cc, sql_select.cc, and sql_update.cc.
 
-    @see
+  @see
   filesort.cc, records.cc, sql_insert.cc, sql_select.cc and sql_update.cc
 */
 int ha_example::rnd_pos(uchar *buf, uchar *pos)
 {
+  int rc;
   DBUG_ENTER("ha_example::rnd_pos");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       TRUE);
+  rc= HA_ERR_WRONG_COMMAND;
+  MYSQL_READ_ROW_DONE(rc);
+  DBUG_RETURN(rc);
 }
 
 
@@ -593,15 +633,15 @@ int ha_example::rnd_pos(uchar *buf, uchar *pos)
   ::info() is used to return information to the optimizer. See my_base.h for
   the complete description.
 
-    @details
+  @details
   Currently this table handler doesn't implement most of the fields really needed.
   SHOW also makes use of this data.
 
   You will probably want to have the following in your code:
-    @code
+  @code
   if (records < 2)
     records = 2;
-    @endcode
+  @endcode
   The reason is that the server will optimize for cases of only a single
   record. If, in a table scan, you don't know the number of records, it
   will probably be better to set records to two so you can return as many
@@ -620,7 +660,7 @@ int ha_example::rnd_pos(uchar *buf, uchar *pos)
   sql_select.cc, sql_select.cc, sql_show.cc, sql_show.cc, sql_show.cc, sql_show.cc,
   sql_table.cc, sql_union.cc, and sql_update.cc.
 
-    @see
+  @see
   filesort.cc, ha_heap.cc, item_sum.cc, opt_sum.cc, sql_delete.cc, sql_delete.cc,
   sql_derived.cc, sql_select.cc, sql_select.cc, sql_select.cc, sql_select.cc,
   sql_select.cc, sql_show.cc, sql_show.cc, sql_show.cc, sql_show.cc, sql_table.cc,
@@ -654,14 +694,14 @@ int ha_example::extra(enum ha_extra_function operation)
   Used to delete all rows in a table, including cases of truncate and cases where
   the optimizer realizes that all rows will be removed as a result of an SQL statement.
 
-    @details
+  @details
   Called from item_sum.cc by Item_func_group_concat::clear(),
   Item_sum_count_distinct::clear(), and Item_func_group_concat::clear().
   Called from sql_delete.cc by mysql_delete().
   Called from sql_select.cc by JOIN::reinit().
   Called from sql_union.cc by st_select_lex_unit::exec().
 
-    @see
+  @see
   Item_func_group_concat::clear(), Item_sum_count_distinct::clear() and
   Item_func_group_concat::clear() in item_sum.cc;
   mysql_delete() in sql_delete.cc;
@@ -677,17 +717,40 @@ int ha_example::delete_all_rows()
 
 /**
   @brief
+  Used for handler specific truncate table.  The table is locked in
+  exclusive mode and handler is responsible for reseting the auto-
+  increment counter.
+
+  @details
+  Called from Truncate_statement::handler_truncate.
+  Not used if the handlerton supports HTON_CAN_RECREATE, unless this
+  engine can be used as a partition. In this case, it is invoked when
+  a particular partition is to be truncated.
+
+  @see
+  Truncate_statement in sql_truncate.cc
+  Remarks in handler::truncate.
+*/
+int ha_example::truncate()
+{
+  DBUG_ENTER("ha_example::truncate");
+  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+}
+
+
+/**
+  @brief
   This create a lock on the table. If you are implementing a storage engine
   that can handle transacations look at ha_berkely.cc to see how you will
   want to go about doing this. Otherwise you should consider calling flock()
   here. Hint: Read the section "locking functions for mysql" in lock.cc to understand
   this.
 
-    @details
+  @details
   Called from lock.cc by lock_external() and unlock_external(). Also called
   from sql_table.cc by copy_data_between_tables().
 
-    @see
+  @see
   lock.cc by lock_external() and unlock_external() in lock.cc;
   the section "locking functions for mysql" in lock.cc;
   copy_data_between_tables() in sql_table.cc.
@@ -705,7 +768,7 @@ int ha_example::external_lock(THD *thd, int lock_type)
   should be needed for the table. For updates/deletes/inserts we get WRITE
   locks, for SELECT... we get read locks.
 
-    @details
+  @details
   Before adding the lock into the table lock handler (see thr_lock.c),
   mysqld calls store lock with the requested locks. Store lock can now
   modify a write lock to a read lock (or some other lock), ignore the
@@ -728,12 +791,12 @@ int ha_example::external_lock(THD *thd, int lock_type)
 
   Called from lock.cc by get_lock_data().
 
-    @note
+  @note
   In this method one should NEVER rely on table->in_use, it may, in fact,
   refer to a different thread! (this happens if get_lock_data() is called
   from mysql_lock_abort_for_thread() function)
 
-    @see
+  @see
   get_lock_data() in lock.cc
 */
 THR_LOCK_DATA **ha_example::store_lock(THD *thd,
@@ -754,7 +817,7 @@ THR_LOCK_DATA **ha_example::store_lock(THD *thd,
   shared references released). The variable name will just be the name of
   the table. You will need to remove any files you have created at this point.
 
-    @details
+  @details
   If you do not implement this, the default delete_table() is called from
   handler.cc and it will delete all files with the file extensions returned
   by bas_ext().
@@ -763,7 +826,7 @@ THR_LOCK_DATA **ha_example::store_lock(THD *thd,
   during create if the table_flag HA_DROP_BEFORE_CREATE was specified for
   the storage engine.
 
-    @see
+  @see
   delete_table and ha_create_table() in handler.cc
 */
 int ha_example::delete_table(const char *name)
@@ -852,6 +915,7 @@ struct st_mysql_storage_engine example_storage_engine=
 
 static ulong srv_enum_var= 0;
 static ulong srv_ulong_var= 0;
+static double srv_double_var= 0;
 
 const char *enum_var_names[]=
 {
@@ -886,10 +950,54 @@ static MYSQL_SYSVAR_ULONG(
   1000,
   0);
 
+static MYSQL_SYSVAR_DOUBLE(
+  double_var,
+  srv_double_var,
+  PLUGIN_VAR_RQCMDARG,
+  "0.500000..1000.500000",
+  NULL,
+  NULL,
+  8.5,
+  0.5,
+  1000.5,
+  0);                             // reserved always 0
+
+static MYSQL_THDVAR_DOUBLE(
+  double_thdvar,
+  PLUGIN_VAR_RQCMDARG,
+  "0.500000..1000.500000",
+  NULL,
+  NULL,
+  8.5,
+  0.5,
+  1000.5,
+  0);
+
 static struct st_mysql_sys_var* example_system_variables[]= {
   MYSQL_SYSVAR(enum_var),
   MYSQL_SYSVAR(ulong_var),
+  MYSQL_SYSVAR(double_var),
+  MYSQL_SYSVAR(double_thdvar),
   NULL
+};
+
+// this is an example of SHOW_FUNC and of my_snprintf() service
+static int show_func_example(MYSQL_THD thd, struct st_mysql_show_var *var,
+                             char *buf)
+{
+  var->type= SHOW_CHAR;
+  var->value= buf; // it's of SHOW_VAR_FUNC_BUFF_SIZE bytes
+  my_snprintf(buf, SHOW_VAR_FUNC_BUFF_SIZE,
+              "enum_var is %lu, ulong_var is %lu, "
+              "double_var is %f, %.6b", // %b is a MySQL extension
+              srv_enum_var, srv_ulong_var, srv_double_var, "really");
+  return 0;
+}
+
+static struct st_mysql_show_var func_status[]=
+{
+  {"example_func_example",  (char *)show_func_example, SHOW_FUNC},
+  {0,0,SHOW_UNDEF}
 };
 
 mysql_declare_plugin(example)
@@ -901,10 +1009,11 @@ mysql_declare_plugin(example)
   "Example storage engine",
   PLUGIN_LICENSE_GPL,
   example_init_func,                            /* Plugin Init */
-  example_done_func,                            /* Plugin Deinit */
+  NULL,                                         /* Plugin Deinit */
   0x0001 /* 0.1 */,
-  NULL,                                         /* status variables */
+  func_status,                                  /* status variables */
   example_system_variables,                     /* system variables */
-  NULL                                          /* config options */
+  NULL,                                         /* config options */
+  0,                                            /* flags */
 }
 mysql_declare_plugin_end;

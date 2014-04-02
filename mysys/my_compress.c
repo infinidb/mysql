@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2003, 2004, 2006, 2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Written by Sinisa Milivojevic <sinisa@mysql.com> */
 
@@ -51,7 +51,7 @@ my_bool my_compress(uchar *packet, size_t *len, size_t *complen)
     if (!compbuf)
       DBUG_RETURN(*complen ? 0 : 1);
     memcpy(packet,compbuf,*len);
-    my_free(compbuf,MYF(MY_WME));
+    my_free(compbuf);
   }
   DBUG_RETURN(0);
 }
@@ -73,14 +73,14 @@ uchar *my_compress_alloc(const uchar *packet, size_t *len, size_t *complen)
 
   if (res != Z_OK)
   {
-    my_free(compbuf, MYF(MY_WME));
+    my_free(compbuf);
     return 0;
   }
 
   if (*complen >= *len)
   {
     *complen= 0;
-    my_free(compbuf, MYF(MY_WME));
+    my_free(compbuf);
     DBUG_PRINT("note",("Packet got longer on compression; Not compressed"));
     return 0;
   }
@@ -125,11 +125,11 @@ my_bool my_uncompress(uchar *packet, size_t len, size_t *complen)
     if (error != Z_OK)
     {						/* Probably wrong packet */
       DBUG_PRINT("error",("Can't uncompress packet, error: %d",error));
-      my_free(compbuf, MYF(MY_WME));
+      my_free(compbuf);
       DBUG_RETURN(1);
     }
     memcpy(packet, compbuf, *complen);
-    my_free(compbuf, MYF(MY_WME));
+    my_free(compbuf);
   }
   else
     *complen= len;
@@ -244,13 +244,13 @@ int unpackfrm(uchar **unpack_data, size_t *unpack_len,
 
    if (ver != 1)
      DBUG_RETURN(1);
-   if (!(data= my_malloc(max(orglen, complen), MYF(MY_WME))))
+   if (!(data= my_malloc(MY_MAX(orglen, complen), MYF(MY_WME))))
      DBUG_RETURN(2);
    memcpy(data, pack_data + BLOB_HEADER, complen);
 
    if (my_uncompress(data, complen, &orglen))
    {
-     my_free(data, MYF(0));
+     my_free(data);
      DBUG_RETURN(3);
    }
 

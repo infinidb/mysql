@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2002, 2005, 2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Quick & light hash implementation for tab completion purposes
  *
@@ -22,7 +22,6 @@
 
 #include <my_global.h>
 #include <m_string.h>
-#undef SAFEMALLOC				// Speed things up
 #include <my_sys.h>
 #include "completion_hash.h"
 
@@ -206,14 +205,14 @@ Bucket *find_longest_match(HashTable *ht, char *str, uint length,
 void completion_hash_clean(HashTable *ht)
 {
   free_root(&ht->mem_root,MYF(0));
-  bzero((char*) ht->arBuckets,ht->nTableSize*sizeof(Bucket *));
+  memset(ht->arBuckets, 0, ht->nTableSize * sizeof(Bucket *));
 }
 
 
 void completion_hash_free(HashTable *ht)
 {
   completion_hash_clean(ht);
-  my_free(ht->arBuckets, MYF(0));
+  my_free(ht->arBuckets);
 }
 
 

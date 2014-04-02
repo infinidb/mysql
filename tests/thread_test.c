@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2004, 2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,18 +11,9 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
-
-#ifndef THREAD
-
-int main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
-{
-  printf("This test must be compiled with multithread support to work\n");
-  exit(1);
-}
-#else
 
 #include <my_sys.h>
 #include <my_pthread.h>
@@ -77,7 +68,7 @@ end:
   mysql_close(mysql);
   pthread_mutex_lock(&LOCK_thread_count);
   thread_count--;
-  VOID(pthread_cond_signal(&COND_thread_count)); /* Tell main we are ready */
+  pthread_cond_signal(&COND_thread_count); /* Tell main we are ready */
   pthread_mutex_unlock(&LOCK_thread_count);
   pthread_exit(0);
   return 0;
@@ -88,36 +79,36 @@ static struct my_option my_long_options[] =
 {
   {"help", '?', "Display this help and exit", 0, 0, 0, GET_NO_ARG, NO_ARG, 0,
    0, 0, 0, 0, 0},
-  {"database", 'D', "Database to use", (uchar**) &database, (uchar**) &database,
+  {"database", 'D', "Database to use", &database, &database,
    0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"host", 'h', "Connect to host", (uchar**) &host, (uchar**) &host, 0, GET_STR,
+  {"host", 'h', "Connect to host", &host, &host, 0, GET_STR,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"password", 'p',
    "Password to use when connecting to server. If password is not given it's asked from the tty.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
-  {"user", 'u', "User for login if not current user", (uchar**) &user,
-   (uchar**) &user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"user", 'u', "User for login if not current user", &user,
+   &user, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"verbose", 'v', "Write some progress indicators", (uchar**) &verbose,
-   (uchar**) &verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"query", 'Q', "Query to execute in each threads", (uchar**) &query,
-   (uchar**) &query, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"verbose", 'v', "Write some progress indicators", &verbose,
+   &verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"query", 'Q', "Query to execute in each threads", &query,
+   &query, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"port", 'P', "Port number to use for connection or 0 for default to, in "
    "order of preference, my.cnf, $MYSQL_TCP_PORT, "
 #if MYSQL_PORT_DEFAULT == 0
    "/etc/services, "
 #endif
    "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
-   (uchar**) &tcp_port,
-   (uchar**) &tcp_port, 0, GET_UINT, REQUIRED_ARG, MYSQL_PORT, 0, 0, 0, 0, 0},
-  {"socket", 'S', "Socket file to use for connection", (uchar**) &unix_socket,
-   (uchar**) &unix_socket, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   &tcp_port,
+   &tcp_port, 0, GET_UINT, REQUIRED_ARG, MYSQL_PORT, 0, 0, 0, 0, 0},
+  {"socket", 'S', "Socket file to use for connection", &unix_socket,
+   &unix_socket, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"test-count", 'c', "Run test count times (default %d)",
-   (uchar**) &number_of_tests, (uchar**) &number_of_tests, 0, GET_UINT,
+   &number_of_tests, &number_of_tests, 0, GET_UINT,
    REQUIRED_ARG, 1000, 0, 0, 0, 0, 0},
   {"thread-count", 't', "Number of threads to start",
-   (uchar**) &number_of_threads, (uchar**) &number_of_threads, 0, GET_UINT,
+   &number_of_threads, &number_of_threads, 0, GET_UINT,
    REQUIRED_ARG, 2, 0, 0, 0, 0, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
@@ -150,7 +141,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
   case 'p':
     if (argument)
     {
-      my_free(password, MYF(MY_ALLOW_ZERO_PTR));
+      my_free(password);
       password= my_strdup(argument, MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
     }
@@ -176,9 +167,8 @@ static void get_options(int argc, char **argv)
 {
   int ho_error;
 
-  load_defaults("my",load_default_groups,&argc,&argv);
-
-  if ((ho_error=handle_options(&argc, &argv, my_long_options, get_one_option)))
+  if ((ho_error= load_defaults("my",load_default_groups,&argc,&argv)) ||
+      (ho_error= handle_options(&argc, &argv, my_long_options, get_one_option)))
     exit(ho_error);
 
   free_defaults(argv);
@@ -255,4 +245,3 @@ int main(int argc, char **argv)
   return 0;					/* Keep some compilers happy */
 }
 
-#endif /* THREAD */

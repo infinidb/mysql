@@ -1,5 +1,5 @@
 /* -*- C++ -*- */
-/* Copyright (c) 2002-2005, 2008 MySQL AB
+/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,13 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #ifndef _SP_CACHE_H_
 #define _SP_CACHE_H_
 
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
+#include "my_global.h"                          /* ulong */
 
 /*
   Stored procedures/functions cache. This is used as follows:
@@ -30,6 +28,7 @@
 
 class sp_head;
 class sp_cache;
+class sp_name;
 
 /*
   Cache usage scenarios:
@@ -57,7 +56,8 @@ void sp_cache_clear(sp_cache **cp);
 void sp_cache_insert(sp_cache **cp, sp_head *sp);
 sp_head *sp_cache_lookup(sp_cache **cp, sp_name *name);
 void sp_cache_invalidate();
-void sp_cache_flush_obsolete(sp_cache **cp);
-ulong sp_cache_version(sp_cache **cp);
+void sp_cache_flush_obsolete(sp_cache **cp, sp_head **sp);
+ulong sp_cache_version();
+void sp_cache_enforce_limit(sp_cache *cp, ulong upper_limit_for_elements);
 
 #endif /* _SP_CACHE_H_ */

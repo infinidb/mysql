@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,12 +11,21 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include "mysys_err.h"
 #include <errno.h>
+
+static void (*before_sync_wait)(void)= 0;
+static void (*after_sync_wait)(void)= 0;
+
+void thr_set_sync_wait_callback(void (*before_wait)(void),
+                                void (*after_wait)(void))
+{
+  before_sync_wait= before_wait;
+  after_sync_wait= after_wait;
+}
 
 /*
   Sync data in file to disk
@@ -48,6 +56,8 @@ int my_sync(File fd, myf my_flags)
   DBUG_ENTER("my_sync");
   DBUG_PRINT("my",("Fd: %d  my_flags: %d", fd, my_flags));
 
+  if (before_sync_wait)
+    (*before_sync_wait)();
   do
   {
 #if defined(F_FULLFSYNC)
@@ -64,8 +74,8 @@ int my_sync(File fd, myf my_flags)
     res= fdatasync(fd);
 #elif defined(HAVE_FSYNC)
     res= fsync(fd);
-#elif defined(__WIN__)
-    res= _commit(fd);
+#elif defined(_WIN32)
+    res= my_win_fsync(fd);
 #else
 #error Cannot find a way to sync a file, durability in danger
     res= 0;					/* No sync (strange OS) */
@@ -77,6 +87,8 @@ int my_sync(File fd, myf my_flags)
     int er= errno;
     if (!(my_errno= er))
       my_errno= -1;                             /* Unknown error */
+    if (after_sync_wait)
+      (*after_sync_wait)();
     if ((my_flags & MY_IGNORE_BADFD) &&
         (er == EBADF || er == EINVAL || er == EROFS))
     {
@@ -84,7 +96,16 @@ int my_sync(File fd, myf my_flags)
       res= 0;
     }
     else if (my_flags & MY_WME)
-      my_error(EE_SYNC, MYF(ME_BELL+ME_WAITTANG), my_filename(fd), my_errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_SYNC, MYF(ME_BELL+ME_WAITTANG), my_filename(fd),
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
+  }
+  else
+  {
+    if (after_sync_wait)
+      (*after_sync_wait)();
   }
   DBUG_RETURN(res);
 } /* my_sync */

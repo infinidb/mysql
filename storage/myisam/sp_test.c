@@ -11,13 +11,12 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Testing of the basic functions of a MyISAM spatial table        */
 /* Written by Alex Barkov, who has a shared copyright to this code */
 
 #include "myisam.h"
-#include "myisamdef.h"
 
 #ifdef HAVE_SPATIAL
 #include "sp_defs.h"
@@ -104,7 +103,7 @@ int run_test(const char *filename)
   if (!silent)
     printf("- Creating isam-file\n");
   
-  bzero((char*) &create_info,sizeof(create_info));
+  memset(&create_info, 0, sizeof(create_info));
   create_info.max_rows=10000000;
   
   if (mi_create(filename,
@@ -147,7 +146,7 @@ int run_test(const char *filename)
   for (i=0; i < nrecords/4; i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -168,7 +167,7 @@ int run_test(const char *filename)
   for (i=0; i < nrecords/2 ; i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -281,7 +280,7 @@ static int read_with_pos (MI_INFO * file,int silent)
   for (i=0;;i++)
   {
     my_errno=0;
-    bzero((char*) read_record,MAX_REC_LENGTH);
+    memset(read_record, 0, MAX_REC_LENGTH);
     error=mi_rrnd(file,read_record,i == 0 ? 0L : HA_OFFSET_ERROR);
     if (error)
     {
@@ -300,26 +299,6 @@ static int read_with_pos (MI_INFO * file,int silent)
 }
 
 
-#ifdef NOT_USED
-static void bprint_record(uchar * record,
-			  my_off_t offs __attribute__((unused)),
-			  const char * tail)
-{
-  int i;
-  char * pos;
-  i=(unsigned char)record[0];
-  printf("%02X ",i);
-  
-  for( pos=record+1, i=0; i<32; i++,pos++)
-  {
-    int b=(unsigned char)*pos;
-    printf("%02X",b);
-  }
-  printf("%s",tail);
-}
-#endif
-
-
 static void print_record(uchar * record, my_off_t offs,const char * tail)
 {
   uchar *pos;
@@ -331,7 +310,7 @@ static void print_record(uchar * record, my_off_t offs,const char * tail)
   len=sint4korr(pos);
   pos+=4;
   printf(" len=%d ",len);
-  memcpy_fixed(&ptr,pos,sizeof(char*));
+  memcpy(&ptr, pos, sizeof(char*));
   if (ptr)
     rtree_PrintWKB((uchar*) ptr,SPDIMS);
   else
@@ -339,34 +318,6 @@ static void print_record(uchar * record, my_off_t offs,const char * tail)
   printf(" offs=%ld ",(long int)offs);
   printf("%s",tail);
 }
-
-
-#ifdef NOT_USED
-static void create_point(uchar *record,uint rownr)
-{
-   uint tmp;
-   char *ptr;
-   char *pos=record;
-   double x[200];
-   int i;
-   
-   for(i=0;i<SPDIMS;i++)
-     x[i]=rownr;
-   
-   bzero((char*) record,MAX_REC_LENGTH);
-   *pos=0x01; /* DEL marker */
-   pos++;
-   
-   memset(blob_key,0,sizeof(blob_key));
-   tmp=rtree_CreatePointWKB(x,SPDIMS,blob_key);
-   
-   int4store(pos,tmp);
-   pos+=4;
-   
-   ptr=blob_key;
-   memcpy_fixed(pos,&ptr,sizeof(char*));
-}
-#endif
 
 
 static void create_linestring(uchar *record,uint rownr)
@@ -377,23 +328,23 @@ static void create_linestring(uchar *record,uint rownr)
    double x[200];
    int i,j;
    int npoints=2;
-   
+
    for(j=0;j<npoints;j++)
      for(i=0;i<SPDIMS;i++)
        x[i+j*SPDIMS]=rownr*j;
-   
-   bzero((char*) record,MAX_REC_LENGTH);
+
+   memset(record, 0, MAX_REC_LENGTH);
    *pos=0x01; /* DEL marker */
    pos++;
-   
+
    memset(blob_key,0,sizeof(blob_key));
    tmp=rtree_CreateLineStringWKB(x,SPDIMS,npoints, (uchar*) blob_key);
-   
+
    int4store(pos,tmp);
    pos+=4;
-   
+
    ptr=blob_key;
-   memcpy_fixed(pos,&ptr,sizeof(char*));
+   memcpy(pos, &ptr, sizeof(char*));
 }
 
 
@@ -402,8 +353,8 @@ static void create_key(uchar *key,uint rownr)
    double c=rownr;
    uchar *pos;
    uint i;
-   
-   bzero(key,MAX_REC_LENGTH);
+
+   memset(key, 0, MAX_REC_LENGTH);
    for (pos=key, i=0; i<2*SPDIMS; i++)
    {
      float8store(pos,c);
@@ -425,27 +376,6 @@ static void print_key(const uchar *key,const char * tail)
   }
   printf("%s",tail);
 }
-
-
-#ifdef NOT_USED
-
-static int rtree_CreatePointWKB(double *ords, uint n_dims, uchar *wkb)
-{
-  uint i;
-
-  *wkb = wkbXDR;
-  ++wkb;
-  int4store(wkb, wkbPoint);
-  wkb += 4;
-
-  for (i=0; i < n_dims; ++i)
-  {
-    float8store(wkb, ords[i]);
-    wkb += 8;
-  }
-  return 5 + n_dims * 8;
-}
-#endif
 
 
 static int rtree_CreateLineStringWKB(double *ords, uint n_dims, uint n_points,
@@ -563,3 +493,4 @@ int main(int argc __attribute__((unused)),char *argv[] __attribute__((unused)))
 }
 #endif /*HAVE_SPATIAL*/
 
+#include "mi_extrafunc.h"

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBmysql_config\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBMYSQL_CONFIG\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBMYSQL_CONFIG\FR" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -53,11 +53,27 @@ supports the following options\&.
 .\" cflags option: mysql_config
 \fB\-\-cflags\fR
 .sp
-Compiler flags to find include files and critical compiler flags and defines used when compiling the
+C Compiler flags to find include files and critical compiler flags and defines used when compiling the
 libmysqlclient
 library\&. The options returned are tied to the specific compiler that was used when the library was created and might clash with the settings for your own compiler\&. Use
 \fB\-\-include\fR
 for more portable options that contain only include paths\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" mysql_config: cxxflags option
+.\" cxxflags option: mysql_config
+\fB\-\-cxxflags\fR
+.sp
+Like
+\fB\-\-cflags\fR, but for C++ compiler flags\&. This option was added in MySQL 5\&.6\&.4\&.
 .RE
 .sp
 .RS 4
@@ -120,7 +136,9 @@ Libraries and options required to link with the MySQL client library\&.
 .\" libs_r option: mysql_config
 \fB\-\-libs_r\fR
 .sp
-Libraries and options required to link with the thread\-safe MySQL client library\&.
+Libraries and options required to link with the thread\-safe MySQL client library\&. In MySQL 5\&.6, all client libraries are thread\-safe, so this option need not be used\&. The
+\fB\-\-libs\fR
+option can be used in all cases\&.
 .RE
 .sp
 .RS 4
@@ -135,7 +153,7 @@ Libraries and options required to link with the thread\-safe MySQL client librar
 .\" plugindir option: mysql_config
 \fB\-\-plugindir\fR
 .sp
-The default plugin directory path name, defined when configuring MySQL\&. This option was added in MySQL 5\&.1\&.24\&.
+The default plugin directory path name, defined when configuring MySQL\&.
 .RE
 .sp
 .RS 4
@@ -148,6 +166,7 @@ The default plugin directory path name, defined when configuring MySQL\&. This o
 .\}
 .\" mysql_config: port option
 .\" port option: mysql_config
+.\" TCP/IP
 \fB\-\-port\fR
 .sp
 The default TCP/IP port number, defined when configuring MySQL\&.
@@ -196,15 +215,15 @@ Usage: /usr/local/mysql/bin/mysql_config [options]
 Options:
   \-\-cflags         [\-I/usr/local/mysql/include/mysql \-mcpu=pentiumpro]
   \-\-include        [\-I/usr/local/mysql/include/mysql]
-  \-\-libs           [\-L/usr/local/mysql/lib/mysql \-lmysqlclient \-lz
-                    \-lz \-lcrypt \-lnsl \-lm]
+  \-\-libs           [\-L/usr/local/mysql/lib/mysql \-lmysqlclient
+                    \-lpthread \-lm \-lrt \-lssl \-lcrypto \-ldl]
   \-\-libs_r         [\-L/usr/local/mysql/lib/mysql \-lmysqlclient_r
-                    \-lz \-lpthread \-lcrypt \-lnsl \-lm \-lpthread]
+                    \-lpthread \-lm \-lrt \-lssl \-lcrypto \-ldl]
   \-\-socket         [/tmp/mysql\&.sock]
   \-\-port           [3306]
-  \-\-version        [5\&.1\&.69]
-  \-\-libmysqld\-libs [\-L/usr/local/mysql/lib/mysql \-lmysqld \-ldl
-                    \-lz \-lpthread \-lcrypt \-lnsl \-lm \-lpthread \-lrt]
+  \-\-version        [5\&.6\&.11]
+  \-\-libmysqld\-libs [\-L/usr/local/mysql/lib/mysql \-lmysqld
+                    \-lpthread \-lm \-lrt \-lssl \-lcrypto \-ldl \-lcrypt]
 .fi
 .if n \{\
 .RE
@@ -229,7 +248,7 @@ shell> \fBgcc \-o progname progname\&.o `mysql_config \-\-libs`\fR
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

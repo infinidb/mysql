@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,11 +10,17 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+/*
+  It is necessary to include set_var.h instead of item.h because there
+  are dependencies on include order for set_var.h and item.h. This
+  will be resolved later.
+*/
+#include "sql_class.h"                          // THD, set_var.h: THD
+#include "set_var.h"
 
 /**
   Row items used for comparing rows and IN operations on rows:
@@ -87,7 +92,8 @@ bool Item_row::fix_fields(THD *thd, Item **ref)
       }
     }
     maybe_null|= item->maybe_null;
-    with_sum_func= with_sum_func || item->with_sum_func;
+    with_sum_func|= item->with_sum_func;
+    with_subselect|= item->has_subquery();
   }
   fixed= 1;
   return FALSE;
@@ -108,7 +114,7 @@ void Item_row::cleanup()
 }
 
 
-void Item_row::split_sum_func(THD *thd, Item **ref_pointer_array,
+void Item_row::split_sum_func(THD *thd, Ref_ptr_array ref_pointer_array,
                               List<Item> &fields)
 {
   Item **arg, **arg_end;
@@ -120,11 +126,30 @@ void Item_row::split_sum_func(THD *thd, Item **ref_pointer_array,
 void Item_row::update_used_tables()
 {
   used_tables_cache= 0;
-  const_item_cache= 1;
+  const_item_cache= true;
+  with_subselect= false;
+  with_stored_program= false;
   for (uint i= 0; i < arg_count; i++)
   {
     items[i]->update_used_tables();
     used_tables_cache|= items[i]->used_tables();
+    const_item_cache&= items[i]->const_item();
+    with_subselect|= items[i]->has_subquery();
+    with_stored_program|= items[i]->has_stored_program();
+  }
+}
+
+void Item_row::fix_after_pullout(st_select_lex *parent_select,
+                                 st_select_lex *removed_select)
+{
+  used_tables_cache= 0;
+  not_null_tables_cache= 0;
+  const_item_cache= true;
+  for (uint i= 0; i < arg_count; i++)
+  {
+    items[i]->fix_after_pullout(parent_select, removed_select);
+    used_tables_cache|= items[i]->used_tables();
+    not_null_tables_cache|= items[i]->not_null_tables();
     const_item_cache&= items[i]->const_item();
   }
 }
@@ -165,7 +190,7 @@ bool Item_row::walk(Item_processor processor, bool walk_subquery, uchar *arg)
 
 Item *Item_row::transform(Item_transformer transformer, uchar *arg)
 {
-  DBUG_ASSERT(!current_thd->is_stmt_prepare());
+  DBUG_ASSERT(!current_thd->stmt_arena->is_stmt_prepare());
 
   for (uint i= 0; i < arg_count; i++)
   {

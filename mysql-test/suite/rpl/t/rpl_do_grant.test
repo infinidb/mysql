@@ -1,16 +1,20 @@
 # Works in statement-based and row-based binlogging.
 # Test that GRANT and other user management commands are replicated to the slave
 
+-- source include/not_gtid_enabled.inc
 -- source include/master-slave.inc
 
 # do not be influenced by other tests.
 connection master;
+call mtr.add_suppression("Did not write failed .* into binary log while "
+                         "revoking all_privileges from a list of users.");
+call mtr.add_suppression("Did not write failed .* into binary log while "
+                         "storing routine level grants in the privilege "
+                         "tables.");
 delete from mysql.user where user=_binary'rpl_do_grant';
 delete from mysql.db where user=_binary'rpl_do_grant';
 flush privileges;
-save_master_pos;
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 # if these DELETE did nothing on the master, we need to do them manually on the
 # slave.
 delete from mysql.user where user=_binary'rpl_ignore_grant';
@@ -21,17 +25,13 @@ flush privileges;
 connection master;
 grant select on *.* to rpl_do_grant@localhost;
 grant drop on test.* to rpl_do_grant@localhost;
-save_master_pos;
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 show grants for rpl_do_grant@localhost;
 
 # test replication of SET PASSWORD
 connection master;
 set password for rpl_do_grant@localhost=password("does it work?");
-save_master_pos;
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 select password<>_binary'' from mysql.user where user=_binary'rpl_do_grant';
 
 #
@@ -44,9 +44,7 @@ select password<>'' from mysql.user where user='rpl_do_grant';
 set sql_mode='ANSI_QUOTES';
 set password for rpl_do_grant@localhost=password('does it work?');
 set sql_mode='';
-save_master_pos;
-connection slave;
-sync_with_master;
+sync_slave_with_master;
 select password<>'' from mysql.user where user='rpl_do_grant';
 
 
@@ -260,7 +258,6 @@ CREATE PROCEDURE p1() SELECT * FROM t1 |
 DELIMITER ;|
 -- error ER_NONEXISTING_PROC_GRANT
 REVOKE EXECUTE ON PROCEDURE p1 FROM 'root'@'localhost';
-
 -- sync_slave_with_master
 
 -- connection master
@@ -312,6 +309,16 @@ SHOW GRANTS FOR 'user49119'@'localhost';
 SHOW GRANTS FOR CURRENT_USER;
 -- echo ##############################################################
 
+--connection slave
+SET sql_log_bin= 0;
+call mtr.add_suppression("Slave SQL.*The incident LOST_EVENTS occured on the master.*");
+SET sql_log_bin= 1;
+--let $slave_sql_errno= convert_error(ER_SLAVE_INCIDENT)
+--source include/wait_for_slave_sql_error.inc
+# Skip incident event
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
+--source include/start_slave_sql.inc
+-- connection master
 -- sync_slave_with_master
 
 -- echo #############################################################
@@ -341,12 +348,7 @@ revoke all privileges, grant option from "foo";
 
 ## assertion: revoke is logged
 -- source include/show_binlog_events.inc
-
 -- sync_slave_with_master
-
-## assertion: slave replicates revoke and does not fail because master
-##            logged revoke with correct expected error code
---source include/check_slave_no_error.inc
 
 -- connection master
 DROP USER foo@"1.2.3.4";
@@ -371,5 +373,4 @@ SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
 --connection master
 DROP USER user_bug27606@localhost;
 
---echo "End of test"
 --source include/rpl_end.inc

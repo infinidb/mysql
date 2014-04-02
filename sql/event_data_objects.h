@@ -1,6 +1,6 @@
 #ifndef _EVENT_DATA_OBJECTS_H_
 #define _EVENT_DATA_OBJECTS_H_
-/* Copyright (c) 2004-2008 MySQL AB
+/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +12,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /**
   @addtogroup Event_Scheduler
@@ -23,6 +23,12 @@
 */
 
 #include "event_parse_data.h"
+#include "thr_lock.h"                           /* thr_lock_type */
+
+class Field;
+class THD;
+class Time_zone;
+struct TABLE;
 
 class Event_queue_element_for_exec
 {
@@ -76,10 +82,6 @@ protected:
 
 class Event_queue_element : public Event_basic
 {
-protected:
-  bool status_changed;
-  bool last_executed_changed;
-
 public:
   int on_completion;
   int status;
@@ -111,9 +113,6 @@ public:
 
   void
   mark_last_executed(THD *thd);
-
-  bool
-  update_timing_fields(THD *thd);
 };
 
 
@@ -133,7 +132,7 @@ public:
   ulonglong created;
   ulonglong modified;
 
-  ulong sql_mode;
+  sql_mode_t sql_mode;
 
   class Stored_program_creation_ctx *creation_ctx;
   LEX_STRING body_utf8;
@@ -159,7 +158,7 @@ public:
   LEX_STRING definer_user;
   LEX_STRING definer_host;
 
-  ulong sql_mode;
+  sql_mode_t sql_mode;
 
   class Stored_program_creation_ctx *creation_ctx;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Open a temporary file and cache it with io_cache. Delete it on close */
 
@@ -71,8 +71,8 @@ my_bool open_cached_file(IO_CACHE *cache, const char* dir, const char *prefix,
   {
     DBUG_RETURN(0);
   }
-  my_free(cache->dir,	MYF(MY_ALLOW_ZERO_PTR));
-  my_free(cache->prefix,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(cache->dir);
+  my_free(cache->prefix);
   DBUG_RETURN(1);
 }
 
@@ -110,12 +110,12 @@ void close_cached_file(IO_CACHE *cache)
       if (cache->file_name)
       {
 	(void) my_delete(cache->file_name,MYF(MY_WME | ME_NOINPUT));
-	my_free(cache->file_name,MYF(0));
+	my_free(cache->file_name);
       }
 #endif
     }
-    my_free(cache->dir,MYF(MY_ALLOW_ZERO_PTR));
-    my_free(cache->prefix,MYF(MY_ALLOW_ZERO_PTR));
+    my_free(cache->dir);
+    my_free(cache->prefix);
   }
   DBUG_VOID_RETURN;
 }

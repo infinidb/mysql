@@ -1,4 +1,5 @@
-/* Copyright (c) 2000, 2001, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2001, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "myisamdef.h"
 
@@ -49,12 +50,12 @@ int mi_rsame(MI_INFO *info, uchar *record, int inx)
     info->lastkey_length=_mi_make_key(info,(uint) inx,info->lastkey,record,
 				      info->lastpos);
     if (info->s->concurrent_insert)
-      rw_rdlock(&info->s->key_root_lock[inx]);
-    VOID(_mi_search(info,info->s->keyinfo+inx,info->lastkey, USE_WHOLE_KEY,
+      mysql_rwlock_rdlock(&info->s->key_root_lock[inx]);
+    (void) _mi_search(info,info->s->keyinfo+inx,info->lastkey, USE_WHOLE_KEY,
 		    SEARCH_SAME,
-		    info->s->state.key_root[inx]));
+		    info->s->state.key_root[inx]);
     if (info->s->concurrent_insert)
-      rw_unlock(&info->s->key_root_lock[inx]);
+      mysql_rwlock_unlock(&info->s->key_root_lock[inx]);
   }
 
   if (!(*info->read_record)(info,info->lastpos,record))

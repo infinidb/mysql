@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 
 *** Preparing data ***
@@ -18,6 +21,7 @@ END|
 INSERT INTO t3 VALUES(1, 'AA');
 INSERT INTO t2 VALUES(1, 'AA');
 INSERT INTO t1 VALUES(1, 'AA');
+include/sync_slave_sql_with_master.inc
 RENAME TABLE t3 TO t3_bak;
 UPDATE t1 SET b = 'XX' WHERE a = 1;
 SELECT * FROM t1 ORDER BY a;
@@ -29,8 +33,9 @@ a	b
 SELECT * FROM t3 ORDER BY a;
 a	b
 1	ZZ
-call mtr.add_suppression("Slave SQL.*Error .Table .test.t3. doesn.t exist. on.* Error_code: 1146");
-include/wait_for_slave_sql_error.inc [errno=1146]
+call mtr.add_suppression("Slave SQL.*Table .test.t3. doesn.t exist.* Error_code: 1146");
+call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+include/wait_for_slave_sql_to_stop.inc
 SHOW TABLES LIKE 't%';
 Tables_in_test (t%)
 t1
@@ -48,17 +53,19 @@ include/start_slave.inc
 TRUNCATE t1;
 TRUNCATE t2;
 TRUNCATE t3;
+include/sync_slave_sql_with_master.inc
 
 *** Test non-transactional group w/ PK ***
 ALTER TABLE t1 ADD PRIMARY KEY (a);
 ALTER TABLE t2 ADD PRIMARY KEY (a);
 ALTER TABLE t3 ADD PRIMARY KEY (a);
+include/sync_slave_sql_with_master.inc
 RENAME TABLE t3 TO t3_bak;
 INSERT INTO t3 VALUES(2, 'B');
 INSERT INTO t2 VALUES(2, 'B');
 INSERT INTO t1 VALUES(2, 'B');
 UPDATE t1 SET b = 'X' WHERE a = 2;
-include/wait_for_slave_sql_error.inc [errno=1146]
+include/wait_for_slave_sql_to_stop.inc
 SELECT * FROM t1 ORDER BY a;
 a	b
 2	X
@@ -83,18 +90,20 @@ include/start_slave.inc
 TRUNCATE t1;
 TRUNCATE t2;
 TRUNCATE t3;
+include/sync_slave_sql_with_master.inc
 
 *** Test transactional group w/ PK ***
 ALTER TABLE t1 ENGINE=InnoDB;
 ALTER TABLE t2 ENGINE=InnoDB;
 ALTER TABLE t3 ENGINE=InnoDB;
+include/sync_slave_sql_with_master.inc
 RENAME TABLE t3 TO t3_bak;
 BEGIN;
 INSERT INTO t1 VALUES (3, 'C'), (4, 'D');
 INSERT INTO t2 VALUES (3, 'C'), (4, 'D');
 INSERT INTO t3 VALUES (3, 'C'), (4, 'D');
 COMMIT;
-include/wait_for_slave_sql_error.inc [errno=1146]
+include/wait_for_slave_sql_to_stop.inc
 SELECT * FROM t1 ORDER BY a;
 a	b
 3	C
@@ -121,4 +130,5 @@ RENAME TABLE t3_bak TO t3;
 include/start_slave.inc
 *** Clean up ***
 DROP TABLE t1,t2,t3;
+include/sync_slave_sql_with_master.inc
 include/rpl_end.inc

@@ -189,17 +189,16 @@ LOCK TABLES `t1` WRITE;
 INSERT INTO `t1`(c2) VALUES ('1');
 FLUSH LOGS;
 
--- sync_slave_with_master
+--source include/sync_slave_sql_with_master.inc
 -- connection master
 
 -- echo ### assertion: the slave replicated event successfully and tables match
 -- let $diff_tables= master:t1, slave:t1
 -- source include/diff_tables.inc
 
-DROP TABLE `t1`;
-
 -- connection master
--- sync_slave_with_master
+DROP TABLE `t1`;
+--source include/sync_slave_sql_with_master.inc
 -- connection master
 
 -- echo === Using mysqlbinlog to detect failure. Before the patch mysqlbinlog would find a corrupted event, thence would fail.
@@ -303,7 +302,7 @@ EOF
 -- source $generated_sql
 -- enable_query_log
 
--- sync_slave_with_master
+--source include/sync_slave_sql_with_master.inc
 -- connection master
 
 FLUSH LOGS;
@@ -319,7 +318,7 @@ while($ntables)
   -- disable_query_log
   -- eval DROP TABLE t$ntables
   -- enable_query_log
-  -- sync_slave_with_master
+  --source include/sync_slave_sql_with_master.inc
   -- connection master
 
   -- dec $ntables

@@ -1,4 +1,5 @@
-/* Copyright (c) 2003-2008 MySQL AB
+/* Copyright (c) 2003-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Key cache assignments
@@ -96,7 +97,7 @@ int mi_assign_to_key_cache(MI_INFO *info,
     ensure that setting the key cache and changing the multi_key_cache
     is done atomicly
   */
-  pthread_mutex_lock(&share->intern_lock);
+  mysql_mutex_lock(&share->intern_lock);
   /*
     Tell all threads to use the new key cache
     This should be seen at the lastes for the next call to an myisam function.
@@ -108,7 +109,7 @@ int mi_assign_to_key_cache(MI_INFO *info,
                           share->unique_name_length,
 			  share->key_cache))
     error= my_errno;
-  pthread_mutex_unlock(&share->intern_lock);
+  mysql_mutex_unlock(&share->intern_lock);
   DBUG_RETURN(error);
 }
 
@@ -143,7 +144,7 @@ void mi_change_key_cache(KEY_CACHE *old_key_cache,
   /*
     Lock list to ensure that no one can close the table while we manipulate it
   */
-  pthread_mutex_lock(&THR_LOCK_myisam);
+  mysql_mutex_lock(&THR_LOCK_myisam);
   for (pos=myisam_open_list ; pos ; pos=pos->next)
   {
     MI_INFO *info= (MI_INFO*) pos->data;
@@ -158,6 +159,6 @@ void mi_change_key_cache(KEY_CACHE *old_key_cache,
     open a new table that will be associted with the old key cache
   */
   multi_key_cache_change(old_key_cache, new_key_cache);
-  pthread_mutex_unlock(&THR_LOCK_myisam);
+  mysql_mutex_unlock(&THR_LOCK_myisam);
   DBUG_VOID_RETURN;
 }

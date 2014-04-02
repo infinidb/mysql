@@ -1,4 +1,4 @@
-/* Copyright (c) 2005 MySQL AB
+/* Copyright (c) 2000, 2005, 2006 MySQL AB
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -12,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
 #include <m_string.h>
@@ -31,5 +30,11 @@ static void my_str_free_default(void *ptr)
   free(ptr);
 }
 
+void *my_str_realloc_default(void *ptr, size_t size)
+{
+  return realloc(ptr, size);
+}
+
 void *(*my_str_malloc)(size_t)= &my_str_malloc_default;
 void (*my_str_free)(void *)= &my_str_free_default;
+void *(*my_str_realloc)(void *, size_t)= &my_str_realloc_default;

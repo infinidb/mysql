@@ -1,4 +1,7 @@
-/* Copyright (c) 2000-2004, 2006, 2007 MySQL AB
+#ifndef GSTREAM_INCLUDED
+#define GSTREAM_INCLUDED
+
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,8 +14,15 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+
+#include "my_global.h"                          /* NULL, NullS */
+#include "my_sys.h"                             /* MY_ALLOW_ZERO_PTR */
+#include "m_ctype.h"           /* my_charset_latin1, my_charset_bin */
+
+typedef struct charset_info_st CHARSET_INFO;
+typedef struct st_mysql_lex_string LEX_STRING;
 
 class Gis_read_stream
 {
@@ -28,14 +38,14 @@ public:
     comma
   };
 
-  Gis_read_stream(CHARSET_INFO *charset, const char *buffer, int size)
+  Gis_read_stream(const CHARSET_INFO *charset, const char *buffer, int size)
     :m_cur(buffer), m_limit(buffer + size), m_err_msg(NULL), m_charset(charset)
   {}
   Gis_read_stream(): m_cur(NullS), m_limit(NullS), m_err_msg(NullS)
   {}
   ~Gis_read_stream()
   {
-    my_free((uchar*) m_err_msg, MYF(MY_ALLOW_ZERO_PTR));
+    my_free(m_err_msg);
   }
 
   enum enum_tok_types get_next_toc_type();
@@ -71,5 +81,7 @@ protected:
   const char *m_cur;
   const char *m_limit;
   char *m_err_msg;
-  CHARSET_INFO *m_charset;
+  const CHARSET_INFO *m_charset;
 };
+
+#endif /* GSTREAM_INCLUDED */

@@ -1,5 +1,4 @@
-# Copyright (c) 2006, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,15 +11,18 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG -DSAFEMALLOC -DSAFE_MUTEX")
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
 
 SET(REGEX_SOURCES regcomp.c regerror.c regexec.c regfree.c reginit.c)
+ADD_CONVENIENCE_LIBRARY(regex ${REGEX_SOURCES})
 
-IF(NOT SOURCE_SUBLIBS)
-  ADD_LIBRARY(regex ${REGEX_SOURCES})
-ENDIF(NOT SOURCE_SUBLIBS)
+IF(WITH_UNIT_TESTS)
+  ADD_EXECUTABLE(re main.c split.c debug.c)
+  TARGET_LINK_LIBRARIES(re regex strings mysys)
+
+  ADD_TEST(regex1 re     -I)
+  ADD_TEST(regex2 re -el -I)
+  ADD_TEST(regex3 re -er -I)
+ENDIF()

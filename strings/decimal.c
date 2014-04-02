@@ -1,5 +1,4 @@
-/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights
- * reserved.
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 /*
 =======================================================================
@@ -137,12 +135,6 @@ static const dec1 frac_max[DIG_PER_DEC1-1]={
   900000000, 990000000, 999000000,
   999900000, 999990000, 999999000,
   999999900, 999999990 };
-static double scaler10[]= {
-  1.0, 1e10, 1e20, 1e30, 1e40, 1e50, 1e60, 1e70, 1e80, 1e90
-};
-static double scaler1[]= {
-  1.0, 10.0, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
-};
 
 #ifdef HAVE_purify
 #define sanity(d) DBUG_ASSERT((d)->len > 0)
@@ -256,7 +248,7 @@ void max_decimal(int precision, int frac, decimal_t *to)
 }
 
 
-static dec1 *remove_leading_zeroes(decimal_t *from, int *intg_result)
+static dec1 *remove_leading_zeroes(const decimal_t *from, int *intg_result)
 {
   int intg= from->intg, i;
   dec1 *buf0= from->buf;
@@ -334,7 +326,7 @@ int decimal_actual_fraction(decimal_t *from)
     E_DEC_OK/E_DEC_TRUNCATED/E_DEC_OVERFLOW
 */
 
-int decimal2string(decimal_t *from, char *to, int *to_len,
+int decimal2string(const decimal_t *from, char *to, int *to_len,
                    int fixed_precision, int fixed_decimals,
                    char filler)
 {
@@ -361,7 +353,7 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
   if (!(intg_len= fixed_precision ? fixed_intg : intg))
     intg_len= 1;
   frac_len= fixed_precision ? fixed_decimals : frac;
-  len= from->sign + intg_len + test(frac) + frac_len;
+  len= from->sign + intg_len + MY_TEST(frac) + frac_len;
   if (fixed_precision)
   {
     if (frac > fixed_decimals)
@@ -377,20 +369,28 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
   }
   else if (unlikely(len > --*to_len)) /* reserve one byte for \0 */
   {
-    int j= len-*to_len;
+    int j= len - *to_len;             /* excess printable chars */
     error= (frac && j <= frac + 1) ? E_DEC_TRUNCATED : E_DEC_OVERFLOW;
-    if (frac && j >= frac + 1) j--;
+
+    /*
+      If we need to cut more places than frac is wide, we'll end up
+      dropping the decimal point as well.  Account for this.
+    */
+    if (frac && j >= frac + 1)
+      j--;
+
     if (j > frac)
     {
-      intg-= j-frac;
+      intg_len= intg-= j-frac;
       frac= 0;
     }
     else
       frac-=j;
-    len= from->sign + intg_len + test(frac) + frac_len;
+    frac_len= frac;
+    len= from->sign + intg_len + MY_TEST(frac) + frac_len;
   }
-  *to_len=len;
-  s[len]=0;
+  *to_len= len;
+  s[len]= 0;
 
   if (from->sign)
     *s++='-';
@@ -404,7 +404,7 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
     for (; frac>0; frac-=DIG_PER_DEC1)
     {
       dec1 x=*buf++;
-      for (i=min(frac, DIG_PER_DEC1); i; i--)
+      for (i= MY_MIN(frac, DIG_PER_DEC1); i; i--)
       {
         dec1 y=x/DIG_MASK;
         *s1++='0'+(uchar)y;
@@ -412,14 +412,14 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
         x*=10;
       }
     }
-    for(; fill; fill--)
+    for(; fill > 0; fill--)
       *s1++=filler;
   }
 
   fill= intg_len - intg;
   if (intg == 0)
     fill--; /* symbol 0 before digital point */
-  for(; fill; fill--)
+  for(; fill > 0; fill--)
     *s++=filler;
   if (intg)
   {
@@ -427,7 +427,7 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
     for (buf=buf0+ROUND_UP(intg); intg>0; intg-=DIG_PER_DEC1)
     {
       dec1 x=*--buf;
-      for (i=min(intg, DIG_PER_DEC1); i; i--)
+      for (i= MY_MIN(intg, DIG_PER_DEC1); i; i--)
       {
         dec1 y=x/10;
         *--s='0'+(uchar)(x-y*10);
@@ -437,6 +437,7 @@ int decimal2string(decimal_t *from, char *to, int *to_len,
   }
   else
     *s= '0';
+
   return error;
 }
 
@@ -677,7 +678,7 @@ int decimal_shift(decimal_t *dec, int shift)
     if (do_left)
     {
       do_mini_left_shift(dec, l_mini_shift, beg, end);
-      mini_shift=- l_mini_shift;
+      mini_shift= -l_mini_shift;
     }
     else
     {
@@ -948,33 +949,25 @@ fatal_error:
       to      - result will be stored there
 
   RETURN VALUE
-    E_DEC_OK
+    E_DEC_OK/E_DEC_OVERFLOW/E_DEC_TRUNCATED
 */
 
-int decimal2double(decimal_t *from, double *to)
+int decimal2double(const decimal_t *from, double *to)
 {
-  double result= 0.0;
-  int i, exp= 0;
-  dec1 *buf= from->buf;
+  char strbuf[FLOATING_POINT_BUFFER], *end;
+  int len= sizeof(strbuf);
+  int rc, error;
 
-  for (i= from->intg; i > 0;  i-= DIG_PER_DEC1)
-    result= result * DIG_BASE + *buf++;
+  rc = decimal2string(from, strbuf, &len, 0, 0, 0);
+  end= strbuf + len;
 
-  for (i= from->frac; i > 0; i-= DIG_PER_DEC1) {
-    result= result * DIG_BASE + *buf++;
-    exp+= DIG_PER_DEC1;
-  }
+  DBUG_PRINT("info", ("interm.: %s", strbuf));
 
-  DBUG_PRINT("info", ("interm.: %f %d %f", result, exp,
-             scaler10[exp / 10] * scaler1[exp % 10]));
-
-  result/= scaler10[exp / 10] * scaler1[exp % 10];
-
-  *to= from->sign ? -result : result;
+  *to= my_strtod(strbuf, &end, &error);
 
   DBUG_PRINT("info", ("result: %f", *to));
 
-  return E_DEC_OK;
+  return (rc != E_DEC_OK) ? rc : (error ? E_DEC_OVERFLOW : E_DEC_OK);
 }
 
 /*
@@ -991,13 +984,10 @@ int decimal2double(decimal_t *from, double *to)
 
 int double2decimal(double from, decimal_t *to)
 {
-  /* TODO: fix it, when we'll have dtoa */
-  char buff[400], *end;
-  int length, res;
+  char buff[FLOATING_POINT_BUFFER], *end;
+  int res;
   DBUG_ENTER("double2decimal");
-  length= sprintf(buff, "%.16G", from);
-  DBUG_PRINT("info",("from: %g  from_as_str: %s", from, buff));
-  end= buff+length;
+  end= buff + my_gcvt(from, MY_GCVT_ARG_DOUBLE, sizeof(buff) - 1, buff, NULL);
   res= string2decimal(buff, to, &end);
   DBUG_PRINT("exit", ("res: %d", res));
   DBUG_RETURN(res);
@@ -1112,6 +1102,87 @@ int decimal2longlong(decimal_t *from, longlong *to)
   return E_DEC_OK;
 }
 
+
+#define LLDIV_MIN -1000000000000000000LL
+#define LLDIV_MAX  1000000000000000000LL
+
+/**
+  Convert decimal value to lldiv_t value.
+  @param      from  The decimal value to convert from.
+  @param OUT  to    The lldiv_t variable to convert to.
+  @return           0 on success, error code on error.
+*/
+int decimal2lldiv_t(const decimal_t *from, lldiv_t *to)
+{
+  int int_part= ROUND_UP(from->intg);
+  int frac_part= ROUND_UP(from->frac);
+  if (int_part > 2)
+  {
+    to->rem= 0;
+    to->quot= from->sign ? LLDIV_MIN : LLDIV_MAX;
+    return E_DEC_OVERFLOW;
+  }
+  if (int_part == 2)
+    to->quot= ((longlong) from->buf[0]) * DIG_BASE + from->buf[1];
+  else if (int_part == 1)
+    to->quot= from->buf[0];
+  else
+    to->quot= 0;
+  to->rem= frac_part ? from->buf[int_part] : 0;
+  if (from->sign)
+  {
+    to->quot= -to->quot;
+    to->rem= -to->rem;
+  }
+  return 0;
+}
+
+
+/**
+  Convert double value to lldiv_t valie.
+  @param     from The double value to convert from.
+  @param OUT to   The lldit_t variable to convert to.
+  @return         0 on success, error code on error.
+
+  Integer part goes into lld.quot.
+  Fractional part multiplied to 1000000000 (10^9) goes to lld.rem.
+  Typically used in datetime calculations to split seconds
+  and nanoseconds.
+*/
+int double2lldiv_t(double nr, lldiv_t *lld)
+{
+  if (nr > LLDIV_MAX)
+  {
+    lld->quot= LLDIV_MAX;
+    lld->rem= 0;
+    return E_DEC_OVERFLOW;
+  }
+  else if (nr < LLDIV_MIN)
+  {
+    lld->quot= LLDIV_MIN;
+    lld->rem= 0;
+    return E_DEC_OVERFLOW;
+  }
+  /* Truncate fractional part toward zero and store into "quot" */
+  lld->quot= (longlong) (nr > 0 ? floor(nr) : ceil(nr));
+  /* Multiply reminder to 10^9 and store into "rem" */
+  lld->rem= (longlong) rint((nr - (double) lld->quot) * 1000000000);
+  /*
+    Sometimes the expression "(double) 0.999999999xxx * (double) 10e9"
+    gives 1,000,000,000 instead of 999,999,999 due to lack of double precision.
+    The callers do not expect lld->rem to be greater than 999,999,999.
+    Let's catch this corner case and put the "nanounit" (e.g. nanosecond)
+    value in ldd->rem back into the valid range.
+  */
+  if (lld->rem > 999999999LL)
+    lld->rem= 999999999LL;
+  else if (lld->rem < -999999999LL)
+    lld->rem= -999999999LL;
+  return E_DEC_OK;
+}
+
+
+
 /*
   Convert decimal to its binary fixed-length representation
   two representations of the same length can be compared with memcmp
@@ -1189,7 +1260,7 @@ int decimal2longlong(decimal_t *from, longlong *to)
 
     And for -1234567890.1234 it would be
 
-                7E F2 04 37 2D FB 2D
+                7E F2 04 C7 2D FB 2D
 */
 int decimal2bin(decimal_t *from, uchar *to, int precision, int frac)
 {
@@ -1488,10 +1559,10 @@ int decimal_bin_size(int precision, int scale)
 */
 
 int
-decimal_round(decimal_t *from, decimal_t *to, int scale,
+decimal_round(const decimal_t *from, decimal_t *to, int scale,
               decimal_round_mode mode)
 {
-  int frac0=scale>0 ? ROUND_UP(scale) : scale/DIG_PER_DEC1,
+  int frac0=scale>0 ? ROUND_UP(scale) : (scale + 1)/DIG_PER_DEC1,
     frac1=ROUND_UP(from->frac), UNINIT_VAR(round_digit),
     intg0=ROUND_UP(from->intg), error=E_DEC_OK, len=to->len;
 
@@ -1530,8 +1601,8 @@ decimal_round(decimal_t *from, decimal_t *to, int scale,
 
   if (to != from)
   {
-    dec1 *p0= buf0+intg0+max(frac1, frac0);
-    dec1 *p1= buf1+intg0+max(frac1, frac0);
+    dec1 *p0= buf0 + intg0 + MY_MAX(frac1, frac0);
+    dec1 *p1= buf1 + intg0 + MY_MAX(frac1, frac0);
 
     DBUG_ASSERT(p0 - buf0 <= len);
     DBUG_ASSERT(p1 - buf1 <= len);
@@ -1542,7 +1613,7 @@ decimal_round(decimal_t *from, decimal_t *to, int scale,
     buf0=to->buf;
     buf1=to->buf;
     to->sign=from->sign;
-    to->intg=min(intg0, len)*DIG_PER_DEC1;
+    to->intg= MY_MIN(intg0, len) * DIG_PER_DEC1;
   }
 
   if (frac0 > frac1)
@@ -1644,12 +1715,20 @@ decimal_round(decimal_t *from, decimal_t *to, int scale,
         scale=frac0*DIG_PER_DEC1;
         error=E_DEC_TRUNCATED; /* XXX */
       }
-      for (buf1=to->buf+intg0+max(frac0,0); buf1 > to->buf; buf1--)
+      for (buf1=to->buf + intg0 + MY_MAX(frac0, 0); buf1 > to->buf; buf1--)
       {
-        buf1[0]=buf1[-1];
+        /* Avoid out-of-bounds write. */
+        if (buf1 < to->buf + len)
+          buf1[0]=buf1[-1];
+        else
+          error= E_DEC_OVERFLOW;
       }
       *buf1=1;
-      to->intg++;
+      /* We cannot have more than 9 * 9 = 81 digits. */
+      if (to->intg < len * DIG_PER_DEC1)
+        to->intg++;
+      else
+        error= E_DEC_OVERFLOW;
     }
   }
   else
@@ -1663,7 +1742,7 @@ decimal_round(decimal_t *from, decimal_t *to, int scale,
         /* making 'zero' with the proper scale */
         dec1 *p0= to->buf + frac0 + 1;
         to->intg=1;
-        to->frac= max(scale, 0);
+        to->frac= MY_MAX(scale, 0);
         to->sign= 0;
         for (buf1= to->buf; buf1<p0; buf1++)
           *buf1= 0;
@@ -1681,6 +1760,7 @@ decimal_round(decimal_t *from, decimal_t *to, int scale,
     scale=0;
 
 done:
+  DBUG_ASSERT(to->intg <= (len * DIG_PER_DEC1));
   to->frac=scale;
   return error;
 }
@@ -1712,11 +1792,11 @@ int decimal_result_size(decimal_t *from1, decimal_t *from2, char op, int param)
 {
   switch (op) {
   case '-':
-    return ROUND_UP(max(from1->intg, from2->intg)) +
-           ROUND_UP(max(from1->frac, from2->frac));
+    return ROUND_UP(MY_MAX(from1->intg, from2->intg)) +
+           ROUND_UP(MY_MAX(from1->frac, from2->frac));
   case '+':
-    return ROUND_UP(max(from1->intg, from2->intg)+1) +
-           ROUND_UP(max(from1->frac, from2->frac));
+    return ROUND_UP(MY_MAX(from1->intg, from2->intg)+1) +
+           ROUND_UP(MY_MAX(from1->frac, from2->frac));
   case '*':
     return ROUND_UP(from1->intg+from2->intg)+
            ROUND_UP(from1->frac)+ROUND_UP(from2->frac);
@@ -1727,11 +1807,11 @@ int decimal_result_size(decimal_t *from1, decimal_t *from2, char op, int param)
   return -1; /* shut up the warning */
 }
 
-static int do_add(decimal_t *from1, decimal_t *from2, decimal_t *to)
+static int do_add(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   int intg1=ROUND_UP(from1->intg), intg2=ROUND_UP(from2->intg),
       frac1=ROUND_UP(from1->frac), frac2=ROUND_UP(from2->frac),
-      frac0=max(frac1, frac2), intg0=max(intg1, intg2), error;
+      frac0= MY_MAX(frac1, frac2), intg0= MY_MAX(intg1, intg2), error;
   dec1 *buf1, *buf2, *buf0, *stop, *stop2, x, carry;
 
   sanity(to);
@@ -1756,7 +1836,7 @@ static int do_add(decimal_t *from1, decimal_t *from2, decimal_t *to)
   buf0=to->buf+intg0+frac0;
 
   to->sign=from1->sign;
-  to->frac=max(from1->frac, from2->frac);
+  to->frac= MY_MAX(from1->frac, from2->frac);
   to->intg=intg0*DIG_PER_DEC1;
   if (unlikely(error))
   {
@@ -1809,11 +1889,11 @@ static int do_add(decimal_t *from1, decimal_t *from2, decimal_t *to)
 
 /* to=from1-from2.
    if to==0, return -1/0/+1 - the result of the comparison */
-static int do_sub(decimal_t *from1, decimal_t *from2, decimal_t *to)
+static int do_sub(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   int intg1=ROUND_UP(from1->intg), intg2=ROUND_UP(from2->intg),
       frac1=ROUND_UP(from1->frac), frac2=ROUND_UP(from2->frac);
-  int frac0=max(frac1, frac2), error;
+  int frac0= MY_MAX(frac1, frac2), error;
   dec1 *buf1, *buf2, *buf0, *stop1, *stop2, *start1, *start2, carry=0;
 
   /* let carry:=1 if from2 > from1 */
@@ -1878,7 +1958,7 @@ static int do_sub(decimal_t *from1, decimal_t *from2, decimal_t *to)
   /* ensure that always from1 > from2 (and intg1 >= intg2) */
   if (carry)
   {
-    swap_variables(decimal_t *,from1,from1);
+    swap_variables(const decimal_t *, from1, from2);
     swap_variables(dec1 *,start1, start2);
     swap_variables(int,intg1,intg2);
     swap_variables(int,frac1,frac2);
@@ -1888,7 +1968,7 @@ static int do_sub(decimal_t *from1, decimal_t *from2, decimal_t *to)
   FIX_INTG_FRAC_ERROR(to->len, intg1, frac0, error);
   buf0=to->buf+intg1+frac0;
 
-  to->frac=max(from1->frac, from2->frac);
+  to->frac= MY_MAX(from1->frac, from2->frac);
   to->intg=intg1*DIG_PER_DEC1;
   if (unlikely(error))
   {
@@ -1944,35 +2024,35 @@ static int do_sub(decimal_t *from1, decimal_t *from2, decimal_t *to)
   return error;
 }
 
-int decimal_intg(decimal_t *from)
+int decimal_intg(const decimal_t *from)
 {
   int res;
   remove_leading_zeroes(from, &res);
   return res;
 }
 
-int decimal_add(decimal_t *from1, decimal_t *from2, decimal_t *to)
+int decimal_add(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   if (likely(from1->sign == from2->sign))
     return do_add(from1, from2, to);
   return do_sub(from1, from2, to);
 }
 
-int decimal_sub(decimal_t *from1, decimal_t *from2, decimal_t *to)
+int decimal_sub(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   if (likely(from1->sign == from2->sign))
     return do_sub(from1, from2, to);
   return do_add(from1, from2, to);
 }
 
-int decimal_cmp(decimal_t *from1, decimal_t *from2)
+int decimal_cmp(const decimal_t *from1, const decimal_t *from2)
 {
   if (likely(from1->sign == from2->sign))
     return do_sub(from1, from2, 0);
   return from1->sign > from2->sign ? -1 : 1;
 }
 
-int decimal_is_zero(decimal_t *from)
+int decimal_is_zero(const decimal_t *from)
 {
   dec1 *buf1=from->buf,
        *end=buf1+ROUND_UP(from->intg)+ROUND_UP(from->frac);
@@ -2003,49 +2083,50 @@ int decimal_is_zero(decimal_t *from)
     XXX if this library is to be used with huge numbers of thousands of
     digits, fast multiplication must be implemented.
 */
-int decimal_mul(decimal_t *from1, decimal_t *from2, decimal_t *to)
+int decimal_mul(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   int intg1=ROUND_UP(from1->intg), intg2=ROUND_UP(from2->intg),
       frac1=ROUND_UP(from1->frac), frac2=ROUND_UP(from2->frac),
       intg0=ROUND_UP(from1->intg+from2->intg),
-      frac0=frac1+frac2, error, i, j, d_to_move;
+      frac0=frac1+frac2, error, iii, jjj, d_to_move;
   dec1 *buf1=from1->buf+intg1, *buf2=from2->buf+intg2, *buf0,
        *start2, *stop2, *stop1, *start0, carry;
 
   sanity(to);
 
-  i=intg0;                                       /* save 'ideal' values */
-  j=frac0;
+  iii= intg0;                                       /* save 'ideal' values */
+  jjj= frac0;
   FIX_INTG_FRAC_ERROR(to->len, intg0, frac0, error);  /* bound size */
-  to->sign=from1->sign != from2->sign;
-  to->frac=from1->frac+from2->frac;              /* store size in digits */
+  to->sign= from1->sign != from2->sign;
+  to->frac= from1->frac + from2->frac;              /* store size in digits */
+  set_if_smaller(to->frac, NOT_FIXED_DEC);
   to->intg=intg0*DIG_PER_DEC1;
 
   if (unlikely(error))
   {
     set_if_smaller(to->frac, frac0*DIG_PER_DEC1);
     set_if_smaller(to->intg, intg0*DIG_PER_DEC1);
-    if (unlikely(i > intg0))                     /* bounded integer-part */
+    if (unlikely(iii > intg0))                     /* bounded integer-part */
     {
-      i-=intg0;
-      j=i >> 1;
-      intg1-= j;
-      intg2-=i-j;
+      iii-=intg0;
+      jjj= iii >> 1;
+      intg1-= jjj;
+      intg2-=iii-jjj;
       frac1=frac2=0; /* frac0 is already 0 here */
     }
     else                                         /* bounded fract part */
     {
-      j-=frac0;
-      i=j >> 1;
+      jjj-=frac0;
+      iii=jjj >> 1;
       if (frac1 <= frac2)
       {
-        frac1-= i;
-        frac2-=j-i;
+        frac1-= iii;
+        frac2-=jjj-iii;
       }
       else
       {
-        frac2-= i;
-        frac1-=j-i;
+        frac2-= iii;
+        frac1-=jjj-iii;
       }
     }
   }
@@ -2054,7 +2135,7 @@ int decimal_mul(decimal_t *from1, decimal_t *from2, decimal_t *to)
   stop1=buf1-intg1;
   stop2=buf2-intg2;
 
-  bzero(to->buf, (intg0+frac0)*sizeof(dec1));
+  memset(to->buf, 0, (intg0+frac0)*sizeof(dec1));
 
   for (buf1+=frac1-1; buf1 >= stop1; buf1--, start0--)
   {
@@ -2127,8 +2208,8 @@ int decimal_mul(decimal_t *from1, decimal_t *from2, decimal_t *to)
   changed to malloc (or at least fallback to malloc if alloca() fails)
   but then, decimal_mul() should be rewritten too :(
 */
-static int do_div_mod(decimal_t *from1, decimal_t *from2,
-                       decimal_t *to, decimal_t *mod, int scale_incr)
+static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
+                      decimal_t *to, decimal_t *mod, int scale_incr)
 {
   int frac1=ROUND_UP(from1->frac)*DIG_PER_DEC1, prec1=from1->intg+frac1,
       frac2=ROUND_UP(from2->frac)*DIG_PER_DEC1, prec2=from2->intg+frac2,
@@ -2190,7 +2271,7 @@ static int do_div_mod(decimal_t *from1, decimal_t *from2,
          intg=intg2
     */
     to->sign=from1->sign;
-    to->frac=max(from1->frac, from2->frac);
+    to->frac= MY_MAX(from1->frac, from2->frac);
     frac0=0;
   }
   else
@@ -2214,15 +2295,17 @@ static int do_div_mod(decimal_t *from1, decimal_t *from2,
   buf0=to->buf;
   stop0=buf0+intg0+frac0;
   if (likely(div_mod))
-    while (dintg++ < 0)
+    while (dintg++ < 0 && buf0 < &to->buf[to->len])
+    {
       *buf0++=0;
+    }
 
   len1=(i=ROUND_UP(prec1))+ROUND_UP(2*frac2+scale_incr+1) + 1;
   set_if_bigger(len1, 3);
   if (!(tmp1=(dec1 *)my_alloca(len1*sizeof(dec1))))
     return E_DEC_OOM;
   memcpy(tmp1, buf1, i*sizeof(dec1));
-  bzero(tmp1+i, (len1-i)*sizeof(dec1));
+  memset(tmp1+i, 0, (len1-i)*sizeof(dec1));
 
   start1=tmp1;
   stop1=start1+len1;
@@ -2305,7 +2388,10 @@ static int do_div_mod(decimal_t *from1, decimal_t *from2,
       }
     }
     if (likely(div_mod))
+    {
+      DBUG_ASSERT(buf0 < to->buf + to->len);
       *buf0=(dec1)guess;
+    }
     dcarry= *start1;
     start1++;
   }
@@ -2352,7 +2438,7 @@ static int do_div_mod(decimal_t *from1, decimal_t *from2,
       }
       DBUG_ASSERT(intg0 <= ROUND_UP(from2->intg));
       stop1=start1+frac0+intg0;
-      to->intg=min(intg0*DIG_PER_DEC1, from2->intg);
+      to->intg= MY_MIN(intg0 * DIG_PER_DEC1, from2->intg);
     }
     if (unlikely(intg0+frac0 > to->len))
     {
@@ -2367,6 +2453,10 @@ static int do_div_mod(decimal_t *from1, decimal_t *from2,
   }
 done:
   my_afree(tmp1);
+  tmp1= remove_leading_zeroes(to, &to->intg);
+  if(to->buf != tmp1)
+    memmove(to->buf, tmp1,
+            (ROUND_UP(to->intg) + ROUND_UP(to->frac)) * sizeof(dec1));
   return error;
 }
 
@@ -2387,7 +2477,8 @@ done:
 */
 
 int
-decimal_div(decimal_t *from1, decimal_t *from2, decimal_t *to, int scale_incr)
+decimal_div(const decimal_t *from1, const decimal_t *from2, decimal_t *to,
+            int scale_incr)
 {
   return do_div_mod(from1, from2, to, 0, scale_incr);
 }
@@ -2419,740 +2510,13 @@ decimal_div(decimal_t *from1, decimal_t *from2, decimal_t *to, int scale_incr)
    thus, there's no requirement for M or N to be integers
 */
 
-int decimal_mod(decimal_t *from1, decimal_t *from2, decimal_t *to)
+int decimal_mod(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   return do_div_mod(from1, from2, 0, to, 0);
 }
 
 #ifdef MAIN
-
-int full= 0;
-decimal_t a, b, c;
-char buf1[100], buf2[100], buf3[100];
-
-void dump_decimal(decimal_t *d)
-{
-  int i;
-  printf("/* intg=%d, frac=%d, sign=%d, buf[]={", d->intg, d->frac, d->sign);
-  for (i=0; i < ROUND_UP(d->frac)+ROUND_UP(d->intg)-1; i++)
-    printf("%09d, ", d->buf[i]);
-  printf("%09d} */ ", d->buf[i]);
-}
-
-
-void check_result_code(int actual, int want)
-{
-  if (actual != want)
-  {
-    printf("\n^^^^^^^^^^^^^ must return %d\n", want);
-    exit(1);
-  }
-}
-
-
-void print_decimal(decimal_t *d, const char *orig, int actual, int want)
-{
-  char s[100];
-  int slen=sizeof(s);
-
-  if (full) dump_decimal(d);
-  decimal2string(d, s, &slen, 0, 0, 0);
-  printf("'%s'", s);
-  check_result_code(actual, want);
-  if (orig && strcmp(orig, s))
-  {
-    printf("\n^^^^^^^^^^^^^ must've been '%s'\n", orig);
-    exit(1);
-  }
-}
-
-void test_d2s()
-{
-  char s[100];
-  int slen, res;
-
-  /***********************************/
-  printf("==== decimal2string ====\n");
-  a.buf[0]=12345; a.intg=5; a.frac=0; a.sign=0;
-  slen=sizeof(s);
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-
-  a.buf[1]=987000000; a.frac=3;
-  slen=sizeof(s);
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-
-  a.sign=1;
-  slen=sizeof(s);
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-
-  slen=8;
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-
-  slen=5;
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-
-  a.buf[0]=987000000; a.frac=3; a.intg=0;
-  slen=sizeof(s);
-  res=decimal2string(&a, s, &slen, 0, 0, 0);
-  dump_decimal(&a); printf("  -->  res=%d str='%s' len=%d\n", res, s, slen);
-}
-
-void test_s2d(const char *s, const char *orig, int ex)
-{
-  char s1[100], *end;
-  int res;
-  sprintf(s1, "'%s'", s);
-  end= strend(s);
-  printf("len=%2d %-30s => res=%d    ", a.len, s1,
-         (res= string2decimal(s, &a, &end)));
-  print_decimal(&a, orig, res, ex);
-  printf("\n");
-}
-
-void test_d2f(const char *s, int ex)
-{
-  char s1[100], *end;
-  double x;
-  int res;
-
-  sprintf(s1, "'%s'", s);
-  end= strend(s);
-  string2decimal(s, &a, &end);
-  res=decimal2double(&a, &x);
-  if (full) dump_decimal(&a);
-  printf("%-40s => res=%d    %.*g\n", s1, res, a.intg+a.frac, x);
-  check_result_code(res, ex);
-}
-
-void test_d2b2d(const char *str, int p, int s, const char *orig, int ex)
-{
-  char s1[100], buf[100], *end;
-  int res, i, size=decimal_bin_size(p, s);
-
-  sprintf(s1, "'%s'", str);
-  end= strend(str);
-  string2decimal(str, &a, &end);
-  res=decimal2bin(&a, buf, p, s);
-  printf("%-31s {%2d, %2d} => res=%d size=%-2d ", s1, p, s, res, size);
-  if (full)
-  {
-    printf("0x");
-    for (i=0; i < size; i++)
-      printf("%02x", ((uchar *)buf)[i]);
-  }
-  res=bin2decimal(buf, &a, p, s);
-  printf(" => res=%d ", res);
-  print_decimal(&a, orig, res, ex);
-  printf("\n");
-}
-
-void test_f2d(double from, int ex)
-{
-  int res;
-
-  res=double2decimal(from, &a);
-  printf("%-40.*f => res=%d    ", DBL_DIG-2, from, res);
-  print_decimal(&a, 0, res, ex);
-  printf("\n");
-}
-
-void test_ull2d(ulonglong from, const char *orig, int ex)
-{
-  char s[100];
-  int res;
-
-  res=ulonglong2decimal(from, &a);
-  longlong10_to_str(from,s,10);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&a, orig, res, ex);
-  printf("\n");
-}
-
-void test_ll2d(longlong from, const char *orig, int ex)
-{
-  char s[100];
-  int res;
-
-  res=longlong2decimal(from, &a);
-  longlong10_to_str(from,s,-10);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&a, orig, res, ex);
-  printf("\n");
-}
-
-void test_d2ull(const char *s, const char *orig, int ex)
-{
-  char s1[100], *end;
-  ulonglong x;
-  int res;
-
-  end= strend(s);
-  string2decimal(s, &a, &end);
-  res=decimal2ulonglong(&a, &x);
-  if (full) dump_decimal(&a);
-  longlong10_to_str(x,s1,10);
-  printf("%-40s => res=%d    %s\n", s, res, s1);
-  check_result_code(res, ex);
-  if (orig && strcmp(orig, s1))
-  {
-    printf("\n^^^^^^^^^^^^^ must've been '%s'\n", orig);
-    exit(1);
-  }
-}
-
-void test_d2ll(const char *s, const char *orig, int ex)
-{
-  char s1[100], *end;
-  longlong x;
-  int res;
-
-  end= strend(s);
-  string2decimal(s, &a, &end);
-  res=decimal2longlong(&a, &x);
-  if (full) dump_decimal(&a);
-  longlong10_to_str(x,s1,-10);
-  printf("%-40s => res=%d    %s\n", s, res, s1);
-  check_result_code(res, ex);
-  if (orig && strcmp(orig, s1))
-  {
-    printf("\n^^^^^^^^^^^^^ must've been '%s'\n", orig);
-    exit(1);
-  }
-}
-
-void test_da(const char *s1, const char *s2, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' + '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_add(&a, &b, &c);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&c, orig, res, ex);
-  printf("\n");
-}
-
-void test_ds(const char *s1, const char *s2, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' - '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_sub(&a, &b, &c);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&c, orig, res, ex);
-  printf("\n");
-}
-
-void test_dc(const char *s1, const char *s2, int orig)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' <=> '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_cmp(&a, &b);
-  printf("%-40s => res=%d\n", s, res);
-  if (orig != res)
-  {
-    printf("\n^^^^^^^^^^^^^ must've been %d\n", orig);
-    exit(1);
-  }
-}
-
-void test_dm(const char *s1, const char *s2, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' * '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_mul(&a, &b, &c);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&c, orig, res, ex);
-  printf("\n");
-}
-
-void test_dv(const char *s1, const char *s2, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' / '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_div(&a, &b, &c, 5);
-  printf("%-40s => res=%d    ", s, res);
-  check_result_code(res, ex);
-  if (res == E_DEC_DIV_ZERO)
-    printf("E_DEC_DIV_ZERO");
-  else
-    print_decimal(&c, orig, res, ex);
-  printf("\n");
-}
-
-void test_md(const char *s1, const char *s2, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' %% '%s'", s1, s2);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  end= strend(s2);
-  string2decimal(s2, &b, &end);
-  res=decimal_mod(&a, &b, &c);
-  printf("%-40s => res=%d    ", s, res);
-  check_result_code(res, ex);
-  if (res == E_DEC_DIV_ZERO)
-    printf("E_DEC_DIV_ZERO");
-  else
-    print_decimal(&c, orig, res, ex);
-  printf("\n");
-}
-
-const char *round_mode[]=
-{"TRUNCATE", "HALF_EVEN", "HALF_UP", "CEILING", "FLOOR"};
-
-void test_ro(const char *s1, int n, decimal_round_mode mode, const char *orig,
-             int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s', %d, %s", s1, n, round_mode[mode]);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  res=decimal_round(&a, &b, n, mode);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&b, orig, res, ex);
-  printf("\n");
-}
-
-
-void test_mx(int precision, int frac, const char *orig)
-{
-  char s[100];
-  sprintf(s, "%d, %d", precision, frac);
-  max_decimal(precision, frac, &a);
-  printf("%-40s =>          ", s);
-  print_decimal(&a, orig, 0, 0);
-  printf("\n");
-}
-
-
-void test_pr(const char *s1, int prec, int dec, char filler, const char *orig,
-             int ex)
-{
-  char s[100], *end;
-  char s2[100];
-  int slen= sizeof(s2);
-  int res;
-
-  sprintf(s, filler ? "'%s', %d, %d, '%c'" : "'%s', %d, %d, '\\0'",
-          s1, prec, dec, filler);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  res= decimal2string(&a, s2, &slen, prec, dec, filler);
-  printf("%-40s => res=%d    '%s'", s, res, s2);
-  check_result_code(res, ex);
-  if (orig && strcmp(orig, s2))
-  {
-    printf("\n^^^^^^^^^^^^^ must've been '%s'\n", orig);
-    exit(1);
-  }
-  printf("\n");
-}
-
-
-void test_sh(const char *s1, int shift, const char *orig, int ex)
-{
-  char s[100], *end;
-  int res;
-  sprintf(s, "'%s' %s %d", s1, ((shift < 0) ? ">>" : "<<"), abs(shift));
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  res= decimal_shift(&a, shift);
-  printf("%-40s => res=%d    ", s, res);
-  print_decimal(&a, orig, res, ex);
-  printf("\n");
-}
-
-
-void test_fr(const char *s1, const char *orig)
-{
-  char s[100], *end;
-  sprintf(s, "'%s'", s1);
-  printf("%-40s =>          ", s);
-  end= strend(s1);
-  string2decimal(s1, &a, &end);
-  a.frac= decimal_actual_fraction(&a);
-  print_decimal(&a, orig, 0, 0);
-  printf("\n");
-}
-
-
-int main()
-{
-  a.buf=(void*)buf1;
-  a.len=sizeof(buf1)/sizeof(dec1);
-  b.buf=(void*)buf2;
-  b.len=sizeof(buf2)/sizeof(dec1);
-  c.buf=(void*)buf3;
-  c.len=sizeof(buf3)/sizeof(dec1);
-
-  if (full)
-    test_d2s();
-
-  printf("==== string2decimal ====\n");
-  test_s2d("12345", "12345", 0);
-  test_s2d("12345.", "12345", 0);
-  test_s2d("123.45", "123.45", 0);
-  test_s2d("-123.45", "-123.45", 0);
-  test_s2d(".00012345000098765", "0.00012345000098765", 0);
-  test_s2d(".12345000098765", "0.12345000098765", 0);
-  test_s2d("-.000000012345000098765", "-0.000000012345000098765", 0);
-  test_s2d("1234500009876.5", "1234500009876.5", 0);
-  a.len=1;
-  test_s2d("123450000098765", "98765", 2);
-  test_s2d("123450.000098765", "123450", 1);
-  a.len=sizeof(buf1)/sizeof(dec1);
-  test_s2d("123E5", "12300000", 0);
-  test_s2d("123E-2", "1.23", 0);
-
-  printf("==== decimal2double ====\n");
-  test_d2f("12345", 0);
-  test_d2f("123.45", 0);
-  test_d2f("-123.45", 0);
-  test_d2f("0.00012345000098765", 0);
-  test_d2f("1234500009876.5", 0);
-
-  printf("==== double2decimal ====\n");
-  test_f2d(12345, 0);
-  test_f2d(1.0/3, 0);
-  test_f2d(-123.45, 0);
-  test_f2d(0.00012345000098765, 0);
-  test_f2d(1234500009876.5, 0);
-
-  printf("==== ulonglong2decimal ====\n");
-  test_ull2d(ULL(12345), "12345", 0);
-  test_ull2d(ULL(0), "0", 0);
-  test_ull2d(ULL(18446744073709551615), "18446744073709551615", 0);
-
-  printf("==== decimal2ulonglong ====\n");
-  test_d2ull("12345", "12345", 0);
-  test_d2ull("0", "0", 0);
-  test_d2ull("18446744073709551615", "18446744073709551615", 0);
-  test_d2ull("18446744073709551616", "18446744073", 2);
-  test_d2ull("-1", "0", 2);
-  test_d2ull("1.23", "1", 1);
-  test_d2ull("9999999999999999999999999.000", "9999999999999999", 2);
-
-  printf("==== longlong2decimal ====\n");
-  test_ll2d(LL(-12345), "-12345", 0);
-  test_ll2d(LL(-1), "-1", 0);
-  test_ll2d(LL(-9223372036854775807), "-9223372036854775807", 0);
-  test_ll2d(ULL(9223372036854775808), "-9223372036854775808", 0);
-
-  printf("==== decimal2longlong ====\n");
-  test_d2ll("18446744073709551615", "18446744073", 2);
-  test_d2ll("-1", "-1", 0);
-  test_d2ll("-1.23", "-1", 1);
-  test_d2ll("-9223372036854775807", "-9223372036854775807", 0);
-  test_d2ll("-9223372036854775808", "-9223372036854775808", 0);
-  test_d2ll("9223372036854775808", "9223372036854775807", 2);
-
-  printf("==== do_add ====\n");
-  test_da(".00012345000098765" ,"123.45", "123.45012345000098765", 0);
-  test_da(".1" ,".45", "0.55", 0);
-  test_da("1234500009876.5" ,".00012345000098765", "1234500009876.50012345000098765", 0);
-  test_da("9999909999999.5" ,".555", "9999910000000.055", 0);
-  test_da("99999999" ,"1", "100000000", 0);
-  test_da("989999999" ,"1", "990000000", 0);
-  test_da("999999999" ,"1", "1000000000", 0);
-  test_da("12345" ,"123.45", "12468.45", 0);
-  test_da("-12345" ,"-123.45", "-12468.45", 0);
-  test_ds("-12345" ,"123.45", "-12468.45", 0);
-  test_ds("12345" ,"-123.45", "12468.45", 0);
-
-  printf("==== do_sub ====\n");
-  test_ds(".00012345000098765", "123.45","-123.44987654999901235", 0);
-  test_ds("1234500009876.5", ".00012345000098765","1234500009876.49987654999901235", 0);
-  test_ds("9999900000000.5", ".555","9999899999999.945", 0);
-  test_ds("1111.5551", "1111.555","0.0001", 0);
-  test_ds(".555", ".555","0", 0);
-  test_ds("10000000", "1","9999999", 0);
-  test_ds("1000001000", ".1","1000000999.9", 0);
-  test_ds("1000000000", ".1","999999999.9", 0);
-  test_ds("12345", "123.45","12221.55", 0);
-  test_ds("-12345", "-123.45","-12221.55", 0);
-  test_da("-12345", "123.45","-12221.55", 0);
-  test_da("12345", "-123.45","12221.55", 0);
-  test_ds("123.45", "12345","-12221.55", 0);
-  test_ds("-123.45", "-12345","12221.55", 0);
-  test_da("123.45", "-12345","-12221.55", 0);
-  test_da("-123.45", "12345","12221.55", 0);
-  test_da("5", "-6.0","-1.0", 0);
-
-  printf("==== decimal_mul ====\n");
-  test_dm("12", "10","120", 0);
-  test_dm("-123.456", "98765.4321","-12193185.1853376", 0);
-  test_dm("-123456000000", "98765432100000","-12193185185337600000000000", 0);
-  test_dm("123456", "987654321","121931851853376", 0);
-  test_dm("123456", "9876543210","1219318518533760", 0);
-  test_dm("123", "0.01","1.23", 0);
-  test_dm("123", "0","0", 0);
-
-  printf("==== decimal_div ====\n");
-  test_dv("120", "10","12.000000000", 0);
-  test_dv("123", "0.01","12300.000000000", 0);
-  test_dv("120", "100000000000.00000","0.000000001200000000", 0);
-  test_dv("123", "0","", 4);
-  test_dv("0", "0", "", 4);
-  test_dv("-12193185.1853376", "98765.4321","-123.456000000000000000", 0);
-  test_dv("121931851853376", "987654321","123456.000000000", 0);
-  test_dv("0", "987","0", 0);
-  test_dv("1", "3","0.333333333", 0);
-  test_dv("1.000000000000", "3","0.333333333333333333", 0);
-  test_dv("1", "1","1.000000000", 0);
-  test_dv("0.0123456789012345678912345", "9999999999","0.000000000001234567890246913578148141", 0);
-  test_dv("10.333000000", "12.34500","0.837019036046982584042122316", 0);
-  test_dv("10.000000000060", "2","5.000000000030000000", 0);
-
-  printf("==== decimal_mod ====\n");
-  test_md("234","10","4", 0);
-  test_md("234.567","10.555","2.357", 0);
-  test_md("-234.567","10.555","-2.357", 0);
-  test_md("234.567","-10.555","2.357", 0);
-  c.buf[1]=0x3ABECA;
-  test_md("99999999999999999999999999999999999999","3","0", 0);
-  if (c.buf[1] != 0x3ABECA)
-  {
-    printf("%X - overflow\n", c.buf[1]);
-    exit(1);
-  }
-
-  printf("==== decimal2bin/bin2decimal ====\n");
-  test_d2b2d("-10.55", 4, 2,"-10.55", 0);
-  test_d2b2d("0.0123456789012345678912345", 30, 25,"0.0123456789012345678912345", 0);
-  test_d2b2d("12345", 5, 0,"12345", 0);
-  test_d2b2d("12345", 10, 3,"12345.000", 0);
-  test_d2b2d("123.45", 10, 3,"123.450", 0);
-  test_d2b2d("-123.45", 20, 10,"-123.4500000000", 0);
-  test_d2b2d(".00012345000098765", 15, 14,"0.00012345000098", 0);
-  test_d2b2d(".00012345000098765", 22, 20,"0.00012345000098765000", 0);
-  test_d2b2d(".12345000098765", 30, 20,"0.12345000098765000000", 0);
-  test_d2b2d("-.000000012345000098765", 30, 20,"-0.00000001234500009876", 0);
-  test_d2b2d("1234500009876.5", 30, 5,"1234500009876.50000", 0);
-  test_d2b2d("111111111.11", 10, 2,"11111111.11", 0);
-  test_d2b2d("000000000.01", 7, 3,"0.010", 0);
-  test_d2b2d("123.4", 10, 2, "123.40", 0);
-
-
-  printf("==== decimal_cmp ====\n");
-  test_dc("12","13",-1);
-  test_dc("13","12",1);
-  test_dc("-10","10",-1);
-  test_dc("10","-10",1);
-  test_dc("-12","-13",1);
-  test_dc("0","12",-1);
-  test_dc("-10","0",-1);
-  test_dc("4","4",0);
-
-  printf("==== decimal_round ====\n");
-  test_ro("5678.123451",-4,TRUNCATE,"0", 0);
-  test_ro("5678.123451",-3,TRUNCATE,"5000", 0);
-  test_ro("5678.123451",-2,TRUNCATE,"5600", 0);
-  test_ro("5678.123451",-1,TRUNCATE,"5670", 0);
-  test_ro("5678.123451",0,TRUNCATE,"5678", 0);
-  test_ro("5678.123451",1,TRUNCATE,"5678.1", 0);
-  test_ro("5678.123451",2,TRUNCATE,"5678.12", 0);
-  test_ro("5678.123451",3,TRUNCATE,"5678.123", 0);
-  test_ro("5678.123451",4,TRUNCATE,"5678.1234", 0);
-  test_ro("5678.123451",5,TRUNCATE,"5678.12345", 0);
-  test_ro("5678.123451",6,TRUNCATE,"5678.123451", 0);
-  test_ro("-5678.123451",-4,TRUNCATE,"0", 0);
-  memset(buf2, 33, sizeof(buf2));
-  test_ro("99999999999999999999999999999999999999",-31,TRUNCATE,"99999990000000000000000000000000000000", 0);
-  test_ro("15.1",0,HALF_UP,"15", 0);
-  test_ro("15.5",0,HALF_UP,"16", 0);
-  test_ro("15.9",0,HALF_UP,"16", 0);
-  test_ro("-15.1",0,HALF_UP,"-15", 0);
-  test_ro("-15.5",0,HALF_UP,"-16", 0);
-  test_ro("-15.9",0,HALF_UP,"-16", 0);
-  test_ro("15.1",1,HALF_UP,"15.1", 0);
-  test_ro("-15.1",1,HALF_UP,"-15.1", 0);
-  test_ro("15.17",1,HALF_UP,"15.2", 0);
-  test_ro("15.4",-1,HALF_UP,"20", 0);
-  test_ro("-15.4",-1,HALF_UP,"-20", 0);
-  test_ro("5.4",-1,HALF_UP,"10", 0);
-  test_ro(".999", 0, HALF_UP, "1", 0);
-  memset(buf2, 33, sizeof(buf2));
-  test_ro("999999999", -9, HALF_UP, "1000000000", 0);
-  test_ro("15.1",0,HALF_EVEN,"15", 0);
-  test_ro("15.5",0,HALF_EVEN,"16", 0);
-  test_ro("14.5",0,HALF_EVEN,"14", 0);
-  test_ro("15.9",0,HALF_EVEN,"16", 0);
-  test_ro("15.1",0,CEILING,"16", 0);
-  test_ro("-15.1",0,CEILING,"-15", 0);
-  test_ro("15.1",0,FLOOR,"15", 0);
-  test_ro("-15.1",0,FLOOR,"-16", 0);
-  test_ro("999999999999999999999.999", 0, CEILING,"1000000000000000000000", 0);
-  test_ro("-999999999999999999999.999", 0, FLOOR,"-1000000000000000000000", 0);
-
-  b.buf[0]=DIG_BASE+1;
-  b.buf++;
-  test_ro(".3", 0, HALF_UP, "0", 0);
-  b.buf--;
-  if (b.buf[0] != DIG_BASE+1)
-  {
-    printf("%d - underflow\n", b.buf[0]);
-    exit(1);
-  }
-
-  printf("==== max_decimal ====\n");
-  test_mx(1,1,"0.9");
-  test_mx(1,0,"9");
-  test_mx(2,1,"9.9");
-  test_mx(4,2,"99.99");
-  test_mx(6,3,"999.999");
-  test_mx(8,4,"9999.9999");
-  test_mx(10,5,"99999.99999");
-  test_mx(12,6,"999999.999999");
-  test_mx(14,7,"9999999.9999999");
-  test_mx(16,8,"99999999.99999999");
-  test_mx(18,9,"999999999.999999999");
-  test_mx(20,10,"9999999999.9999999999");
-  test_mx(20,20,"0.99999999999999999999");
-  test_mx(20,0,"99999999999999999999");
-  test_mx(40,20,"99999999999999999999.99999999999999999999");
-
-  printf("==== decimal2string ====\n");
-  test_pr("123.123", 0, 0, 0, "123.123", 0);
-  test_pr("123.123", 7, 3, '0', "123.123", 0);
-  test_pr("123.123", 9, 3, '0', "00123.123", 0);
-  test_pr("123.123", 9, 4, '0', "0123.1230", 0);
-  test_pr("123.123", 9, 5, '0', "123.12300", 0);
-  test_pr("123.123", 9, 2, '0', "000123.12", 1);
-  test_pr("123.123", 9, 6, '0', "23.123000", 2);
-
-  printf("==== decimal_shift ====\n");
-  test_sh("123.123", 1, "1231.23", 0);
-  test_sh("123457189.123123456789000", 1, "1234571891.23123456789", 0);
-  test_sh("123457189.123123456789000", 4, "1234571891231.23456789", 0);
-  test_sh("123457189.123123456789000", 8, "12345718912312345.6789", 0);
-  test_sh("123457189.123123456789000", 9, "123457189123123456.789", 0);
-  test_sh("123457189.123123456789000", 10, "1234571891231234567.89", 0);
-  test_sh("123457189.123123456789000", 17, "12345718912312345678900000", 0);
-  test_sh("123457189.123123456789000", 18, "123457189123123456789000000", 0);
-  test_sh("123457189.123123456789000", 19, "1234571891231234567890000000", 0);
-  test_sh("123457189.123123456789000", 26, "12345718912312345678900000000000000", 0);
-  test_sh("123457189.123123456789000", 27, "123457189123123456789000000000000000", 0);
-  test_sh("123457189.123123456789000", 28, "1234571891231234567890000000000000000", 0);
-  test_sh("000000000000000000000000123457189.123123456789000", 26, "12345718912312345678900000000000000", 0);
-  test_sh("00000000123457189.123123456789000", 27, "123457189123123456789000000000000000", 0);
-  test_sh("00000000000000000123457189.123123456789000", 28, "1234571891231234567890000000000000000", 0);
-  test_sh("123", 1, "1230", 0);
-  test_sh("123", 10, "1230000000000", 0);
-  test_sh(".123", 1, "1.23", 0);
-  test_sh(".123", 10, "1230000000", 0);
-  test_sh(".123", 14, "12300000000000", 0);
-  test_sh("000.000", 1000, "0", 0);
-  test_sh("000.", 1000, "0", 0);
-  test_sh(".000", 1000, "0", 0);
-  test_sh("1", 1000, "1", 2);
-  test_sh("123.123", -1, "12.3123", 0);
-  test_sh("123987654321.123456789000", -1, "12398765432.1123456789", 0);
-  test_sh("123987654321.123456789000", -2, "1239876543.21123456789", 0);
-  test_sh("123987654321.123456789000", -3, "123987654.321123456789", 0);
-  test_sh("123987654321.123456789000", -8, "1239.87654321123456789", 0);
-  test_sh("123987654321.123456789000", -9, "123.987654321123456789", 0);
-  test_sh("123987654321.123456789000", -10, "12.3987654321123456789", 0);
-  test_sh("123987654321.123456789000", -11, "1.23987654321123456789", 0);
-  test_sh("123987654321.123456789000", -12, "0.123987654321123456789", 0);
-  test_sh("123987654321.123456789000", -13, "0.0123987654321123456789", 0);
-  test_sh("123987654321.123456789000", -14, "0.00123987654321123456789", 0);
-  test_sh("00000087654321.123456789000", -14, "0.00000087654321123456789", 0);
-  a.len= 2;
-  test_sh("123.123", -2, "1.23123", 0);
-  test_sh("123.123", -3, "0.123123", 0);
-  test_sh("123.123", -6, "0.000123123", 0);
-  test_sh("123.123", -7, "0.0000123123", 0);
-  test_sh("123.123", -15, "0.000000000000123123", 0);
-  test_sh("123.123", -16, "0.000000000000012312", 1);
-  test_sh("123.123", -17, "0.000000000000001231", 1);
-  test_sh("123.123", -18, "0.000000000000000123", 1);
-  test_sh("123.123", -19, "0.000000000000000012", 1);
-  test_sh("123.123", -20, "0.000000000000000001", 1);
-  test_sh("123.123", -21, "0", 1);
-  test_sh(".000000000123", -1, "0.0000000000123", 0);
-  test_sh(".000000000123", -6, "0.000000000000000123", 0);
-  test_sh(".000000000123", -7, "0.000000000000000012", 1);
-  test_sh(".000000000123", -8, "0.000000000000000001", 1);
-  test_sh(".000000000123", -9, "0", 1);
-  test_sh(".000000000123", 1, "0.00000000123", 0);
-  test_sh(".000000000123", 8, "0.0123", 0);
-  test_sh(".000000000123", 9, "0.123", 0);
-  test_sh(".000000000123", 10, "1.23", 0);
-  test_sh(".000000000123", 17, "12300000", 0);
-  test_sh(".000000000123", 18, "123000000", 0);
-  test_sh(".000000000123", 19, "1230000000", 0);
-  test_sh(".000000000123", 20, "12300000000", 0);
-  test_sh(".000000000123", 21, "123000000000", 0);
-  test_sh(".000000000123", 22, "1230000000000", 0);
-  test_sh(".000000000123", 23, "12300000000000", 0);
-  test_sh(".000000000123", 24, "123000000000000", 0);
-  test_sh(".000000000123", 25, "1230000000000000", 0);
-  test_sh(".000000000123", 26, "12300000000000000", 0);
-  test_sh(".000000000123", 27, "123000000000000000", 0);
-  test_sh(".000000000123", 28, "0.000000000123", 2);
-  test_sh("123456789.987654321", -1, "12345678.998765432", 1);
-  test_sh("123456789.987654321", -2, "1234567.899876543", 1);
-  test_sh("123456789.987654321", -8, "1.234567900", 1);
-  test_sh("123456789.987654321", -9, "0.123456789987654321", 0);
-  test_sh("123456789.987654321", -10, "0.012345678998765432", 1);
-  test_sh("123456789.987654321", -17, "0.000000001234567900", 1);
-  test_sh("123456789.987654321", -18, "0.000000000123456790", 1);
-  test_sh("123456789.987654321", -19, "0.000000000012345679", 1);
-  test_sh("123456789.987654321", -26, "0.000000000000000001", 1);
-  test_sh("123456789.987654321", -27, "0", 1);
-  test_sh("123456789.987654321", 1, "1234567900", 1);
-  test_sh("123456789.987654321", 2, "12345678999", 1);
-  test_sh("123456789.987654321", 4, "1234567899877", 1);
-  test_sh("123456789.987654321", 8, "12345678998765432", 1);
-  test_sh("123456789.987654321", 9, "123456789987654321", 0);
-  test_sh("123456789.987654321", 10, "123456789.987654321", 2);
-  test_sh("123456789.987654321", 0, "123456789.987654321", 0);
-  a.len= sizeof(buf1)/sizeof(dec1);
-
-  printf("==== decimal_actual_fraction ====\n");
-  test_fr("1.123456789000000000", "1.123456789");
-  test_fr("1.12345678000000000", "1.12345678");
-  test_fr("1.1234567000000000", "1.1234567");
-  test_fr("1.123456000000000", "1.123456");
-  test_fr("1.12345000000000", "1.12345");
-  test_fr("1.1234000000000", "1.1234");
-  test_fr("1.123000000000", "1.123");
-  test_fr("1.12000000000", "1.12");
-  test_fr("1.1000000000", "1.1");
-  test_fr("1.000000000", "1");
-  test_fr("1.0", "1");
-  test_fr("10000000000000000000.0", "10000000000000000000");
-
-  return 0;
-}
+/*
+  The main() program has been converted into a unit test.
+ */
 #endif

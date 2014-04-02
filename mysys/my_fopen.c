@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include "mysys_priv.h"
 #include "my_static.h"
@@ -45,29 +45,14 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
   DBUG_ENTER("my_fopen");
   DBUG_PRINT("my",("Name: '%s'  flags: %d  MyFlags: %d",
 		   filename, flags, MyFlags));
-  /* 
-    if we are not creating, then we need to use my_access to make sure  
-    the file exists since Windows doesn't handle files like "com1.sym" 
-    very  well 
-  */
-#ifdef __WIN__
-  if (check_if_legal_filename(filename))
-  {
-    errno= EACCES;
-    fd= 0;
-  }
-  else if (!is_filename_allowed(filename, strlen(filename)))
-  {
-    errno= EINVAL;
-    fd= 0;
-  }
-  else
+
+  make_ftype(type,flags);
+
+#ifdef _WIN32
+  fd= my_win_fopen(filename, type);
+#else
+  fd= fopen(filename, type);
 #endif
-  {
-    make_ftype(type,flags);
-    fd = fopen(filename, type);
-  }
-  
   if (fd != 0)
   {
     /*
@@ -75,23 +60,25 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
       on some OS (SUNOS). Actually the filename save isn't that important
       so we can ignore if this doesn't work.
     */
-    if ((uint) fileno(fd) >= my_file_limit)
+
+    int filedesc= my_fileno(fd);
+    if ((uint)filedesc >= my_file_limit)
     {
       thread_safe_increment(my_stream_opened,&THR_LOCK_open);
       DBUG_RETURN(fd);				/* safeguard */
     }
-    pthread_mutex_lock(&THR_LOCK_open);
-    if ((my_file_info[fileno(fd)].name = (char*)
+    mysql_mutex_lock(&THR_LOCK_open);
+    if ((my_file_info[filedesc].name= (char*)
 	 my_strdup(filename,MyFlags)))
     {
       my_stream_opened++;
       my_file_total_opened++;
-      my_file_info[fileno(fd)].type = STREAM_BY_FOPEN;
-      pthread_mutex_unlock(&THR_LOCK_open);
+      my_file_info[filedesc].type= STREAM_BY_FOPEN;
+      mysql_mutex_unlock(&THR_LOCK_open);
       DBUG_PRINT("exit",("stream: 0x%lx", (long) fd));
       DBUG_RETURN(fd);
     }
-    pthread_mutex_unlock(&THR_LOCK_open);
+    mysql_mutex_unlock(&THR_LOCK_open);
     (void) my_fclose(fd,MyFlags);
     my_errno=ENOMEM;
   }
@@ -99,9 +86,13 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
     my_errno=errno;
   DBUG_PRINT("error",("Got error %d on open",my_errno));
   if (MyFlags & (MY_FFNF | MY_FAE | MY_WME))
+  {
+    char errbuf[MYSYS_STRERROR_SIZE];
     my_error((flags & O_RDONLY) || (flags == O_RDONLY ) ? EE_FILENOTFOUND :
-	     EE_CANTCREATEFILE,
-	     MYF(ME_BELL+ME_WAITTANG), filename, my_errno);
+             EE_CANTCREATEFILE,
+             MYF(ME_BELL+ME_WAITTANG), filename,
+             my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+  }
   DBUG_RETURN((FILE*) 0);
 } /* my_fopen */
 
@@ -243,23 +234,31 @@ int my_fclose(FILE *fd, myf MyFlags)
   DBUG_ENTER("my_fclose");
   DBUG_PRINT("my",("stream: 0x%lx  MyFlags: %d", (long) fd, MyFlags));
 
-  pthread_mutex_lock(&THR_LOCK_open);
-  file=fileno(fd);
-  if ((err = fclose(fd)) < 0)
+  mysql_mutex_lock(&THR_LOCK_open);
+  file= my_fileno(fd);
+#ifndef _WIN32
+  err= fclose(fd);
+#else
+  err= my_win_fclose(fd);
+#endif
+  if(err < 0)
   {
     my_errno=errno;
     if (MyFlags & (MY_FAE | MY_WME))
-      my_error(EE_BADCLOSE, MYF(ME_BELL+ME_WAITTANG),
-	       my_filename(file),errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_BADCLOSE, MYF(ME_BELL+ME_WAITTANG), my_filename(file),
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
   }
   else
     my_stream_opened--;
   if ((uint) file < my_file_limit && my_file_info[file].type != UNOPEN)
   {
     my_file_info[file].type = UNOPEN;
-    my_free(my_file_info[file].name, MYF(MY_ALLOW_ZERO_PTR));
+    my_free(my_file_info[file].name);
   }
-  pthread_mutex_unlock(&THR_LOCK_open);
+  mysql_mutex_unlock(&THR_LOCK_open);
   DBUG_RETURN(err);
 } /* my_fclose */
 
@@ -276,15 +275,24 @@ FILE *my_fdopen(File Filedes, const char *name, int Flags, myf MyFlags)
 		   Filedes, Flags, MyFlags));
 
   make_ftype(type,Flags);
-  if ((fd = fdopen(Filedes, type)) == 0)
+#ifdef _WIN32
+  fd= my_win_fdopen(Filedes, type);
+#else
+  fd= fdopen(Filedes, type);
+#endif
+  if (!fd)
   {
     my_errno=errno;
     if (MyFlags & (MY_FAE | MY_WME))
-      my_error(EE_CANT_OPEN_STREAM, MYF(ME_BELL+ME_WAITTANG),errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_CANT_OPEN_STREAM, MYF(ME_BELL+ME_WAITTANG),
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
   }
   else
   {
-    pthread_mutex_lock(&THR_LOCK_open);
+    mysql_mutex_lock(&THR_LOCK_open);
     my_stream_opened++;
     if ((uint) Filedes < (uint) my_file_limit)
     {
@@ -298,7 +306,7 @@ FILE *my_fdopen(File Filedes, const char *name, int Flags, myf MyFlags)
       }
       my_file_info[Filedes].type = STREAM_BY_FDOPEN;
     }
-    pthread_mutex_unlock(&THR_LOCK_open);
+    mysql_mutex_unlock(&THR_LOCK_open);
   }
 
   DBUG_PRINT("exit",("stream: 0x%lx", (long) fd));

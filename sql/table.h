@@ -1,4 +1,7 @@
-/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+#ifndef TABLE_INCLUDED
+#define TABLE_INCLUDED
+
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +14,23 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/* Copyright (C) 2013 Calpont Corp. */
+#include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
+#include "sql_plist.h"
+#include "sql_alloc.h"
+#include "mdl.h"
+#include "datadict.h"
 
+#ifndef MYSQL_CLIENT
+
+#include "hash.h"                               /* HASH */
+#include "handler.h"                /* row_type, ha_choice, handler */
+#include "mysql_com.h"              /* enum_field_types */
+#include "thr_lock.h"                  /* thr_lock_type */
+#include "filesort_utils.h"
+#include "parse_file.h"
+#include "table_id.h"
 
 /* Structs that defines the TABLE */
 
@@ -27,8 +43,141 @@ class st_select_lex;
 class partition_info;
 class COND_EQUAL;
 class Security_context;
+struct TABLE_LIST;
+class ACL_internal_schema_access;
+class ACL_internal_table_access;
+class Field;
+class Field_temporal_with_date_and_time;
+class Table_cache_element;
+
+/*
+  Used to identify NESTED_JOIN structures within a join (applicable to
+  structures representing outer joins that have not been simplified away).
+*/
+typedef ulonglong nested_join_map;
+
+
+#define tmp_file_prefix "#sql"			/**< Prefix for tmp tables */
+#define tmp_file_prefix_length 4
+#define TMP_TABLE_KEY_EXTRA 8
+
+/**
+  Enumerate possible types of a table from re-execution
+  standpoint.
+  TABLE_LIST class has a member of this type.
+  At prepared statement prepare, this member is assigned a value
+  as of the current state of the database. Before (re-)execution
+  of a prepared statement, we check that the value recorded at
+  prepare matches the type of the object we obtained from the
+  table definition cache.
+
+  @sa check_and_update_table_version()
+  @sa Execute_observer
+  @sa Prepared_statement::reprepare()
+*/
+
+enum enum_table_ref_type
+{
+  /** Initial value set by the parser */
+  TABLE_REF_NULL= 0,
+  TABLE_REF_VIEW,
+  TABLE_REF_BASE_TABLE,
+  TABLE_REF_I_S_TABLE,
+  TABLE_REF_TMP_TABLE
+};
+
+/**
+ Enumerate possible status of a identifier name while determining
+ its validity
+*/
+enum enum_ident_name_check
+{
+  IDENT_NAME_OK,
+  IDENT_NAME_WRONG,
+  IDENT_NAME_TOO_LONG
+};
 
 /*************************************************************************/
+
+/**
+ Object_creation_ctx -- interface for creation context of database objects
+ (views, stored routines, events, triggers). Creation context -- is a set
+ of attributes, that should be fixed at the creation time and then be used
+ each time the object is parsed or executed.
+*/
+
+class Object_creation_ctx
+{
+public:
+  Object_creation_ctx *set_n_backup(THD *thd);
+
+  void restore_env(THD *thd, Object_creation_ctx *backup_ctx);
+
+protected:
+  Object_creation_ctx() {}
+  virtual Object_creation_ctx *create_backup_ctx(THD *thd) const = 0;
+
+  virtual void change_env(THD *thd) const = 0;
+
+public:
+  virtual ~Object_creation_ctx()
+  { }
+};
+
+/*************************************************************************/
+
+/**
+ Default_object_creation_ctx -- default implementation of
+ Object_creation_ctx.
+*/
+
+class Default_object_creation_ctx : public Object_creation_ctx
+{
+public:
+  const CHARSET_INFO *get_client_cs()
+  {
+    return m_client_cs;
+  }
+
+  const CHARSET_INFO *get_connection_cl()
+  {
+    return m_connection_cl;
+  }
+
+protected:
+  Default_object_creation_ctx(THD *thd);
+
+  Default_object_creation_ctx(const CHARSET_INFO *client_cs,
+                              const CHARSET_INFO *connection_cl);
+
+protected:
+  virtual Object_creation_ctx *create_backup_ctx(THD *thd) const;
+
+  virtual void change_env(THD *thd) const;
+
+protected:
+  /**
+    client_cs stores the value of character_set_client session variable.
+    The only character set attribute is used.
+
+    Client character set is included into query context, because we save
+    query in the original character set, which is client character set. So,
+    in order to parse the query properly we have to switch client character
+    set on parsing.
+  */
+  const CHARSET_INFO *m_client_cs;
+
+  /**
+    connection_cl stores the value of collation_connection session
+    variable. Both character set and collation attributes are used.
+
+    Connection collation is included into query context, becase it defines
+    the character set and collation of text literals in internal
+    representation of query (item-objects).
+  */
+  const CHARSET_INFO *m_connection_cl;
+};
+
 
 /**
  View_creation_ctx -- creation context of view objects.
@@ -51,27 +200,53 @@ private:
 
 /*************************************************************************/
 
-/* Order clause list element */
+/** Order clause list element */
 
 typedef struct st_order {
   struct st_order *next;
-  Item	 **item;			/* Point at item in select fields */
-  Item	 *item_ptr;			/* Storage for initial item */
+  Item   **item;                        /* Point at item in select fields */
+  Item   *item_ptr;                     /* Storage for initial item */
   int    counter;                       /* position in SELECT list, correct
-                                           only if counter_used is true*/
-  bool	 asc;				/* true if ascending */
-  bool	 free_me;			/* true if item isn't shared  */
-  bool	 in_field_list;			/* true if in select field list */
+                                           only if counter_used is true */
+  enum enum_order {
+    ORDER_NOT_RELEVANT,
+    ORDER_ASC,
+    ORDER_DESC
+  };
+
+  enum_order direction;                 /* Requested direction of ordering */
+  bool   in_field_list;                 /* true if in select field list */
   bool   counter_used;                  /* parameter was counter of columns */
-  Field  *field;			/* If tmp-table group */
-  char	 *buff;				/* If tmp-table group */
+  /**
+     Tells whether this ORDER element was referenced with an alias or with an
+     expression, in the query:
+     SELECT a AS foo GROUP BY foo: true.
+     SELECT a AS foo GROUP BY a: false.
+  */
+  bool   used_alias;
+  Field  *field;                        /* If tmp-table group */
+  char   *buff;                         /* If tmp-table group */
   table_map used, depend_map;
-  uint   nulls;                         /* @InfiniDB. For window function order by clause 
-                                           2 -- not definied. default nulls last if ascending
-                                                default nulls first if descending
-                                           1 -- nulls first
-                                           0 -- nulls last */
 } ORDER;
+
+/**
+  State information for internal tables grants.
+  This structure is part of the TABLE_LIST, and is updated
+  during the ACL check process.
+  @sa GRANT_INFO
+*/
+struct st_grant_internal_info
+{
+  /** True if the internal lookup by schema name was done. */
+  bool m_schema_lookup_done;
+  /** Cached internal schema access. */
+  const ACL_internal_schema_access *m_schema_access;
+  /** True if the internal lookup by table name was done. */
+  bool m_table_lookup_done;
+  /** Cached internal table access. */
+  const ACL_internal_table_access *m_table_access;
+};
+typedef struct st_grant_internal_info GRANT_INTERNAL_INFO;
 
 /**
    @brief The current state of the privilege checking process for the current
@@ -134,6 +309,8 @@ typedef struct st_grant_info
     check access rights to the underlying tables of a view.
   */
   ulong orig_want_privilege;
+  /** The grant state for internal tables. */
+  GRANT_INTERNAL_INFO m_internal;
 } GRANT_INFO;
 
 enum tmp_table_type
@@ -141,30 +318,16 @@ enum tmp_table_type
   NO_TMP_TABLE, NON_TRANSACTIONAL_TMP_TABLE, TRANSACTIONAL_TMP_TABLE,
   INTERNAL_TMP_TABLE, SYSTEM_TMP_TABLE
 };
-
-/** Event on which trigger is invoked. */
-enum trg_event_type
-{
-  TRG_EVENT_INSERT= 0,
-  TRG_EVENT_UPDATE= 1,
-  TRG_EVENT_DELETE= 2,
-  TRG_EVENT_MAX
-};
-
-enum frm_type_enum
-{
-  FRMTYPE_ERROR= 0,
-  FRMTYPE_TABLE,
-  FRMTYPE_VIEW
-};
-
 enum release_type { RELEASE_NORMAL, RELEASE_WAIT_FOR_DROP };
 
-typedef struct st_filesort_info
+
+class Filesort_info
 {
+  /// Buffer for sorting keys.
+  Filesort_buffer filesort_buffer;
+
+public:
   IO_CACHE *io_cache;           /* If sorted through filesort */
-  uchar     **sort_keys;        /* Buffer for sorting keys */
-  size_t    sort_keys_size;     /* Number of bytes allocated */
   uchar     *buffpek;           /* Buffer for buffpek structures */
   uint      buffpek_len;        /* Max number of buffpeks in the buffer */
   uchar     *addon_buf;         /* Pointer to a buffer if sorted with fields */
@@ -173,28 +336,34 @@ typedef struct st_filesort_info
   void    (*unpack)(struct st_sort_addon_field *, uchar *); /* To unpack back */
   uchar     *record_pointers;    /* If sorted in memory */
   ha_rows   found_records;      /* How many records in sort */
-} FILESORT_INFO;
 
+  Filesort_info(): record_pointers(0) {};
+  /** Sort filesort_buffer */
+  void sort_buffer(Sort_param *param, uint count)
+  { filesort_buffer.sort_buffer(param, count); }
 
-/*
-  Values in this enum are used to indicate how a tables TIMESTAMP field
-  should be treated. It can be set to the current timestamp on insert or
-  update or both.
-  WARNING: The values are used for bit operations. If you change the
-  enum, you must keep the bitwise relation of the values. For example:
-  (int) TIMESTAMP_AUTO_SET_ON_BOTH must be equal to
-  (int) TIMESTAMP_AUTO_SET_ON_INSERT | (int) TIMESTAMP_AUTO_SET_ON_UPDATE.
-  We use an enum here so that the debugger can display the value names.
-*/
-enum timestamp_auto_set_type
-{
-  TIMESTAMP_NO_AUTO_SET= 0, TIMESTAMP_AUTO_SET_ON_INSERT= 1,
-  TIMESTAMP_AUTO_SET_ON_UPDATE= 2, TIMESTAMP_AUTO_SET_ON_BOTH= 3
+  /**
+     Accessors for Filesort_buffer (which @c).
+  */
+  uchar *get_record_buffer(uint idx)
+  { return filesort_buffer.get_record_buffer(idx); }
+
+  uchar **get_sort_keys()
+  { return filesort_buffer.get_sort_keys(); }
+
+  uchar **alloc_sort_buffer(uint num_records, uint record_length)
+  { return filesort_buffer.alloc_sort_buffer(num_records, record_length); }
+
+  void free_sort_buffer()
+  { filesort_buffer.free_sort_buffer(); }
+
+  void init_record_pointers()
+  { filesort_buffer.init_record_pointers(); }
+
+  size_t sort_buffer_size() const
+  { return filesort_buffer.sort_buffer_size(); }
 };
-#define clear_timestamp_auto_bits(_target_, _bits_) \
-  (_target_)= (enum timestamp_auto_set_type)((int)(_target_) & ~(int)(_bits_))
 
-class Field_timestamp;
 class Field_blob;
 class Table_triggers_list;
 
@@ -251,7 +420,7 @@ enum enum_table_category
     - LOCK TABLE t FOR READ/WRITE
     - FLUSH TABLES WITH READ LOCK
     - SET GLOBAL READ_ONLY = ON
-    as there is no point in locking explicitely
+    as there is no point in locking explicitly
     an INFORMATION_SCHEMA table.
     Nothing is directly written to information schema tables.
     Note that this value is not used currently,
@@ -266,16 +435,16 @@ enum enum_table_category
   TABLE_CATEGORY_INFORMATION=4,
 
   /**
-    Performance schema tables.
+    Log tables.
     These tables are an interface provided by the system
-    to inspect the system performance data.
+    to inspect the system logs.
     These tables do *not* honor:
     - LOCK TABLE t FOR READ/WRITE
     - FLUSH TABLES WITH READ LOCK
     - SET GLOBAL READ_ONLY = ON
-    as there is no point in locking explicitely
-    a PERFORMANCE_SCHEMA table.
-    An example of PERFORMANCE_SCHEMA tables are:
+    as there is no point in locking explicitly
+    a LOG table.
+    An example of LOG tables are:
     - mysql.slow_log
     - mysql.general_log,
     which *are* updated even when there is either
@@ -283,15 +452,58 @@ enum enum_table_category
     User queries do not write directly to these tables
     (there are exceptions for log tables).
     The server implementation perform writes.
+    Log tables are cached in the table cache.
+  */
+  TABLE_CATEGORY_LOG=5,
+
+  /**
+    Performance schema tables.
+    These tables are an interface provided by the system
+    to inspect the system performance data.
+    These tables do *not* honor:
+    - LOCK TABLE t FOR READ/WRITE
+    - FLUSH TABLES WITH READ LOCK
+    - SET GLOBAL READ_ONLY = ON
+    as there is no point in locking explicitly
+    a PERFORMANCE_SCHEMA table.
+    An example of PERFORMANCE_SCHEMA tables are:
+    - performance_schema.*
+    which *are* updated (but not using the handler interface)
+    even when there is either
+    a GLOBAL READ LOCK or a GLOBAL READ_ONLY in effect.
+    User queries do not write directly to these tables
+    (there are exceptions for SETUP_* tables).
+    The server implementation perform writes.
     Performance tables are cached in the table cache.
   */
-  TABLE_CATEGORY_PERFORMANCE=5
+  TABLE_CATEGORY_PERFORMANCE=6,
+
+  /**
+    Replication Information Tables.
+    These tables are used to store replication information.
+    These tables do *not* honor:
+    - LOCK TABLE t FOR READ/WRITE
+    - FLUSH TABLES WITH READ LOCK
+    - SET GLOBAL READ_ONLY = ON
+    as there is no point in locking explicitly
+    a Replication Information table.
+    An example of replication tables are:
+    - mysql.slave_master_info
+    - mysql.slave_relay_log_info,
+    which *are* updated even when there is either
+    a GLOBAL READ LOCK or a GLOBAL READ_ONLY in effect.
+    User queries do not write directly to these tables.
+    Replication tables are cached in the table cache.
+  */
+  TABLE_CATEGORY_RPL_INFO=7
 };
 typedef enum enum_table_category TABLE_CATEGORY;
 
 TABLE_CATEGORY get_table_category(const LEX_STRING *db,
                                   const LEX_STRING *name);
 
+
+extern ulong refresh_version;
 
 typedef struct st_table_field_type
 {
@@ -322,14 +534,53 @@ public:
 };
 
 
-/*
+/**
+  Class representing the fact that some thread waits for table
+  share to be flushed. Is used to represent information about
+  such waits in MDL deadlock detector.
+*/
+
+class Wait_for_flush : public MDL_wait_for_subgraph
+{
+  MDL_context *m_ctx;
+  TABLE_SHARE *m_share;
+  uint m_deadlock_weight;
+public:
+  Wait_for_flush(MDL_context *ctx_arg, TABLE_SHARE *share_arg,
+               uint deadlock_weight_arg)
+    : m_ctx(ctx_arg), m_share(share_arg),
+      m_deadlock_weight(deadlock_weight_arg)
+  {}
+
+  MDL_context *get_ctx() const { return m_ctx; }
+
+  virtual bool accept_visitor(MDL_wait_for_graph_visitor *dvisitor);
+
+  virtual uint get_deadlock_weight() const;
+
+  /**
+    Pointers for participating in the list of waiters for table share.
+  */
+  Wait_for_flush *next_in_share;
+  Wait_for_flush **prev_in_share;
+};
+
+
+typedef I_P_List <Wait_for_flush,
+                  I_P_List_adapter<Wait_for_flush,
+                                   &Wait_for_flush::next_in_share,
+                                   &Wait_for_flush::prev_in_share> >
+                 Wait_for_flush_list;
+
+
+/**
   This structure is shared between different table objects. There is one
   instance of table share per one table in the database.
 */
 
-typedef struct st_table_share
+struct TABLE_SHARE
 {
-  st_table_share() {}                    /* Remove gcc warning */
+  TABLE_SHARE() {}                    /* Remove gcc warning */
 
   /** Category of this table. */
   TABLE_CATEGORY table_category;
@@ -340,24 +591,27 @@ typedef struct st_table_share
   TYPELIB keynames;			/* Pointers to keynames */
   TYPELIB fieldnames;			/* Pointer to fieldnames */
   TYPELIB *intervals;			/* pointer to interval info */
-  pthread_mutex_t mutex;                /* For locking the share  */
-  pthread_cond_t cond;			/* To signal that share is ready */
-  struct st_table_share *next,		/* Link to unused shares */
-    **prev;
-#ifdef NOT_YET
-  struct st_table *open_tables;		/* link to open tables */
-#endif
+  mysql_mutex_t LOCK_ha_data;           /* To protect access to ha_data */
+  TABLE_SHARE *next, **prev;            /* Link to unused shares */
+  /**
+    Array of table_cache_instances pointers to elements of table caches
+    respresenting this table in each of Table_cache instances.
+    Allocated along with the share itself in alloc_table_share().
+    Each element of the array is protected by Table_cache::m_lock in the
+    corresponding Table_cache. False sharing should not be a problem in
+    this case as elements of this array are supposed to be updated rarely.
+  */
+  Table_cache_element **cache_element;
 
   /* The following is copied to each TABLE on OPEN */
   Field **field;
   Field **found_next_number_field;
-  Field *timestamp_field;               /* Used only during open */
-  KEY  *key_info;			/* data of keys in database */
+  KEY  *key_info;			/* data of keys defined for the table */
   uint	*blob_field;			/* Index to blobs in Field arrray*/
 
   uchar	*default_values;		/* row with default values */
   LEX_STRING comment;			/* Comment about table */
-  CHARSET_INFO *table_charset;		/* Default charset of string fields */
+  const CHARSET_INFO *table_charset;	/* Default charset of string fields */
 
   MY_BITMAP all_set;
   /*
@@ -385,9 +639,8 @@ typedef struct st_table_share
   key_map keys_for_keyread;
   ha_rows min_rows, max_rows;		/* create information */
   ulong   avg_row_length;		/* create information */
-  ulong   raid_chunksize;
-  ulong   version, mysql_version;
-  ulong   timestamp_offset;		/* Set to offset+1 of record */
+  ulong   version;
+  ulong   mysql_version;		/* 0 if .frm is created before 5.0 */
   ulong   reclength;			/* Recordlength */
 
   plugin_ref db_plugin;			/* storage engine plugin */
@@ -398,30 +651,32 @@ typedef struct st_table_share
   }
   enum row_type row_type;		/* How rows are stored */
   enum tmp_table_type tmp_table;
-  enum enum_ha_unused unused1;
-  enum enum_ha_unused unused2;
 
   uint ref_count;                       /* How many TABLE objects uses this */
-  uint open_count;			/* Number of tables in open list */
-  uint blob_ptr_size;			/* 4 or 8 */
   uint key_block_size;			/* create key_block_size, if used */
+  uint stats_sample_pages;		/* number of pages to sample during
+					stats estimation, if used, otherwise 0. */
+  enum_stats_auto_recalc stats_auto_recalc; /* Automatic recalc of stats. */
   uint null_bytes, last_null_bit_pos;
   uint fields;				/* Number of fields */
   uint rec_buff_length;                 /* Size of table->record[] buffer */
-  uint keys, key_parts;
-  uint max_key_length, max_unique_length, total_key_length;
+  uint keys;                            /* Number of keys defined for the table*/
+  uint key_parts;                       /* Number of key parts of all keys
+                                           defined for the table
+                                        */
+  uint max_key_length;                  /* Length of the longest key */
+  uint max_unique_length;               /* Length of the longest unique key */
+  uint total_key_length;
   uint uniques;                         /* Number of UNIQUE index */
   uint null_fields;			/* number of null fields */
   uint blob_fields;			/* number of blob fields */
-  uint timestamp_field_offset;		/* Field number for timestamp field */
   uint varchar_fields;                  /* number of varchar fields */
   uint db_create_options;		/* Create options from database */
   uint db_options_in_use;		/* Options in use */
   uint db_record_offset;		/* if HA_REC_IN_SEQ */
-  uint raid_type, raid_chunks;
   uint rowid_field_offset;		/* Field_nr +1 to rowid field */
-  /* Index of auto-updated TIMESTAMP field in field array */
-  uint primary_key;
+  /* Primary key index number, used in TABLE::key_info[] */
+  uint primary_key;                     
   uint next_number_index;               /* autoincrement key number */
   uint next_number_key_offset;          /* autoinc keypart offset in a key */
   uint next_number_keypart;             /* autoinc keypart number in a key */
@@ -434,9 +689,7 @@ typedef struct st_table_share
   bool db_low_byte_first;		/* Portable row format */
   bool crashed;
   bool is_view;
-  bool name_lock, replace_with_name_lock;
-  bool waiting_on_cond;                 /* Protection against free */
-  ulong table_map_id;                   /* for row-based replication */
+  Table_id table_map_id;                   /* for row-based replication */
 
   /*
     Cache for row-based replication table share checks that does not
@@ -446,14 +699,22 @@ typedef struct st_table_share
   */
   int cached_row_logging_check;
 
+  /*
+    Storage media to use for this table (unless another storage
+    media has been specified on an individual column - in versions
+    where that is supported)
+  */
+  enum ha_storage_media default_storage_media;
+
+  /* Name of the tablespace used for this table */
+  char *tablespace;
+
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  /** @todo: Move into *ha_data for partitioning */
+  /* filled in when reading from frm */
   bool auto_partitioned;
-  char *partition_info;
-  uint  partition_info_len;
+  char *partition_info_str;
+  uint  partition_info_str_len;
   uint  partition_info_buffer_size;
-  const char *part_state;
-  uint part_state_len;
   handlerton *default_part_db_type;
 #endif
 
@@ -469,9 +730,22 @@ typedef struct st_table_share
   */
   const TABLE_FIELD_DEF *table_field_def_cache;
 
-  /** place to store storage engine specific data */
-  void *ha_data;
-  void (*ha_data_destroy)(void *); /* An optional destructor for ha_data. */
+  /** Main handler's share */
+  Handler_share *ha_share;
+
+  /** Instrumentation for this table share. */
+  PSI_table_share *m_psi;
+
+  /**
+    List of tickets representing threads waiting for the share to be flushed.
+  */
+  Wait_for_flush_list m_flush_tickets;
+
+  /**
+    For shares representing views File_parser object with view
+    definition read from .FRM file.
+  */ 
+  const File_parser *view_def;
 
 
   /*
@@ -532,16 +806,17 @@ typedef struct st_table_share
             || (table_category == TABLE_CATEGORY_SYSTEM));
   }
 
-  inline bool require_write_privileges()
-  {
-    return (table_category == TABLE_CATEGORY_PERFORMANCE);
-  }
-
-  inline ulong get_table_def_version()
+  inline ulonglong get_table_def_version()
   {
     return table_map_id;
   }
 
+
+  /** Is this table share being expelled from the table definition cache?  */
+  inline bool has_old_version() const
+  {
+    return version != refresh_version;
+  }
   /**
     Convert unrelated members of TABLE_SHARE to one enum
     representing its type.
@@ -563,7 +838,7 @@ typedef struct st_table_share
   }
   /**
     Return a table metadata version.
-     * for base tables, we return table_map_id.
+     * for base tables and views, we return table_map_id.
        It is assigned from a global counter incremented for each
        new table loaded into the table definition cache (TDC).
      * for temporary tables it's table_map_id again. But for
@@ -572,7 +847,7 @@ typedef struct st_table_share
        counter incremented for every new SQL statement. Since
        temporary tables are thread-local, each temporary table
        gets a unique id.
-     * for everything else (views, information schema tables),
+     * for everything else (e.g. information schema tables),
        the version id is zero.
 
    This choice of version id is a large compromise
@@ -587,8 +862,8 @@ typedef struct st_table_share
    version id of a temporary table is never compared with
    a version id of a view, and vice versa.
 
-   Secondly, for base tables, we know that each DDL flushes the
-   respective share from the TDC. This ensures that whenever
+   Secondly, for base tables and views, we know that each DDL flushes
+   the respective share from the TDC. This ensures that whenever
    a table is altered or dropped and recreated, it gets a new
    version id.
    Unfortunately, since elements of the TDC are also flushed on
@@ -609,26 +884,6 @@ typedef struct st_table_share
    Metadata of information schema tables never changes.
    Thus we can safely assume 0 for a good enough version id.
 
-   Views are a special and tricky case. A view is always inlined
-   into the parse tree of a prepared statement at prepare.
-   Thus, when we execute a prepared statement, the parse tree
-   will not get modified even if the view is replaced with another
-   view.  Therefore, we can safely choose 0 for version id of
-   views and effectively never invalidate a prepared statement
-   when a view definition is altered. Note, that this leads to
-   wrong binary log in statement-based replication, since we log
-   prepared statement execution in form Query_log_events
-   containing conventional statements. But since there is no
-   metadata locking for views, the very same problem exists for
-   conventional statements alone, as reported in Bug#25144. The only
-   difference between prepared and conventional execution is,
-   effectively, that for prepared statements the race condition
-   window is much wider.
-   In 6.0 we plan to support view metadata locking (WL#3726) and
-   extend table definition cache to cache views (WL#4298).
-   When this is done, views will be handled in the same fashion
-   as the base tables.
-
    Finally, by taking into account table type, we always
    track that a change has taken place when a view is replaced
    with a base table, a base table is replaced with a temporary
@@ -636,15 +891,71 @@ typedef struct st_table_share
 
    @sa TABLE_LIST::is_table_ref_id_equal()
   */
-  ulong get_table_ref_version() const
+  ulonglong get_table_ref_version() const
   {
-    return (tmp_table == SYSTEM_TMP_TABLE || is_view) ? 0 : table_map_id;
+    return (tmp_table == SYSTEM_TMP_TABLE) ? 0 : table_map_id.id();
   }
 
-} TABLE_SHARE;
+  bool visit_subgraph(Wait_for_flush *waiting_ticket,
+                      MDL_wait_for_graph_visitor *gvisitor);
+
+  bool wait_for_old_version(THD *thd, struct timespec *abstime,
+                            uint deadlock_weight);
+  /** Release resources and free memory occupied by the table share. */
+  void destroy();
+};
 
 
-extern ulong refresh_version;
+/**
+   Class is used as a BLOB field value storage for
+   intermediate GROUP_CONCAT results. Used only for
+   GROUP_CONCAT with  DISTINCT or ORDER BY options.
+ */
+
+class Blob_mem_storage: public Sql_alloc
+{
+private:
+  MEM_ROOT storage;
+  /**
+    Sign that some values were cut
+    during saving into the storage.
+  */
+  bool truncated_value;
+public:
+  Blob_mem_storage() :truncated_value(false)
+  {
+    init_alloc_root(&storage, MAX_FIELD_VARCHARLENGTH, 0);
+  }
+  ~ Blob_mem_storage()
+  {
+    free_root(&storage, MYF(0));
+  }
+  void reset()
+  {
+    free_root(&storage, MYF(MY_MARK_BLOCKS_FREE));
+    truncated_value= false;
+  }
+  /**
+     Fuction creates duplicate of 'from'
+     string in 'storage' MEM_ROOT.
+
+     @param from           string to copy
+     @param length         string length
+
+     @retval Pointer to the copied string.
+     @retval 0 if an error occured.
+  */
+  char *store(const char *from, uint length)
+  {
+    return (char*) memdup_root(&storage, from, length);
+  }
+  void set_truncated_value(bool is_truncated_value)
+  {
+    truncated_value= is_truncated_value;
+  }
+  bool is_truncated_value() { return truncated_value; }
+};
+
 
 /* Information for one open table */
 enum index_hint_type
@@ -654,21 +965,39 @@ enum index_hint_type
   INDEX_HINT_FORCE
 };
 
-struct st_table {
-  st_table() {}                               /* Remove gcc warning */
+/* Bitmap of table's fields */
+typedef Bitmap<MAX_FIELDS> Field_map;
+
+struct TABLE
+{
+  TABLE() {}                               /* Remove gcc warning */
+  /*
+    Since TABLE instances are often cleared using memset(), do not
+    add virtual members and do not inherit from TABLE.
+    Otherwise memset() will start overwriting the vtable pointer.
+  */
 
   TABLE_SHARE	*s;
   handler	*file;
-#ifdef NOT_YET
-  struct st_table *used_next, **used_prev;	/* Link to used tables */
-  struct st_table *open_next, **open_prev;	/* Link to open tables */
-#endif
-  struct st_table *next, *prev;
+  TABLE *next, *prev;
 
-  /* For the below MERGE related members see top comment in ha_myisammrg.cc */
-  struct st_table *parent;          /* Set in MERGE child.  Ptr to parent */
-  TABLE_LIST      *child_l;         /* Set in MERGE parent. List of children */
-  TABLE_LIST      **child_last_l;   /* Set in MERGE parent. End of list */
+private:
+  /**
+     Links for the lists of used/unused TABLE objects for the particular
+     table in the specific instance of Table_cache (in other words for
+     specific Table_cache_element object).
+     Declared as private to avoid direct manipulation with those objects.
+     One should use methods of I_P_List template instead.
+  */
+  TABLE *cache_next, **cache_prev;
+
+  /*
+    Give Table_cache_element access to the above two members to allow
+    using them for linking TABLE objects in a list.
+  */
+  friend class Table_cache_element;
+
+public:
 
   THD	*in_use;                        /* Which thread uses this */
   Field **field;			/* Pointer to fields */
@@ -683,6 +1012,20 @@ struct st_table {
   */
   key_map covering_keys;
   key_map quick_keys, merge_keys;
+  key_map used_keys;  /* Indexes that cover all fields used by the query */
+  
+  /*
+    possible_quick_keys is a superset of quick_keys to use with EXPLAIN of
+    JOIN-less commands (single-table UPDATE and DELETE).
+    
+    When explaining regular JOINs, we use JOIN_TAB::keys to output the 
+    "possible_keys" column value. However, it is not available for
+    single-table UPDATE and DELETE commands, since they don't use JOIN
+    optimizer at the top level. OTOH they directly use the range optimizer,
+    that collects all keys usable for range access here.
+  */
+  key_map possible_quick_keys;
+
   /*
     A set of keys that can be used in the query that references this
     table.
@@ -699,15 +1042,16 @@ struct st_table {
   key_map keys_in_use_for_group_by;
   /* Map of keys that can be used to calculate ORDER BY without sorting */
   key_map keys_in_use_for_order_by;
-  KEY  *key_info;			/* data of keys in database */
+  KEY  *key_info;			/* data of keys defined for the table */
 
   Field *next_number_field;		/* Set if next_number is activated */
   Field *found_next_number_field;	/* Set on open */
-  Field_timestamp *timestamp_field;
 
   /* Table's triggers, 0 if there are no of them */
   Table_triggers_list *triggers;
   TABLE_LIST *pos_in_table_list;/* Element referring to this table */
+  /* Position in thd->locked_table_list under LOCK TABLES */
+  TABLE_LIST *pos_in_locked_tables;
   ORDER		*group;
   const char	*alias;            	  /* alias or table name */
   uchar		*null_flags;
@@ -755,20 +1099,6 @@ struct st_table {
     this table and constants)
   */
   ha_rows       quick_condition_rows;
-
-  /*
-    If this table has TIMESTAMP field with auto-set property (pointed by
-    timestamp_field member) then this variable indicates during which
-    operations (insert only/on update/in both cases) we should set this
-    field to current timestamp. If there are no such field in this table
-    or we should not automatically set its value during execution of current
-    statement then the variable contains TIMESTAMP_NO_AUTO_SET (i.e. 0).
-
-    Value of this variable is set for each statement in open_table() and
-    if needed cleared later in statement processing code (see mysql_update()
-    as example).
-  */
-  timestamp_auto_set_type timestamp_field_type;
   table_map	map;                    /* ID bit of table (1,2,4,8,16...) */
 
   uint          lock_position;          /* Position in MYSQL_LOCK.table */
@@ -776,12 +1106,8 @@ struct st_table {
   uint          lock_count;             /* Number of locks */
   uint		tablenr,used_fields;
   uint          temp_pool_slot;		/* Used by intern temp tables */
-  uint		status;                 /* What's in record[0] */
   uint		db_stat;		/* mode of file as in handler.h */
-  /* number of select if it is derived table */
-  uint          derived_select_number;
   int		current_lock;           /* Type of lock on table */
-  my_bool copy_blobs;			/* copy_blobs when storing */
 
   /*
     0 or JOIN_TYPE_{LEFT|RIGHT}. Currently this is only compared to 0.
@@ -794,6 +1120,9 @@ struct st_table {
     NULL, including columns declared as "not null" (see maybe_null).
   */
   my_bool null_row;
+
+  uint8   status;                       /* What's in record[0] */
+  my_bool copy_blobs;                   /* copy_blobs when storing */
 
   /*
     TODO: Each of the following flags take up 8 bits. They can just as easily
@@ -821,25 +1150,10 @@ struct st_table {
    */
   my_bool key_read;
   my_bool no_keyread;
-  /*
-    Placeholder for an open table which prevents other connections
-    from taking name-locks on this table. Typically used with
-    TABLE_SHARE::version member to take an exclusive name-lock on
-    this table name -- a name lock that not only prevents other
-    threads from opening the table, but also blocks other name
-    locks. This is achieved by:
-    - setting open_placeholder to 1 - this will block other name
-      locks, as wait_for_locked_table_name will be forced to wait,
-      see table_is_used for details.
-    - setting version to 0 - this will force other threads to close
-      the instance of this table and wait (this is the same approach
-      as used for usual name locks).
-    An exclusively name-locked table currently can have no handler
-    object associated with it (db_stat is always 0), but please do
-    not rely on that.
-  */
-  my_bool open_placeholder;
   my_bool locked_by_logger;
+  /**
+    If set, indicate that the table is not replicated by the server.
+  */
   my_bool no_replicate;
   my_bool locked_by_name;
   my_bool fulltext_searched;
@@ -855,47 +1169,52 @@ struct st_table {
   my_bool insert_or_update;             /* Can be used by the handler */
   my_bool alias_name_used;		/* true if table_name is alias */
   my_bool get_fields_in_item_tree;      /* Signal to fix_field */
-  /* If MERGE children attached to parent. See top comment in ha_myisammrg.cc */
-  my_bool children_attached;
+  my_bool m_needs_reopen;
+private:
+  bool created; /* For tmp tables. TRUE <=> tmp table has been instantiated.*/
+public:
+  uint max_keys; /* Size of allocated key_info array. */
 
   REGINFO reginfo;			/* field connections */
+  /**
+     @todo This member should not be declared in-line. That makes it
+     impossible for any function that does memory allocation to take a const
+     reference to a TABLE object.
+   */
   MEM_ROOT mem_root;
+  /**
+     Initialized in Item_func_group_concat::setup for appropriate
+     temporary table if GROUP_CONCAT is used with ORDER BY | DISTINCT
+     and BLOB field count > 0.
+   */
+  Blob_mem_storage *blob_storage;
   GRANT_INFO grant;
-  FILESORT_INFO sort;
+  Filesort_info sort;
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   partition_info *part_info;            /* Partition related information */
-  bool no_partitions_used; /* If true, all partitions have been pruned away */
+  /* If true, all partitions have been pruned away */
+  bool all_partitions_pruned_away;
 #endif
+  MDL_ticket *mdl_ticket;
 
+  void init(THD *thd, TABLE_LIST *tl);
   bool fill_item_list(List<Item> *item_list) const;
   void reset_item_list(List<Item> *item_list) const;
   void clear_column_bitmaps(void);
   void prepare_for_position(void);
   void mark_columns_used_by_index_no_reset(uint index, MY_BITMAP *map);
   void mark_columns_used_by_index(uint index);
-  void add_read_columns_used_by_index(uint index);
-  void restore_column_maps_after_mark_index();
   void mark_auto_increment_column(void);
   void mark_columns_needed_for_update(void);
   void mark_columns_needed_for_delete(void);
   void mark_columns_needed_for_insert(void);
-  // @Infinidb if this is InfiniDB table.
-  inline bool isInfiniDB()
-  {
-#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
-    if (s && s->db_plugin && (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0))
-#else
-    if (s && s->db_plugin && (strcmp(s->db_plugin->name.str, "InfiniDB") == 0))
-#endif
-      return true;
-    return false;
-  }
+  void mark_columns_per_binlog_row_image(void);
   inline void column_bitmaps_set(MY_BITMAP *read_set_arg,
                                  MY_BITMAP *write_set_arg)
   {
     read_set= read_set_arg;
     write_set= write_set_arg;
-    if (file)
+    if (file && created)
       file->column_bitmaps_signal();
   }
   inline void column_bitmaps_set_no_signal(MY_BITMAP *read_set_arg,
@@ -913,29 +1232,59 @@ struct st_table {
     read_set= &def_read_set;
     write_set= &def_write_set;
   }
-  /* Is table open or should be treated as such by name-locking? */
-  inline bool is_name_opened() { return db_stat || open_placeholder; }
-  /*
-    Is this instance of the table should be reopen or represents a name-lock?
-  */
-  inline bool needs_reopen_or_name_lock()
-  { return s->version != refresh_version; }
-  bool is_children_attached(void);
-  inline void set_keyread(bool flag)
+  /** Should this instance of the table be reopened? */
+  inline bool needs_reopen()
+  { return !db_stat || m_needs_reopen; }
+  bool alloc_keys(uint key_count);
+  bool add_tmp_key(Field_map *key_parts, char *key_name);
+  void use_index(int key_to_save);
+
+  void set_keyread(bool flag)
   {
     DBUG_ASSERT(file);
     if (flag && !key_read)
     {
       key_read= 1;
-      file->extra(HA_EXTRA_KEYREAD);
+      if (is_created())
+        file->extra(HA_EXTRA_KEYREAD);
     }
     else if (!flag && key_read)
     {
       key_read= 0;
-      file->extra(HA_EXTRA_NO_KEYREAD);
+      if (is_created())
+        file->extra(HA_EXTRA_NO_KEYREAD);
     }
   }
+
+  bool update_const_key_parts(Item *conds);
+
+  bool check_read_removal(uint index);
+
+  /// Return true if table is instantiated, and false otherwise.
+  bool is_created() const { return created; }
+
+  /**
+    Set the table as "created", and enable flags in storage engine
+    that could not be enabled without an instantiated table.
+  */
+  void set_created()
+  {
+    if (created)
+      return;
+    if (key_read)
+      file->extra(HA_EXTRA_KEYREAD);
+    created= true;
+  }
+  /**
+    Set the contents of table to be "deleted", ie "not created", after having
+    deleted the contents.
+  */
+  void set_deleted()
+  {
+    created= false;
+  }
 };
+
 
 enum enum_schema_table_state
 { 
@@ -946,7 +1295,9 @@ enum enum_schema_table_state
 
 typedef struct st_foreign_key_info
 {
-  LEX_STRING *forein_id;
+  LEX_STRING *foreign_id;
+  LEX_STRING *foreign_db;
+  LEX_STRING *foreign_table;
   LEX_STRING *referenced_db;
   LEX_STRING *referenced_table;
   LEX_STRING *update_method;
@@ -955,47 +1306,6 @@ typedef struct st_foreign_key_info
   List<LEX_STRING> foreign_fields;
   List<LEX_STRING> referenced_fields;
 } FOREIGN_KEY_INFO;
-
-/*
-  Make sure that the order of schema_tables and enum_schema_tables are the same.
-*/
-
-enum enum_schema_tables
-{
-  SCH_CHARSETS= 0,
-  SCH_COLLATIONS,
-  SCH_COLLATION_CHARACTER_SET_APPLICABILITY,
-  SCH_COLUMNS,
-  SCH_COLUMN_PRIVILEGES,
-  SCH_ENGINES,
-  SCH_EVENTS,
-  SCH_FILES,
-  SCH_GLOBAL_STATUS,
-  SCH_GLOBAL_VARIABLES,
-  SCH_KEY_COLUMN_USAGE,
-  SCH_OPEN_TABLES,
-  SCH_PARTITIONS,
-  SCH_PLUGINS,
-  SCH_PROCESSLIST,
-  SCH_PROFILES,
-  SCH_REFERENTIAL_CONSTRAINTS,
-  SCH_PROCEDURES,
-  SCH_SCHEMATA,
-  SCH_SCHEMA_PRIVILEGES,
-  SCH_SESSION_STATUS,
-  SCH_SESSION_VARIABLES,
-  SCH_STATISTICS,
-  SCH_STATUS,
-  SCH_TABLES,
-  SCH_TABLE_CONSTRAINTS,
-  SCH_TABLE_NAMES,
-  SCH_TABLE_PRIVILEGES,
-  SCH_TRIGGERS,
-  SCH_USER_PRIVILEGES,
-  SCH_VARIABLES,
-  SCH_VIEWS
-};
-
 
 #define MY_I_S_MAYBE_NULL 1
 #define MY_I_S_UNSIGNED   2
@@ -1042,7 +1352,6 @@ typedef struct st_field_info
 
 
 struct TABLE_LIST;
-typedef class Item COND;
 
 typedef struct st_schema_table
 {
@@ -1051,7 +1360,7 @@ typedef struct st_schema_table
   /* Create information_schema table */
   TABLE *(*create_table)  (THD *thd, TABLE_LIST *table_list);
   /* Fill table with data */
-  int (*fill_table) (THD *thd, TABLE_LIST *tables, COND *cond);
+  int (*fill_table) (THD *thd, TABLE_LIST *tables, Item *cond);
   /* Handle fileds for old SHOW */
   int (*old_format) (THD *thd, struct st_schema_table *schema_table);
   int (*process_table) (THD *thd, TABLE_LIST *tables, TABLE *table,
@@ -1065,9 +1374,12 @@ typedef struct st_schema_table
 #define JOIN_TYPE_LEFT	1
 #define JOIN_TYPE_RIGHT	2
 
-#define VIEW_ALGORITHM_UNDEFINED        0
-#define VIEW_ALGORITHM_TMPTABLE         1
-#define VIEW_ALGORITHM_MERGE            2
+enum enum_derived_type {
+  VIEW_ALGORITHM_UNDEFINED = 0,
+  VIEW_ALGORITHM_TMPTABLE,
+  VIEW_ALGORITHM_MERGE,
+  DERIVED_ALGORITHM_TMPTABLE
+};
 
 #define VIEW_SUID_INVOKER               0
 #define VIEW_SUID_DEFINER               1
@@ -1086,12 +1398,8 @@ typedef struct st_schema_table
 /** The threshold size a blob field buffer before it is freed */
 #define MAX_TDC_BLOB_SIZE 65536
 
-struct st_lex;
 class select_union;
 class TMP_TABLE_PARAM;
-
-Item *create_view_field(THD *thd, TABLE_LIST *view, Item **field_ref,
-                        const char *name);
 
 struct Field_translator
 {
@@ -1132,6 +1440,34 @@ public:
 };
 
 
+/**
+   Type of table which can be open for an element of table list.
+*/
+
+enum enum_open_type
+{
+  OT_TEMPORARY_OR_BASE= 0, OT_TEMPORARY_ONLY, OT_BASE_ONLY
+};
+
+/**
+  This structure is used to keep info about possible key for the result table
+  of a derived table/view.
+  The 'referenced_by' is the table map of tables to which this possible
+    key corresponds.
+  The 'used_field' is a map of fields of which this key consists of.
+  See also the comment for the TABLE_LIST::update_derived_keys function.
+*/
+
+class Derived_key: public Sql_alloc {
+public:
+  table_map referenced_by;
+  Field_map used_fields;
+};
+
+class Index_hint;
+class Item_exists_subselect;
+
+
 /*
   Table reference in the FROM clause.
 
@@ -1162,9 +1498,12 @@ public:
        (TABLE_LIST::natural_join != NULL)
        - JOIN ... USING
          (TABLE_LIST::join_using_fields != NULL)
+     - semi-join
+       ;
 */
 
-class Index_hint;
+struct Name_resolution_context;
+struct LEX;
 struct TABLE_LIST
 {
   TABLE_LIST() {}                          /* Remove gcc warning */
@@ -1174,35 +1513,78 @@ struct TABLE_LIST
     simple_open_and_lock_tables
   */
   inline void init_one_table(const char *db_name_arg,
+                             size_t db_length_arg,
                              const char *table_name_arg,
+                             size_t table_name_length_arg,
+                             const char *alias_arg,
                              enum thr_lock_type lock_type_arg)
   {
-    bzero((char*) this, sizeof(*this));
+    memset(this, 0, sizeof(*this));
     db= (char*) db_name_arg;
-    table_name= alias= (char*) table_name_arg;
+    db_length= db_length_arg;
+    table_name= (char*) table_name_arg;
+    table_name_length= table_name_length_arg;
+    alias= (char*) alias_arg;
     lock_type= lock_type_arg;
+    mdl_request.init(MDL_key::TABLE, db, table_name,
+                     (lock_type >= TL_WRITE_ALLOW_WRITE) ?
+                     MDL_SHARED_WRITE : MDL_SHARED_READ,
+                     MDL_TRANSACTION);
+    callback_func= 0;
   }
 
+  /// Create a TABLE_LIST object representing a nested join
+  static TABLE_LIST *new_nested_join(MEM_ROOT *allocator,
+                                     const char *alias,
+                                     TABLE_LIST *embedding,
+                                     List<TABLE_LIST> *belongs_to,
+                                     class st_select_lex *select);
+
   /*
-    List of tables local to a subquery (used by SQL_I_List). Considers
-    views as leaves (unlike 'next_leaf' below). Created at parse time
-    in st_select_lex::add_table_to_list() -> table_list.link_in_list().
+    List of tables local to a subquery or the top-level SELECT (used by
+    SQL_I_List). Considers views as leaves (unlike 'next_leaf' below).
+    Created at parse time in st_select_lex::add_table_to_list() ->
+    table_list.link_in_list().
   */
   TABLE_LIST *next_local;
   /* link in a global list of all queries tables */
   TABLE_LIST *next_global, **prev_global;
   char		*db, *alias, *table_name, *schema_table_name;
   char          *option;                /* Used by cache index  */
-  Item		*on_expr;		/* Used with outer join */
+  /**
+     Context which should be used to resolve identifiers contained in the ON
+     condition of the embedding join nest.
+     @todo When name resolution contexts are created after parsing, we should
+     be able to store this in the embedding join nest instead.
+  */
+  Name_resolution_context *context_of_embedding;
+
+private:
+  Item		*m_join_cond;           /* Used with outer join */
+public:
+  Item         **join_cond_ref() { return &m_join_cond; }
+  Item          *join_cond() const { return m_join_cond; }
+  Item          *set_join_cond(Item *val)
+                 { return m_join_cond= val; }
   /*
-    The structure of ON expression presented in the member above
+    The structure of the join condition presented in the member above
     can be changed during certain optimizations. This member
-    contains a snapshot of AND-OR structure of the ON expression
+    contains a snapshot of AND-OR structure of the join condition
     made after permanent transformations of the parse tree, and is
-    used to restore ON clause before every reexecution of a prepared
+    used to restore the join condition before every reexecution of a prepared
     statement or stored procedure.
   */
-  Item          *prep_on_expr;
+  Item          *prep_join_cond;
+
+  Item          *sj_on_expr;            /* Synthesized semijoin condition */
+  /*
+    (Valid only for semi-join nests) Bitmap of tables that are within the
+    semi-join (this is different from bitmap of all nest's children because
+    tables that were pulled out of the semi-join nest remain listed as
+    nest's children).
+  */
+  table_map     sj_inner_tables;
+
   COND_EQUAL    *cond_equal;            /* Used with outer join */
   /*
     During parsing - left operand of NATURAL/USING join where 'this' is
@@ -1238,7 +1620,7 @@ struct TABLE_LIST
   /* Index names in a "... JOIN ... USE/IGNORE INDEX ..." clause. */
   List<Index_hint> *index_hints;
   TABLE        *table;                          /* opened table */
-  uint          table_id; /* table id (from binlog) for opened table */
+  Table_id table_id; /* table id (from binlog) for opened table */
   /*
     select_result for derived table to pass it from table creation to table
     filling procedure
@@ -1274,6 +1656,11 @@ struct TABLE_LIST
      derived tables. Use TABLE_LIST::is_anonymous_derived_table().
   */
   st_select_lex_unit *derived;		/* SELECT_LEX_UNIT of derived table */
+  /*
+    TRUE <=> all possible keys for a derived table were collected and
+    could be re-used while statement re-execution.
+  */
+  bool derived_keys_ready;
   ST_SCHEMA_TABLE *schema_table;        /* Information_schema table */
   st_select_lex	*schema_select_lex;
   /*
@@ -1284,7 +1671,7 @@ struct TABLE_LIST
   TMP_TABLE_PARAM *schema_table_param;
   /* link to select_lex where this table was used */
   st_select_lex	*select_lex;
-  st_lex	*view;			/* link on VIEW lex for merging */
+  LEX *view;                    /* link on VIEW lex for merging */
   Field_translator *field_translation;	/* array of VIEW fields */
   /* pointer to element after last one in translation table above */
   Field_translator *field_translation_end;
@@ -1361,7 +1748,7 @@ struct TABLE_LIST
       - VIEW_ALGORITHM_MERGE
       @to do Replace with an enum 
   */
-  uint8         effective_algorithm;
+  enum_derived_type effective_algorithm;
   GRANT_INFO	grant;
   /* data need by some engines in query cache*/
   ulonglong     engine_data;
@@ -1385,7 +1772,11 @@ struct TABLE_LIST
   bool		cacheable_table;	/* stop PS caching */
   /* used in multi-upd/views privilege check */
   bool		table_in_first_from_clause;
-  bool		skip_temporary;		/* this table shouldn't be temporary */
+  /**
+     Specifies which kind of table should be open for this element
+     of table list.
+  */
+  enum enum_open_type open_type;
   /* TRUE if this merged view contain auto_increment field */
   bool          contain_auto_increment;
   bool          multitable_view;        /* TRUE iff this is multitable view */
@@ -1396,20 +1787,37 @@ struct TABLE_LIST
   bool          check_option_processed;
   /* FRMTYPE_ERROR if any type is acceptable */
   enum frm_type_enum required_type;
-  handlerton	*db_type;		/* table_type for handler */
   char		timestamp_buffer[20];	/* buffer for timestamp (19+1) */
   /*
     This TABLE_LIST object is just placeholder for prelocking, it will be
     used for implicit LOCK TABLES only and won't be used in real statement.
   */
   bool          prelocking_placeholder;
-  /*
-    This TABLE_LIST object corresponds to the table to be created
-    so it is possible that it does not exist (used in CREATE TABLE
-    ... SELECT implementation).
+  /**
+     Indicates that if TABLE_LIST object corresponds to the table/view
+     which requires special handling.
   */
-  bool          create;
+  enum
+  {
+    /* Normal open. */
+    OPEN_NORMAL= 0,
+    /* Associate a table share only if the the table exists. */
+    OPEN_IF_EXISTS,
+    /*
+      Associate a table share only if the the table exists.
+      Also upgrade metadata lock to exclusive if table doesn't exist.
+    */
+    OPEN_FOR_CREATE,
+    /* Don't associate a table share. */
+    OPEN_STUB
+  } open_strategy;
   bool          internal_tmp_table;
+  /** TRUE if an alias for this table was specified in the SQL. */
+  bool          is_alias;
+  /** TRUE if the table is referred to in the statement using a fully
+      qualified name (<db_name>.<table_name>).
+  */
+  bool          is_fqtn;
 
 
   /* View creation context. */
@@ -1436,6 +1844,8 @@ struct TABLE_LIST
   LEX_STRING view_body_utf8;
 
    /* End of view definition context. */
+  /* List of possible keys. Valid only for materialized derived tables/views. */
+  List<Derived_key> derived_key_list;
 
   /**
     Indicates what triggers we need to pre-load for this TABLE_LIST
@@ -1443,21 +1853,29 @@ struct TABLE_LIST
     the parsed tree is created.
   */
   uint8 trg_event_map;
-
+  /* TRUE <=> this table is a const one and was optimized away. */
+  bool optimized_away;
   uint i_s_requested_object;
   bool has_db_lookup_value;
   bool has_table_lookup_value;
   uint table_open_method;
   enum enum_schema_table_state schema_table_state;
+
+  MDL_request mdl_request;
+
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  /* List to carry partition names from PARTITION (...) clause in statement */
+  List<String> *partition_names;
+#endif /* WITH_PARTITION_STORAGE_ENGINE */
+
   void calc_md5(char *buffer);
   void set_underlying_merge();
-  int view_check_option(THD *thd, bool ignore_failure);
+  int view_check_option(THD *thd, bool ignore_failure) const;
   bool setup_underlying(THD *thd);
   void cleanup_items();
   bool placeholder()
   {
-    return derived || view || schema_table || (create && !table->db_stat) ||
-           !table;
+    return derived || view || schema_table || !table;
   }
   void print(THD *thd, String *str, enum_query_type query_type);
   bool check_single_table(TABLE_LIST **table, table_map map,
@@ -1468,8 +1886,15 @@ struct TABLE_LIST
   TABLE_LIST *first_leaf_for_name_resolution();
   TABLE_LIST *last_leaf_for_name_resolution();
   bool is_leaf_for_name_resolution();
-  inline TABLE_LIST *top_table()
+  inline const TABLE_LIST *top_table() const
     { return belong_to_view ? belong_to_view : this; }
+
+  inline TABLE_LIST *top_table()
+  {
+    return
+      const_cast<TABLE_LIST*>(const_cast<const TABLE_LIST*>(this)->top_table());
+  }
+
   inline bool prepare_check_option(THD *thd)
   {
     bool res= FALSE;
@@ -1484,6 +1909,27 @@ struct TABLE_LIST
       return prep_where(thd, conds, no_where_clause);
     return FALSE;
   }
+  /**
+    @returns
+      TRUE  this is a materializable derived table/view.
+      FALSE otherwise.
+  */
+  inline bool uses_materialization() const
+  {
+    return (effective_algorithm == VIEW_ALGORITHM_TMPTABLE ||
+            effective_algorithm == DERIVED_ALGORITHM_TMPTABLE);
+  }
+  inline bool is_view_or_derived() const
+  {
+    return (effective_algorithm != VIEW_ALGORITHM_UNDEFINED);
+  }
+  /**
+    @returns true if materializable table contains one or zero rows.
+
+    Returning true implies that the table is materialized during optimization,
+    so it need not be optimized during execution.
+  */
+  bool materializable_is_const() const;
 
   void register_want_access(ulong want_access);
   bool prepare_security(THD *thd);
@@ -1499,25 +1945,11 @@ struct TABLE_LIST
   Item_subselect *containing_subselect();
 
   /* 
-    Compiles the tagged hints list and fills up st_table::keys_in_use_for_query,
-    st_table::keys_in_use_for_group_by, st_table::keys_in_use_for_order_by,
-    st_table::force_index and st_table::covering_keys.
+    Compiles the tagged hints list and fills up TABLE::keys_in_use_for_query,
+    TABLE::keys_in_use_for_group_by, TABLE::keys_in_use_for_order_by,
+    TABLE::force_index and TABLE::covering_keys.
   */
   bool process_index_hints(TABLE *table);
-
-  /* Access MERGE child def version.  See top comment in ha_myisammrg.cc */
-  inline ulong get_child_def_version()
-  {
-    return child_def_version;
-  }
-  inline void set_child_def_version(ulong version)
-  {
-    child_def_version= version;
-  }
-  inline void init_child_def_version()
-  {
-    child_def_version= ~0UL;
-  }
 
   /**
     Compare the version of metadata from the previous execution
@@ -1541,9 +1973,14 @@ struct TABLE_LIST
   */
   inline
   void set_table_ref_id(TABLE_SHARE *s)
+  { set_table_ref_id(s->get_table_ref_type(), s->get_table_ref_version()); }
+
+  inline
+  void set_table_ref_id(enum_table_ref_type table_ref_type_arg,
+                        ulonglong table_ref_version_arg)
   {
-    m_table_ref_type= s->get_table_ref_type();
-    m_table_ref_version= s->get_table_ref_version();
+    m_table_ref_type= table_ref_type_arg;
+    m_table_ref_version= table_ref_version_arg;
   }
 
   /**
@@ -1552,11 +1989,14 @@ struct TABLE_LIST
   */
   bool is_anonymous_derived_table() const { return derived && !view; }
 
+  /// returns query block id for derived table, and zero if not derived.
+  uint query_block_id() const;
+
   /**
      @brief Returns the name of the database that the referenced table belongs
      to.
   */
-  char *get_db_name() { return view != NULL ? view_db.str : db; }
+  char *get_db_name() const { return view != NULL ? view_db.str : db; }
 
   /**
      @brief Returns the name of the table that this TABLE_LIST represents.
@@ -1564,24 +2004,51 @@ struct TABLE_LIST
      @details The unqualified table name or view name for a table or view,
      respectively.
    */
-  char *get_table_name() { return view != NULL ? view_name.str : table_name; }
+  char *get_table_name() const { return view != NULL ? view_name.str : table_name; }
+  int fetch_number_of_rows();
+  bool update_derived_keys(Field*, Item**, uint);
+  bool generate_keys();
+  bool handle_derived(LEX *lex, bool (*processor)(THD*, LEX*, TABLE_LIST*));
+  st_select_lex_unit *get_unit() const;
+
+  /**
+    @brief Returns the outer join nest that this TABLE_LIST belongs to, if any.
+
+    @details There are two kinds of join nests, outer-join nests and semi-join 
+    nests.  This function returns non-NULL in the following cases:
+      @li 1. If this table/nest is embedded in a nest and this nest IS NOT a 
+             semi-join nest.  (In other words, it is an outer-join nest.)
+      @li 2. If this table/nest is embedded in a nest and this nest IS a 
+             semi-join nest, but this semi-join nest is embedded in another 
+             nest. (This other nest will be an outer-join nest, since all inner 
+             joined nested semi-join nests have been merged in 
+             @c simplify_joins() ).
+    Note: This function assumes that @c simplify_joins() has been performed.
+    Before that, join nests will be present for all types of join.
+
+    @return outer join nest, or NULL if none.
+   */
+  TABLE_LIST *outer_join_nest() const
+  {
+    if (!embedding)
+      return NULL;
+    if (embedding->sj_on_expr)
+      return embedding->embedding;
+    return embedding;
+  }
 
 private:
   bool prep_check_option(THD *thd, uint8 check_opt_type);
   bool prep_where(THD *thd, Item **conds, bool no_where_clause);
-  /*
-    Cleanup for re-execution in a prepared statement or a stored
-    procedure.
-  */
-
-  /* Remembered MERGE child def version.  See top comment in ha_myisammrg.cc */
-  ulong         child_def_version;
   /** See comments for set_metadata_id() */
   enum enum_table_ref_type m_table_ref_type;
-  /** See comments for set_metadata_id() */
-  ulong m_table_ref_version;
+  /** See comments for TABLE_SHARE::get_table_ref_version() */
+  ulonglong m_table_ref_version;
 };
 
+
+struct st_position;
+  
 class Item;
 
 /*
@@ -1704,7 +2171,40 @@ public:
   Natural_join_column *get_natural_column_ref();
 };
 
+/**
+  Semijoin_mat_optimize collects data used when calculating the cost of
+  executing a semijoin operation using a materialization strategy.
+  It is used during optimization phase only.
+*/
 
+struct Semijoin_mat_optimize
+{
+  /// Optimal join order calculated for inner tables of this semijoin op.
+  struct st_position *positions;
+  /// True if data types allow the MaterializeLookup semijoin strategy
+  bool lookup_allowed;
+  /// True if data types allow the MaterializeScan semijoin strategy
+  bool scan_allowed;
+  /// Expected #rows in the materialized table
+  double expected_rowcount;
+  /// Materialization cost - execute sub-join and write rows to temp.table
+  Cost_estimate materialization_cost;
+  /// Cost to make one lookup in the temptable
+  Cost_estimate lookup_cost;
+  /// Cost of scanning the materialized table
+  Cost_estimate scan_cost;
+  /// Array of pointers to fields in the materialized table.
+  Item_field **mat_fields;
+};
+
+/**
+  Struct st_nested_join is used to represent how tables are connected through
+  outer join operations and semi-join operations to form a query block.
+  Out of the parser, inner joins are also represented by st_nested_join
+  structs, but these are later flattened out by simplify_joins().
+  Some outer join nests are also flattened, when it can be determined that
+  they can be processed as inner joins instead of outer joins.
+*/
 typedef struct st_nested_join
 {
   List<TABLE_LIST>  join_list;       /* list of elements in the nested join */
@@ -1715,24 +2215,45 @@ typedef struct st_nested_join
     join nest. It is used exclusively within make_outerjoin_info().
    */
   struct st_join_table *first_nested;
-  /* 
+  /**
+    Number of tables and outer join nests administered by this nested join
+    object for the sake of cost analysis. Includes direct member tables as
+    well as tables included through semi-join nests, but notice that semi-join
+    nests themselves are not counted.
+  */
+  uint              nj_total;
+  /**
     Used to count tables in the nested join in 2 isolated places:
     1. In make_outerjoin_info(). 
-    2. check_interleaving_with_nj/restore_prev_nj_state (these are called
+    2. check_interleaving_with_nj/backout_nj_state (these are called
        by the join optimizer. 
     Before each use the counters are zeroed by reset_nj_counters.
   */
-  uint              counter;
-  nested_join_map   nj_map;          /* Bit used to identify this nested join*/
+  uint              nj_counter;
   /**
-     True if this join nest node is completely covered by the query execution
-     plan. This means two things.
-
-     1. All tables on its @c join_list are covered by the plan.
-
-     2. All child join nest nodes are fully covered.
-   */
-  bool is_fully_covered() const { return join_list.elements == counter; }
+    Bit identifying this nested join. Only nested joins representing the
+    outer join structure need this, other nests have bit set to zero.
+  */
+  nested_join_map   nj_map;
+  /**
+    Tables outside the semi-join that are used within the semi-join's
+    ON condition (ie. the subquery WHERE clause and optional IN equalities).
+  */
+  table_map         sj_depends_on;
+  /**
+    Outer non-trivially correlated tables, a true subset of sj_depends_on
+  */
+  table_map         sj_corr_tables;
+  /**
+    Query block id if this struct is generated from a subquery transform.
+  */
+  uint query_block_id;
+  /*
+    Lists of trivially-correlated expressions from the outer and inner tables
+    of the semi-join, respectively.
+  */
+  List<Item>        sj_outer_exprs, sj_inner_exprs;
+  Semijoin_mat_optimize sjm;
 } NESTED_JOIN;
 
 
@@ -1755,7 +2276,7 @@ static inline my_bitmap_map *tmp_use_all_columns(TABLE *table,
                                                  MY_BITMAP *bitmap)
 {
   my_bitmap_map *old= bitmap->bitmap;
-  bitmap->bitmap= table->s->all_set.bitmap;
+  bitmap->bitmap= table->s->all_set.bitmap;// does not repoint last_word_ptr
   return old;
 }
 
@@ -1818,3 +2339,93 @@ static inline void dbug_tmp_restore_column_maps(MY_BITMAP *read_set,
 
 size_t max_row_length(TABLE *table, const uchar *data);
 
+
+void init_mdl_requests(TABLE_LIST *table_list);
+
+int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
+                          uint db_stat, uint prgflag, uint ha_open_flags,
+                          TABLE *outparam, bool is_create_table);
+TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, const char *key,
+                               uint key_length);
+void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
+                          uint key_length,
+                          const char *table_name, const char *path);
+void free_table_share(TABLE_SHARE *share);
+int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags);
+void open_table_error(TABLE_SHARE *share, int error, int db_errno, int errarg);
+void update_create_info_from_table(HA_CREATE_INFO *info, TABLE *form);
+enum_ident_name_check check_and_convert_db_name(LEX_STRING *db,
+                                                bool preserve_lettercase);
+bool check_column_name(const char *name);
+enum_ident_name_check check_table_name(const char *name, size_t length,
+                                       bool check_for_path_chars);
+int rename_file_ext(const char * from,const char * to,const char * ext);
+char *get_field(MEM_ROOT *mem, Field *field);
+bool get_field(MEM_ROOT *mem, Field *field, class String *res);
+
+int closefrm(TABLE *table, bool free_share);
+int read_string(File file, uchar* *to, size_t length);
+void free_blobs(TABLE *table);
+void free_field_buffers_larger_than(TABLE *table, uint32 size);
+int set_zone(int nr,int min_zone,int max_zone);
+ulong get_form_pos(File file, uchar *head, TYPELIB *save_names);
+ulong make_new_entry(File file,uchar *fileinfo,TYPELIB *formnames,
+		     const char *newname);
+ulong next_io_size(ulong pos);
+void append_unescaped(String *res, const char *pos, uint length);
+File create_frm(THD *thd, const char *name, const char *db,
+                const char *table, uint reclength, uchar *fileinfo,
+  		HA_CREATE_INFO *create_info, uint keys, KEY *key_info);
+char *fn_rext(char *name);
+
+/* performance schema */
+extern LEX_STRING PERFORMANCE_SCHEMA_DB_NAME;
+
+extern LEX_STRING GENERAL_LOG_NAME;
+extern LEX_STRING SLOW_LOG_NAME;
+
+/* information schema */
+extern LEX_STRING INFORMATION_SCHEMA_NAME;
+extern LEX_STRING MYSQL_SCHEMA_NAME;
+
+/* replication's tables */
+extern LEX_STRING RLI_INFO_NAME;
+extern LEX_STRING MI_INFO_NAME;
+extern LEX_STRING WORKER_INFO_NAME;
+
+inline bool is_infoschema_db(const char *name, size_t len)
+{
+  return (INFORMATION_SCHEMA_NAME.length == len &&
+          !my_strcasecmp(system_charset_info,
+                         INFORMATION_SCHEMA_NAME.str, name));
+}
+
+inline bool is_infoschema_db(const char *name)
+{
+  return !my_strcasecmp(system_charset_info,
+                        INFORMATION_SCHEMA_NAME.str, name);
+}
+
+TYPELIB *typelib(MEM_ROOT *mem_root, List<String> &strings);
+
+/**
+  return true if the table was created explicitly.
+*/
+inline bool is_user_table(TABLE * table)
+{
+  const char *name= table->s->table_name.str;
+  return strncmp(name, tmp_file_prefix, tmp_file_prefix_length);
+}
+
+inline void mark_as_null_row(TABLE *table)
+{
+  table->null_row=1;
+  table->status|=STATUS_NULL_ROW;
+  memset(table->null_flags, 255, table->s->null_bytes);
+}
+
+bool is_simple_order(ORDER *order);
+
+#endif /* MYSQL_CLIENT */
+
+#endif /* TABLE_INCLUDED */

@@ -42,9 +42,8 @@ create table t2 (
 
 
 # Single statement, no params.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists foo42;
---enable_warnings
 create procedure foo42()
   insert into test.t1 values ("foo", 42);
 
@@ -55,9 +54,8 @@ drop procedure foo42;
 
 
 # Single statement, two IN params.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bar;
---enable_warnings
 create procedure bar(x char(16), y int)
   insert into test.t1 values (x, y);
 
@@ -71,9 +69,8 @@ delete from t1;
 delimiter |;
 
 # Empty statement
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists empty|
---enable_warnings
 create procedure empty()
 begin
 end|
@@ -83,9 +80,8 @@ drop procedure empty|
 
 # Scope test. This is legal (warnings might be possible in the future,
 # but for the time being, we just accept it).
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists scope|
---enable_warnings
 create procedure scope(a int, b float)
 begin
   declare b int;
@@ -99,9 +95,8 @@ end|
 drop procedure scope|
 
 # Two statements.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists two|
---enable_warnings
 create procedure two(x1 char(16), x2 char(16), y int)
 begin
   insert into test.t1 values (x1, y);
@@ -115,9 +110,8 @@ drop procedure two|
 
 
 # Simple test of local variables and SET.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists locset|
---enable_warnings
 create procedure locset(x char(16), y int)
 begin
   declare z1, z2 int;
@@ -134,9 +128,8 @@ drop procedure locset|
 
 # In some contexts local variables are not recognized
 # (and in some, you have to qualify the identifier).
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists setcontext|
---enable_warnings
 create procedure setcontext()
 begin
   declare data int default 2;
@@ -155,9 +148,8 @@ drop procedure setcontext|
 # Set things to null
 create table t3 ( d date, i int, f double, s varchar(32) )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists nullset|
---enable_warnings
 create procedure nullset()
 begin
   declare ld date;
@@ -183,9 +175,8 @@ drop procedure nullset|
 
 
 # The peculiar (non-standard) mixture of variables types in SET.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists mixset|
---enable_warnings
 create procedure mixset(x char(16), y int)
 begin
   declare z int;
@@ -202,9 +193,8 @@ drop procedure mixset|
 
 
 # Multiple CALL statements, one with OUT parameter.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists zip|
---enable_warnings
 create procedure zip(x char(16), y int)
 begin
   declare z int;
@@ -213,9 +203,8 @@ begin
 end|
 
 # SET local variables and OUT parameter.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists zap|
---enable_warnings
 create procedure zap(x int, out y int)
 begin
   declare z int;
@@ -236,24 +225,20 @@ drop procedure zap|
 
 
 # "Deep" calls...
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists c1|
---enable_warnings
 create procedure c1(x int)
   call c2("c", x)|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists c2|
---enable_warnings
 create procedure c2(s char(16), x int)
   call c3(x, s)|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists c3|
---enable_warnings
 create procedure c3(x int, s char(16))
   call c4("level", x, s)|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists c4|
---enable_warnings
 create procedure c4(l char(8), x int, s char(16))
   insert into t1 values (concat(l,s), x)|
 
@@ -266,27 +251,24 @@ drop procedure c3|
 drop procedure c4|
 
 # INOUT test
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists iotest|
---enable_warnings
 create procedure iotest(x1 char(16), x2 char(16), y int)
 begin
   call inc2(x2, y);
   insert into test.t1 values (x1, y);
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists inc2|
---enable_warnings
 create procedure inc2(x char(16), y int)
 begin
   call inc(y);
   insert into test.t1 values (x, y);
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists inc|
---enable_warnings
 create procedure inc(inout io int)
   set io = io + 1|
 
@@ -297,9 +279,8 @@ drop procedure iotest|
 drop procedure inc2|
 
 # Propagating top-level @-vars
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists incr|
---enable_warnings
 create procedure incr(inout x int)
   call inc(x)|
 
@@ -316,9 +297,8 @@ drop procedure incr|
 #  The expected result is:
 #    ("cbv2", 4)
 #    ("cbv1", 4711)
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists cbv1|
---enable_warnings
 create procedure cbv1()
 begin
   declare y int default 3;
@@ -327,9 +307,8 @@ begin
   insert into test.t1 values ("cbv1", y);
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists cbv2|
---enable_warnings
 create procedure cbv2(y1 int, inout y2 int)
 begin
   set y2 = 4711;
@@ -347,15 +326,13 @@ drop procedure cbv2|
 
 insert into t2 values ("a", 1, 1.1), ("b", 2, 1.2), ("c", 3, 1.3)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists sub1|
---enable_warnings
 create procedure sub1(id char(16), x int)
   insert into test.t1 values (id, x)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists sub2|
---enable_warnings
 create procedure sub2(id char(16))
 begin
   declare x int;
@@ -363,9 +340,8 @@ begin
   insert into test.t1 values (id, x);
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists sub3|
---enable_warnings
 create function sub3(i int) returns int deterministic
   return i+1|
 
@@ -386,9 +362,8 @@ delete from t2|
 # Basic tests of the flow control constructs
 
 # Just test on 'x'...
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists a0|
---enable_warnings
 create procedure a0(x int)
 while x do
   set x = x-1;
@@ -402,9 +377,8 @@ drop procedure a0|
 
 
 # The same, but with a more traditional test.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists a|
---enable_warnings
 create procedure a(x int)
 while x > 0 do
   set x = x-1;
@@ -418,9 +392,8 @@ drop procedure a|
 
 
 # REPEAT
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists b|
---enable_warnings
 create procedure b(x int)
 repeat
   insert into test.t1 values (repeat("b",3), x);
@@ -434,9 +407,8 @@ drop procedure b|
 
 
 # Check that repeat isn't parsed the wrong way
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists b2|
---enable_warnings
 create procedure b2(x int)
 repeat(select 1 into outfile 'b2');
   insert into test.t1 values (repeat("b2",3), x);
@@ -448,9 +420,8 @@ drop procedure b2|
 
 
 # Labelled WHILE with ITERATE (pointless really)
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists c|
---enable_warnings
 create procedure c(x int)
 hmm: while x > 0 do
   insert into test.t1 values ("c", x);
@@ -466,9 +437,8 @@ drop procedure c|
 
 
 # Labelled WHILE with LEAVE
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists d|
---enable_warnings
 create procedure d(x int)
 hmm: while x > 0 do
   insert into test.t1 values ("d", x);
@@ -484,9 +454,8 @@ drop procedure d|
 
 
 # LOOP, with simple IF statement
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists e|
---enable_warnings
 create procedure e(x int)
 foo: loop
   if x = 0 then
@@ -503,9 +472,8 @@ drop procedure e|
 
 
 # A full IF statement
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists f|
---enable_warnings
 create procedure f(x int)
 if x < 0 then
   insert into test.t1 values ("f", 0);
@@ -524,9 +492,8 @@ drop procedure f|
 
 
 # This form of CASE is really just syntactic sugar for IF-ELSEIF-...
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists g|
---enable_warnings
 create procedure g(x int)
 case
 when x < 0 then
@@ -546,9 +513,8 @@ drop procedure g|
 
 
 # The "simple CASE"
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists h|
---enable_warnings
 create procedure h(x int)
 case x
 when 0 then
@@ -568,9 +534,8 @@ drop procedure h|
 
 
 # It's actually possible to LEAVE a BEGIN-END block
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists i|
---enable_warnings
 create procedure i(x int)
 foo:
 begin
@@ -591,9 +556,8 @@ drop procedure i|
 insert into t1 values ("foo", 3), ("bar", 19)|
 insert into t2 values ("x", 9, 4.1), ("y", -1, 19.2), ("z", 3, 2.2)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists sel1|
---enable_warnings
 create procedure sel1()
 begin
   select * from t1 order by data;
@@ -602,9 +566,8 @@ end|
 call sel1()|
 drop procedure sel1|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists sel2|
---enable_warnings
 create procedure sel2()
 begin
   select * from t1 order by data;
@@ -617,9 +580,8 @@ delete from t1|
 delete from t2|
 
 # SELECT INTO local variables
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_test|
---enable_warnings
 create procedure into_test(x char(16), y int)
 begin
   insert into test.t1 values (x, y);
@@ -634,9 +596,8 @@ drop procedure into_test|
 
 
 # SELECT INTO with a mix of local and global variables
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_tes2|
---enable_warnings
 create procedure into_test2(x char(16), y int)
 begin
   insert into test.t1 values (x, y);
@@ -651,9 +612,8 @@ drop procedure into_test2|
 
 
 # SELECT * INTO ... (bug test)
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_test3|
---enable_warnings
 create procedure into_test3()
 begin
   declare x char(16);
@@ -675,9 +635,8 @@ drop procedure into_test3|
 
 # SELECT INTO with no data is a warning ("no data", which we will
 # not see normally). When not caught, execution proceeds.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_test4|
---enable_warnings
 create procedure into_test4()
 begin
   declare x int;
@@ -700,9 +659,8 @@ drop procedure into_test4|
 
 # These two (and the two procedures above) caused an assert() to fail in
 # sql_base.cc:lock_tables() at some point.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_outfile|
---enable_warnings
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 eval create procedure into_outfile(x char(16), y int)
 begin
@@ -719,9 +677,8 @@ call into_outfile("ofile", 1)|
 delete from t1|
 drop procedure into_outfile|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists into_dumpfile|
---enable_warnings
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 eval create procedure into_dumpfile(x char(16), y int)
 begin
@@ -738,9 +695,8 @@ call into_dumpfile("dfile", 1)|
 delete from t1|
 drop procedure into_dumpfile|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists create_select|
---enable_warnings
 create procedure create_select(x char(16), y int)
 begin
   insert into test.t1 values (x, y);
@@ -756,9 +712,8 @@ drop procedure create_select|
 
 
 # A minimal, constant FUNCTION.
---disable_warnings
+--disable_warnings ONCE
 drop function if exists e|
---enable_warnings
 create function e() returns double
   return 2.7182818284590452354|
 
@@ -766,36 +721,32 @@ set @e = e()|
 select e(), @e|
 
 # A minimal function with one argument
---disable_warnings
+--disable_warnings ONCE
 drop function if exists inc|
---enable_warnings
 create function inc(i int) returns int
   return i+1|
 
 select inc(1), inc(99), inc(-71)|
 
 # A minimal function with two arguments
---disable_warnings
+--disable_warnings ONCE
 drop function if exists mul|
---enable_warnings
 create function mul(x int, y int) returns int
   return x*y|
 
 select mul(1,1), mul(3,5), mul(4711, 666)|
 
 # A minimal string function
---disable_warnings
+--disable_warnings ONCE
 drop function if exists append|
---enable_warnings
 create function append(s1 char(8), s2 char(8)) returns char(16)
   return concat(s1, s2)|
 
 select append("foo", "bar")|
 
 # A function with flow control
---disable_warnings
+--disable_warnings ONCE
 drop function if exists fac|
---enable_warnings
 create function fac(n int unsigned) returns bigint unsigned
 begin
   declare f bigint unsigned default 1;
@@ -810,9 +761,8 @@ end|
 select fac(1), fac(2), fac(5), fac(10)|
 
 # Nested calls
---disable_warnings
+--disable_warnings ONCE
 drop function if exists fun|
---enable_warnings
 create function fun(d double, i int, u int unsigned) returns double
   return mul(inc(i), fac(u)) / e()|
 
@@ -844,9 +794,8 @@ drop function fun|
 # CONDITIONs and HANDLERs
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists hndlr1|
---enable_warnings
 create procedure hndlr1(val int)
 begin
   declare x int default 0;
@@ -866,9 +815,8 @@ select * from t1|
 delete from t1|
 drop procedure hndlr1|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists hndlr2|
---enable_warnings
 create procedure hndlr2(val int)
 begin
   declare x int default 0;
@@ -888,9 +836,8 @@ delete from t1|
 drop procedure hndlr2|
 
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists hndlr3|
---enable_warnings
 create procedure hndlr3(val int)
 begin
   declare x int default 0;
@@ -926,9 +873,8 @@ drop procedure hndlr3|
 #  not in this case.)
 create table t3 ( id   char(16), data int )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists hndlr4|
---enable_warnings
 create procedure hndlr4()
 begin
   declare x int default 0;
@@ -949,9 +895,8 @@ drop procedure hndlr4|
 #
 # Cursors
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists cur1|
---enable_warnings
 create procedure cur1()
 begin
   declare a char(16);
@@ -978,9 +923,8 @@ drop procedure cur1|
 
 create table t3 ( s char(16), i int )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists cur2|
---enable_warnings
 create procedure cur2()
 begin
   declare done int default 0;
@@ -1019,9 +963,8 @@ drop procedure cur2|
 
 
 # The few characteristics we parse
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists chistics|
---enable_warnings
 create procedure chistics()
     language sql
     modifies sql data
@@ -1039,9 +982,8 @@ alter procedure chistics sql security invoker|
 show create procedure chistics|
 drop procedure chistics|
 
---disable_warnings
+--disable_warnings ONCE
 drop function if exists chistics|
---enable_warnings
 create function chistics() returns int
     language sql
     deterministic
@@ -1064,9 +1006,8 @@ insert into t1 values ("foo", 1), ("bar", 2), ("zip", 3)|
 
 set @@sql_mode = 'ANSI'|
 delimiter $|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists modes$
---enable_warnings
 create procedure modes(out c1 int, out c2 int)
 begin
   declare done int default 0;
@@ -1115,9 +1056,8 @@ drop database sp_db2|
 # And yet again, with just a procedure.
 create database sp_db3|
 use sp_db3|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists dummy|
---enable_warnings
 create procedure dummy(out x int)
   set x = 42|
 use test|
@@ -1128,9 +1068,8 @@ select type,db,name from mysql.proc where db = 'sp_db3'|
 
 # ROW_COUNT() function after a CALL
 # We test the other cases here too, although it's not strictly SP specific
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists rc|
---enable_warnings
 create procedure rc()
 begin
   delete from t1;
@@ -1308,9 +1247,11 @@ select f3()|
 select id, f3() from t1 as t11 order by id|
 # Degenerate cases work too :)
 select f0()|
+# But these should not (particularly views should be locked explicitly).
+--error ER_TABLE_NOT_LOCKED
 select * from v0|
+--error ER_TABLE_NOT_LOCKED
 select *, f0() from v0, (select 123) as d1|
-# But these should not !
 --error ER_TABLE_NOT_LOCKED
 select id, f3() from t1|
 --error ER_TABLE_NOT_LOCKED
@@ -1426,14 +1367,12 @@ drop table t4|
 
 # fac
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t3|
---enable_warnings
 create table t3 (n int unsigned not null primary key, f bigint unsigned)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists ifac|
---enable_warnings
 create procedure ifac(n int unsigned)
 begin
   declare i int unsigned default 1;
@@ -1462,9 +1401,8 @@ show function status like '%f%'|
 
 # primes
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t3|
---enable_warnings
 
 create table t3 (
   i int unsigned not null primary key,
@@ -1482,9 +1420,8 @@ insert into t3 values
  (35, 157), (36, 163), (37, 167), (38, 173), (39, 179),
  (40, 181), (41, 191), (42, 193), (43, 197), (44, 199)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists opp|
---enable_warnings
 create procedure opp(n bigint unsigned, out pp bool)
 begin
   declare r double;
@@ -1515,9 +1452,8 @@ begin
   end loop;
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists ip|
---enable_warnings
 create procedure ip(m int unsigned)
 begin
   declare p bigint unsigned;
@@ -1565,9 +1501,8 @@ show procedure status where name like '%p%' and db='test'|
 # Comment & suid
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bar|
---enable_warnings
 create procedure bar(x char(16), y int)
  comment "111111111111" sql security invoker
  insert into test.t1 values (x, y)|
@@ -1584,9 +1519,8 @@ drop procedure bar|
 #
 # rexecution
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists p1|
---enable_warnings
 create procedure p1 ()
   select (select s1 from t3) from t3|
 
@@ -1601,9 +1535,8 @@ drop table t3|
 #
 # backticks
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists foo|
---enable_warnings
 create function `foo` () returns int
   return 5|
 select `foo` ()|
@@ -1613,9 +1546,8 @@ drop function `foo`|
 # Implicit LOCK/UNLOCK TABLES for table access in functions
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop function if exists t1max|
---enable_warnings
 create function t1max() returns int
 begin
   declare x int;
@@ -1659,31 +1591,27 @@ drop function getcount|
 # Test cases for different combinations of condition handlers in nested
 # begin-end blocks in stored procedures.
 #
-# Note that the standard specifies that the most specific handler should
-# be triggered even if it's an outer handler masked by a less specific
-# handler in an inner block.
+# The SQL standard document says:
+# "8) If there is a general <handler declaration> and a specific
+# <handler declaration> for the same <condition value> in the same scope, then
+# only the specific <handler declaration> is associated with that
+# <condition value>."
+
+# A general handler declaration has SQLWARNING + SQLEXCEPTION + NOT FOUND.
+# A specific handler declaration has SQLSTATE, condition name, or (for MySQL)
+# an errno.
+#
+# So when there are multiple handlers in the same scope, they're all
+# applicable, but the most specific handler should be activated. Notice the
+# standard's exact words: "in the same scope". A specific handler declaration
+# in an outer scope must not be activated instead of a general handler
+# declaration in the inner scope. Previously that was not the case in MySQL.
+#
 # Note also that '02000' is more specific than NOT FOUND; there might be
 # other '02xxx' states, even if we currently do not issue them in any
 # situation (e.g. '02001').
 #
-# The combinations we test are these:
-#
-#                                         Inner
-#              errcode      sqlstate     not found    sqlwarning   sqlexception
-#  Outer      +------------+------------+------------+------------+------------+
-#errcode      | h_ee (i)   | h_es (o)   | h_en (o)   | h_ew (o)   | h_ex (o)   |
-#sqlstate     | h_se (i)   | h_ss (i)   | h_sn (o)   | h_sw (o)   | h_sx (o)   |
-#not found    | h_ne (i)   | h_ns (i)   | h_nn (i)   |            |            |
-#sqlwarning   | h_we (i)   | h_ws (i)   |            | h_ww (i)   |            |
-#sqlexception | h_xe (i)   | h_xs (i)   |            |            | h_xx (i)   |
-#             +------------+---------------------------------------------------+
-#
-# (i) means that the inner handler is the one that should be invoked,
-# (o) means that the outer handler should be invoked.
-#
-# ('not found', 'sqlwarning' and 'sqlexception' are mutually exclusive, hence
-#  no tests for those combinations.)
-#
+# Thus, in all combinations below an inner handler should be activated.
 
 --disable_warnings
 drop table if exists t3|
@@ -1732,12 +1660,12 @@ create procedure h_es()
     deterministic
 begin
   declare continue handler for 1062 -- ER_DUP_ENTRY
-    select 'Outer (good)' as 'h_es';
+    select 'Outer (bad)' as 'h_es';
 
   begin
     -- integrity constraint violation
     declare continue handler for sqlstate '23000'
-      select 'Inner (bad)' as 'h_es';
+      select 'Inner (good)' as 'h_es';
 
     insert into t3 values (1);
   end;
@@ -1747,12 +1675,12 @@ create procedure h_en()
     deterministic
 begin
   declare continue handler for 1329 -- ER_SP_FETCH_NO_DATA
-    select 'Outer (good)' as 'h_en';
+    select 'Outer (bad)' as 'h_en';
 
   begin
     declare x int;
     declare continue handler for sqlstate '02000' -- no data
-      select 'Inner (bad)' as 'h_en';
+      select 'Inner (good)' as 'h_en';
 
     select a into x from t3 where a = 42;
   end;
@@ -1762,11 +1690,11 @@ create procedure h_ew()
     deterministic
 begin
   declare continue handler for 1264 -- ER_WARN_DATA_OUT_OF_RANGE
-    select 'Outer (good)' as 'h_ew';
+    select 'Outer (bad)' as 'h_ew';
 
   begin
     declare continue handler for sqlwarning
-      select 'Inner (bad)' as 'h_ew';
+      select 'Inner (good)' as 'h_ew';
 
     insert into t3 values (123456789012);
   end;
@@ -1778,11 +1706,11 @@ create procedure h_ex()
     deterministic
 begin
   declare continue handler for 1062 -- ER_DUP_ENTRY
-    select 'Outer (good)' as 'h_ex';
+    select 'Outer (bad)' as 'h_ex';
 
   begin
     declare continue handler for sqlexception
-      select 'Inner (bad)' as 'h_ex';
+      select 'Inner (good)' as 'h_ex';
 
     insert into t3 values (1);
   end;
@@ -1825,12 +1753,12 @@ begin
   -- Note: '02000' is more specific than NOT FOUND ;
   --       there might be other not found states 
   declare continue handler for sqlstate '02000' -- no data
-    select 'Outer (good)' as 'h_sn';
+    select 'Outer (bad)' as 'h_sn';
 
   begin
     declare x int;
     declare continue handler for not found
-      select 'Inner (bad)' as 'h_sn';
+      select 'Inner (good)' as 'h_sn';
 
     select a into x from t3 where a = 42;
   end;
@@ -1841,11 +1769,11 @@ create procedure h_sw()
 begin
   -- data exception - numeric value out of range
   declare continue handler for sqlstate '22003'
-    select 'Outer (good)' as 'h_sw';
+    select 'Outer (bad)' as 'h_sw';
 
   begin
     declare continue handler for sqlwarning
-      select 'Inner (bad)' as 'h_sw';
+      select 'Inner (good)' as 'h_sw';
 
     insert into t3 values (123456789012);
   end;
@@ -1858,11 +1786,11 @@ create procedure h_sx()
 begin
   -- integrity constraint violation
   declare continue handler for sqlstate '23000' 
-    select 'Outer (good)' as 'h_sx';
+    select 'Outer (bad)' as 'h_sx';
 
   begin
     declare continue handler for sqlexception
-      select 'Inner (bad)' as 'h_sx';
+      select 'Inner (good)' as 'h_sx';
 
     insert into t3 values (1);
   end;
@@ -2054,9 +1982,8 @@ drop procedure h_xx|
 #
 # BUG#822
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug822|
---enable_warnings
 create procedure bug822(a_id char(16), a_data int)
 begin
   declare n int;
@@ -2077,9 +2004,8 @@ drop procedure bug822|
 #
 # BUG#1495
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1495|
---enable_warnings
 create procedure bug1495()
 begin
   declare x int;
@@ -2105,9 +2031,8 @@ drop procedure bug1495|
 #
 # BUG#1547
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1547|
---enable_warnings
 create procedure bug1547(s char(16))
 begin
   declare x int;
@@ -2130,15 +2055,13 @@ drop procedure bug1547|
 #
 # BUG#1656
 #
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t70|
---enable_warnings
 create table t70 (s1 int,s2 int)|
 insert into t70 values (1,2)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1656|
---enable_warnings
 create procedure bug1656(out p1 int, out p2 int)
   select * into p1, p1 from t70|
 
@@ -2152,9 +2075,8 @@ drop procedure bug1656|
 #
 create table t3(a int)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1862|
---enable_warnings
 create procedure bug1862()
 begin
   insert into t3 values(2);    
@@ -2171,9 +2093,8 @@ drop procedure bug1862|
 #
 # BUG#1874
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1874|
---enable_warnings
 create procedure bug1874()
 begin
   declare x int;
@@ -2198,9 +2119,8 @@ drop procedure bug1874|
 #
 # BUG#2260
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2260|
---enable_warnings
 create procedure bug2260()
 begin
   declare v1 int;
@@ -2220,25 +2140,22 @@ drop procedure bug2260|
 #
 # BUG#2267 "Lost connect if stored procedure has SHOW FUNCTION STATUS"
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2267_1|
---enable_warnings
 create procedure bug2267_1()
 begin
   show procedure status where db='test';
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2267_2|
---enable_warnings
 create procedure bug2267_2()
 begin
   show function status where db='test';
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2267_3|
---enable_warnings
 create procedure bug2267_3()
 begin
   show create procedure bug2267_1;
@@ -2270,9 +2187,8 @@ drop function bug2267_4|
 #
 # BUG#2227
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2227|
---enable_warnings
 create procedure bug2227(x int)
 begin
   declare y float default 2.6;
@@ -2288,9 +2204,8 @@ drop procedure bug2227|
 # BUG#2614 "Stored procedure with INSERT ... SELECT that does not
 #           contain any tables crashes server"
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2614|
---enable_warnings
 create procedure bug2614()
 begin
   drop table if exists t3;
@@ -2299,9 +2214,8 @@ begin
   insert into t3 select * from t3;
 end|
 
---disable_warnings
+--disable_warnings ONCE
 call bug2614()|
---enable_warnings
 call bug2614()|
 drop table t3|
 drop procedure bug2614|
@@ -2309,9 +2223,8 @@ drop procedure bug2614|
 #
 # BUG#2674
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug2674|
---enable_warnings
 create function bug2674() returns int
   return @@sort_buffer_size|
 
@@ -2324,17 +2237,14 @@ set @@sort_buffer_size = @osbs|
 #
 # BUG#3259
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3259_1 |
---enable_warnings
 create procedure bug3259_1 () begin end|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists BUG3259_2 |
---enable_warnings
 create procedure BUG3259_2 () begin end|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists Bug3259_3 |
---enable_warnings
 create procedure Bug3259_3 () begin end|
 
 call BUG3259_1()|
@@ -2351,47 +2261,13 @@ drop procedure BUG3259_3|
 #
 # BUG#2772
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug2772|
---enable_warnings
 create function bug2772() returns char(10) character set latin2
   return 'a'|
 
 select bug2772()|
 drop function bug2772|
-
-#
-# BUG#2776
-#
---disable_warnings
-drop procedure if exists bug2776_1|
---enable_warnings
-create procedure bug2776_1(out x int)
-begin
-  declare v int;
-
-  set v = default;
-  set x = v;
-end|
-
---disable_warnings
-drop procedure if exists bug2776_2|
---enable_warnings
-create procedure bug2776_2(out x int)
-begin
-  declare v int default 42;
-
-  set v = default;
-  set x = v;
-end|
-
-set @x = 1|
-call bug2776_1(@x)|
-select @x|
-call bug2776_2(@x)|
-select @x|
-drop procedure bug2776_1|
-drop procedure bug2776_2|
 
 #
 # BUG#2780
@@ -2400,9 +2276,8 @@ create table t3 (s1 smallint)|
 
 insert into t3 values (123456789012)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2780|
---enable_warnings
 create procedure bug2780()
 begin
   declare exit handler for sqlwarning set @x = 1; 
@@ -2427,9 +2302,8 @@ insert into t3 values ("test1")|
 insert into t3 values ("test2")|
 create table t4 (f1 int, rc int, t3 int)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug1863|
---enable_warnings
 create procedure bug1863(in1 int)
 begin 
 
@@ -2488,9 +2362,8 @@ insert t3 (OrderID,MarketID) values (2,2)|
 insert t4 (MarketID,Market,Status) values (1,"MarketID One","A")|
 insert t4 (MarketID,Market,Status) values (2,"MarketID Two","A")|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2656_1|
---enable_warnings
 create procedure bug2656_1()
 begin 
   select
@@ -2499,9 +2372,8 @@ begin
         ON o.MarketID != 1 and o.MarketID = m.MarketID;
 end |
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2656_2|
---enable_warnings
 create procedure bug2656_2()
 begin 
   select
@@ -2525,9 +2397,8 @@ drop table t3, t4|
 #
 # BUG#3426
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3426|
---enable_warnings
 create procedure bug3426(in_time int unsigned, out x int)
 begin
   if in_time is null then
@@ -2573,9 +2444,8 @@ insert into t3 (title,body) values
   ('MySQL vs. YourSQL','In the following database comparison ...'),
   ('MySQL Security','When configured properly, MySQL ...')|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3734 |
---enable_warnings
 create procedure bug3734 (param1 varchar(100))
   select * from t3 where match (title,body) against (param1)|
 
@@ -2588,9 +2458,8 @@ drop table t3|
 #
 # BUG#3863
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3863|
---enable_warnings
 create procedure bug3863()
 begin
   set @a = 0;
@@ -2618,9 +2487,8 @@ create table t3 (
   unique key rid (rid, id)
 )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2460_1|
---enable_warnings
 create procedure bug2460_1(in v int)
 begin
     ( select n0.id from t3 as n0 where n0.id = v )
@@ -2638,9 +2506,8 @@ insert into t3 values (1, 1, 'foo'), (2, 1, 'bar'), (3, 1, 'zip zap')|
 call bug2460_1(2)|
 call bug2460_1(2)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2460_2|
---enable_warnings
 create procedure bug2460_2()
 begin
   drop table if exists t3;
@@ -2661,32 +2528,28 @@ drop table t3|
 # BUG#2564
 #
 set @@sql_mode = ''|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2564_1|
---enable_warnings
 create procedure bug2564_1()
     comment 'Joe''s procedure'
   insert into `t1` values ("foo", 1)|
 
 set @@sql_mode = 'ANSI_QUOTES'|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2564_2|
---enable_warnings
 create procedure bug2564_2()
   insert into "t1" values ('foo', 1)|
 
 delimiter $|
 set @@sql_mode = ''$
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug2564_3$
---enable_warnings
 create function bug2564_3(x int, y int) returns int
   return x || y$
 
 set @@sql_mode = 'ANSI'$
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug2564_4$
---enable_warnings
 create function bug2564_4(x int, y int) returns int
   return x || y$
 delimiter |$
@@ -2705,9 +2568,8 @@ drop function bug2564_4|
 #
 # BUG#3132
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug3132|
---enable_warnings
 create function bug3132(s char(20)) returns char(50)
   return concat('Hello, ', s, '!')|
 
@@ -2717,9 +2579,8 @@ drop function bug3132|
 #
 # BUG#3843
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3843|
---enable_warnings
 create procedure bug3843()
   analyze table t1|
 
@@ -2736,9 +2597,8 @@ drop procedure bug3843|
 create table t3 ( s1 char(10) )|
 insert into t3 values ('a'), ('b')|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3368|
---enable_warnings
 create procedure bug3368(v char(10))
 begin
   select group_concat(v) from t3;
@@ -2755,9 +2615,8 @@ drop table t3|
 create table t3 (f1 int, f2 int)|
 insert into t3 values (1,1)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4579_1|
---enable_warnings
 create procedure bug4579_1 ()
 begin
   declare sf1 int;
@@ -2767,9 +2626,8 @@ begin
   call bug4579_2();
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4579_2|
---enable_warnings
 create procedure bug4579_2 ()
 begin
 end|
@@ -2785,9 +2643,8 @@ drop table t3|
 #
 # BUG#2773: Function's data type ignored in stored procedures
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug2773|
---enable_warnings
 
 create function bug2773() returns int return null|
 create table t3 as select bug2773()|
@@ -2798,9 +2655,8 @@ drop function bug2773|
 #
 # BUG#3788: Stored procedure packet error
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3788|
---enable_warnings
 
 create function bug3788() returns date return cast("2005-03-04" as date)|
 select bug3788()|
@@ -2817,9 +2673,8 @@ drop function bug3788|
 create table t3 (f1 int, f2 int, f3 int)|
 insert into t3 values (1,1,1)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4726|
---enable_warnings
 create procedure bug4726()
 begin
    declare tmp_o_id INT;
@@ -2848,9 +2703,8 @@ drop table t3|
 create table t3 (s1 int)|
 insert into t3 values (3), (4)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4318|
---enable_warnings
 create procedure bug4318()
   handler t3 read next|
 
@@ -2875,14 +2729,12 @@ drop table t3|
 #       It's possible that some of these are not deterministic across
 #       platforms. If so, just remove the offending command.
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4902|
---enable_warnings
 create procedure bug4902()
 begin
   show charset like 'foo';
   show collation like 'foo';
-  show column types;
   show create table t1;
   show create database test;
   show databases like 'foo';
@@ -2914,9 +2766,8 @@ drop procedure bug4902|
 #
 # BUG#4904
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4904|
---enable_warnings
 create procedure bug4904()
 begin
   declare continue handler for sqlstate 'HY000' begin end;
@@ -2931,9 +2782,8 @@ drop procedure bug4904|
 
 create table t3 (s1 char character set latin1, s2 char character set latin2)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4904|
---enable_warnings
 create procedure bug4904 ()
 begin
   declare continue handler for sqlstate 'HY000' begin end;
@@ -2949,9 +2799,8 @@ drop table t3|
 #
 # BUG#336
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug336|
---enable_warnings
 create procedure bug336(out y int)
 begin
   declare x int;
@@ -2968,9 +2817,8 @@ drop procedure bug336|
 #
 # BUG#3157
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug3157|
---enable_warnings
 create procedure bug3157()
 begin
   if exists(select * from t1) then
@@ -2991,9 +2839,8 @@ drop procedure bug3157|
 #
 # BUG#5251: mysql changes creation time of a procedure/function when altering
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5251|
---enable_warnings
 create procedure bug5251()
 begin
 end|
@@ -3010,9 +2857,8 @@ drop procedure bug5251|
 #
 # BUG#5279: Stored procedure packets out of order if CHECKSUM TABLE
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5251|
---enable_warnings
 create procedure bug5251()
   checksum table t1|
 
@@ -3023,9 +2869,8 @@ drop procedure bug5251|
 #
 # BUG#5287: Stored procedure crash if leave outside loop
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5287|
---enable_warnings
 create procedure bug5287(param1 int)
 label1:
   begin
@@ -3044,9 +2889,8 @@ drop procedure bug5287|
 #
 # BUG#5307: Stored procedure allows statement after BEGIN ... END
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5307|
---enable_warnings
 create procedure bug5307()
 begin
 end; set @x = 3|
@@ -3058,16 +2902,14 @@ drop procedure bug5307|
 #
 # BUG#5258: Stored procedure modified date is 0000-00-00
 # (This was a design flaw)
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5258|
---enable_warnings
 create procedure bug5258()
 begin
 end|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5258_aux|
---enable_warnings
 create procedure bug5258_aux()
 begin
   declare c, m char(19);
@@ -3088,9 +2930,8 @@ drop procedure bug5258_aux|
 #
 # BUG#4487: Stored procedure connection aborted if uninitialized char
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug4487|
---enable_warnings
 create function bug4487() returns char
 begin
   declare v char;
@@ -3106,8 +2947,6 @@ drop function bug4487|
 #
 --disable_warnings
 drop procedure if exists bug4941|
---enable_warnings
---disable_warnings
 drop procedure if exists bug4941|
 --enable_warnings
 create procedure bug4941(out x int)
@@ -3128,15 +2967,13 @@ drop procedure bug4941|
 #
 # BUG#4905: Stored procedure doesn't clear for "Rows affected"
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4905|
---enable_warnings
 
 create table t3 (s1 int,primary key (s1))|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug4905|
---enable_warnings
 create procedure bug4905()
 begin
   declare v int;
@@ -3161,13 +2998,11 @@ drop table t3|
 #
 
 --disable_parsing # until we implement support for recursive stored functions.
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug6022|
---enable_warnings
 
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug6022|
---enable_warnings
 create function bug6022(x int) returns int
 begin
   if x < 0 then
@@ -3184,13 +3019,11 @@ drop function bug6022|
 #
 # BUG#6029: Stored procedure specific handlers should have priority
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug6029|
---enable_warnings
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug6029|
---enable_warnings
 create procedure bug6029()
 begin
   declare exit handler for 1136  select '1136';
@@ -3213,9 +3046,8 @@ drop table t3|
 #
 # BUG#8540: Local variable overrides an alias
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8540|
---enable_warnings
 
 create procedure bug8540()
 begin
@@ -3231,9 +3063,8 @@ drop procedure bug8540|
 #
 create table t3 (s1 int)|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug6642|
---enable_warnings
 
 create procedure bug6642()
   select abs(count(s1)) from t3|
@@ -3246,9 +3077,8 @@ drop procedure bug6642|
 # BUG#7013: Stored procedure crash if group by ... with rollup
 #
 insert into t3 values (0),(1)|
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug7013|
---enable_warnings
 create procedure bug7013()
   select s1,count(s1) from t3 group by s1 with rollup|
 call bug7013()|
@@ -3258,9 +3088,8 @@ drop procedure bug7013|
 #
 # BUG#7743: 'Lost connection to MySQL server during query' on Stored Procedure
 #
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t4|
---enable_warnings
 create table t4 (
   a mediumint(8) unsigned not null auto_increment,
   b smallint(5) unsigned not null,
@@ -3270,9 +3099,8 @@ create table t4 (
 insert into t4 values (1, 2, 'oneword')|
 insert into t4 values (2, 2, 'anotherword')|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug7743|
---enable_warnings
 create procedure bug7743 ( searchstring char(28) )
 begin
   declare var mediumint(8) unsigned;
@@ -3318,9 +3146,8 @@ drop table t3|
 #
 create table t3 (  userid bigint(20) not null default 0 )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8116|
---enable_warnings
 create procedure bug8116(in _userid int)
    select * from t3 where userid = _userid|
 
@@ -3332,40 +3159,31 @@ drop table t3|
 #
 # BUG#6857: current_time() in STORED PROCEDURES
 #
---disable_warnings
+--disable_warnings 
 drop procedure if exists bug6857|
 --enable_warnings
-create procedure bug6857(counter int)
+create procedure bug6857()
 begin
   declare t0, t1 int;
   declare plus bool default 0;
-
-  set t0 = current_time();
-  while counter > 0 do
-    set counter = counter - 1;
-  end while;
-  set t1 = current_time();
+  set t0 = unix_timestamp();
+  select sleep(1.1);
+  set t1 = unix_timestamp();
   if t1 > t0 then
     set plus = 1;
   end if;
   select plus;
 end|
 
-# QQ: This is currently disabled. Not only does it slow down a normal test
-#     run, it makes running with valgrind (or similar tools) extremely
-#     painful.
-# Make sure this takes at least one second on all machines in all builds.
-# 30000 makes it about 3 seconds on an old 1.1GHz linux.
-#call bug6857(300000)|
+call bug6857()|
 
 drop procedure bug6857|
 
 #
 # BUG#8757: Stored Procedures: Scope of Begin and End Statements do not
 #           work properly.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8757|
---enable_warnings
 create procedure bug8757()
 begin
   declare x int;
@@ -3401,9 +3219,8 @@ drop procedure bug8757|
 #
 # BUG#8762: Stored Procedures: Inconsistent behavior
 #           of DROP PROCEDURE IF EXISTS statement.
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8762|
---enable_warnings
 # Doesn't exist
 drop procedure if exists bug8762; create procedure bug8762() begin end|
 # Does exist
@@ -3414,9 +3231,8 @@ drop procedure bug8762|
 #
 # BUG#5240: Stored procedure crash if function has cursor declaration
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug5240|
---enable_warnings
 create function bug5240 () returns int
 begin
   declare x int;
@@ -3436,9 +3252,8 @@ drop function bug5240|
 #
 # BUG#7992: rolling back temporary Item tree changes in SP
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists p1|
---enable_warnings
 create table t3(id int)|
 insert into t3 values(1)|
 create procedure bug7992()
@@ -3479,9 +3294,8 @@ create table t5 (
   primary key  (lbsiid,ltradingareaid)
 )|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8849|
---enable_warnings
 create procedure bug8849()
 begin
   insert into t5
@@ -3509,9 +3323,8 @@ drop tables t3,t4,t5|
 #
 # BUG#8937: Stored Procedure: AVG() works as SUM() in SELECT ... INTO statement
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8937|
---enable_warnings
 create procedure bug8937()
 begin
   declare s,x,y,z int;
@@ -3616,9 +3429,8 @@ drop table t3|
 #
 # BUG#7185: Stored procedure crash if identifier is AVG
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists avg|
---enable_warnings
 create procedure avg ()
 begin
 end|
@@ -3630,9 +3442,8 @@ drop procedure avg|
 #
 # BUG#6129: Stored procedure won't display @@sql_mode value
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug6129|
---enable_warnings
 set @old_mode= @@sql_mode;
 set @@sql_mode= "ERROR_FOR_DIVISION_BY_ZERO";
 create procedure bug6129()
@@ -3650,9 +3461,8 @@ drop procedure bug6129|
 #
 # BUG#9856: Stored procedures: crash if handler for sqlexception, not found
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug9856|
---enable_warnings
 create procedure bug9856()
 begin
   declare v int;
@@ -3739,9 +3549,8 @@ drop procedure bug9598_2|
 #
 # BUG#9902: Crash with simple stored function using user defined variables
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug9902|
---enable_warnings
 create function bug9902() returns int(11)
 begin
   set @x = @x + 1;
@@ -3749,7 +3558,7 @@ begin
 end|
 
 set @qcs1 = @@query_cache_size|
-set global query_cache_size = 100000|
+set global query_cache_size = 102400|
 set @x = 1|
 insert into t1 values ("qc", 42)|
 select bug9902() from t1|
@@ -3764,9 +3573,8 @@ drop function bug9902|
 #
 # BUG#9102: Stored proccedures: function which returns blob causes crash
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug9102|
---enable_warnings
 create function bug9102() returns blob return 'a'|
 select bug9102()|
 drop function bug9102|
@@ -3775,9 +3583,8 @@ drop function bug9102|
 #
 # BUG#7648: Stored procedure crash when invoking a function that returns a bit
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug7648|
---enable_warnings
 create function bug7648() returns bit(8) return 'a'|
 select bug7648()|
 drop function bug7648|
@@ -3786,9 +3593,8 @@ drop function bug7648|
 #
 # BUG#9775: crash if create function that returns enum or set
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug9775|
---enable_warnings
 create function bug9775(v1 char(1)) returns enum('a','b') return v1|
 select bug9775('a'),bug9775('b'),bug9775('c')|
 drop function bug9775|
@@ -3807,9 +3613,8 @@ drop function bug9775|
 #
 # BUG#8861: If Return is a YEAR data type, value is not shown in year format
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug8861|
---enable_warnings
 create function bug8861(v1 int) returns year return v1|
 select bug8861(05)|
 set @x = bug8861(05)|
@@ -3843,9 +3648,8 @@ drop procedure bug9004_2|
 #
 # BUG#7293: Stored procedure crash with soundex
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug7293|
---enable_warnings
 insert into t1 values ('secret', 0)| 
 create procedure bug7293(p1 varchar(100))
 begin
@@ -3880,9 +3684,8 @@ drop procedure bug9841|
 #
 # BUG#5963 subqueries in SET/IF
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug5963|
---enable_warnings
 
 create procedure bug5963_1 () begin declare v int; set v = (select s1 from t3); select v; end;|
 create table t3 (s1 int)|
@@ -3911,9 +3714,8 @@ drop table t3|
 # BUG#9559: Functions: Numeric Operations using -ve value gives incorrect
 #           results.
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug9559|
---enable_warnings
 create function bug9559()
   returns int
 begin
@@ -3929,9 +3731,8 @@ drop function bug9559|
 #
 # BUG#10961: Stored procedures: crash if select * from dual
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug10961|
---enable_warnings
 # "select * from dual" results in an error, so the cursor will not open
 create procedure bug10961()
 begin
@@ -3957,9 +3758,8 @@ drop procedure bug10961|
 # BUG #6866: Second call of a stored procedure using a view with on expressions
 #
 
---disable_warnings
+--disable_warnings ONCE
 DROP PROCEDURE IF EXISTS bug6866|
---enable_warnings
 
 DROP VIEW IF EXISTS tv|
 DROP TABLE IF EXISTS tt1,tt2,tt3|
@@ -4001,9 +3801,8 @@ DROP TABLE tt1, tt2, tt3|
 #
 # BUG#10136: items cleunup
 #
---disable_warnings
+--disable_warnings ONCE
 DROP PROCEDURE IF EXISTS bug10136|
---enable_warnings
 create table t3 ( name char(5) not null primary key, val float not null)|
 insert into t3 values ('aaaaa', 1), ('bbbbb', 2), ('ccccc', 3)|
 create procedure bug10136()
@@ -4025,9 +3824,8 @@ drop table t3|
 #
 # BUG#11529: crash server after use stored procedure
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug11529|
---enable_warnings
 create procedure bug11529()
 begin
   declare c cursor for select id, data from t1 where data in (10,13);
@@ -4062,34 +3860,41 @@ drop procedure bug11529|
 # BUG#6063: Stored procedure labels are subject to restrictions (partial)
 # BUG#7088: Stored procedures: labels won't work if character set is utf8
 #
+
+set character set utf8|
+
 --disable_warnings
 drop procedure if exists bug6063|
 drop procedure if exists bug7088_1|
 drop procedure if exists bug7088_2|
 --enable_warnings
 
---disable_parsing # temporarily disabled until Bar fixes BUG#11986
 create procedure bug6063()
-  lâbel: begin end|
-call bug6063()|
-# QQ Known bug: this will not show the label correctly.
-show create procedure bug6063|
+begin
+  lâbel: begin end;
+  label: begin end;
+  label1: begin end;
+end|
 
-set character set utf8|
 create procedure bug7088_1()
   label1: begin end label1|
+
 create procedure bug7088_2()
   läbel1: begin end|
+
+call bug6063()|
 call bug7088_1()|
 call bug7088_2()|
+
 set character set default|
+
+show create procedure bug6063|
 show create procedure bug7088_1|
 show create procedure bug7088_2|
 
 drop procedure bug6063|
 drop procedure bug7088_1|
 drop procedure bug7088_2|
---enable_parsing
 
 #
 # BUG#9565: "Wrong locking in stored procedure if a sub-sequent procedure
@@ -4118,9 +3923,8 @@ drop procedure bug9565|
 # BUG#9538: SProc: Creation fails if we try to SET system variable
 #           using @@var_name in proc
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug9538|
---enable_warnings
 create procedure bug9538()
   set @@sort_buffer_size = 1000000|
 
@@ -4137,9 +3941,8 @@ drop procedure bug9538|
 #
 # BUG#8692: Cursor fetch of empty string
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug8692|
---enable_warnings
 create table t3 (c1 varchar(5), c2 char(5), c3 enum('one','two'), c4 text, c5 blob, c6 char(5), c7 varchar(5))|
 insert into t3 values ('', '', '', '', '', '', NULL)|
 
@@ -4166,9 +3969,8 @@ drop table t3|
 # Bug#10055 "Using stored function with information_schema causes empty
 #            result set"
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug10055|
---enable_warnings
 create function bug10055(v char(255)) returns char(255) return lower(v)|
 # This select should not crash server and should return all fields in t1
 select t.column_name, bug10055(t.column_name)
@@ -4183,9 +3985,8 @@ drop function bug10055|
 # consumption by passing large input parameter.
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug12297|
---enable_warnings
 
 create procedure bug12297(lim int)
 begin
@@ -4333,9 +4134,8 @@ drop table t3|
 #
 # BUG#9048: Creating a function with char binary IN parameter fails
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug9048|
---enable_warnings
 create function bug9048(f1 char binary) returns char
 begin
   set f1= concat( 'hello', f1 );
@@ -4358,18 +4158,16 @@ end|
 # 'INOUT' parameter
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug12849_1|
---enable_warnings
 create procedure bug12849_1(inout x char) select x into x|
 set @var='a'|
 call bug12849_1(@var)|
 select @var|
 drop procedure bug12849_1|
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug12849_2|
---enable_warnings
 create procedure bug12849_2(inout foo varchar(15))
 begin
 select concat(foo, foo) INTO foo;
@@ -4487,9 +4285,8 @@ drop table t3|
 # Bug #13124    Stored Procedure using SELECT INTO crashes server
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug13124|
---enable_warnings
 create procedure bug13124()
 begin
   declare y integer;
@@ -4504,9 +4301,8 @@ drop procedure  bug13124|
 
 # check NULL inout parameters processing
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug12979_1|
---enable_warnings
 create procedure bug12979_1(inout d decimal(5)) set d = d / 2|
 set @bug12979_user_var = NULL|
 call bug12979_1(@bug12979_user_var)|
@@ -4514,9 +4310,8 @@ drop procedure bug12979_1|
 
 # check NULL local variables processing
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug12979_2|
---enable_warnings
 create procedure bug12979_2()
 begin
 declare internal_var decimal(5);
@@ -5107,9 +4902,8 @@ drop table t3, t4|
 #
 # BUG#14376: MySQL crash on scoped variable (re)initialization
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug14376|
---enable_warnings
 
 create procedure bug14376()
 begin
@@ -5209,19 +5003,13 @@ drop procedure bug5967|
 --disable_warnings
 drop procedure if exists bug13012|
 # Disable warnings also for BACKUP/RESTORE: they are deprecated.
---replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
 eval create procedure bug13012()
     BEGIN
        REPAIR TABLE t1;
-       BACKUP TABLE t1 to '$backupdir';
-       DROP TABLE t1;
-       RESTORE TABLE t1 FROM '$backupdir';
     END|
 call bug13012()|
 
 --enable_warnings
---remove_file $backupdir/t1.frm
---remove_file $backupdir/t1.MYD
 
 drop procedure bug13012|
 
@@ -5429,6 +5217,8 @@ drop procedure if exists bug15231_1|
 drop procedure if exists bug15231_2|
 drop procedure if exists bug15231_3|
 drop procedure if exists bug15231_4|
+drop procedure if exists bug15231_5|
+drop procedure if exists bug15231_6|
 --enable_warnings
 
 create table t3 (id int not null)|
@@ -5458,7 +5248,7 @@ end|
 create procedure bug15231_3()
 begin
   declare exit handler for sqlwarning
-    select 'Caught it (wrong)' as 'Result';
+    select 'Caught it (correct)' as 'Result';
 
   call bug15231_4();
 end|
@@ -5469,24 +5259,44 @@ begin
 
   set x = 'zap';
   select 'Missed it (correct)' as 'Result';
+  show warnings;
+end|
+
+create procedure bug15231_5()
+begin
+  declare exit handler for sqlwarning
+    select 'Caught it (wrong)' as 'Result';
+
+  call bug15231_6();
+end|
+
+create procedure bug15231_6()
+begin
+  declare x decimal(2,1);
+
+  set x = 'zap';
+  select 'Missed it (correct)' as 'Result';
+  select id from t3;
 end|
 
 call bug15231_1()|
 call bug15231_3()|
+call bug15231_5()|
 
-drop table if exists t3|
-drop procedure if exists bug15231_1|
-drop procedure if exists bug15231_2|
-drop procedure if exists bug15231_3|
-drop procedure if exists bug15231_4|
+drop table t3|
+drop procedure bug15231_1|
+drop procedure bug15231_2|
+drop procedure bug15231_3|
+drop procedure bug15231_4|
+drop procedure bug15231_5|
+drop procedure bug15231_6|
 
 
 #
 # BUG#15011: error handler in nested block not activated
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug15011|
---enable_warnings
 
 create table t3 (c1 int primary key)|
 
@@ -5516,9 +5326,8 @@ drop table t3|
 # BUG#17476: Stored procedure not returning data when it is called first
 #            time per connection
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug17476|
---enable_warnings
 
 create table t3 ( d date )|
 insert into t3 values
@@ -5612,9 +5421,8 @@ end|
 # 
 # BUG#14945: Truncate table doesn't reset the auto_increment counter
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug14945|
---enable_warnings
 create table t3 (id int not null auto_increment primary key)|
 create procedure bug14945() deterministic truncate t3|
 insert into t3 values (null)|
@@ -5670,9 +5478,8 @@ drop table t3|
 # BUG#18787: Server crashed when calling a stored procedure containing
 #            a misnamed function
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug18787|
---enable_warnings
 create procedure bug18787()
 begin
   declare continue handler for sqlexception begin end;
@@ -5720,9 +5527,8 @@ select routine_name,routine_schema from information_schema.routines where
 # BUG#12472/BUG#15137 'CREATE TABLE ... SELECT ... which explicitly or
 # implicitly uses stored function gives "Table not locked" error'.
 #
---disable_warnings
+--disable_warnings ONCE
 drop function if exists bug12472|
---enable_warnings
 create function bug12472() returns int return (select count(*) from t1)|
 # Check case when function is used directly
 create table t3 as select bug12472() as i|
@@ -5913,9 +5719,8 @@ drop procedure bug15217|
 # This is a performance and memory leak test.  Run with large number
 # passed to bug21013() procedure.
 #
---disable_warnings
+--disable_warnings ONCE
 DROP PROCEDURE IF EXISTS bug21013 |
---enable_warnings
 
 CREATE PROCEDURE bug21013(IN lim INT)
 BEGIN
@@ -6044,9 +5849,8 @@ DROP DATABASE mysqltest2|
 
 # Prepare: create database with fixed, pre-defined character set.
 
---disable_warnings
+--disable_warnings ONCE
 DROP DATABASE IF EXISTS mysqltest1|
---enable_warnings
 
 CREATE DATABASE mysqltest1 DEFAULT CHARACTER SET utf8|
 
@@ -6190,9 +5994,8 @@ drop table t4|
 #
 # BUG#19862: Sort with filesort by function evaluates function twice
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug19862|
---enable_warnings
 CREATE TABLE t11 (a INT)|
 CREATE TABLE t12 (a INT)|
 CREATE FUNCTION bug19862(x INT) RETURNS INT
@@ -6258,9 +6061,8 @@ END|
 #
 # BUG#21416: SP: Recursion level higher than zero needed for non-recursive call
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists bug21416|
---enable_warnings
 create procedure bug21416() show create procedure bug21416|
 call bug21416()|
 drop procedure bug21416|
@@ -6269,9 +6071,8 @@ drop procedure bug21416|
 #
 # BUG#21414: SP: Procedure undroppable, to some extent
 #
---disable_warnings
+--disable_warnings ONCE
 DROP PROCEDURE IF EXISTS bug21414|
---enable_warnings
 
 CREATE PROCEDURE bug21414() SELECT 1|
 
@@ -6290,9 +6091,8 @@ DROP PROCEDURE bug21414|
 # BUG#21311: Possible stack overrun if SP has non-latin1 name
 #
 set names utf8|
---disable_warnings
+--disable_warnings ONCE
 drop database if exists това_е_дълго_име_за_база_данни_нали|
---enable_warnings
 create database това_е_дълго_име_за_база_данни_нали|
 INSERT INTO mysql.proc VALUES ('това_е_дълго_име_за_база_данни_нали','това_е_процедура_с_доста_дълго_име_нали_и_още_по_дълго','PROCEDURE','това_е_процедура_с_доста_дълго_име_нали_и_още_по_дълго','SQL','CONTAINS_SQL','NO','DEFINER','','','bad_body','root@localhost',now(), now(),'','', 'utf8', 'utf8_general_ci', 'utf8_general_ci', 'n/a')|
 --error ER_SP_PROC_TABLE_CORRUPT
@@ -6345,9 +6145,8 @@ INSERT INTO t4(Member_ID, Action, Action_Date, Track) VALUES
   ('666666', 'Enrolled', '2006-05-12', 'CHF' ),
   ('666666', 'Disenrolled', '2006-06-01', 'CAD' )|
 
---disable_warnings
+--disable_warnings ONCE
 DROP FUNCTION IF EXISTS bug21493|
---enable_warnings
 
 CREATE FUNCTION bug21493(paramMember VARCHAR(15)) RETURNS varchar(45)
 BEGIN
@@ -6609,9 +6408,8 @@ DROP TABLE t3, t4|
 
 delimiter ;|
 
---disable_warnings
+--disable_warnings ONCE
 drop function if exists pi;
---enable_warnings
 
 create function pi() returns varchar(50)
 return "pie, my favorite desert.";
@@ -6623,18 +6421,16 @@ SET SQL_MODE='IGNORE_SPACE';
 select pi(), pi ();
 
 # Non deterministic warnings from db_load_routine
---disable_warnings
+--disable_warnings ONCE
 select test.pi(), test.pi ();
---enable_warnings
 
 SET SQL_MODE='';
 
 select pi(), pi ();
 
 # Non deterministic warnings from db_load_routine
---disable_warnings
+--disable_warnings ONCE
 select test.pi(), test.pi ();
---enable_warnings
 
 SET @@sql_mode=@save_sql_mode;
 
@@ -7003,7 +6799,6 @@ drop procedure proc_26503_ok_4|
 #
 --disable_warnings
 DROP FUNCTION IF EXISTS bug25373|
---disable_warnings
 CREATE FUNCTION bug25373(p1 INTEGER) RETURNS INTEGER
 LANGUAGE SQL DETERMINISTIC
 RETURN p1;|
@@ -7073,11 +6868,14 @@ select bug20777(9223372036854775807) as '9223372036854775807   2**63-1';
 select bug20777(9223372036854775808) as '9223372036854775808   2**63+0';
 select bug20777(9223372036854775809) as '9223372036854775809   2**63+1';
 select bug20777(9223372036854775810) as '9223372036854775810   2**63+2';
+--error ER_DATA_OUT_OF_RANGE
 select bug20777(-9223372036854775808) as 'lower bounds signed bigint';
 select bug20777(9223372036854775807) as 'upper bounds signed bigint';
+--error ER_DATA_OUT_OF_RANGE
 select bug20777(0) as 'lower bounds unsigned bigint';
 select bug20777(18446744073709551615) as 'upper bounds unsigned bigint';
 select bug20777(18446744073709551616) as 'upper bounds unsigned bigint + 1';
+--error ER_DATA_OUT_OF_RANGE
 select bug20777(-1) as 'lower bounds unsigned bigint - 1';
 
 create table examplebug20777 as select 
@@ -7088,10 +6886,8 @@ create table examplebug20777 as select
   bug20777(9223372036854775809) as '2**63+1',
   bug20777(18446744073709551614) as '2**64-2',
   bug20777(18446744073709551615) as '2**64-1', 
-  bug20777(18446744073709551616) as '2**64',
-  bug20777(0) as '0',
-  bug20777(-1) as '-1';
-insert into examplebug20777 values (1, 9223372036854775806, 9223372036854775807, 223372036854775808, 9223372036854775809, 18446744073709551614, 18446744073709551615, 8446744073709551616, 0, -1);
+  bug20777(18446744073709551616) as '2**64';
+insert into examplebug20777 values (1, 9223372036854775806, 9223372036854775807, 223372036854775808, 9223372036854775809, 18446744073709551614, 18446744073709551615, 8446744073709551616);
 show create table examplebug20777;
 select * from examplebug20777 order by i;
 
@@ -7140,9 +6936,8 @@ DROP FUNCTION bug5274_f2|
 #
 # Bug#21513 (SP having body starting with quoted label rendered unusable)
 #
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists proc_21513|
---enable_warnings
 
 create procedure proc_21513()`my_label`:BEGIN END|
 show create procedure proc_21513|
@@ -7155,10 +6950,9 @@ drop procedure proc_21513|
 #
 # BUG#NNNN: New bug synopsis
 #
-#--disable_warnings
+#--disable_warnings ONCE
 #drop procedure if exists bugNNNN|
-#--enable_warnings
-#create procedure bugNNNN...
+##create procedure bugNNNN...
 #
 # Add bugs above this line. Use existing tables t1 and t2 when
 # practical, or create table t3,t4 etc temporarily (and drop them).
@@ -7288,9 +7082,8 @@ DROP TABLE t1;
 # Bug#28551 "The warning 'No database selected' is reported when calling
 # stored procedures"
 #
---disable_warnings
+--disable_warnings ONCE
 drop database if exists mysqltest_db1;
---enable_warnings
 create database mysqltest_db1;
 create procedure mysqltest_db1.sp_bug28551() begin end;
 call mysqltest_db1.sp_bug28551();
@@ -7408,9 +7201,8 @@ drop procedure proc_25411_c;
 # Bug#26302 (MySQL server cuts off trailing "*/" from comments in SP/func)
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists proc_26302;
---enable_warnings
 
 create procedure proc_26302()
 select 1 /* testing */;
@@ -7480,8 +7272,10 @@ show create view test.v1;
 select column_name from information_schema.columns
 where table_name='v1' and table_schema='test';
 
-connection default;
 disconnect bug29408;
+--source include/wait_until_disconnected.inc
+connection default;
+
 drop view v1;
 drop function f1;
 
@@ -7939,9 +7733,8 @@ drop procedure proc_33618;
 --echo # Bug#30787: Stored function ignores user defined alias.
 --echo #
 use test;
---disable_warnings
+--disable_warnings ONCE
 drop function if exists func30787;
---enable_warnings
 create table t1(f1 int);
 insert into t1 values(1),(2);
 delimiter |;
@@ -8000,9 +7793,8 @@ drop table t1;
 # Bug#38469 invalid memory read and/or crash with utf8 text field, stored procedure, uservar 
 #
 delimiter $;
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists `p2` $
---enable_warnings
 create procedure `p2`(in `a` text charset utf8)
 begin
         declare `pos` int default 1;
@@ -8134,9 +7926,8 @@ DROP VIEW v2;
 
 --echo
 
---disable_warnings
+--disable_warnings ONCE
 DROP FUNCTION IF EXISTS f1;
---enable_warnings
 
 --echo
 
@@ -8199,18 +7990,16 @@ DROP FUNCTION f1;
 # the mysql.proc table.
 #
 
---disable_warnings
+--disable_warnings ONCE
 drop procedure if exists p;
---enable_warnings
 set @old_mode= @@sql_mode;
-set @@sql_mode= pow(2,32)-1;
+set @@sql_mode= cast(pow(2,32)-1 as unsigned integer);
 select @@sql_mode into @full_mode;
 create procedure p() begin end;
 call p();
-select @@sql_mode;
 set @@sql_mode= @old_mode;
 # Rename SQL modes that differ in name between the server and the table definition.
-select replace(@full_mode, '?', 'NOT_USED') into @full_mode;
+select replace(@full_mode, ',,,', ',NOT_USED,') into @full_mode;
 select replace(@full_mode, 'ALLOW_INVALID_DATES', 'INVALID_DATES') into @full_mode;
 select name from mysql.proc where name = 'p' and sql_mode = @full_mode;
 drop procedure p;
@@ -8356,9 +8145,8 @@ DROP PROCEDURE p5;
 --echo # The string "versiondata" seems
 --echo # to be 'leaking' into the schema name space
 --echo #
---disable_warnings
+--disable_warnings ONCE
 DROP DATABASE IF EXISTS mixedCaseDbName;
---enable_warnings
 CREATE DATABASE mixedCaseDbName;
 DELIMITER |;
 CREATE PROCEDURE mixedCaseDbName.tryMyProc() begin end|
@@ -8397,38 +8185,596 @@ DROP FUNCTION f1;
 DROP TABLE t1, t2;
 
 
---echo #
---echo # Bug#12663165 SP DEAD CODE REMOVAL DOESN'T UNDERSTAND CONTINUE HANDLERS
---echo #
-
---disable_warnings
-DROP FUNCTION IF EXISTS f1;
---enable_warnings
-
-delimiter $;
-CREATE FUNCTION f1() RETURNS INT
-BEGIN
-  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION BEGIN END;
-  BEGIN
-    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RETURN f1();
-    BEGIN
-     DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RETURN f1();
-     RETURN f1();
-    END;
-  END;
-RETURN 1;
-END $ 
-delimiter ;$
-
-# This used to cause an assertion.
-SELECT f1();
-
-DROP FUNCTION f1;
-
-
 --echo # ------------------------------------------------------------------
 --echo # -- End of 5.1 tests
 --echo # ------------------------------------------------------------------
+
+#
+# Bug#39255: Stored procedures: crash if function references nonexistent table
+#
+
+--disable_warnings
+DROP FUNCTION IF EXISTS f1;
+DROP TABLE IF EXISTS t_non_existing;
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+delimiter |;
+CREATE FUNCTION f1() RETURNS INT
+BEGIN
+   DECLARE v INT;
+   SELECT a INTO v FROM t_non_existing;
+   RETURN 1;
+END|
+delimiter ;|
+
+CREATE TABLE t1 (a INT) ENGINE = myisam;
+INSERT INTO t1 VALUES (1);
+
+--error ER_NO_SUCH_TABLE
+SELECT * FROM t1 WHERE a = f1();
+
+DROP FUNCTION f1;
+DROP TABLE t1;
+
+#
+# Bug#36649: Condition area is not properly cleaned up after stored routine invocation
+#
+
+--disable_warnings ONCE
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter |;
+CREATE PROCEDURE p1(a INT, b CHAR)
+BEGIN
+  IF a > 0 THEN
+    CALL p1(a-1, 'ab');
+  ELSE
+    SELECT 1;
+  END IF;
+END|
+delimiter ;|
+
+SET @save_max_sp_recursion= @@max_sp_recursion_depth;
+SET @@max_sp_recursion_depth= 5;
+CALL p1(4, 'a');
+SET @@max_sp_recursion_depth= @save_max_sp_recursion;
+
+DROP PROCEDURE p1;
+
+#
+# Ensure that rules for message list clean up are being respected.
+#
+
+--disable_warnings ONCE
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter |;
+CREATE PROCEDURE p1(a CHAR)
+BEGIN
+  SELECT 1;
+  SELECT CAST('10 ' as UNSIGNED INTEGER);
+  SELECT 1;
+END|
+delimiter ;|
+
+CALL p1('data truncated parameter');
+
+DROP PROCEDURE p1;
+
+#
+# Cascading stored procedure/function calls.
+#
+
+--disable_warnings
+DROP PROCEDURE IF EXISTS p1;
+DROP PROCEDURE IF EXISTS p2;
+DROP PROCEDURE IF EXISTS p3;
+DROP PROCEDURE IF EXISTS p4;
+--enable_warnings
+
+delimiter |;
+CREATE PROCEDURE p1()
+  CALL p2()|
+CREATE PROCEDURE p2()
+  CALL p3()|
+CREATE PROCEDURE p3()
+  CALL p4()|
+CREATE PROCEDURE p4()
+BEGIN
+  SELECT 1;
+  SELECT CAST('10 ' as UNSIGNED INTEGER);
+  SELECT 2;
+END|
+delimiter ;|
+
+CALL p1();
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+
+--disable_warnings
+DROP FUNCTION IF EXISTS f1;
+DROP FUNCTION IF EXISTS f2;
+DROP FUNCTION IF EXISTS f3;
+DROP FUNCTION IF EXISTS f4;
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (a CHAR(2));
+
+INSERT INTO t1 VALUES ('aa');
+
+delimiter |;
+CREATE FUNCTION f1() RETURNS CHAR
+  RETURN (SELECT f2())|
+CREATE FUNCTION f2() RETURNS CHAR
+  RETURN (SELECT f3())|
+CREATE FUNCTION f3() RETURNS CHAR
+  RETURN (SELECT f4())|
+CREATE FUNCTION f4() RETURNS CHAR
+BEGIN
+  RETURN (SELECT a FROM t1);
+END|
+delimiter ;|
+
+SELECT f1();
+
+DROP FUNCTION f1;
+DROP FUNCTION f2;
+DROP FUNCTION f3;
+DROP FUNCTION f4;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#34197: CREATE PROCEDURE fails when COMMENT truncated in non 
+--echo #            strict SQL mode
+--echo #
+
+--disable_warnings ONCE
+DROP PROCEDURE IF EXISTS p1;
+
+CREATE PROCEDURE p1 ()
+COMMENT
+'12345678901234567890123456789012345678901234567890123456789012345678901234567890'
+BEGIN
+END;
+
+SELECT comment FROM mysql.proc WHERE name = "p1";
+
+SELECT routine_comment FROM information_schema.routines WHERE routine_name = "p1";
+
+DROP PROCEDURE p1;
+
+
+--echo #
+--echo # Bug #47313 assert in check_key_in_view during CALL procedure
+--echo #
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP VIEW IF EXISTS t1, t2_unrelated;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+CREATE VIEW t1 AS SELECT 10 AS f1;
+
+--echo # t1 refers to the view
+--error ER_NON_INSERTABLE_TABLE
+CALL p1(1);
+
+CREATE TEMPORARY TABLE t1 (f1 INT);
+
+--echo # t1 still refers to the view since it was inlined
+--error ER_NON_INSERTABLE_TABLE
+CALL p1(2);
+
+DROP VIEW t1;
+
+--echo # t1 now refers to the temporary table
+CALL p1(3);
+
+--echo # Check which values were inserted into the temp table.
+SELECT * FROM t1;
+
+DROP TEMPORARY TABLE t1;
+DROP PROCEDURE p1;
+
+--echo # Now test what happens if the sp cache is invalidated.
+
+CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+CREATE VIEW t1 AS SELECT 10 AS f1;
+CREATE VIEW v2_unrelated AS SELECT 1 AS r1;
+
+--echo # Load the procedure into the sp cache
+--error ER_NON_INSERTABLE_TABLE
+CALL p1(4);
+
+CREATE TEMPORARY TABLE t1 (f1 int);
+
+ALTER VIEW v2_unrelated AS SELECT 2 AS r1;
+
+--echo # Alter view causes the sp cache to be invalidated.
+--echo # Now t1 refers to the temporary table, not the view.
+CALL p1(5);
+
+--echo # Check which values were inserted into the temp table.
+SELECT * FROM t1;
+
+DROP TEMPORARY TABLE t1;
+DROP VIEW t1, v2_unrelated;
+DROP PROCEDURE p1;
+
+CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+CREATE TEMPORARY TABLE t1 (f1 INT);
+
+--echo # t1 refers to the temporary table
+CALL p1(6);
+
+CREATE VIEW t1 AS SELECT 10 AS f1;
+
+--echo # Create view causes the sp cache to be invalidated.
+--echo # t1 still refers to the temporary table since it shadows the view.
+CALL p1(7);
+
+DROP VIEW t1;
+
+--echo # Check which values were inserted into the temp table.
+SELECT * FROM t1;
+
+DROP TEMPORARY TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # Bug #11918 Can't use a declared variable in LIMIT clause
+--echo #
+--disable_warnings
+drop table if exists t1;
+drop procedure if exists p1;
+--enable_warnings
+create table t1 (c1 int);
+insert into t1 (c1) values (1), (2), (3), (4), (5);
+
+delimiter |;
+create procedure p1()
+begin
+  declare a integer;
+  declare b integer;
+  select * from t1 limit a, b;
+end|
+delimiter ;|
+--echo # How do we handle NULL limit values?
+call p1();
+drop table t1;
+create table t1 (a int);
+insert into t1 (a) values (1), (2), (3), (4), (5);
+--echo #
+--echo # Do we correctly resolve identifiers in LIMIT?
+--echo #
+call p1();
+drop table t1;
+create table t1 (c1 int);
+insert into t1 (c1) values (1), (2), (3), (4), (5);
+drop procedure p1;
+--echo # Try to create a procedure that
+--echo # refers to non-existing variables.
+--error ER_SP_UNDECLARED_VAR
+create procedure p1(p1 integer, p2 integer)
+  select * from t1 limit a, b;
+--echo #
+--echo # Try to use data types not allowed in LIMIT 
+--echo #
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 date, p2 date) select * from t1 limit p1, p2;
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 integer, p2 float) select * from t1 limit p1, p2;
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 integer, p2 char(1)) select * from t1 limit p1, p2;
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 varchar(5), p2 char(1)) select * from t1 limit p1, p2;
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 decimal, p2 decimal) select * from t1 limit p1, p2;
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create procedure p1(p1 double, p2 double) select * from t1 limit p1, p2;
+
+--echo #
+--echo # Finally, test the valid case.
+--echo #
+create procedure p1(p1 integer, p2 integer)
+  select * from t1 limit p1, p2;
+
+call p1(NULL, NULL);
+call p1(0, 0);
+call p1(0, -1);
+call p1(-1, 0);
+call p1(-1, -1);
+call p1(0, 1);
+call p1(1, 0);
+call p1(1, 5);
+call p1(3, 2);
+
+delimiter |;
+--echo # Try to create a function that
+--echo # refers to non-existing variables.
+--error ER_SP_UNDECLARED_VAR
+create function f1(p1 integer, p2 integer)
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit a, b);
+  return a;
+end|
+
+create function f1()
+  returns int
+begin
+  declare a, b, c int;
+  set a = (select count(*) from t1 limit b, c);
+  return a;
+end|
+
+delimiter ;|
+--echo # How do we handle NULL limit values?
+select f1();
+
+drop function f1;
+
+delimiter |;
+--echo #
+--echo # Try to use data types not allowed in LIMIT 
+--echo #
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 date, p2 date)
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 integer, p2 float)
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 integer, p2 char(1))
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 varchar(5), p2 char(1))
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 decimal, p2 decimal)
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
+create function f1(p1 double, p2 double)
+  returns int
+begin
+  declare a int;
+  set a = (select count(*) from t1 limit p1, p2);
+  return a;
+end|
+
+--echo #
+--echo # Finally, test the valid case.
+--echo #
+
+create function f1(p1 integer, p2 integer)
+returns int
+begin
+  declare count int;
+  set count= (select count(*) from (select * from t1 limit p1, p2) t_1);
+  return count;
+end|
+
+delimiter ;|
+
+select f1(0, 0);
+select f1(0, -1);
+select f1(-1, 0);
+select f1(-1, -1);
+select f1(0, 1);
+select f1(1, 0);
+select f1(1, 5);
+select f1(3, 2);
+
+--echo # Cleanup
+drop table t1;
+drop procedure p1;
+drop function f1;
+
+--echo # 
+--echo # BUG#11766234: 59299: ASSERT (TABLE_REF->TABLE || TABLE_REF->VIEW) 
+--echo #               FAILS IN SET_FIELD_ITERATOR
+--echo # 
+
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (a INT);
+CREATE VIEW v1 AS SELECT a FROM t2;
+CREATE PROCEDURE proc() SELECT * FROM t1 NATURAL JOIN v1;
+ALTER TABLE t2 CHANGE COLUMN a b CHAR;
+
+--echo
+--error ER_VIEW_INVALID
+CALL proc();
+--error ER_VIEW_INVALID
+CALL proc();
+
+--echo
+DROP TABLE t1,t2;
+DROP VIEW v1;
+DROP PROCEDURE proc;
+
+
+--echo
+--echo # --
+--echo # -- Bug 11765684 - 58674: SP-cache does not detect changes in
+--echo # -- pre-locking list caused by triggers
+--echo # --- 
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE TABLE t1(a INT);
+CREATE TABLE t2(a INT);
+CREATE TABLE t3(a INT);
+
+CREATE PROCEDURE p1()
+  INSERT INTO t1(a) VALUES (1);
+
+--echo
+CREATE TRIGGER t1_ai AFTER INSERT ON t1
+  FOR EACH ROW
+    INSERT INTO t2(a) VALUES (new.a);
+
+--echo
+CALL p1();
+
+--echo
+CREATE TRIGGER t1_bi BEFORE INSERT ON t1
+  FOR EACH ROW
+    INSERT INTO t3(a) VALUES (new.a);
+
+--echo
+CALL p1();
+
+--echo
+DROP TABLE t1, t2, t3;
+DROP PROCEDURE p1;
+--echo
+
+
+--echo
+--echo # --
+--echo # -- Bug#12652769 - 61470: case operator in stored routine retains old
+--echo # -- value of input parameter
+--echo # --- 
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE TABLE t1 (s1 CHAR(5) CHARACTER SET utf8);
+INSERT INTO t1 VALUES ('a');
+
+delimiter |;
+
+CREATE PROCEDURE p1(dt DATETIME, i INT)
+BEGIN
+  SELECT
+    CASE
+      WHEN i = 1 THEN 2
+      ELSE dt
+    END AS x1;
+
+  SELECT
+    CASE _latin1'a'
+      WHEN _utf8'a' THEN 'A'
+    END AS x2;
+
+  SELECT
+    CASE _utf8'a'
+      WHEN _latin1'a' THEN _utf8'A'
+    END AS x3;
+
+  SELECT
+    CASE s1
+      WHEN _latin1'a' THEN _latin1'b'
+      ELSE _latin1'c'
+    END AS x4
+  FROM t1;
+END|
+
+delimiter ;|
+
+--echo
+CALL p1('2011-04-03 05:14:10', 1);
+CALL p1('2011-04-03 05:14:11', 2);
+CALL p1('2011-04-03 05:14:12', 2);
+CALL p1('2011-04-03 05:14:13', 2);
+
+--echo
+DROP TABLE t1;
+DROP PROCEDURE p1;
+--echo
+
+--echo #
+--echo # Bug#12621017 - Crash if a sp variable is used in the
+--echo #                limit clause of a set statement
+--echo #
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1; 
+DROP PROCEDURE IF EXISTS p2;
+--enable_warnings
+
+CREATE TABLE t1 (c1 INT); 
+INSERT INTO t1 VALUES (1);
+
+delimiter |;
+
+CREATE PROCEDURE p1() 
+BEGIN 
+  DECLARE foo, cnt INT UNSIGNED DEFAULT 1; 
+  SET foo = (SELECT MIN(c1) FROM t1 LIMIT cnt); 
+END| 
+
+CREATE PROCEDURE p2()
+BEGIN
+
+DECLARE iLimit INT;
+DECLARE iVal INT;
+
+DECLARE cur1 CURSOR FOR
+  SELECT c1 FROM t1
+  LIMIT iLimit;
+
+SET iLimit=1;
+
+OPEN cur1;
+FETCH cur1 INTO iVal;
+
+END|
+
+delimiter ;|
+
+CALL p1();
+CALL p2();
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP TABLE t1;
 
 --echo
 --echo # Bug#13805127: Stored program cache produces wrong result in same THD
@@ -8466,3 +8812,197 @@ CALL p1(1);
 
 DROP PROCEDURE p1;
 
+--echo # End of 5.5 test
+
+
+--echo #
+--echo # Bug#12663165 SP DEAD CODE REMOVAL DOESN'T UNDERSTAND CONTINUE HANDLERS
+--echo #
+
+--disable_warnings ONCE
+DROP FUNCTION IF EXISTS f1;
+
+delimiter $;
+CREATE FUNCTION f1() RETURNS INT
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION BEGIN END;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RETURN f1();
+    BEGIN
+     DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RETURN f1();
+     RETURN f1();
+    END;
+  END;
+RETURN 1;
+END $ 
+delimiter ;$
+
+# This used to cause an assertion.
+SELECT f1();
+
+DROP FUNCTION f1;
+
+--echo #
+--echo # Bug#12577230
+--echo # RERUN OF STORED FUNCTION CAUSES SEGFAULT IN MAKE_JOIN_SELECT
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=myisam;
+INSERT INTO t1 VALUES (1);
+CREATE VIEW v1 AS SELECT a FROM t1;
+
+CREATE PROCEDURE p1()
+SELECT 1 FROM v1 JOIN t1 ON v1.a
+WHERE (SELECT 1 FROM t1 WHERE v1.a)
+;
+
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+DROP TABLE t1;
+DROP VIEW v1;
+
+--echo #
+--echo # WL#2111: Add non-reserved ROW_COUNT keyword.
+--echo #
+
+--disable_warnings
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+DELIMITER |;
+
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE row_count INT DEFAULT 1;
+  SELECT row_count;
+  SELECT row_count();
+  ROW_COUNT: WHILE row_count > 0 DO
+    SET row_count = row_count - 1;
+  END WHILE ROW_COUNT;
+  SELECT ROW_COUNT;
+END|
+
+DELIMITER ;|
+
+CALL p1();
+
+DROP PROCEDURE p1;
+
+--echo #
+--echo # BUG #11748187 - 35410: STORED FUNCTION: CONFUSING 'ORDER CLAUSE' IN ERROR MESSAGE
+--echo #
+
+--disable_warnings
+DROP FUNCTION if exists f1;
+--enable_warnings
+CREATE FUNCTION f1 (p_value INT) RETURNS INT DETERMINISTIC RETURN x;
+--error ER_BAD_FIELD_ERROR
+SELECT f1(1);
+DROP FUNCTION f1;
+
+--echo #
+--echo # BUG #12872824 (formerly known as 62125): testing stored function
+--echo #                result for null incorrectly yields 1292 warning.
+
+--disable_warnings
+DROP FUNCTION IF EXISTS f1;
+DROP FUNCTION IF EXISTS f2;
+DROP FUNCTION IF EXISTS f3;
+DROP FUNCTION IF EXISTS f4;
+--enable_warnings
+
+delimiter /;
+
+CREATE FUNCTION f1() RETURNS VARCHAR(1)
+BEGIN RETURN 'X'; END;/
+
+CREATE FUNCTION f2() RETURNS CHAR(1)
+BEGIN RETURN 'X'; END;/
+
+CREATE FUNCTION f3() RETURNS VARCHAR(1)
+BEGIN RETURN NULL; END;/
+
+CREATE FUNCTION f4() RETURNS CHAR(1)
+BEGIN RETURN NULL; END;/
+
+delimiter ;/
+
+SELECT f1() IS NULL;
+SELECT f2() IS NULL;
+SELECT f3() IS NULL;
+SELECT f4() IS NULL;
+
+DROP FUNCTION f1;
+DROP FUNCTION f2;
+DROP FUNCTION f3;
+DROP FUNCTION f4;
+
+--echo #
+
+--echo #
+--echo # WL#6230: Remove 'SET = DEFAULT'
+--echo #
+
+CREATE TABLE t1(a INT);
+
+delimiter |;
+
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p(p INT)
+  SET p = DEFAULT|
+
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p()
+BEGIN
+  DECLARE v INT;
+  SET v = DEFAULT;
+END|
+
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p()
+BEGIN
+  DECLARE v INT DEFAULT 1;
+  SET v = DEFAULT;
+END|
+
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p()
+BEGIN
+  DECLARE v INT DEFAULT (SELECT * FROM t1);
+  SET v = DEFAULT;
+END|
+
+--error ER_PARSE_ERROR
+CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
+BEGIN
+  SET NEW.a = DEFAULT;
+END|
+
+delimiter ;|
+
+--echo
+--echo # Check that setting system variables to DEFAULT still works in SP.
+--echo
+
+CREATE PROCEDURE p1()
+  SET @@default_storage_engine = DEFAULT;
+
+SET @default_storage_engine_saved = @@default_storage_engine;
+
+SELECT @@default_storage_engine;
+SET @@default_storage_engine = InnoDB;
+SELECT @@default_storage_engine;
+
+CALL p1();
+
+SELECT @@default_storage_engine;
+
+SET @@default_storage_engine = @default_storage_engine_saved;
+
+DROP PROCEDURE p1;
+
+DROP TABLE t1;
+
+--echo # End of 5.6 tests

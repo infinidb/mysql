@@ -124,15 +124,22 @@ void CleanUp();
 
 
 // no gas on these systems ?, disable for now
-#if defined(__sun__) || defined (__APPLE__)
+#if defined(__sun__)
+    #undef  TAOCRYPT_DISABLE_X86ASM
     #define TAOCRYPT_DISABLE_X86ASM
 #endif
 
 // icc problem with -03 and integer, disable for now
 #if defined(__INTEL_COMPILER)
+    #undef  TAOCRYPT_DISABLE_X86ASM
     #define TAOCRYPT_DISABLE_X86ASM
 #endif
 
+// indpedent of build system, unless ia32 asm is enabled disable it
+#if !defined(TAOCRYPT_ENABLE_X86ASM)
+    #undef  TAOCRYPT_DISABLE_X86ASM
+    #define TAOCRYPT_DISABLE_X86ASM
+#endif
 
 // Turn on ia32 ASM for Big Integer
 // CodeWarrior defines _MSC_VER
@@ -743,7 +750,11 @@ private:
     byte *m_block;
 };
 
-template <class T, class B, bool A=true>
+/*
+  XXX MYSQL: Setting A (assumeAligned) to false,
+  keeping it true might trigger segfault on SPARC.
+*/
+template <class T, class B, bool A= false>
 struct BlockGetAndPut
 {
     // function needed because of C++ grammatical ambiguity between

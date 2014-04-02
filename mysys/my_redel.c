@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include <my_dir.h>
@@ -83,7 +81,11 @@ int my_copystat(const char *from, const char *to, int MyFlags)
   {
     my_errno=errno;
     if (MyFlags & (MY_FAE+MY_WME))
-      my_error(EE_STAT, MYF(ME_BELL+ME_WAITTANG),from,errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_STAT, MYF(ME_BELL+ME_WAITTANG), from,
+               errno, my_strerror(errbuf, sizeof(errbuf), errno));
+    }
     return -1;				/* Can't get stat on input file */
   }
   if ((statbuf.st_mode & S_IFMT) != S_IFREG)
@@ -94,11 +96,15 @@ int my_copystat(const char *from, const char *to, int MyFlags)
   {
     my_errno= errno;
     if (MyFlags & (MY_FAE+MY_WME))
-      my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from, errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from,
+               errno, my_strerror(errbuf, sizeof(errbuf), errno));
+    }
     return -1;
   }
 
-#if !defined(__WIN__) && !defined(__NETWARE__)
+#if !defined(__WIN__)
   if (statbuf.st_nlink > 1 && MyFlags & MY_LINK_WARNING)
   {
     if (MyFlags & MY_LINK_WARNING)
@@ -109,29 +115,22 @@ int my_copystat(const char *from, const char *to, int MyFlags)
   {
     my_errno= errno;
     if (MyFlags & (MY_FAE+MY_WME))
-      my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from, errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from,
+               errno, my_strerror(errbuf, sizeof(errbuf), errno));
+    }
     return -1;
   }
-#endif /* !__WIN__ && !__NETWARE__ */
+#endif /* !__WIN__ */
 
-#ifndef VMS
-#ifndef __ZTC__
   if (MyFlags & MY_COPYTIME)
   {
     struct utimbuf timep;
     timep.actime  = statbuf.st_atime;
     timep.modtime = statbuf.st_mtime;
-    VOID(utime((char*) to, &timep));/* Update last accessed and modified times */
+    (void) utime((char*) to, &timep);/* Update last accessed and modified times */
   }
-#else
-  if (MyFlags & MY_COPYTIME)
-  {
-    time_t time[2];
-    time[0]= statbuf.st_atime;
-    time[1]= statbuf.st_mtime;
-    VOID(utime((char*) to, time));/* Update last accessed and modified times */
-  }
-#endif
-#endif
+
   return 0;
 } /* my_copystat */

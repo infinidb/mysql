@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code
    added support for long options (my_getopt) 22.5.2002 by Jani Tolonen */
@@ -48,7 +46,7 @@ static struct my_option my_long_options[] =
   {"stats", 's', "Report global stats.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"verbose", 'v', "Be verbose.",
-   (uchar**) &verbose, (uchar**) &verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+   &verbose, &verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -255,18 +253,15 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
   return 0;
 }
 
-#include <help_start.h>
 
 static void usage()
 {
   printf("Use: myisam_ftdump <table_name> <index_num>\n");
   my_print_help(my_long_options);
   my_print_variables(my_long_options);
-  NETWARE_SET_SCREEN_MODE(1);
   exit(1);
 }
 
-#include <help_end.h>
 
 static void complain(int val) /* Kinda assert :-)  */
 {
@@ -276,3 +271,5 @@ static void complain(int val) /* Kinda assert :-)  */
     exit(1);
   }
 }
+
+#include "mi_extrafunc.h"

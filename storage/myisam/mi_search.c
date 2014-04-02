@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* key handling functions */
 
@@ -84,9 +82,9 @@ int _mi_search(register MI_INFO *info, register MI_KEYDEF *keyinfo,
   }
 
   if (!(buff=_mi_fetch_keypage(info,keyinfo,pos,DFLT_INIT_HITS,info->buff,
-                               test(!(nextflag & SEARCH_SAVE_BUFF)))))
+                               MY_TEST(!(nextflag & SEARCH_SAVE_BUFF)))))
     goto err;
-  DBUG_DUMP("page",(uchar*) buff,mi_getint(buff));
+  DBUG_DUMP("page", buff, mi_getint(buff));
 
   flag=(*keyinfo->bin_search)(info,keyinfo,buff,key,key_len,nextflag,
                               &keypos,lastkey, &last_key);
@@ -127,7 +125,7 @@ int _mi_search(register MI_INFO *info, register MI_KEYDEF *keyinfo,
   {
     uchar *old_buff=buff;
     if (!(buff=_mi_fetch_keypage(info,keyinfo,pos,DFLT_INIT_HITS,info->buff,
-                                 test(!(nextflag & SEARCH_SAVE_BUFF)))))
+                                 MY_TEST(!(nextflag & SEARCH_SAVE_BUFF)))))
       goto err;
     keypos=buff+(keypos-old_buff);
     maxpos=buff+(maxpos-old_buff);
@@ -947,9 +945,7 @@ uint _mi_get_binary_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
                  ("Found too long binary packed key: %u of %u at 0x%lx",
                   length, keyinfo->maxlength, (long) *page_pos));
       DBUG_DUMP("key", *page_pos, 16);
-      mi_print_error(keyinfo->share, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
-      DBUG_RETURN(0);                                 /* Wrong key */
+      goto crashed;                                  /* Wrong key */
     }
     /* Key is packed against prev key, take prefix from prev key. */
     from= key;
@@ -992,6 +988,8 @@ uint _mi_get_binary_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
         if (from == from_end) { from=page;  from_end=page_end; }
         length+= (uint) ((*key++ = *from++));
       }
+      if (length > keyseg->length)
+        goto crashed;
     }
     else
       length=keyseg->length;
@@ -1031,15 +1029,18 @@ uint _mi_get_binary_pack_key(register MI_KEYDEF *keyinfo, uint nod_flag,
     if (from_end != page_end)
     {
       DBUG_PRINT("error",("Error when unpacking key"));
-      mi_print_error(keyinfo->share, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
-      DBUG_RETURN(0);                                 /* Error */
+      goto crashed;                                 /* Error */
     }
     /* Copy data pointer and, if appropriate, key block pointer. */
     memcpy((uchar*) key,(uchar*) from,(size_t) length);
     *page_pos= from+length;
   }
   DBUG_RETURN((uint) (key-start_key)+keyseg->length);
+
+  crashed:
+    mi_print_error(keyinfo->share, HA_ERR_CRASHED);
+    my_errno= HA_ERR_CRASHED;
+    DBUG_RETURN(0);
 }
 
 

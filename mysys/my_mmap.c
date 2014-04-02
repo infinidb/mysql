@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2006 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 
@@ -27,24 +27,27 @@ int my_msync(int fd, void *addr, size_t len, int flags)
   return my_sync(fd, MYF(0));
 }
 
-#elif defined(__WIN__)
+#elif defined(_WIN32)
 
 static SECURITY_ATTRIBUTES mmap_security_attributes=
   {sizeof(SECURITY_ATTRIBUTES), 0, TRUE};
 
 void *my_mmap(void *addr, size_t len, int prot,
-               int flags, int fd, my_off_t offset)
+               int flags, File fd, my_off_t offset)
 {
   HANDLE hFileMap;
   LPVOID ptr;
-  HANDLE hFile= (HANDLE)_get_osfhandle(fd);
+  HANDLE hFile= (HANDLE)my_get_osfhandle(fd);
+  DBUG_ENTER("my_mmap");
+  DBUG_PRINT("mysys", ("map fd: %d", fd));
+
   if (hFile == INVALID_HANDLE_VALUE)
-    return MAP_FAILED;
+    DBUG_RETURN(MAP_FAILED);
 
   hFileMap=CreateFileMapping(hFile, &mmap_security_attributes,
                              PAGE_READWRITE, 0, (DWORD) len, NULL);
   if (hFileMap == 0)
-    return MAP_FAILED;
+    DBUG_RETURN(MAP_FAILED);
 
   ptr=MapViewOfFile(hFileMap,
                     prot & PROT_WRITE ? FILE_MAP_WRITE : FILE_MAP_READ,
@@ -59,14 +62,19 @@ void *my_mmap(void *addr, size_t len, int prot,
   CloseHandle(hFileMap);
 
   if (ptr)
-    return ptr;
+  {
+    DBUG_PRINT("mysys", ("mapped addr: %p", ptr));
+    DBUG_RETURN(ptr);
+  }
 
-  return MAP_FAILED;
+  DBUG_RETURN(MAP_FAILED);
 }
 
 int my_munmap(void *addr, size_t len)
 {
-  return UnmapViewOfFile(addr) ? 0 : -1;
+  DBUG_ENTER("my_munmap");
+  DBUG_PRINT("mysys", ("unmap addr: %p", addr));
+  DBUG_RETURN(UnmapViewOfFile(addr) ? 0 : -1);
 }
 
 int my_msync(int fd, void *addr, size_t len, int flags)

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file should be included when using myisam_funktions */
 
@@ -32,31 +31,9 @@ extern "C" {
 #ifndef _keycache_h
 #include "keycache.h"
 #endif
-#include <mysql/plugin.h>
 #include "my_compare.h"
-
-/*
-  There is a hard limit for the maximum number of keys as there are only
-  8 bits in the index file header for the number of keys in a table.
-  This means that 0..255 keys can exist for a table. The idea of
-  HA_MAX_POSSIBLE_KEY is to ensure that one can use myisamchk & tools on
-  a MyISAM table for which one has more keys than MyISAM is normally
-  compiled for. If you don't have this, you will get a core dump when
-  running myisamchk compiled for 128 keys on a table with 255 keys.
-*/
-
-#define HA_MAX_POSSIBLE_KEY         255         /* For myisamchk */
-/*
-  The following defines can be increased if necessary.
-  But beware the dependency of MI_MAX_POSSIBLE_KEY_BUFF and HA_MAX_KEY_LENGTH.
-*/
-
-#define HA_MAX_KEY_LENGTH           1000        /* Max length in bytes */
-#define HA_MAX_KEY_SEG              16          /* Max segments for key */
-
-#define HA_MAX_POSSIBLE_KEY_BUFF    (HA_MAX_KEY_LENGTH + 24+ 6+6)
-#define HA_MAX_KEY_BUFF  (HA_MAX_KEY_LENGTH+HA_MAX_KEY_SEG*6+8+8)
-
+#include <mysql/plugin.h>
+#include <my_check_opt.h>
 /*
   Limit max keys according to HA_MAX_POSSIBLE_KEY
 */
@@ -103,8 +80,8 @@ extern "C" {
 
 #define mi_is_key_active(_keymap_,_keyno_) \
                             (((_keyno_) < MI_KEYMAP_BITS) ? \
-                             test((_keymap_) & (ULL(1) << (_keyno_))) : \
-                             test((_keymap_) & MI_KEYMAP_HIGH_MASK))
+                             MY_TEST((_keymap_) & (ULL(1) << (_keyno_))) : \
+                             MY_TEST((_keymap_) & MI_KEYMAP_HIGH_MASK))
 #define mi_set_key_active(_keymap_,_keyno_) \
                             (_keymap_)|= (((_keyno_) < MI_KEYMAP_BITS) ? \
                                           (ULL(1) << (_keyno_)) : \
@@ -117,7 +94,7 @@ extern "C" {
 #else
 
 #define mi_is_key_active(_keymap_,_keyno_) \
-                            test((_keymap_) & (ULL(1) << (_keyno_)))
+                            MY_TEST((_keymap_) & (ULL(1) << (_keyno_)))
 #define mi_set_key_active(_keymap_,_keyno_) \
                             (_keymap_)|= (ULL(1) << (_keyno_))
 #define mi_clear_key_active(_keymap_,_keyno_) \
@@ -126,7 +103,7 @@ extern "C" {
 #endif
 
 #define mi_is_any_key_active(_keymap_) \
-                            test((_keymap_))
+                            MY_TEST((_keymap_))
 #define mi_is_all_keys_active(_keymap_,_keys_) \
                             ((_keymap_) == mi_get_mask_all_keys_active(_keys_))
 #define mi_set_all_keys_active(_keymap_,_keys_) \
@@ -142,7 +119,7 @@ extern "C" {
                             (_to_)= (mi_get_mask_all_keys_active(_maxkeys_) & \
                                      (_from_))
 
-	/* Param to/from mi_info */
+	/* Param to/from mi_status */
 
 typedef struct st_mi_isaminfo		/* Struct from h_info */
 {
@@ -184,7 +161,7 @@ typedef struct st_mi_create_info
   ulonglong data_file_length;
   ulonglong key_file_length;
   uint old_options;
-  uint8 language;
+  uint16 language;
   my_bool with_auto_increment;
 } MI_CREATE_INFO;
 
@@ -276,13 +253,13 @@ extern ulong myisam_block_size;
 extern ulong myisam_concurrent_insert;
 extern my_bool myisam_flush,myisam_delay_key_write,myisam_single_user;
 extern my_off_t myisam_max_temp_length;
-extern ulong myisam_bulk_insert_tree_size, myisam_data_pointer_size;
+extern ulong myisam_data_pointer_size;
 
 /* usually used to check if a symlink points into the mysql data home */
 /* which is normally forbidden                                        */
 extern int (*myisam_test_invalid_symlink)(const char *filename);
 extern ulonglong myisam_mmap_size, myisam_mmap_used;
-extern pthread_mutex_t THR_LOCK_myisam_mmap;
+extern mysql_mutex_t THR_LOCK_myisam_mmap;
 
 	/* Prototypes for myisam-functions */
 
@@ -335,51 +312,6 @@ extern uint mi_get_pointer_length(ulonglong file_length, uint def);
 #define   MYISAMCHK_VERIFY 2  /* Verify, run repair if failure */
 
 /*
-  Definitions needed for myisamchk.c
-
-  Entries marked as "QQ to be removed" are NOT used to
-  pass check/repair options to mi_check.c. They are used
-  internally by myisamchk.c or/and ha_myisam.cc and should NOT
-  be stored together with other flags. They should be removed
-  from the following list to make addition of new flags possible.
-*/
-
-#define T_AUTO_INC              1
-#define T_AUTO_REPAIR           2              /* QQ to be removed */
-#define T_BACKUP_DATA           4
-#define T_CALC_CHECKSUM         8
-#define T_CHECK                 16             /* QQ to be removed */
-#define T_CHECK_ONLY_CHANGED    32             /* QQ to be removed */
-#define T_CREATE_MISSING_KEYS   64
-#define T_DESCRIPT              128
-#define T_DONT_CHECK_CHECKSUM   256
-#define T_EXTEND                512
-#define T_FAST                  (1L << 10)     /* QQ to be removed */
-#define T_FORCE_CREATE          (1L << 11)     /* QQ to be removed */
-#define T_FORCE_UNIQUENESS      (1L << 12)
-#define T_INFO                  (1L << 13)
-#define T_MEDIUM                (1L << 14)
-#define T_QUICK                 (1L << 15)     /* QQ to be removed */
-#define T_READONLY              (1L << 16)     /* QQ to be removed */
-#define T_REP                   (1L << 17)
-#define T_REP_BY_SORT           (1L << 18)     /* QQ to be removed */
-#define T_REP_PARALLEL          (1L << 19)     /* QQ to be removed */
-#define T_RETRY_WITHOUT_QUICK   (1L << 20)
-#define T_SAFE_REPAIR           (1L << 21)
-#define T_SILENT                (1L << 22)
-#define T_SORT_INDEX            (1L << 23)     /* QQ to be removed */
-#define T_SORT_RECORDS          (1L << 24)     /* QQ to be removed */
-#define T_STATISTICS            (1L << 25)
-#define T_UNPACK                (1L << 26)
-#define T_UPDATE_STATE          (1L << 27)
-#define T_VERBOSE               (1L << 28)
-#define T_VERY_SILENT           (1L << 29)
-#define T_WAIT_FOREVER          (1L << 30)
-#define T_WRITE_LOOP            ((ulong) 1L << 31)
-
-#define T_REP_ANY               (T_REP | T_REP_BY_SORT | T_REP_PARALLEL)
-
-/*
   Flags used by myisamchk.c or/and ha_myisam.cc that are NOT passed
   to mi_check.c follows:
 */
@@ -424,18 +356,18 @@ typedef struct st_mi_check_param
   ulonglong max_data_file_length;
   ulonglong keys_in_use;
   ulonglong max_record_length;
+  ulonglong sort_buffer_length;
   my_off_t search_after_block;
   my_off_t new_file_pos,key_file_blocks;
   my_off_t keydata,totaldata,key_blocks,start_check_pos;
   ha_rows total_records,total_deleted;
   ha_checksum record_checksum,glob_crc;
   ulonglong use_buffers;
-  ulong read_buffer_length,write_buffer_length,
-	sort_buffer_length,sort_key_blocks;
+  ulong read_buffer_length, write_buffer_length, sort_key_blocks;
   uint out_flag,warning_printed,error_printed,verbose;
   uint opt_sort_key,total_files,max_level;
   uint testflag, key_cache_block_size;
-  uint8 language;
+  uint16 language;
   my_bool using_global_keycache, opt_lock_memory, opt_follow_links;
   my_bool retry_repair, force_sort;
   char temp_filename[FN_REFLEN],*isam_file_name;
@@ -457,10 +389,8 @@ typedef struct st_mi_check_param
   const char *db_name, *table_name;
   const char *op_name;
   enum_mi_stats_method stats_method;
-#ifdef THREAD
-  pthread_mutex_t print_msg_mutex;
+  mysql_mutex_t print_msg_mutex;
   my_bool need_print_msg_lock;
-#endif
 } MI_CHECK;
 
 typedef struct st_sort_ft_buf
@@ -484,10 +414,8 @@ typedef struct st_sort_info
   SORT_FT_BUF *ft_buf;
   /* sync things */
   uint got_error, threads_running;
-#ifdef THREAD
-  pthread_mutex_t mutex;
-  pthread_cond_t  cond;
-#endif
+  mysql_mutex_t mutex;
+  mysql_cond_t  cond;
 } SORT_INFO;
 
 /* functions in mi_check */
@@ -505,8 +433,7 @@ int mi_repair_by_sort(MI_CHECK *param, register MI_INFO *info,
 int mi_repair_parallel(MI_CHECK *param, register MI_INFO *info,
 		      const char * name, int rep_quick);
 int change_to_newfile(const char * filename, const char * old_ext,
-		      const char * new_ext, uint raid_chunks,
-		      myf myflags);
+		      const char * new_ext, myf myflags);
 int lock_file(MI_CHECK *param, File file, my_off_t start, int lock_type,
 	      const char *filetype, const char *filename);
 void lock_memory(MI_CHECK *param);

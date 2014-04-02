@@ -14,9 +14,14 @@ DROP TABLE IF EXISTS t1;
 
 --echo **** Testing WL#3228 changes. ****
 --echo *** Create "wider" table on slave ***
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
 STOP SLAVE;
+--source include/wait_for_slave_to_stop.inc
 RESET SLAVE;
+RESET MASTER;
+
+SET @saved_slave_type_conversions = @@slave_type_conversions;
+SET GLOBAL SLAVE_TYPE_CONVERSIONS = 'ALL_NON_LOSSY';
 
 eval CREATE TABLE t1 (
   a float     (47),
@@ -69,6 +74,7 @@ RESET MASTER;
 --echo *** Start replication ***
 connection slave;
 START SLAVE;
+--source include/wait_for_slave_to_start.inc
 
 --echo *** Insert data on master and display it. ***
 connection master;
@@ -99,8 +105,7 @@ INSERT INTO t1 () VALUES (
 SELECT * FROM t1 ORDER BY a;
 
 --echo *** Select data from slave to compare ***
-sync_slave_with_master;
-connection slave;
+--source include/sync_slave_sql_with_master.inc
 
 # Replace values in columns that display differently between SBR & RBR
 --replace_column 5 # 8 #
@@ -131,7 +136,8 @@ CREATE TABLE t1 (
   d CHAR(5)
 );
 
-sync_slave_with_master slave;
+--let $sync_slave_connection= slave
+--source include/sync_slave_sql_with_master.inc
 
 --echo Alter varchar table on slave
 ALTER TABLE t1 CHANGE COLUMN a a VARCHAR(100);
@@ -150,7 +156,8 @@ SELECT * FROM t1;
 --replace_result default DEFAULT
 SHOW CREATE TABLE t1;
 
-sync_slave_with_master slave;
+--let $sync_slave_connection= slave
+--source include/sync_slave_sql_with_master.inc
 
 --echo Insert some values and select them on slave
 SELECT * FROM t1;
@@ -178,9 +185,9 @@ CREATE TABLE t1 (
   e BIT(11)
 );
 
-sync_slave_with_master slave;
-
 --echo Create bit table on slave
+--source include/sync_slave_sql_with_master.inc
+
 DROP TABLE t1;
 CREATE TABLE t1 (
   a BIT(16),
@@ -205,7 +212,10 @@ SELECT BIN(a), BIN(b), BIN(c), BIN(d), BIN(e) FROM t1;
 --replace_result default DEFAULT
 SHOW CREATE TABLE t1;
 
-sync_slave_with_master slave;
+--let $sync_slave_connection= slave
+--source include/sync_slave_sql_with_master.inc
+
+
 
 --echo Insert some values and select them on master
 SELECT BIN(a), BIN(b), BIN(c), BIN(d), BIN(e) FROM t1;
@@ -215,7 +225,9 @@ SHOW CREATE TABLE t1;
 --echo *** Cleanup  ***
 connection master;
 DROP TABLE t1;
-sync_slave_with_master;
+--source include/sync_slave_sql_with_master.inc
+
+SET GLOBAL SLAVE_TYPE_CONVERSIONS = @saved_slave_type_conversions;
 
 # END 5.1 Test Case
 --source include/rpl_end.inc

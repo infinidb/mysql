@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Functions to check if a row is unique */
 
@@ -113,7 +111,7 @@ ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record)
     else if (keyseg->flag & HA_BLOB_PART)
     {
       uint tmp_length=_mi_calc_blob_length(keyseg->bit_start,pos);
-      memcpy_fixed((uchar*) &pos,pos+keyseg->bit_start,sizeof(char*));
+      memcpy(&pos, pos+keyseg->bit_start, sizeof(char*));
       if (!length || length > tmp_length)
 	length=tmp_length;			/* The whole blob */
     }
@@ -208,8 +206,8 @@ int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
         set_if_smaller(a_length, keyseg->length);
         set_if_smaller(b_length, keyseg->length);
       }
-      memcpy_fixed((uchar*) &pos_a,pos_a+keyseg->bit_start,sizeof(char*));
-      memcpy_fixed((uchar*) &pos_b,pos_b+keyseg->bit_start,sizeof(char*));
+      memcpy(&pos_a, pos_a+keyseg->bit_start, sizeof(char*));
+      memcpy(&pos_b, pos_b+keyseg->bit_start, sizeof(char*));
     }
     if (type == HA_KEYTYPE_TEXT || type == HA_KEYTYPE_VARTEXT1 ||
         type == HA_KEYTYPE_VARTEXT2)

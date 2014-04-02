@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Preload indexes into key cache
@@ -86,7 +84,8 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
     /* Read the next block of index file into the preload buffer */
     if ((my_off_t) length > (key_file_length-pos))
       length= (ulong) (key_file_length-pos);
-    if (my_pread(share->kfile, (uchar*) buff, length, pos, MYF(MY_FAE|MY_FNABP)))
+    if (mysql_file_pread(share->kfile, (uchar*) buff, length, pos,
+                         MYF(MY_FAE|MY_FNABP)))
       goto err;
 
     if (ignore_leaves)
@@ -117,11 +116,11 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
   }
   while (pos != key_file_length);
 
-  my_free((char*) buff, MYF(0));
+  my_free(buff);
   DBUG_RETURN(0);
 
 err:
-  my_free((char*) buff, MYF(MY_ALLOW_ZERO_PTR));
+  my_free(buff);
   DBUG_RETURN(my_errno= errno);
 }
 

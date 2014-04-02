@@ -42,7 +42,7 @@ source include/wait_for_slave_param.inc;
 
 let $_wfsse_errno= query_get_value(SHOW SLAVE STATUS, Last_SQL_Errno, 1);
 
-if (!$slave_sql_errno) {
+if ($slave_sql_errno == '') {
   --echo !!!ERROR IN TEST: you must set \$slave_sql_errno before you source
   --echo !!!wait_for_slave_sql_error.inc. The error we got this time was '$_wfsse_errno',
   --echo !!!so you probably want to add the following line to your test case:
@@ -59,10 +59,10 @@ if (`SELECT $_wfsse_errno NOT IN ($slave_sql_errno)`) {
 
 if ($show_slave_sql_error)
 {
-  --let $_wait_for_slave_sql_error_old_status_items= $status_items
-  --let $status_items= Last_SQL_Error
-  --source include/show_slave_status.inc
-  --let $status_items= $_wait_for_slave_sql_error_old_status_items
+  --let $_wait_for_slave_sql_error_error= query_get_value("SHOW SLAVE STATUS", Last_SQL_Error, 1)
+  # remove timestamp and mask absolute path
+  --let $_wait_for_slave_sql_error_error= `SELECT REPLACE("$_wait_for_slave_sql_error_error", '$MYSQL_TEST_DIR', 'MYSQL_TEST_DIR')`
+  --echo Last_SQL_Error = '$_wait_for_slave_sql_error_error'
 }
 
 

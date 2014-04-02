@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2004-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -44,7 +41,7 @@ typedef struct st_tina_share {
     share initialization.
   */
   my_off_t saved_data_file_length;
-  pthread_mutex_t mutex;
+  mysql_mutex_t mutex;
   THR_LOCK lock;
   bool update_file_opened;
   bool tina_write_opened;
@@ -98,9 +95,10 @@ public:
   ~ha_tina()
   {
     if (chain_alloced)
-      my_free(chain, 0);
+      my_free(chain);
     if (file_buff)
       delete file_buff;
+    free_root(&blobroot, MYF(0));
   }
   const char *table_type() const { return "CSV"; }
   const char *index_type(uint inx) { return "NONE"; }
@@ -108,7 +106,8 @@ public:
   ulonglong table_flags() const
   {
     return (HA_NO_TRANSACTIONS | HA_REC_NOT_IN_SEQ | HA_NO_AUTO_INCREMENT |
-            HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE);
+            HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE |
+            HA_CAN_REPAIR);
   }
   ulong index_flags(uint idx, uint part, bool all_parts) const
   {

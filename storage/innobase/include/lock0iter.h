@@ -1,7 +1,24 @@
-/******************************************************
-Lock queue iterator type and function prototypes.
+/*****************************************************************************
 
-(c) 2007 Innobase Oy
+Copyright (c) 2007, 2009, Oracle and/or its affiliates. All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+
+*****************************************************************************/
+
+/**************************************************//**
+@file include/lock0iter.h
+Lock queue iterator type and function prototypes.
 
 Created July 16, 2007 Vasil Dimov
 *******************************************************/
@@ -12,15 +29,15 @@ Created July 16, 2007 Vasil Dimov
 #include "univ.i"
 #include "lock0types.h"
 
-typedef struct lock_queue_iterator_struct {
-	lock_t*	current_lock;
+struct lock_queue_iterator_t {
+	const lock_t*	current_lock;
 	/* In case this is a record lock queue (not table lock queue)
 	then bit_no is the record number within the heap in which the
 	record is stored. */
-	ulint	bit_no;
-} lock_queue_iterator_t;
+	ulint		bit_no;
+};
 
-/***********************************************************************
+/*******************************************************************//**
 Initialize lock queue iterator so that it starts to iterate from
 "lock". bit_no specifies the record number within the heap where the
 record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
@@ -29,24 +46,24 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
    bit_no is calculated in this function by using
    lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
    of a wait lock. */
-
+UNIV_INTERN
 void
 lock_queue_iterator_reset(
 /*======================*/
-	lock_queue_iterator_t*	iter,	/* out: iterator */
-	lock_t*			lock,	/* in: lock to start from */
-	ulint			bit_no);/* in: record number in the
+	lock_queue_iterator_t*	iter,	/*!< out: iterator */
+	const lock_t*		lock,	/*!< in: lock to start from */
+	ulint			bit_no);/*!< in: record number in the
 					heap */
 
-/***********************************************************************
+/*******************************************************************//**
 Gets the previous lock in the lock queue, returns NULL if there are no
 more locks (i.e. the current lock is the first one). The iterator is
-receded (if not-NULL is returned). */
+receded (if not-NULL is returned).
+@return	previous lock or NULL */
 
-lock_t*
+const lock_t*
 lock_queue_iterator_get_prev(
 /*=========================*/
-					/* out: previous lock or NULL */
-	lock_queue_iterator_t*	iter);	/* in/out: iterator */
+	lock_queue_iterator_t*	iter);	/*!< in/out: iterator */
 
 #endif /* lock0iter_h */

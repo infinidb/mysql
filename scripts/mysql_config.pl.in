@@ -1,8 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# Copyright (c) 2007 MySQL AB, 2008 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2007, 2014, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,10 +42,8 @@ use Cwd;
 use strict;
 
 my @exclude_cflags =
-  qw/DDBUG_OFF DSAFEMALLOC USAFEMALLOC DSAFE_MUTEX
-     DPEDANTIC_SAFEMALLOC DUNIV_MUST_NOT_INLINE DFORCE_INIT_OF_VARS
+  qw/DDBUG_OFF DSAFE_MUTEX DFORCE_INIT_OF_VARS
      DEXTRA_DEBUG DHAVE_purify O O[0-9] xO[0-9] W[-A-Za-z]*
-     Xa xstrconst xc99=none
      unroll2 ip mp restrict/;
 
 my @exclude_libs = qw/lmtmalloc static-libcxa i-static static-intel/;
@@ -191,7 +188,7 @@ if ( $^O eq "MSWin32" )
 }
 else
 {
-  my $linkpath   = "-L$pkglibdir";
+  my $linkpath   = "-L$pkglibdir @RPATH_OPTION@";
   @lib_opts   = ($linkpath,"-lmysqlclient");
   @lib_r_opts = ($linkpath,"-lmysqlclient_r");
   @lib_e_opts = ($linkpath,"-lmysqld");
@@ -203,15 +200,14 @@ $flags->{libs} =
 $flags->{libs_r} =
   [@ldflags,@lib_r_opts,'@ZLIB_DEPS@','@LIBS@','@openssl_libs@'];
 $flags->{embedded_libs} =
-  [@ldflags,@lib_e_opts,'@LIBDL@','@ZLIB_DEPS@','@LIBS@','@WRAPLIBS@','@innodb_system_libs@','@openssl_libs@'];
+  [@ldflags,@lib_e_opts,'@LIBDL@','@ZLIB_DEPS@','@LIBS@','@WRAPLIBS@','@openssl_libs@'];
 
 $flags->{include} = ["-I$pkgincludedir"];
 $flags->{cflags}  = [@{$flags->{include}},split(" ",'@CFLAGS@')];
+$flags->{cxxflags}= [@{$flags->{include}},split(" ",'@CXXFLAGS@')];
 
 # ----------------------------------------------------------------------
 # Remove some options that a client doesn't have to care about
-# FIXME until we have a --cxxflags, we need to remove -Xa
-#       and -xstrconst to make --cflags usable for Sun Forte C++
 # ----------------------------------------------------------------------
 
 my $filter = join("|", @exclude_cflags);
@@ -220,6 +216,12 @@ $flags->{cflags} = [];                  # Clear it
 foreach my $cflag ( @tmp )
 {
   push(@{$flags->{cflags}}, $cflag) unless $cflag =~ m/^($filter)$/o;
+}
+@tmp = @{$flags->{cxxflags}};           # Copy the flag list
+$flags->{cxxflags} = [];                # Clear it
+foreach my $cxxflag ( @tmp )
+{
+  push(@{$flags->{cxxflags}}, $cxxflag) unless $cxxflag =~ m/^($filter)$/o;
 }
 
 # Same for --libs(_r)
@@ -236,6 +238,7 @@ foreach my $lib_type ( "libs","libs_r","embedded_libs" )
 
 my $include =       quote_options(@{$flags->{include}});
 my $cflags  =       quote_options(@{$flags->{cflags}});
+my $cxxflags=       quote_options(@{$flags->{cxxflags}});
 my $libs    =       quote_options(@{$flags->{libs}});
 my $libs_r  =       quote_options(@{$flags->{libs_r}});
 my $embedded_libs = quote_options(@{$flags->{embedded_libs}});
@@ -252,6 +255,7 @@ sub usage
 Usage: $0 [OPTIONS]
 Options:
         --cflags         [$cflags]
+        --cxxflags       [$cxxflags]
         --include        [$include]
         --libs           [$libs]
         --libs_r         [$libs_r]
@@ -273,6 +277,7 @@ EOF
 
 GetOptions(
            "cflags"  => sub { print "$cflags\n" },
+           "cxxflags"=> sub { print "$cxxflags\n" },
            "include" => sub { print "$include\n" },
            "libs"    => sub { print "$libs\n" },
            "libs_r"  => sub { print "$libs_r\n" },

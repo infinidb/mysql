@@ -1,3 +1,6 @@
+#ifndef NT_SERVC_INCLUDED
+#define NT_SERVC_INCLUDED
+
 /**
   @file
 
@@ -68,6 +71,16 @@ class NTService
     */
     void SetRunning(void);
 
+    /**
+      Sets a timeout after which SCM will abort service startup if SetRunning()
+      was not called or the timeout was not extended with another call to
+      SetSlowStarting(). Should be called when static initialization completes,
+      and the variable initialization part begins
+
+      @arg timeout  the timeout to pass to the SCM (in milliseconds)
+    */
+    void SetSlowStarting(unsigned long timeout);
+
     /*
       Stop() is to be called by the application to stop 
       the service
@@ -98,3 +111,5 @@ class NTService
 
 };
 /* ------------------------- the end -------------------------------------- */
+
+#endif /* NT_SERVC_INCLUDED */

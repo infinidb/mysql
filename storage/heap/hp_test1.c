@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Test av heap-database */
 /* Programmet skapar en heap-databas. Till denna skrivs ett antal poster.
@@ -38,13 +38,19 @@ int main(int argc, char **argv)
   HA_KEYSEG keyseg[4];
   HP_CREATE_INFO hp_create_info;
   HP_SHARE *tmp_share;
+  my_bool unused;
   MY_INIT(argv[0]);
 
   filename= "test1";
   get_options(argc,argv);
 
-  bzero(&hp_create_info, sizeof(hp_create_info));
+  memset(&hp_create_info, 0, sizeof(hp_create_info));
   hp_create_info.max_table_size= 1024L*1024L;
+  hp_create_info.keys= 1;
+  hp_create_info.keydef= keyinfo;
+  hp_create_info.reclength= 30;
+  hp_create_info.max_records= (ulong) flag*100000L;
+  hp_create_info.min_records= 10UL;
 
   keyinfo[0].keysegs=1;
   keyinfo[0].seg=keyseg;
@@ -55,13 +61,12 @@ int main(int argc, char **argv)
   keyinfo[0].seg[0].charset= &my_charset_latin1;
   keyinfo[0].seg[0].null_bit= 0;
   keyinfo[0].flag = HA_NOSAME;
-  
+
   deleted=0;
-  bzero((uchar*) flags,sizeof(flags));
+  memset(flags, 0, sizeof(flags));
 
   printf("- Creating heap-file\n");
-  if (heap_create(filename,1,keyinfo,30,(ulong) flag*100000L,10L,
-		  &hp_create_info, &tmp_share) ||
+  if (heap_create(filename, &hp_create_info, &tmp_share, &unused) ||
       !(file= heap_open(filename, 2)))
     goto err;
   printf("- Writing records:s\n");
@@ -91,7 +96,7 @@ int main(int argc, char **argv)
   printf("- Removing records\n");
   for (i=1 ; i<=10 ; i++)
   {
-    if (i == remove_ant) { VOID(heap_close(file)) ; return (0) ; }
+    if (i == remove_ant) { (void) heap_close(file); return (0) ; }
     sprintf((char*) key,"%6d",(j=(int) ((rand() & 32767)/32767.*25)));
     if ((error = heap_rkey(file,record,0,key,6,HA_READ_KEY_EXACT)))
     {

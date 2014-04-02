@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,9 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 
 /**
@@ -31,18 +29,24 @@
 */
 
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"                    // REQUIRED: for other includes
+#include "sql_profile.h"
 #include "my_sys.h"
+#include "sql_show.h"                     // schema_table_store_record
+#include "sql_class.h"                    // THD
+
+#include <algorithm>
+
+using std::min;
+using std::max;
 
 #define TIME_FLOAT_DIGITS 9
 /** two vals encoded: (dec*100)+len */
 #define TIME_I_S_DECIMAL_SIZE (TIME_FLOAT_DIGITS*100)+(TIME_FLOAT_DIGITS-3)
 
-#define MAX_QUERY_LENGTH 300
-#define MAX_QUERY_HISTORY 101
-
-/* Reserved for systems that can't record the function name in source. */
-const char * const _unknown_func_ = "<unknown>";
+#define MAX_QUERY_LENGTH 300U
+#define MAX_QUERY_HISTORY 101U
 
 /**
   Connects Information_Schema and Profiling.
@@ -50,7 +54,7 @@ const char * const _unknown_func_ = "<unknown>";
 int fill_query_profile_statistics_info(THD *thd, TABLE_LIST *tables,
                                        Item *cond)
 {
-#if defined(ENABLED_PROFILING) && defined(COMMUNITY_SERVER)
+#if defined(ENABLED_PROFILING)
   return(thd->profiling.fill_statistics_info(thd, tables, cond));
 #else
   my_error(ER_FEATURE_DISABLED, MYF(0), "SHOW PROFILE", "enable-profiling");
@@ -121,9 +125,7 @@ int make_profile_table_for_show(THD *thd, ST_SCHEMA_TABLE *schema_table)
                                       NullS, NullS, field_info->field_name);
     if (field)
     {
-      field->set_name(field_info->old_name,
-                      (uint) strlen(field_info->old_name),
-                      system_charset_info);
+      field->item_name.copy(field_info->old_name);
       if (add_item_to_list(thd, field))
         return 1;
     }
@@ -132,11 +134,31 @@ int make_profile_table_for_show(THD *thd, ST_SCHEMA_TABLE *schema_table)
 }
 
 
-#if defined(ENABLED_PROFILING) && defined(COMMUNITY_SERVER)
+#if defined(ENABLED_PROFILING)
 
 #define RUSAGE_USEC(tv)  ((tv).tv_sec*1000*1000 + (tv).tv_usec)
 #define RUSAGE_DIFF_USEC(tv1, tv2) (RUSAGE_USEC((tv1))-RUSAGE_USEC((tv2)))
 
+#ifdef _WIN32
+static ULONGLONG FileTimeToQuadWord(FILETIME *ft)
+{
+  // Overlay FILETIME onto a ULONGLONG.
+  union {
+    ULONGLONG qwTime;
+    FILETIME ft;
+  } u;
+
+  u.ft = *ft;
+  return u.qwTime;
+}
+
+
+// Get time difference between to FILETIME objects in seconds.
+static double GetTimeDiffInSeconds(FILETIME *a, FILETIME *b)
+{
+  return ((FileTimeToQuadWord(a) - FileTimeToQuadWord(b)) / 1e7);
+}
+#endif
 
 PROF_MEASUREMENT::PROF_MEASUREMENT(QUERY_PROFILE *profile_arg, const char
                                    *status_arg)
@@ -159,8 +181,7 @@ PROF_MEASUREMENT::PROF_MEASUREMENT(QUERY_PROFILE *profile_arg,
 
 PROF_MEASUREMENT::~PROF_MEASUREMENT()
 {
-  if (allocated_status_memory != NULL)
-    my_free(allocated_status_memory, MYF(0));
+  my_free(allocated_status_memory);
   status= function= file= NULL;
 }
 
@@ -227,6 +248,12 @@ void PROF_MEASUREMENT::collect()
   time_usecs= (double) my_getsystime() / 10.0;  /* 1 sec was 1e7, now is 1e6 */
 #ifdef HAVE_GETRUSAGE
   getrusage(RUSAGE_SELF, &rusage);
+#elif defined(_WIN32)
+  FILETIME ftDummy;
+  // NOTE: Get{Process|Thread}Times has a granularity of the clock interval,
+  // which is typically ~15ms. So intervals shorter than that will not be
+  // measurable by this function.
+  GetProcessTimes(GetCurrentProcess(), &ftDummy, &ftDummy, &ftKernel, &ftUser);
 #endif
 }
 
@@ -247,8 +274,7 @@ QUERY_PROFILE::~QUERY_PROFILE()
   while (! entries.is_empty())
     delete entries.pop();
 
-  if (query_source != NULL)
-    my_free(query_source, MYF(0));
+  my_free(query_source);
 }
 
 /**
@@ -275,7 +301,7 @@ void QUERY_PROFILE::new_status(const char *status_arg,
   DBUG_ASSERT(status_arg != NULL);
 
   if ((function_arg != NULL) && (file_arg != NULL))
-    prof= new PROF_MEASUREMENT(this, status_arg, function_arg, file_arg, line_arg);
+    prof= new PROF_MEASUREMENT(this, status_arg, function_arg, base_name(file_arg), line_arg);
   else
     prof= new PROF_MEASUREMENT(this, status_arg);
 
@@ -352,7 +378,7 @@ void PROFILING::start_new_query(const char *initial_state)
     finish_current_query();
   }
 
-  enabled= (((thd)->options & OPTION_PROFILING) != 0);
+  enabled= ((thd->variables.option_bits & OPTION_PROFILING) != 0);
 
   if (! enabled) DBUG_VOID_RETURN;
 
@@ -390,7 +416,7 @@ void PROFILING::finish_current_query()
     status_change("ending", NULL, NULL, 0);
 
     if ((enabled) &&                                    /* ON at start? */
-        ((thd->options & OPTION_PROFILING) != 0) &&   /* and ON at end? */
+        ((thd->variables.option_bits & OPTION_PROFILING) != 0) &&   /* and ON at end? */
         (current->query_source != NULL) &&
         (! current->entries.is_empty()))
     {
@@ -426,7 +452,7 @@ bool PROFILING::show_profiles()
                                            MYSQL_TYPE_DOUBLE));
   field_list.push_back(new Item_empty_string("Query", 40));
 
-  if (thd->protocol->send_fields(&field_list,
+  if (thd->protocol->send_result_set_metadata(&field_list,
                                  Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     DBUG_RETURN(TRUE);
 
@@ -600,6 +626,23 @@ int PROFILING::fill_statistics_info(THD *thd_arg, TABLE_LIST *tables, Item *cond
                                                         (1000.0*1000),
                         &cpu_stime_decimal);
 
+      table->field[4]->store_decimal(&cpu_utime_decimal);
+      table->field[5]->store_decimal(&cpu_stime_decimal);
+      table->field[4]->set_notnull();
+      table->field[5]->set_notnull();
+#elif defined(_WIN32)
+      my_decimal cpu_utime_decimal, cpu_stime_decimal;
+
+      double2my_decimal(E_DEC_FATAL_ERROR,
+                        GetTimeDiffInSeconds(&entry->ftUser,
+                                             &previous->ftUser),
+                        &cpu_utime_decimal);
+      double2my_decimal(E_DEC_FATAL_ERROR,
+                        GetTimeDiffInSeconds(&entry->ftKernel,
+                                             &previous->ftKernel),
+                        &cpu_stime_decimal);
+
+      // Store the result.
       table->field[4]->store_decimal(&cpu_utime_decimal);
       table->field[5]->store_decimal(&cpu_stime_decimal);
       table->field[4]->set_notnull();

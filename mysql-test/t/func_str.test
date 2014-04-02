@@ -442,7 +442,7 @@ where collation(t2.a) = _utf8'binary' order by t1.a,t2.a;
 select t1.*,t2.* from t1 left join t2 on (t1.b=t2.b)
 where charset(t2.a) = _utf8'binary' order by t1.a,t2.a;
 select t1.*,t2.* from t1 left join t2 on (t1.b=t2.b)
-where coercibility(t2.a) = 2 order by t1.a,t2.a;
+where coercibility(t2.a) = 5 order by t1.a,t2.a;
 DROP TABLE t1, t2;
 
 #
@@ -1319,6 +1319,7 @@ explain select 1 as a from t1,(select decode(f1,f1) as b from t1) a;
 explain select 1 as a from t1,(select encode(f1,f1) as b from t1) a;
 drop table t1;
 
+
 --echo #
 --echo # Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
 --echo #
@@ -1382,4 +1383,346 @@ SELECT insert( substring_index( 'a', 'a', 'b' ), 1, 0, 'x' );
 SELECT * FROM t1;
 DROP TABLE t1;
 
+--echo #
+--echo # Bug#12634989 VALGRIND WARNING ABOUT UNINITIALIZED VALUES CREATED IN ITEM_FUNC_DAYOFMONTH
+--echo #
+
+SELECT SUBSTRING('1', DAY(FROM_UNIXTIME(-1)));
+SELECT LEFT('1', DAY(FROM_UNIXTIME(-1)));
+SELECT RIGHT('1', DAY(FROM_UNIXTIME(-1)));
+SELECT REPEAT('1', DAY(FROM_UNIXTIME(-1)));
+SELECT RPAD('hi', DAY(FROM_UNIXTIME(-1)),'?');
+SELECT LPAD('hi', DAY(FROM_UNIXTIME(-1)),'?');
+
+CREATE TABLE t1
+SELECT SUBSTRING('1', DAY(FROM_UNIXTIME(-1))) AS f1,
+       LEFT('1', DAY(FROM_UNIXTIME(-1))) AS f2,
+       RIGHT('1', DAY(FROM_UNIXTIME(-1))) AS f3,
+       REPEAT('1', DAY(FROM_UNIXTIME(-1))) AS f4,
+       RPAD('hi', DAY(FROM_UNIXTIME(-1)),'?') AS f5,
+       LPAD('hi', DAY(FROM_UNIXTIME(-1)),'?') AS f6;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#11766684 59851: UNINITIALISED VALUE IN ITEM_FUNC_LIKE::SELECT_OPTIMIZE WITH SUBQUERY AND
+--echo #
+
+CREATE TABLE t2(a INT, KEY(a));
+INSERT INTO t2 VALUES (1),(2);
+CREATE TABLE t1(b INT, PRIMARY KEY(b));
+INSERT INTO t1 VALUES (0),(254);
+SELECT 1 FROM t2 WHERE a LIKE
+(SELECT  EXPORT_SET(1, b, b, b, b) FROM t1 LIMIT 1);
+DROP TABLE t1, t2;
+
 --echo End of 5.1 tests
+
+--echo Start of 5.4 tests
+#
+# WL#4584 Internationalized number format
+#
+SELECT format(12345678901234567890.123, 3);
+SELECT format(12345678901234567890.123, 3, NULL);
+SELECT format(12345678901234567890.123, 3, 'ar_AE');
+SELECT format(12345678901234567890.123, 3, 'ar_SA');
+SELECT format(12345678901234567890.123, 3, 'be_BY');
+SELECT format(12345678901234567890.123, 3, 'de_DE');
+SELECT format(12345678901234567890.123, 3, 'en_IN');
+SELECT format(12345678901234567890.123, 3, 'en_US');
+SELECT format(12345678901234567890.123, 3, 'it_CH');
+SELECT format(12345678901234567890.123, 3, 'ru_RU');
+SELECT format(12345678901234567890.123, 3, 'ta_IN');
+
+CREATE TABLE t1 (fmt CHAR(5) NOT NULL);
+INSERT INTO t1 VALUES ('ar_AE');
+INSERT INTO t1 VALUES ('ar_SA');
+INSERT INTO t1 VALUES ('be_BY');
+INSERT INTO t1 VALUES ('de_DE');
+INSERT INTO t1 VALUES ('en_IN');
+INSERT INTO t1 VALUES ('en_US');
+INSERT INTO t1 VALUES ('it_CH');
+INSERT INTO t1 VALUES ('ru_RU');
+INSERT INTO t1 VALUES ('ta_IN');
+SELECT fmt, format(12345678901234567890.123, 3, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(12345678901234567890.123, 0, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(12345678901234567890,     3, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(-12345678901234567890,    3, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(-02345678901234567890,    3, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(-00345678901234567890,    3, fmt) FROM t1 ORDER BY fmt;
+SELECT fmt, format(-00045678901234567890,    3, fmt) FROM t1 ORDER BY fmt;
+DROP TABLE t1;
+
+SELECT format(123, 1, 'Non-existent-locale');
+
+--echo End of 5.4 tests
+
+--echo #
+--echo # Start of 5.5 tests
+--echo #
+
+--echo #
+--echo # Bug#55912 FORMAT with locale set fails for numbers < 1000
+--echo #
+SELECT FORMAT(123.33, 2, 'no_NO'), FORMAT(1123.33, 2, 'no_NO');
+SELECT FORMAT(12333e-2, 2, 'no_NO'), FORMAT(112333e-2, 2, 'no_NO');
+CREATE TABLE t1 AS SELECT format(123,2,'no_NO');
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#11764310 conv function crashes, negative argument to memcpy
+--echo #
+SELECT CONV(1,-2147483648,-2147483648);
+
+--echo #
+--echo # Bug#12985030 SIMPLE QUERY WITH DECIMAL NUMBERS LEAKS MEMORY
+--echo #
+
+SELECT (rpad(1.0,2048,1)) IS NOT FALSE;
+SELECT ((+0) IN
+((0b111111111111111111111111111111111111111111111111111),(rpad(1.0,2048,1)),
+(32767.1)));
+SELECT ((rpad(1.0,2048,1)) = ('4(') ^ (0.1));
+
+--error 1690
+SELECT
+pow((rpad(10.0,2048,1)),(b'1111111111111111111111111111111111111111111'));
+SELECT ((rpad(1.0,2048,1)) + (0) ^ ('../'));
+SELECT stddev_samp(rpad(1.0,2048,1));
+SELECT ((127.1) not in ((rpad(1.0,2048,1)),(''),(-1.1)));
+SELECT ((0xf3) * (rpad(1.0,2048,1)) << (0xcc));
+
+--echo #
+--echo # Bug#13359121 LARGE NUMBERS, /STRINGS/DTOA.C:662:
+--echo #              BALLOC: ASSERTION `K <= 15' FAILED.
+--echo # Bug#12985021 SIMPLE QUERY WITH DECIMAL NUMBERS TAKE AN 
+--echo #              EXTRAORDINARY LONG TIME TO EXECUTE
+
+SELECT @tmp_max:= @@global.max_allowed_packet;
+SET @@global.max_allowed_packet=1024*1024*1024;
+# switching connection to allow the new max_allowed_packet take effect
+--connect (newconn, localhost, root,,)
+
+SELECT @@global.max_allowed_packet;
+
+do
+format(rpad('111111111.1',
+             1111111,
+             '999999999999999999999999999999999999999999'),0,'be_BY')
+;
+
+DO
+round(
+  concat( (
+    coalesce( (
+      linefromwkb('2147483648',
+                  -b'1111111111111111111111111111111111111111111')),
+      ( convert('[.DC2.]',decimal(30,30)) ),
+      bit_count('')
+    ) ),
+    ( lpad( ( elt('01','}:K5')),
+              sha1('P'),
+              ( ( select '-9223372036854775808.1' > all (select '')))
+          )
+    )
+  )
+);
+
+--connection default
+SET @@global.max_allowed_packet:= @tmp_max;
+--disconnect newconn
+
+--echo #
+--echo # End of 5.5 tests
+--echo #
+
+
+--echo #
+--echo # Start of 5.6 tests
+--echo #
+
+--echo #
+--echo # WL#5510 Functions to_base64 and from_base64
+--echo #
+let $1=64;
+while($1)
+{
+  dec $1;
+  eval CREATE TABLE t1 AS SELECT TO_BASE64(REPEAT('a',$1)) AS to_base64;
+  SHOW CREATE TABLE t1;
+  SELECT to_base64, LENGTH(to_base64) FROM t1;
+  CREATE TABLE t2 AS SELECT from_base64(to_base64) AS from_base64 FROM t1;
+  SHOW CREATE TABLE t2;
+  SELECT from_base64, LENGTH(from_base64) FROM t2;
+  DROP TABLE t2;
+  DROP TABLE t1;
+  --echo
+}
+CREATE TABLE t1 (a VARBINARY(64));
+INSERT INTO t1 VALUES (0x00), (0x0000), (0x000000), (0x00000000);
+INSERT INTO t1 VALUES (0x00010203040506070809);
+SELECT TO_BASE64(a), hex(a) FROM t1 ORDER BY a;
+DROP TABLE t1;
+
+--echo #
+--echo # Test NULL output for NULL input
+--echo #
+SELECT TO_BASE64(NULL);
+SELECT FROM_BASE64(NULL);
+
+--echo #
+--echo # RFC4648 test vectors
+--echo #
+SELECT @b:= TO_BASE64(''), FROM_BASE64(@b);       # ""
+SELECT @b:= TO_BASE64('f'), FROM_BASE64(@b);      # "Zg=="
+SELECT @b:= TO_BASE64('fo'), FROM_BASE64(@b);     # "Zm8="
+SELECT @b:= TO_BASE64('foo'), FROM_BASE64(@b);    # "Zm9v"
+SELECT @b:= TO_BASE64('foob'), FROM_BASE64(@b);   # "Zm9vYg=="
+SELECT @b:= TO_BASE64('fooba'), FROM_BASE64(@b);  # "Zm9vYmE="
+SELECT @b:= TO_BASE64('foobar'), FROM_BASE64(@b); # "Zm9vYmFy"
+
+
+--echo #
+--echo # Invalid characters - return NULL
+--echo #
+SELECT hex(FROM_BASE64('#'));
+SELECT hex(FROM_BASE64('A#'));
+SELECT hex(FROM_BASE64('AB#'));
+SELECT hex(FROM_BASE64('ABC#'));
+SELECT hex(FROM_BASE64('ABCD#'));
+
+--echo #
+--echo # "=" is not valid on the first and second positions of a quadruple
+--echo #
+SELECT hex(FROM_BASE64('='));
+SELECT hex(FROM_BASE64('A='));
+SELECT hex(FROM_BASE64('ABCD='));
+SELECT hex(FROM_BASE64('ABCDE='));
+
+--echo #
+--echo # Incomplete sequences - return NULL
+--echo #
+SELECT hex(FROM_BASE64('A'));
+SELECT hex(FROM_BASE64('AB'));
+SELECT hex(FROM_BASE64('ABC'));
+
+--echo #
+--echo # Unexpected input after pad characters - return NULL
+--echo #
+SELECT hex(FROM_BASE64('AAA=x'));
+SELECT hex(FROM_BASE64('AA==x'));
+
+
+--echo #
+--echo # Delimiters are allowed at any position
+--echo #
+SELECT hex(FROM_BASE64('  A B C D  '));
+SELECT hex(FROM_BASE64('  A A = = '));
+SELECT hex(FROM_BASE64('  A A A = '));
+SELECT hex(FROM_BASE64('  A  \n  B  \r  C  \t D  '));
+
+--echo #
+--echo # Testing that to_base64 respects max_allowed_packet
+--echo #
+SELECT LENGTH(TO_BASE64(REPEAT('a', @@max_allowed_packet-10)));
+
+--echo #
+--echo # Testing base64 with various data types
+--echo #
+CREATE TABLE t1 (
+  i1 INT, 
+  f1 FLOAT,
+  dc1 DECIMAL(10,5),
+  e1 ENUM('enum11','enum12','enum13'),
+  s1 SET('set1','set2','set3'),
+  t1 TIME,
+  d1 DATE,
+  dt1 DATETIME
+);
+INSERT INTO t1 VALUES
+(-12345, -456.789, 123.45, 'enum13', 'set1,set3',
+'01:02:03', '2010-01-01', '2011-01-01 02:03:04');
+SELECT FROM_BASE64(TO_BASE64(i1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(f1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(dc1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(e1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(s1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(t1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(d1)) FROM t1;
+SELECT FROM_BASE64(TO_BASE64(dt1)) FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#11765562 58545:
+--echo # EXPORT_SET() CAN BE USED TO MAKE ENTIRE SERVER COMPLETELY UNRESPONSIVE
+--echo #
+
+SELECT @tmp_max:= @@global.max_allowed_packet;
+SET @@global.max_allowed_packet=1024*1024*1024;
+# switching connection to allow the new max_allowed_packet take effect
+--connect (newconn, localhost, root,,)
+
+SELECT @@global.max_allowed_packet;
+SELECT CHAR_LENGTH(EXPORT_SET(1,1,1,REPEAT(1,100000000))); 
+
+--connection default
+SET @@global.max_allowed_packet:= @tmp_max;
+--disconnect newconn
+
+
+#
+# BUG #12735829: SPACE() FUNCTION WARNING REFERS TO REPEAT() IN ER_WARN_ALLOWED_PACKET_OVERFLOWED 
+#
+
+SELECT SPACE(@@global.max_allowed_packet*2);
+
+
+#
+# BUG #11746123-23637: CHARSET AND COLLATION OF THE FUNCTION SPACE()  
+#
+
+SET NAMES latin1;
+PREPARE stmt FROM "SELECT COLLATION(space(2))";
+EXECUTE stmt;
+SET NAMES latin2;
+EXECUTE stmt;
+
+--echo #
+--echo # Bug#11829861: SUBSTRING_INDEX() RESULTS IN MISSING CHARACTERS WHEN USED
+--echo # INSIDE LOWER()
+--echo #
+
+SET @user_at_host = 'root@mytinyhost-PC.local';
+SELECT LOWER(SUBSTRING_INDEX(@user_at_host, '@', -1));
+
+--echo # End of test  BUG#11829861
+
+--echo #
+--echo # Bug#42404: SUBSTRING_INDEX() RESULTS ARE INCONSISTENT
+--echo #
+
+CREATE TABLE t (i INT NOT NULL, c CHAR(255) NOT NULL);
+INSERT INTO t VALUES (0,'.www.mysql.com'),(1,'.wwwmysqlcom');
+SELECT i, SUBSTRING_INDEX(c, '.', -2) FROM t WHERE i = 1;
+SELECT i, SUBSTRING_INDEX(c, '.', -2) FROM t;
+
+DROP TABLE t;
+
+--echo # End of test  BUG#42404
+
+--echo #
+--echo # Bug#13812875 ILLEGAL MIX OF COLLATIONS WITH FUNCTIONS THAT USED TO WORK
+--echo #
+SET NAMES utf8;
+CREATE TABLE t1 (a varchar(1));
+SELECT * FROM t1 WHERE a=md5('a');
+SELECT * FROM t1 WHERE a=hex('a');
+SELECT * FROM t1 WHERE a=to_base64('a');
+DROP TABLE t1;
+SET NAMES latin1;
+
+--echo #
+--echo # End of 5.6 tests
+--echo #

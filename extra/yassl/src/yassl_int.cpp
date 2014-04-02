@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,25 +10,25 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; see the file COPYING. If not, write to the
-   Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
-   MA  02110-1301  USA.
-*/
-
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 /* yaSSL internal source implements SSL supporting types not specified in the
  * draft along with type conversion functions.
  */
 
+// First include (the generated) my_config.h, to get correct platform defines.
+#include "my_config.h"
+#ifdef __WIN__
+#include<Windows.h>
+#else
+#include <pthread.h>
+#endif
+
 #include "runtime.hpp"
 #include "yassl_int.hpp"
 #include "handshake.hpp"
 #include "timer.hpp"
-
-#ifdef _POSIX_THREADS
-    #include "pthread.h"
-#endif
-
 
 #ifdef HAVE_LIBZ
     #include "zlib.h"
@@ -72,6 +71,8 @@
 
 #endif // YASSL_PURE_C
 
+/* for the definition of get_tty_password() */
+#include <mysql/get_password.h>
 
 namespace yaSSL {
 
@@ -308,9 +309,8 @@ SSL::SSL(SSL_CTX* ctx)
             SetError(YasslError(err));
             return;
         }
-        else if (serverSide && ctx->GetCiphers().setSuites_ == 0) {
+        else if (serverSide && !(ctx->GetCiphers().setSuites_)) {
             // remove RSA or DSA suites depending on cert key type
-            // but don't override user sets
             ProtocolVersion pv = secure_.get_connection().version_;
             
             bool removeDH  = secure_.use_parms().removeDH_;
@@ -722,6 +722,58 @@ void SSL::set_pending(Cipher suite)
     }
 }
 
+#ifdef __WIN__
+typedef volatile LONG yassl_pthread_once_t;
+#define YASSL_PTHREAD_ONCE_INIT  0
+#define YASSL_PTHREAD_ONCE_INPROGRESS 1
+#define YASSL_PTHREAD_ONCE_DONE 2
+
+int yassl_pthread_once(yassl_pthread_once_t *once_control,
+    void (*init_routine)(void))
+{
+  LONG state;
+
+  /*
+    Do "dirty" read to find out if initialization is already done, to
+    save an interlocked operation in common case. Memory barriers are ensured by 
+    Visual C++ volatile implementation.
+  */
+  if (*once_control == YASSL_PTHREAD_ONCE_DONE)
+    return 0;
+
+  state= InterlockedCompareExchange(once_control, YASSL_PTHREAD_ONCE_INPROGRESS,
+                                        YASSL_PTHREAD_ONCE_INIT);
+
+  switch(state)
+  {
+  case YASSL_PTHREAD_ONCE_INIT:
+    /* This is initializer thread */
+    (*init_routine)();
+    *once_control= YASSL_PTHREAD_ONCE_DONE;
+    break;
+
+  case YASSL_PTHREAD_ONCE_INPROGRESS:
+    /* init_routine in progress. Wait for its completion */
+    while(*once_control == YASSL_PTHREAD_ONCE_INPROGRESS)
+    {
+      Sleep(1);
+    }
+    break;
+  case YASSL_PTHREAD_ONCE_DONE:
+    /* Nothing to do */
+    break;
+  }
+  return 0;
+}
+#else
+#define yassl_pthread_once_t pthread_once_t
+#if defined(PTHREAD_ONCE_INITIALIZER)
+#define YASSL_PTHREAD_ONCE_INIT PTHREAD_ONCE_INITIALIZER
+#else
+#define YASSL_PTHREAD_ONCE_INIT PTHREAD_ONCE_INIT
+#endif
+#define yassl_pthread_once(C,F) pthread_once(C,F)
+#endif // __WIN__
 
 // store peer's random
 void SSL::set_random(const opaque* random, ConnectionEnd sender)
@@ -1459,12 +1511,12 @@ void SSL_SESSION::CopyX509(X509* x)
 
     X509_NAME* issuer   = x->GetIssuer();
     X509_NAME* subject  = x->GetSubject();
-    ASN1_STRING* before = x->GetBefore();
-    ASN1_STRING* after  = x->GetAfter();
+    ASN1_TIME* before = x->GetBefore();
+    ASN1_TIME* after  = x->GetAfter();
 
     peerX509_ = NEW_YS X509(issuer->GetName(), issuer->GetLength(),
-        subject->GetName(), subject->GetLength(), (const char*) before->data,
-        before->length, (const char*) after->data, after->length);
+        subject->GetName(), subject->GetLength(),
+        before, after);
 }
 
 
@@ -1569,11 +1621,22 @@ SSL_SESSION::~SSL_SESSION()
 
 
 static Sessions* sessionsInstance = 0;
+static yassl_pthread_once_t session_created= YASSL_PTHREAD_ONCE_INIT;
+
+void Session_initialize()
+{
+    sessionsInstance = NEW_YS Sessions;
+}
+
+extern "C"
+{
+  static void c_session_initialize() { Session_initialize(); }
+}
+
 
 Sessions& GetSessions()
 {
-    if (!sessionsInstance)
-        sessionsInstance = NEW_YS Sessions;
+    yassl_pthread_once(&session_created, c_session_initialize);
     return *sessionsInstance;
 }
 
@@ -1822,8 +1885,48 @@ bool SSL_METHOD::multipleProtocol() const
 }
 
 
+/** Implement a my_strdup replacement, so we can reuse get_password() */
+extern "C" char *yassl_mysql_strdup(const char *from, int)
+{
+  return from ? strdup(from) : NULL;
+}
+
+
+extern "C"
+{
+static int
+default_password_callback(char * buffer, int size_arg, int rwflag,
+                          void * /* unused: callback_data */)
+{
+  char *passwd;
+  size_t passwd_len, size= (size_t) size_arg;
+
+  passwd= ::yassl_mysql_get_tty_password_ext("Enter PEM pass phrase:", 
+                                             yassl_mysql_strdup);
+
+  if (!passwd)
+    return 0;
+
+  passwd_len= strlen(passwd);
+
+  if (!passwd_len)
+    return 0;
+
+  if (size > 0)
+  {
+    size_t result_len= size - 1 > passwd_len ? 
+      passwd_len : size - 1;
+    memcpy(buffer, passwd, result_len);
+    buffer[result_len]= 0;
+  }
+  free(passwd);
+  return passwd_len;
+}
+}
+
 SSL_CTX::SSL_CTX(SSL_METHOD* meth) 
-    : method_(meth), certificate_(0), privateKey_(0), passwordCb_(0),
+    : method_(meth), certificate_(0), privateKey_(0), 
+      passwordCb_(default_password_callback),
       userData_(0), sessionCacheOff_(false), sessionCacheFlushOff_(false),
       verifyCallback_(0)
 {}
@@ -2412,9 +2515,10 @@ size_t X509_NAME::GetLength() const
 
 
 X509::X509(const char* i, size_t iSz, const char* s, size_t sSz,
-           const char* b, int bSz, const char* a, int aSz)
+           ASN1_STRING *b, ASN1_STRING *a)
     : issuer_(i, iSz), subject_(s, sSz),
-      beforeDate_(b, bSz), afterDate_(a, aSz)
+      beforeDate_((char *) b->data, b->length, b->type),
+      afterDate_((char *) a->data, a->length, a->type)
 {}
 
 
@@ -2430,13 +2534,13 @@ X509_NAME* X509::GetSubject()
 }
 
 
-ASN1_STRING* X509::GetBefore()
+ASN1_TIME* X509::GetBefore()
 {
     return beforeDate_.GetString();
 }
 
 
-ASN1_STRING* X509::GetAfter()
+ASN1_TIME* X509::GetAfter()
 {
     return afterDate_.GetString();
 }
@@ -2464,12 +2568,12 @@ ASN1_STRING* X509_NAME::GetEntry(int i)
 }
 
 
-StringHolder::StringHolder(const char* str, int sz)
+StringHolder::StringHolder(const char* str, int sz, byte type)
 {
     asnString_.length = sz;
     asnString_.data = NEW_YS byte[sz + 1];
     memcpy(asnString_.data, str, sz);
-    asnString_.type = 0;  // not used for now
+    asnString_.type = type;
 }
 
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,27 +12,69 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
 
 /* class for the the myisam merge handler */
 
 #include <myisammrg.h>
+
+/** 
+  Represents one name of a MERGE child.
+
+  @todo: Add MYRG_SHARE and store chlidren names in the
+  share.
+*/
+
+class Mrg_child_def: public Sql_alloc
+{
+  /* Remembered MERGE child def version.  See top comment in ha_myisammrg.cc */
+  enum_table_ref_type m_child_table_ref_type;
+  ulonglong m_child_def_version;
+public:
+  LEX_STRING db;
+  LEX_STRING name;
+
+  /* Access MERGE child def version.  See top comment in ha_myisammrg.cc */
+  inline enum_table_ref_type get_child_table_ref_type()
+  {
+    return m_child_table_ref_type;
+  }
+  inline ulonglong get_child_def_version()
+  {
+    return m_child_def_version;
+  }
+  inline void set_child_def_version(enum_table_ref_type child_table_ref_type,
+                                    ulonglong version)
+  {
+    m_child_table_ref_type= child_table_ref_type;
+    m_child_def_version= version;
+  }
+
+  Mrg_child_def(char *db_arg, size_t db_len_arg,
+                char *table_name_arg, size_t table_name_len_arg)
+  {
+    db.str= db_arg;
+    db.length= db_len_arg;
+    name.str= table_name_arg;
+    name.length= table_name_len_arg;
+    m_child_def_version= ~0ULL;
+    m_child_table_ref_type= TABLE_REF_NULL;
+  }
+};
+
 
 class ha_myisammrg: public handler
 {
   MYRG_INFO *file;
   my_bool is_cloned;                    /* This instance has been cloned */
 
- public:
-  TABLE_LIST    *next_child_attach;     /* next child to attach */
+public:
+  MEM_ROOT      children_mem_root;      /* mem root for children list */
+  List<Mrg_child_def> child_def_list;
+  TABLE_LIST    *children_l;            /* children list */
+  TABLE_LIST    **children_last_l;      /* children list end */
   uint          test_if_locked;         /* flags from ::open() */
-  bool          need_compat_check;      /* if need compatibility check */
 
   ha_myisammrg(handlerton *hton, TABLE_SHARE *table_arg);
   ~ha_myisammrg();
@@ -62,6 +104,7 @@ class ha_myisammrg: public handler
   { return ulonglong2double(stats.data_file_length) / IO_SIZE + file->tables; }
 
   int open(const char *name, int mode, uint test_if_locked);
+  int add_children_list(void);
   int attach_children(void);
   int detach_children(void);
   virtual handler *clone(const char *name, MEM_ROOT *mem_root);
@@ -85,6 +128,7 @@ class ha_myisammrg: public handler
   int rnd_pos(uchar * buf, uchar *pos);
   void position(const uchar *record);
   ha_rows records_in_range(uint inx, key_range *min_key, key_range *max_key);
+  int truncate();
   int info(uint);
   int reset(void);
   int extra(enum ha_extra_function operation);

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: \fBndb_config\fR
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 03/14/2014
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 5.1
+.\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDB_CONFIG\FR" "1" "11/04/2013" "MySQL 5\&.1" "MySQL Database System"
+.TH "\FBNDB_CONFIG\FR" "1" "03/14/2014" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -43,10 +43,9 @@ file\&. By default, the management node is the source for the configuration data
 \fB\-\-config\-file\fR
 or
 \fB\-\-mycnf\fR
-option\&. Beginning with MySQL Cluster NDB 7\&.0\&.27 and MySQL Cluster NDB 7\&.1\&.16, it is also possible to use a data node as the source by specifying its node ID using
+option\&. It is also possible to use a data node as the source by specifying its node ID with
 \fB\-\-config_from_node=\fR\fB\fInode_id\fR\fR\&.
 .PP
-Beginning with MySQL Cluster NDB 6\&.3\&.25 and MySQL Cluster NDB 7\&.0\&.6,
 \fBndb_config\fR
 can also provide an offline dump of all configuration parameters which can be used, along with their default, maximum, and minimum values and other information\&. The dump can be produced in either text or XML format; for more information, see the discussion of the
 \fB\-\-configinfo\fR
@@ -54,7 +53,7 @@ and
 \fB\-\-xml\fR
 options later in this section)\&.
 .PP
-Beginning with MySQL Cluster NDB 7\&.0\&.27 and MySQL Cluster NDB 7\&.1\&.16, you can filter the results by section (DB,
+You can filter the results by section (DB,
 SYSTEM, or
 CONNECTIONS) using one of the options
 \fB\-\-nodes\fR,
@@ -70,7 +69,7 @@ Options Common to MySQL Cluster Programs(1)\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.15.\ \&ndb_config Options and Variables: MySQL 5.1, MySQL Cluster NDB 6.3-7.1
+.B Table\ \&17.15.\ \&ndb_config Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -104,7 +103,7 @@ T}:T{
 Print node information (DB section) only\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -114,7 +113,7 @@ Print CONNECTIONS section information only\&. Cannot be used with \-\-nodes
             or \-\-system option\&.
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -125,7 +124,7 @@ T}:T{
 One or more query options (attributes)
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -134,7 +133,7 @@ T}:T{
 Specify host
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -143,7 +142,7 @@ T}:T{
 Specify node type
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -154,7 +153,7 @@ T}:T{
 Get configuration of node with this ID
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -165,7 +164,7 @@ T}:T{
 Field separator
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -176,7 +175,7 @@ T}:T{
 Row separator
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -185,7 +184,7 @@ T}:T{
 Set the path to config\&.ini file
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -194,7 +193,7 @@ T}:T{
 Read configuration data from my\&.cnf file
 T}:T{
 .PP
-All MySQL 5\&.1 based releases
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -203,7 +202,7 @@ T}:T{
 Short form for \-\-ndb\-connectstring
 T}:T{
 .PP
-ADDED: 5\&.1\&.12
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -214,7 +213,7 @@ Dumps information about all NDB configuration parameters in text format
             obtain XML output\&.
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.25, NDB 7\&.0\&.6
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -225,7 +224,7 @@ Use \-\-xml with \-\-configinfo to obtain a dump of all NDB configuration
             values\&.
 T}:T{
 .PP
-ADDED: NDB 6\&.3\&.25, NDB 7\&.0\&.6
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -235,7 +234,7 @@ Print SYSTEM section information only\&. Cannot be used with \-\-nodes or
             \-\-connections option\&.
 T}:T{
 .PP
-ADDED: NDB 7\&.0\&.27, NDB 7\&.1\&.16
+All MySQL 5\&.6 based releases
 T}
 T{
 .PP
@@ -245,7 +244,7 @@ Obtain configuration data from the node having this ID (must be a data
             node)\&.
 T}:T{
 .PP
-ADDED: NDB 7\&.0\&.27, NDB 7\&.1\&.16
+All MySQL 5\&.6 based releases
 T}
 .TE
 .sp 1
@@ -305,15 +304,9 @@ to print a list of available options, and then exit\&.
 allbox tab(:);
 l l s s
 l l s s
-l l s s
 ^ l l s
 ^ l l s
 ^ l l s.
-T{
-\fBIntroduced\fR
-T}:T{
-5\&.1\&.56\-ndb\-7\&.1\&.16
-T}
 T{
 \fBCommand\-Line Format\fR
 T}:T{
@@ -346,9 +339,6 @@ Obtain the cluster\*(Aqs configuration data from the data node that has this ID\
 If the node having this ID is not a data node,
 \fBndb_config\fR
 fails with an error\&. (To obtain configuration data from the management node instead, simply omit this option\&.)
-.sp
-\fB\-\-config_from_node\fR
-was added in MySQL Cluster NDB 7\&.0\&.27 and MySQL NDB 7\&.1\&.16\&.
 .RE
 .sp
 .RS 4
@@ -394,7 +384,8 @@ to print a version information string, and then exit\&.
 .\}
 .\" ndb_config: ndb-connectstring option
 .\" ndb-connectstring option: ndb_config
-\fB\-\-ndb\-connectstring=\fR\fB\fIconnect_string\fR\fR
+\fB\-\-ndb\-connectstring=\fR\fB\fIconnect_string\fR\fR,
+\fB\-c \fR\fB\fIconnect_string\fR\fR
 .TS
 allbox tab(:);
 l l s s
@@ -438,12 +429,6 @@ T}
 Specifies the connection string to use in connecting to the management server\&. The format for the connection string is the same as described in
 Section\ \&17.3.2.3, \(lqMySQL Cluster Connection Strings\(rq, and defaults to
 localhost:1186\&.
-.sp
-The use of
-\fB\-c\fR
-as a short version for this option is supported for
-\fBndb_config\fR
-beginning with MySQL 5\&.1\&.12\&.
 .RE
 .sp
 .RS 4
@@ -774,7 +759,7 @@ Tells
 \fBndb_config\fR
 to print information from parameters defined in
 DB
-sections only\&. Prior to MySQL Cluster NDB 7\&.0\&.27 and MySQL Cluster NDB 7\&.1\&.16, this option had no affect\&. This option cannot be used together with
+sections only\&. This option cannot be used together with
 \fB\-\-connections\fR
 or
 \fB\-\-system\fR\&.
@@ -823,7 +808,7 @@ Tells
 \fBndb_config\fR
 to print
 CONNECTIONS
-information only\&. This option existed prior to MySQL Cluster NDB 7\&.0\&.27 and MySQL Cluster NDB 7\&.1\&.16, but had no affect before then\&. This option cannot be used together with
+information only\&. This option cannot be used together with
 \fB\-\-nodes\fR
 or
 \fB\-\-system\fR\&.
@@ -844,14 +829,8 @@ or
 allbox tab(:);
 l l s s
 l l s s
-l l s s
 ^ l l s
 ^ l l s.
-T{
-\fBIntroduced\fR
-T}:T{
-5\&.1\&.56\-ndb\-7\&.1\&.16
-T}
 T{
 \fBCommand\-Line Format\fR
 T}:T{
@@ -880,7 +859,7 @@ to print
 SYSTEM
 information only\&.
 .sp
-This option was introduced in MySQL Cluster NDB 7\&.0\&.27 and MySQL Cluster NDB 7\&.1\&.16\&. It cannot be used together with the
+This option cannot be used together with the
 \fB\-\-nodes\fR
 or
 \fB\-\-system\fR
@@ -925,6 +904,7 @@ T}
 :T{
 \fBDefault\fR
 T}:T{
+[none]
 T}
 :T{
 \fBValid Values\fR
@@ -1102,7 +1082,7 @@ for the linefeed character), then it must be quoted\&.
 .sp
 The
 \fB\-\-configinfo\fR
-option, added in MySQL Cluster NDB 6\&.3\&.25 and MySQL Cluster NDB 7\&.0\&.6, causes
+option causes
 \fBndb_config\fR
 to dump a list of each MySQL Cluster configuration parameter supported by the MySQL Cluster distribution of which
 \fBndb_config\fR
@@ -1214,14 +1194,8 @@ Default: 0 (Min: 0, Max: 4294967039)
 allbox tab(:);
 l l s s
 l l s s
-l l s s
 ^ l l s
 ^ l l s.
-T{
-\fBIntroduced\fR
-T}:T{
-5\&.1\&.34\-ndb\-7\&.0\&.6
-T}
 T{
 \fBCommand\-Line Format\fR
 T}:T{
@@ -1249,16 +1223,14 @@ You can obtain the output of
 \fB\-\-configinfo\fR
 as XML by adding the
 \fB\-\-xml\fR
-option (like the
-\fB\-\-configinfo\fR
-option, available beginning with MySQL Cluster NDB 6\&.3\&.25 and MySQL Cluster NDB 7\&.0\&.6)\&. A portion of the resulting output is shown in this example:
+option\&. A portion of the resulting output is shown in this example:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
 shell> \fBndb_config \-\-configinfo \-\-xml\fR
-<configvariables protocolversion="1" ndbversionstring="5\&.1\&.72\-ndb\-7\&.1\&.30"
+<configvariables protocolversion="1" ndbversionstring="5\&.6\&.16\-ndb\-7\&.3\&.5"
                     ndbversion="458758" ndbversionmajor="7" ndbversionminor="0"
                     ndbversionbuild="6">
   <section name="SYSTEM">
@@ -1304,13 +1276,13 @@ Normally, the XML output produced by
 is formatted using one line per element; we have added extra whitespace in the previous example, as well as the next one, for reasons of legibility\&. This should not make any difference to applications using this output, since most XML processors either ignore nonessential whitespace as a matter of course, or can be instructed to do so\&.
 .sp .5v
 .RE
-Beginning with MySQL Cluster NDB 6\&.3\&.29 and MySQL Cluster NDB 7\&.0\&.10, the XML output also indicates when changing a given parameter requires that data nodes be restarted using the
+The XML output also indicates when changing a given parameter requires that data nodes be restarted using the
 \fB\-\-initial\fR
 option\&. This is shown by the presence of an
 initial="true"
 attribute in the corresponding
 <param>
-element\&. In addition (also beginning with MySQL Cluster NDB 6\&.3\&.29 and MySQL Cluster NDB 7\&.0\&.10), the restart type (system
+element\&. In addition, the restart type (system
 or
 node) is also shown; if a given parameter requires a system restart, this is indicated by the presence of a
 restart="system"
@@ -1549,7 +1521,7 @@ option\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright \(co 1997, 2014, Oracle and/or its affiliates. All rights reserved.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

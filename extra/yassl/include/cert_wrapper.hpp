@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
    along with this program; see the file COPYING. If not, write to the
    Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
    MA  02110-1301  USA.
-*/
+ */
 
 
 /*  The certificate wrapper header defines certificate management functions
@@ -78,6 +78,7 @@ class CertManager {
     CertList     peerList_;             // peer
     input_buffer peerPublicKey_;
     X509*        peerX509_;             // peer's openSSL X509
+    X509*        selfX509_;             // our own openSSL X509
 
     SignatureAlgorithm keyType_;        // self   key type
     SignatureAlgorithm peerKeyType_;    // peer's key type
@@ -88,6 +89,7 @@ class CertManager {
     bool verifyNone_;                   // no error if verify fails
     bool failNoCert_;
     bool sendVerify_;
+    bool sendBlankCert_;
     VerifyCallback verifyCallback_;     // user verify callback
 public:
     CertManager();
@@ -104,6 +106,7 @@ public:
     const opaque*      get_peerKey()     const;
     const opaque*      get_privateKey()  const;
           X509*        get_peerX509()    const;
+          X509*        get_selfX509()    const;
     SignatureAlgorithm get_keyType()     const;
     SignatureAlgorithm get_peerKeyType() const;
 
@@ -114,16 +117,18 @@ public:
     bool verifyNone() const;
     bool failNoCert() const;
     bool sendVerify() const;
+    bool sendBlankCert() const;
 
     void setVerifyPeer();
     void setVerifyNone();
     void setFailNoCert();
     void setSendVerify();
+    void setSendBlankCert();
     void setPeerX509(X509*);
     void setVerifyCallback(VerifyCallback);
 private:
     CertManager(const CertManager&);            // hide copy
-    CertManager& operator=(const CertManager&); // and assign
+    CertManager& operator=(const CertManager&); // and assigin
 };
 
 

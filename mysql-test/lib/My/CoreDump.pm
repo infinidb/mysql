@@ -1,6 +1,5 @@
 # -*- cperl -*-
-# Copyright (c) 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +21,7 @@ use Carp;
 use My::Platform;
 
 use File::Temp qw/ tempfile tempdir /;
+use mtr_results;
 
 my $hint_mysqld;		# Last resort guess for executable path
 
@@ -81,7 +81,7 @@ sub _gdb {
   return if $? >> 8;
   return unless $gdb_output;
 
-  print <<EOF, $gdb_output, "\n";
+  resfile_print <<EOF . $gdb_output . "\n";
 Output from gdb follows. The first stack trace is from the failing thread.
 The following stack traces are from all threads (so the failing one is
 duplicated).
@@ -125,7 +125,7 @@ sub _dbx {
   return if $? >> 8;
   return unless $dbx_output;
 
-  print <<EOF, $dbx_output, "\n";
+  resfile_print <<EOF .  $dbx_output . "\n";
 Output from dbx follows. Stack trace is printed for all threads in order,
 above this you should see info about which thread was the failing one.
 ----------------------------
@@ -133,10 +133,13 @@ EOF
   return 1;
 }
 
+# The 'cdb debug' prints are added to pinpoint the location of a hang
+# which could not be reproduced manually. Will be removed later.
 
 # Check that Debugging tools for Windows are installed
 sub cdb_check {
    `cdb -? 2>&1`;
+  print localtime() . " cdb debug X\n";
   if ($? >> 8)
   {
     print "Cannot find cdb. Please Install Debugging tools for Windows\n";
@@ -181,14 +184,16 @@ sub _cdb {
   # different machine)
   my $tmp_name= $core_name.".cdb_lmv";
   `cdb -z $core_name -c \"lmv;q\" > $tmp_name 2>&1`;
+  print localtime() . " cdb debug C\n";
   if ($? >> 8)
   {
     unlink($tmp_name);
     # check if cdb is installed and complain if not
+    print localtime() . " cdb debug D\n";
     cdb_check();
     return;
   }
-  
+  print localtime() . " cdb debug E\n";
   open(temp,"< $tmp_name");
   my %dirhash=();
   while(<temp>)
@@ -204,7 +209,7 @@ sub _cdb {
   }
   close(temp);
   unlink($tmp_name);
-  
+  print localtime() . " cdb debug F\n";
   my $image_path= join(";", (keys %dirhash),".");
 
   # For better callstacks, setup _NT_SYMBOL_PATH to include
@@ -235,6 +240,7 @@ sub _cdb {
   my $cdb_output=
     `cdb -c "$cdb_cmd" -z $core_name -i "$image_path" -y "$symbol_path" -t 0 -lines 2>&1`;
   return if $? >> 8;
+  print localtime() . " cdb debug G\n";
   return unless $cdb_output;
   
   # Remove comments (lines starting with *), stack pointer and frame 
@@ -245,7 +251,7 @@ sub _cdb {
   $cdb_output=~ s/^Child\-SP          RetAddr           Call Site//gm;
   $cdb_output=~ s/\+0x([0-9a-fA-F]+)//gm;
   
-  print <<EOF, $cdb_output, "\n";
+  resfile_print <<EOF . $cdb_output . "\n";
 Output from cdb follows. Faulting thread is printed twice,with and without function parameters
 Search for STACK_TEXT to see the stack trace of 
 the faulting thread. Callstacks of other threads are printed after it.
@@ -255,13 +261,17 @@ EOF
 
 
 sub show {
-  my ($class, $core_name, $exe_mysqld)= @_;
+  my ($class, $core_name, $exe_mysqld, $parallel)= @_;
   $hint_mysqld= $exe_mysqld;
 
   # On Windows, rely on cdb to be there...
   if (IS_WINDOWS)
   {
-    _cdb($core_name);
+    # Starting cdb is unsafe when used with --parallel > 1 option 
+    if ( $parallel < 2 )
+    {
+      _cdb($core_name);
+    }
     return;
   }
   

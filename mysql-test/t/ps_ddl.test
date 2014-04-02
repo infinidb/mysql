@@ -278,8 +278,6 @@ deallocate prepare stmt;
 
 --echo # Test 7-a: dependent PROCEDURE has changed
 --echo #
---echo # Note, this scenario is not supported, subject of Bug#12093
---echo #
 
 create table t1 (a int);
 create trigger t1_ai after insert on t1 for each row
@@ -291,11 +289,10 @@ execute stmt using @var;
 drop procedure p1;
 create procedure p1 (a int) begin end;
 set @var= 2;
---error ER_SP_DOES_NOT_EXIST
 execute stmt using @var;
 --echo # Cleanup
 drop procedure p1;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 
 --echo # Test 7-b: dependent FUNCTION has changed
 --echo #
@@ -318,9 +315,6 @@ deallocate prepare stmt;
 
 --echo # Test 7-c: dependent VIEW has changed
 --echo #
---echo # Note, this scenario is not functioning correctly, see
---echo # Bug#33255 Trigger using views and view ddl : corrupted triggers
---echo # and Bug #33000 Triggers do not detect changes in meta-data.
 --echo #
 drop trigger t1_ai;
 create table t2 (a int unique);
@@ -336,9 +330,6 @@ select * from t2;
 select * from t3;
 drop view v1;
 create view v1 as select a from t3;
---error ER_NO_SUCH_TABLE
-insert into t1 (a) values (6);
-flush table t1;
 insert into t1 (a) values (6);
 select * from t2;
 select * from t3;
@@ -352,25 +343,6 @@ select * from t2;
 drop view v1;
 create view v1 as select a from t2;
 set @var=8;
---echo # XXX: bug, the SQL statement in the trigger is still
---echo # pointing at table 't3', since the view was expanded
---echo # at first statement execution.
---echo # Repreparation of the main statement doesn't cause repreparation
---echo # of trigger statements.
---error ER_NO_SUCH_TABLE
-execute stmt using @var;
-call p_verify_reprepare_count(1);
---echo #
---echo # Sic: the insert went into t3, even though the view now
---echo # points at t2. This is because neither the merged view
---echo #  nor its prelocking list are affected by view DDL
---echo # The binary log is of course wrong, since it is not
---echo # using prepared statements
---echo #
-select * from t2;
-select * from t3;
-flush table t1;
-set @var=9;
 execute stmt using @var;
 call p_verify_reprepare_count(1);
 select * from t2;
@@ -642,6 +614,9 @@ deallocate prepare stmt;
 --echo Part 16: VIEW -> TEMPORARY TABLE transitions
 --echo =====================================================================
 
+--echo #
+--echo # Test 1: Merged view
+--echo #
 create table t2 (a int);
 insert into t2 (a) values (1);
 create view t1 as select * from t2;
@@ -651,13 +626,65 @@ execute stmt;
 call p_verify_reprepare_count(0);
 
 create temporary table t1 (a int);
+# t1 still refers to the view - no reprepare has been done.
 execute stmt;
-call p_verify_reprepare_count(1);
+call p_verify_reprepare_count(0);
+
 drop view t1;
+# t1 still refers to the, now deleted, view - no reprepare has been done.
+--error ER_NO_SUCH_TABLE
 execute stmt;
 call p_verify_reprepare_count(0);
 
 drop table t2;
+drop temporary table t1;
+deallocate prepare stmt;
+
+--echo #
+--echo # Test 2: Materialized view
+--echo #
+create table t2 (a int);
+insert into t2 (a) values (1);
+create algorithm = temptable view t1 as select * from t2;
+
+prepare stmt from "select * from t1";
+execute stmt;
+call p_verify_reprepare_count(0);
+
+create temporary table t1 (a int);
+# t1 still refers to the view - no reprepare has been done.
+execute stmt;
+call p_verify_reprepare_count(0);
+
+drop view t1;
+# t1 still refers to the, now deleted, view - no reprepare has been done.
+--error ER_NO_SUCH_TABLE
+execute stmt;
+call p_verify_reprepare_count(0);
+
+drop table t2;
+drop temporary table t1;
+deallocate prepare stmt;
+
+--echo #
+--echo # Test 3: View referencing an Information schema table
+--echo #
+create view t1 as select table_name from information_schema.views;
+
+prepare stmt from "select * from t1";
+execute stmt;
+call p_verify_reprepare_count(0);
+
+create temporary table t1 (a int);
+# t1 has been substituted with a reference to the IS table
+execute stmt;
+call p_verify_reprepare_count(0);
+
+drop view t1;
+# Since the IS table has been substituted in, the statement still works
+execute stmt;
+call p_verify_reprepare_count(0);
+
 drop temporary table t1;
 deallocate prepare stmt;
 
@@ -678,19 +705,134 @@ drop view t1;
 create view t1 as select a, 2*a as b, 5*a as c from t2;
 select * from t1;
 
---echo # Currently a different result from conventional statements.
---echo # A view is inlined once at prepare, later on view DDL
---echo # does not affect prepared statement and it is not re-prepared.
---echo # This is reported in Bug#36002 Prepared statements: if a view
---echo # used in a statement is replaced, bad data
-execute stmt;
-call p_verify_reprepare_count(0);
-flush table t2;
+--echo # This is actually a test case for Bug#11748352 (36002 Prepared
+--echo # statements: if a view used in a statement is replaced, bad data).
 execute stmt;
 call p_verify_reprepare_count(1);
 
+flush table t2;
+
+execute stmt;
+call p_verify_reprepare_count(1);
+
+--echo # Check that we properly handle ALTER VIEW statements.
+execute stmt;
+call p_verify_reprepare_count(0);
+alter view t1 as select a, 3*a as b, 4*a as c from t2;
+execute stmt;
+call p_verify_reprepare_count(1);
+execute stmt;
+call p_verify_reprepare_count(0);
+execute stmt;
+call p_verify_reprepare_count(0);
+select * from t1;
+
+--echo # Check that DROP & CREATE is properly handled under LOCK TABLES.
+drop view t1;
+flush tables; # empty TDC
+create view t1 as select a, 5*a as b, 6*a as c from t2;
+lock tables t1 read, t2 read;
+execute stmt;
+call p_verify_reprepare_count(1);
+execute stmt;
+call p_verify_reprepare_count(0);
+execute stmt;
+call p_verify_reprepare_count(0);
+unlock tables;
+--echo #   ... and once again...
+drop view t1;
+create view t1 as select a, 6*a as b, 7*a as c from t2;
+lock tables t1 read, t2 read;
+execute stmt;
+call p_verify_reprepare_count(1);
+execute stmt;
+call p_verify_reprepare_count(0);
+execute stmt;
+call p_verify_reprepare_count(0);
+unlock tables;
+
+--echo # Check that ALTER VIEW is properly handled under LOCK TABLES.
+alter view t1 as select a, 7*a as b, 8*a as c from t2;
+lock tables t1 read, t2 read;
+execute stmt;
+call p_verify_reprepare_count(1);
+execute stmt;
+call p_verify_reprepare_count(0);
+execute stmt;
+call p_verify_reprepare_count(0);
+unlock tables;
+
 drop table t2;
 drop view t1;
+deallocate prepare stmt;
+
+--echo # Check that DROP & CREATE is properly handled under LOCK TABLES when
+--echo # LOCK TABLES does not contain the complete set of views.
+
+create table t1(a int);
+insert into t1 values (1), (2), (3);
+
+create view v1 as select a from t1;
+
+lock tables t1 read, v1 read;
+
+prepare stmt from 'select * from v1';
+
+execute stmt;
+call p_verify_reprepare_count(0);
+
+execute stmt;
+call p_verify_reprepare_count(0);
+
+unlock tables;
+
+drop view v1;
+create view v1 as select 2*a from t1;
+
+# Miss v1.
+lock tables t1 read;
+
+--error ER_TABLE_NOT_LOCKED
+execute stmt;
+
+unlock tables;
+
+drop table t1;
+drop view v1;
+deallocate prepare stmt;
+
+--echo # Check that ALTER VIEW is properly handled under LOCK TABLES when
+--echo # LOCK TABLES does not contain the complete set of views.
+
+create table t1(a int);
+insert into t1 values (1), (2), (3);
+
+create view v1 as select a from t1;
+
+lock tables t1 read, v1 read;
+
+prepare stmt from 'select * from v1';
+
+execute stmt;
+call p_verify_reprepare_count(0);
+
+execute stmt;
+call p_verify_reprepare_count(0);
+
+unlock tables;
+
+alter view v1 as select 2*a from t1;
+
+# Miss v1.
+lock tables t1 read;
+
+--error ER_TABLE_NOT_LOCKED
+execute stmt;
+
+unlock tables;
+
+drop table t1;
+drop view v1;
 deallocate prepare stmt;
 
 --echo =====================================================================
@@ -761,10 +903,10 @@ drop view v2;
 create view v2 as select a from t2;
 execute stmt;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 flush table t1;
 execute stmt;
-call p_verify_reprepare_count(1);
+call p_verify_reprepare_count(0);
 execute stmt;
 --echo # Test 18-d: dependent TABLE has changed
 drop view v2;
@@ -1407,9 +1549,8 @@ deallocate prepare stmt_sp;
 --echo # SQLCOM_SELECT
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "select 1 as res from dual where (1) in (select * from t1)";
 drop table t1;
@@ -1447,7 +1588,7 @@ drop table t2;
 create temporary table t2 (a int);
 # Temporary table and base table are not in the same name space.
 execute stmt;
-call p_verify_reprepare_count(1);
+call p_verify_reprepare_count(0);
 --error ER_TABLE_EXISTS_ERROR
 execute stmt;
 call p_verify_reprepare_count(1);
@@ -1457,7 +1598,7 @@ execute stmt;
 call p_verify_reprepare_count(0);
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(1);
+call p_verify_reprepare_count(0);
 drop table t2;
 # View with name of table to be created exists
 # Attention:
@@ -1494,27 +1635,24 @@ execute stmt;
 call p_verify_reprepare_count(0);
 drop table t1;
 deallocate prepare stmt;
---echo # XXX: no validation of the first table in case of
---echo # CREATE TEMPORARY TABLE. This is a shortcoming of the current code,
---echo # but since validation is not strictly necessary, nothing is done
---echo # about it.
---echo # Will be fixed as part of work on Bug#21431 "Incomplete support of
---echo # temporary tables"
 create table t1 (a int);
 insert into t1 (a) values (1);
 prepare stmt from "create temporary table if not exists t2 as select * from t1";
 execute stmt;
 drop table t2;
 execute stmt;
+call p_verify_reprepare_count(0);
 execute stmt;
+call p_verify_reprepare_count(1);
 select * from t2;
 execute stmt;
+call p_verify_reprepare_count(0);
 select * from t2;
 drop table t2;
 create temporary table t2 (a varchar(10));
 execute stmt;
 select * from t2;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 drop table t1;
 create table t1 (x int);
 execute stmt;
@@ -1567,9 +1705,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_UPDATE
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "update t2 set a=a+1 where (1) in (select * from t1)";
@@ -1584,9 +1721,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_INSERT
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "insert into t2 set a=((1) in (select * from t1))";
@@ -1602,9 +1738,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_INSERT_SELECT
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "insert into t2 select * from t1";
@@ -1619,9 +1754,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_REPLACE
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "replace t2 set a=((1) in (select * from t1))";
@@ -1636,9 +1770,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_REPLACE_SELECT
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "replace t2 select * from t1";
@@ -1653,9 +1786,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_DELETE
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "delete from t2 where (1) in (select * from t1)";
@@ -1670,9 +1802,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_DELETE_MULTI
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2, t3;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 create table t3 (a int);
@@ -1688,9 +1819,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_UPDATE_MULTI
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1, t2, t3;
---enable_warnings
 create table t1 (a int);
 create table t2 (a int);
 create table t3 (a int);
@@ -1707,9 +1837,8 @@ call p_verify_reprepare_count(8);
 --echo # SQLCOM_LOAD
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a varchar(20));
 --error ER_UNSUPPORTED_PS
 prepare stmt from "load data infile '../std_data_ln/words.dat' into table t1";
@@ -1719,9 +1848,8 @@ drop table t1;
 --echo # SQLCOM_SHOW_DATABASES
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show databases where (1) in (select * from t1)";
 execute stmt;
@@ -1735,9 +1863,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_TABLES
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show tables where (1) in (select * from t1)";
 execute stmt;
@@ -1751,9 +1878,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_FIELDS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show fields from t1 where (1) in (select * from t1)";
 execute stmt;
@@ -1767,9 +1893,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_KEYS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show keys from t1 where (1) in (select * from t1)";
 execute stmt;
@@ -1783,9 +1908,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_VARIABLES
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show variables where (1) in (select * from t1)";
 execute stmt;
@@ -1799,9 +1923,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_STATUS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show status where (1) in (select * from t1)";
 execute stmt;
@@ -1819,9 +1942,8 @@ deallocate prepare stmt;
 --echo # Currently can not have a where clause, need to be covered
 --echo # with tests
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 --error ER_PARSE_ERROR
 prepare stmt from "show engine all status where (1) in (select * from t1)";
@@ -1837,9 +1959,8 @@ drop table t1;
 --echo # SQLCOM_SHOW_CHARSETS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show charset where (1) in (select * from t1)";
 execute stmt;
@@ -1853,9 +1974,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_COLLATIONS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show collation where (1) in (select * from t1)";
 execute stmt;
@@ -1869,9 +1989,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_TABLE_STATUS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show table status where (1) in (select * from t1)";
 execute stmt;
@@ -1885,9 +2004,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_TRIGGERS
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show triggers where (1) in (select * from t1)";
 execute stmt;
@@ -1901,9 +2019,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_OPEN_TABLES
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show open tables where (1) in (select * from t1)";
 execute stmt;
@@ -1917,9 +2034,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_STATUS_PROC
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show procedure status where (1) in (select * from t1)";
 execute stmt;
@@ -1933,9 +2049,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SHOW_STATUS_FUNC
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "show function status where (1) in (select * from t1)";
 execute stmt;
@@ -1956,9 +2071,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_SET_OPTION
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "set @a=((1) in (select * from t1))";
 execute stmt;
@@ -1972,9 +2086,8 @@ deallocate prepare stmt;
 --echo # SQLCOM_DO
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop table if exists t1;
---enable_warnings
 create table t1 (a int);
 prepare stmt from "do ((1) in (select * from t1))";
 execute stmt;
@@ -2029,9 +2142,8 @@ call p_verify_reprepare_count(17);
 --echo # SQLCOM_ALTER_VIEW
 --echo #
 
---disable_warnings
+--disable_warnings ONCE
 drop view if exists v1;
---enable_warnings
 create view v1 as select 1;
 --error ER_UNSUPPORTED_PS
 prepare stmt from "alter view v1 as select 2";
@@ -2047,3 +2159,46 @@ drop procedure if exists p1;
 drop function if exists f1;
 drop view if exists v1, v2;
 --enable_warnings
+
+
+--echo #
+--echo # Additional coverage for refactoring which was made as part of work
+--echo # on bug '27480: Extend CREATE TEMPORARY TABLES privilege to allow
+--echo # temp table operations'. 
+--echo #
+--echo # Check that we don't try to pre-open temporary tables for the elements
+--echo # from prelocking list, as this can lead to unwarranted ER_CANT_REOPEN
+--echo # errors.
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1, tm;
+CREATE TABLE t1 (a INT);
+CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
+  SET @a:= (SELECT COUNT(*) FROM t1);
+--echo # Prelocking list for the below statement should
+--echo # contain t1 twice - once for the INSERT and once
+--echo # SELECT from the trigger.
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (1)';
+EXECUTE stmt1;
+--echo # Create temporary table which will shadow t1.
+CREATE TEMPORARY TABLE t1 (b int);
+--echo # The below execution of statement should not fail with ER_CANT_REOPEN
+--echo # error. Instead stmt1 should be auto-matically reprepared and succeed.
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+DROP TEMPORARY TABLE t1;
+DROP TABLE t1;
+--echo #
+--echo # Also check that we properly reset table list elements from UNION
+--echo # clause of CREATE TABLE and ALTER TABLE statements.
+--echo #
+CREATE TEMPORARY TABLE t1 (i INT);
+PREPARE stmt2 FROM 'CREATE TEMPORARY TABLE tm (i INT) ENGINE=MERGE UNION=(t1)';
+EXECUTE stmt2;
+DROP TEMPORARY TABLE tm;
+EXECUTE stmt2;
+DEALLOCATE PREPARE stmt2;
+PREPARE stmt3 FROM 'ALTER TABLE tm UNION=(t1)';
+EXECUTE stmt3;
+EXECUTE stmt3;
+DEALLOCATE PREPARE stmt3;
+DROP TEMPORARY TABLES tm, t1;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2008 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +11,16 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "my_global.h"                          // HAVE_*
+
 #ifdef HAVE_QUERY_CACHE
 #include <mysql.h>
 #include "emb_qcache.h"
 #include "embedded_priv.h"
+#include "sql_class.h"                          // THD
 
 void Querycache_stream::store_uchar(uchar c)
 {
@@ -188,12 +191,12 @@ uint Querycache_stream::load_int()
     cur_data+= 4;
     return result;
   }
-  char buf[4];
+  char buf[4], *buf_p= buf;
   memcpy(buf, cur_data, rest_len);
   use_next_block(FALSE);
   memcpy(buf+rest_len, cur_data, 4-rest_len);
   cur_data+= 4-rest_len;
-  result= uint4korr(buf);
+  result= uint4korr(buf_p);
   return result;
 }
 
@@ -483,7 +486,8 @@ int emb_load_querycache_result(THD *thd, Querycache_stream *src)
   *prev_row= NULL;
   data->embedded_info->prev_ptr= prev_row;
 return_ok:
-  net_send_eof(thd, thd->server_status, thd->total_warn_count);
+  net_send_eof(thd, thd->server_status,
+               thd->get_stmt_da()->current_statement_warn_count());
   DBUG_RETURN(0);
 err:
   DBUG_RETURN(1);

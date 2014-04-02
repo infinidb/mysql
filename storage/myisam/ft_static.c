@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2008 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,18 +11,18 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
 #include "ftdefs.h"
 
-ulong ft_min_word_len=4;
-ulong ft_max_word_len=HA_FT_MAXCHARLEN;
-ulong ft_query_expansion_limit=5;
-char ft_boolean_syntax[]="+ -><()~*:\"\"&|";
+ulong ft_min_word_len= 4;
+ulong ft_max_word_len= HA_FT_MAXCHARLEN;
+ulong ft_query_expansion_limit= 5;
+const char *ft_boolean_syntax= DEFAULT_FTB_SYNTAX;
 
-const HA_KEYSEG ft_keysegs[FT_SEGS]={
+const HA_KEYSEG ft_keysegs[FT_SEGS]= {
 {
   0,                                            /* charset  */
   HA_FT_WLEN,                                   /* start */
@@ -30,8 +30,8 @@ const HA_KEYSEG ft_keysegs[FT_SEGS]={
   0,                                            /* Bit pos */
   HA_VAR_LENGTH_PART | HA_PACK_KEY,             /* flag */
   HA_FT_MAXBYTELEN,                             /* length */
-  HA_KEYTYPE_VARTEXT2,                          /* type */
   63,                                           /* language (will be overwritten) */
+  HA_KEYTYPE_VARTEXT2,                          /* type */
   0,                                            /* null_bit */
   2, 0, 0                                       /* bit_start, bit_end, bit_length */
 },
@@ -41,22 +41,22 @@ const HA_KEYSEG ft_keysegs[FT_SEGS]={
       be packed in any way, otherwise w_search() won't be able to
       update key entry 'in vivo'
     */
-  0, 0, 0, 0, HA_NO_SORT, HA_FT_WLEN, HA_FT_WTYPE, 63, 0, 0, 0, 0
+  0, 0, 0, 0, HA_NO_SORT, HA_FT_WLEN, 63, HA_FT_WTYPE, 0, 0, 0, 0
 }
 };
 
-const struct _ft_vft _ft_vft_nlq = {
+const struct _ft_vft _ft_vft_nlq= {
   ft_nlq_read_next, ft_nlq_find_relevance, ft_nlq_close_search,
   ft_nlq_get_relevance,  ft_nlq_reinit_search
 };
-const struct _ft_vft _ft_vft_boolean = {
+const struct _ft_vft _ft_vft_boolean= {
   ft_boolean_read_next, ft_boolean_find_relevance, ft_boolean_close_search,
   ft_boolean_get_relevance,  ft_boolean_reinit_search
 };
 
 
 FT_INFO *ft_init_search(uint flags, void *info, uint keynr,
-                        uchar *query, uint query_len, CHARSET_INFO *cs,
+                        uchar *query, uint query_len, const CHARSET_INFO *cs,
                         uchar *record)
 {
   FT_INFO *res;
@@ -68,8 +68,8 @@ FT_INFO *ft_init_search(uint flags, void *info, uint keynr,
   return res;
 }
 
-const char *ft_stopword_file = 0;
-const char *ft_precompiled_stopwords[] = {
+const char *ft_stopword_file= 0;
+const char *ft_precompiled_stopwords[]= {
 
 #ifdef COMPILE_STOPWORDS_IN
 

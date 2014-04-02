@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2001, 2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Sort of string pointers in string-order with radix or qsort */
 
@@ -23,11 +23,11 @@ void my_string_ptr_sort(uchar *base, uint items, size_t size)
 #if INT_MAX > 65536L
   uchar **ptr=0;
 
-  if (size <= 20 && items >= 1000 && items < 100000 &&
+  if (radixsort_is_appliccable(items, size) &&
       (ptr= (uchar**) my_malloc(items*sizeof(char*),MYF(0))))
   {
     radixsort_for_str_ptr((uchar**) base,items,size,ptr);
-    my_free((uchar*) ptr,MYF(0));
+    my_free(ptr);
   }
   else
 #endif

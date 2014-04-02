@@ -13,17 +13,17 @@
 #
 #   OR
 #
+#    let $show_rpl_debug_info= 1; # to force post-failure printout
 #    let $wait_timeout= 60; # Override default 30 seconds with 60.
 #    let $wait_condition=
 #      SELECT c = 3 FROM t;
 #    --source include/wait_condition.inc
 #    --echo Executed the test condition $wait_condition_reps times
 #
+# 
 # EXAMPLE
 #    events_bugs.test, events_time_zone.test
 #
-
---disable_query_log
 
 let $wait_counter= 300;
 if ($wait_timeout)
@@ -53,7 +53,9 @@ while ($wait_counter)
 }
 if (!$success)
 {
-  echo Timeout in wait_condition.inc for $wait_condition;
+  if ($show_rpl_debug_info)
+  {
+    --source include/show_rpl_debug_info.inc
+  }
+  die Timeout in wait_condition.inc for $wait_condition;
 }
-
---enable_query_log

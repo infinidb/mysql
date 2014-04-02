@@ -169,11 +169,16 @@ function ScrubSymbol(symbol)
 function IsCompilerDefinedSymbol(symbol)
 {
     return ((symbol.indexOf("__real@") != -1) ||
+    (symbol.indexOf("_CTA2?") != -1) ||        // std::bad_alloc
+    (symbol.indexOf("_CTA3?") != -1) ||        // std::length_error
+    (symbol.indexOf("_TI2?") != -1) ||         // std::bad_alloc
+    (symbol.indexOf("_TI3?") != -1) ||         // std::length_error
     (symbol.indexOf("_RTC_") != -1) || 
     (symbol.indexOf("??_C@_") != -1) ||
     (symbol.indexOf("??_R") != -1) ||
     (symbol.indexOf("??_7") != -1)  ||
     (symbol.indexOf("?_G") != -1) ||           // scalar deleting destructor
+    (symbol.indexOf("_VInfreq_?") != -1) ||    // special label (exception handler?) for Intel compiler
     (symbol.indexOf("?_E") != -1));            // vector deleting destructor
 }
 

@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include "my_static.h"
@@ -21,14 +19,13 @@
 #include <m_string.h>
 #include <m_ctype.h>
 #include <signal.h>
-#ifdef VMS
-#include <my_static.c>
-#include <m_ctype.h>
-#endif
+#include <mysql/psi/mysql_stage.h>
 #ifdef __WIN__
 #ifdef _MSC_VER
 #include <locale.h>
 #include <crtdbg.h>
+/* WSAStartup needs winsock library*/
+#pragma comment(lib, "ws2_32")
 #endif
 my_bool have_tcpip=0;
 static void my_win_init(void);
@@ -36,14 +33,11 @@ static my_bool win32_init_tcp_ip();
 #else
 #define my_win_init()
 #endif
-#ifdef __NETWARE__
-static void netware_init();
-#else
-#define netware_init()
-#endif
+
+#define SCALE_SEC       100
+#define SCALE_USEC      10000
 
 my_bool my_init_done= 0;
-uint	mysys_usage_id= 0;              /* Incremented for each my_init() */
 ulong   my_thread_stack_size= 65536;
 
 static ulong atoi_octal(const char *str)
@@ -57,68 +51,62 @@ static ulong atoi_octal(const char *str)
   return (ulong) tmp;
 }
 
+MYSQL_FILE *mysql_stdin= NULL;
+static MYSQL_FILE instrumented_stdin;
 
-/*
-  Init my_sys functions and my_sys variabels
 
-  SYNOPSIS
-    my_init()
+/**
+  Initialize my_sys functions, resources and variables
 
-  RETURN
-    0  ok
-    1  Couldn't initialize environment
+  @return Initialization result
+    @retval 0 Success
+    @retval 1 Error. Couldn't initialize environment
 */
-
 my_bool my_init(void)
 {
-  char * str;
+  char *str;
+
   if (my_init_done)
     return 0;
-  my_init_done=1;
-  mysys_usage_id++;
+
+  my_init_done= 1;
+
   my_umask= 0660;                       /* Default umask for new files */
   my_umask_dir= 0700;                   /* Default umask for new directories */
+
+  /* Default creation of new files */
+  if ((str= getenv("UMASK")) != 0)
+    my_umask= (int) (atoi_octal(str) | 0600);
+  /* Default creation of new dir's */
+  if ((str= getenv("UMASK_DIR")) != 0)
+    my_umask_dir= (int) (atoi_octal(str) | 0700);
+
   init_glob_errs();
-#if defined(THREAD)
+
+  instrumented_stdin.m_file= stdin;
+  instrumented_stdin.m_psi= NULL;       /* not yet instrumented */
+  mysql_stdin= & instrumented_stdin;
+
   if (my_thread_global_init())
     return 1;
-#  if defined(SAFE_MUTEX)
+
+#if defined(SAFE_MUTEX)
   safe_mutex_global_init();		/* Must be called early */
-#  endif
 #endif
-#if defined(THREAD) && defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX)
+
+#if defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX)
   fastmutex_global_init();              /* Must be called early */
 #endif
-  netware_init();
-#ifdef THREAD
-#if defined(HAVE_PTHREAD_INIT)
-  pthread_init();			/* Must be called before DBUG_ENTER */
-#endif
-#if !defined( __WIN__) && !defined(__NETWARE__)
-  sigfillset(&my_signals);		/* signals blocked by mf_brkhant */
-#endif
-#endif /* THREAD */
+
+  /* $HOME is needed early to parse configuration files located in ~/ */
+  if ((home_dir= getenv("HOME")) != 0)
+    home_dir= intern_filename(home_dir_buff, home_dir);
+
   {
     DBUG_ENTER("my_init");
     DBUG_PROCESS((char*) (my_progname ? my_progname : "unknown"));
-    if (!home_dir)
-    {					/* Don't initialize twice */
-      my_win_init();
-      if ((home_dir=getenv("HOME")) != 0)
-	home_dir=intern_filename(home_dir_buff,home_dir);
-#ifndef VMS
-      /* Default creation of new files */
-      if ((str=getenv("UMASK")) != 0)
-	my_umask=(int) (atoi_octal(str) | 0600);
-	/* Default creation of new dir's */
-      if ((str=getenv("UMASK_DIR")) != 0)
-	my_umask_dir=(int) (atoi_octal(str) | 0700);
-#endif
-#ifdef VMS
-      init_ctype();			/* Stupid linker don't link _ctype.c */
-#endif
-      DBUG_PRINT("exit",("home: '%s'",home_dir));
-    }
+    my_win_init();
+    DBUG_PRINT("exit", ("home: '%s'", home_dir));
 #ifdef __WIN__
     win32_init_tcp_ip();
 #endif
@@ -162,7 +150,7 @@ void my_end(int infoflag)
       char ebuff[512];
       my_snprintf(ebuff, sizeof(ebuff), EE(EE_OPEN_WARNING),
                   my_file_opened, my_stream_opened);
-      my_message_no_curses(EE_OPEN_WARNING, ebuff, ME_BELL);
+      my_message_stderr(EE_OPEN_WARNING, ebuff, ME_BELL);
       DBUG_PRINT("error", ("%s", ebuff));
       my_print_open_files();
     }
@@ -177,7 +165,7 @@ void my_end(int infoflag)
     struct rusage rus;
 #ifdef HAVE_purify
     /* Purify assumes that rus is uninitialized after getrusage call */
-    bzero((char*) &rus, sizeof(rus));
+    memset(&rus, 0, sizeof(rus));
 #endif
     if (!getrusage(RUSAGE_SELF, &rus))
       fprintf(info_file,"\n\
@@ -196,12 +184,7 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
 	      rus.ru_msgsnd, rus.ru_msgrcv, rus.ru_nsignals,
 	      rus.ru_nvcsw, rus.ru_nivcsw);
 #endif
-#if defined(__NETWARE__) && !defined(__WIN__)
-    fprintf(info_file,"\nRun time: %.1f\n",(double) clock()/CLOCKS_PER_SEC);
-#endif
-#if defined(SAFEMALLOC)
-    TERMINATE(stderr, (infoflag & MY_GIVE_INFO) != 0);
-#elif defined(__WIN__) && defined(_MSC_VER)
+#if defined(__WIN__) && defined(_MSC_VER)
    _CrtSetReportMode( _CRT_WARN, _CRTDBG_MODE_FILE );
    _CrtSetReportFile( _CRT_WARN, _CRTDBG_FILE_STDERR );
    _CrtSetReportMode( _CRT_ERROR, _CRTDBG_MODE_FILE );
@@ -212,16 +195,12 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
    _CrtDumpMemoryLeaks();
 #endif
   }
-  else if (infoflag & MY_CHECK_ERROR)
-  {
-    TERMINATE(stderr, 0);		/* Print memory leaks on screen */
-  }
 
   if (!(infoflag & MY_DONT_FREE_DBUG))
   {
     DBUG_END();                /* Must be done before my_thread_end */
   }
-#ifdef THREAD
+
   my_thread_end();
   my_thread_global_end();
 #if defined(SAFE_MUTEX)
@@ -232,12 +211,12 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
   safe_mutex_end((infoflag & (MY_GIVE_INFO | MY_CHECK_ERROR)) ? stderr :
                  (FILE *) 0);
 #endif /* defined(SAFE_MUTEX) */
-#endif /* THREAD */
 
 #ifdef __WIN__
   if (have_tcpip)
     WSACleanup();
 #endif /* __WIN__ */
+
   my_init_done=0;
 } /* my_end */
 
@@ -290,6 +269,89 @@ int handle_rtc_failure(int err_type, const char *file, int line,
 #pragma runtime_checks("", restore)
 #endif
 
+#define OFFSET_TO_EPOC ((__int64) 134774 * 24 * 60 * 60 * 1000 * 1000 * 10)
+#define MS 10000000
+
+static void win_init_time(void)
+{
+  /* The following is used by time functions */
+  FILETIME ft;
+  LARGE_INTEGER li, t_cnt;
+
+  DBUG_ASSERT(sizeof(LARGE_INTEGER) == sizeof(query_performance_frequency));
+
+  if (QueryPerformanceFrequency((LARGE_INTEGER *)&query_performance_frequency) == 0)
+    query_performance_frequency= 0;
+  else
+  {
+    GetSystemTimeAsFileTime(&ft);
+    li.LowPart=  ft.dwLowDateTime;
+    li.HighPart= ft.dwHighDateTime;
+    query_performance_offset= li.QuadPart-OFFSET_TO_EPOC;
+    QueryPerformanceCounter(&t_cnt);
+    query_performance_offset-= (t_cnt.QuadPart /
+                                query_performance_frequency * MS +
+                                t_cnt.QuadPart %
+                                query_performance_frequency * MS /
+                                query_performance_frequency);
+  }
+}
+
+
+/*
+  Open HKEY_LOCAL_MACHINE\SOFTWARE\MySQL and set any strings found
+  there as environment variables
+*/
+static void win_init_registry(void)
+{
+  HKEY key_handle;
+
+  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, (LPCTSTR)"SOFTWARE\\MySQL",
+                    0, KEY_READ, &key_handle) == ERROR_SUCCESS)
+  {
+    LONG ret;
+    DWORD index= 0;
+    DWORD type;
+    char key_name[256], key_data[1024];
+    DWORD key_name_len= sizeof(key_name) - 1;
+    DWORD key_data_len= sizeof(key_data) - 1;
+
+    while ((ret= RegEnumValue(key_handle, index++,
+                              key_name, &key_name_len,
+                              NULL, &type, (LPBYTE)&key_data,
+                              &key_data_len)) != ERROR_NO_MORE_ITEMS)
+    {
+      char env_string[sizeof(key_name) + sizeof(key_data) + 2];
+
+      if (ret == ERROR_MORE_DATA)
+      {
+        /* Registry value larger than 'key_data', skip it */
+        DBUG_PRINT("error", ("Skipped registry value that was too large"));
+      }
+      else if (ret == ERROR_SUCCESS)
+      {
+        if (type == REG_SZ)
+        {
+          strxmov(env_string, key_name, "=", key_data, NullS);
+
+          /* variable for putenv must be allocated ! */
+          putenv(strdup(env_string)) ;
+        }
+      }
+      else
+      {
+        /* Unhandled error, break out of loop */
+        break;
+      }
+
+      key_name_len= sizeof(key_name) - 1;
+      key_data_len= sizeof(key_data) - 1;
+    }
+
+    RegCloseKey(key_handle);
+  }
+}
+
 
 static void my_win_init(void)
 {
@@ -297,17 +359,18 @@ static void my_win_init(void)
 
 #if defined(_MSC_VER)
 #if _MSC_VER < 1300
-  /* 
+  /*
     Clear the OS system variable TZ and avoid the 100% CPU usage
     Only for old versions of Visual C++
   */
-  _putenv( "TZ=" ); 
-#endif 
+  _putenv("TZ=");
+#endif
 #if _MSC_VER >= 1400
   /* this is required to make crt functions return -1 appropriately */
   _set_invalid_parameter_handler(my_parameter_handler);
 #endif
-#endif  
+#endif
+
 #ifdef __MSVC_RUNTIME_CHECKS
   /*
     Install handler to send RTC (Runtime Error Check) warnings
@@ -318,106 +381,10 @@ static void my_win_init(void)
 
   _tzset();
 
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-               
-  /* The following is used by time functions */
-#define OFFSET_TO_EPOC ((__int64) 134774 * 24 * 60 * 60 * 1000 * 1000 * 10)
-#define MS 10000000
-  {
-    FILETIME ft;
-    LARGE_INTEGER li, t_cnt;
-    DBUG_ASSERT(sizeof(LARGE_INTEGER) == sizeof(query_performance_frequency));
-    if (QueryPerformanceFrequency((LARGE_INTEGER *)&query_performance_frequency) == 0)
-      query_performance_frequency= 0;
-    else
-    {
-      GetSystemTimeAsFileTime(&ft);
-      li.LowPart=  ft.dwLowDateTime;
-      li.HighPart= ft.dwHighDateTime;
-      query_performance_offset= li.QuadPart-OFFSET_TO_EPOC;
-      QueryPerformanceCounter(&t_cnt);
-      query_performance_offset-= (t_cnt.QuadPart /
-                                  query_performance_frequency * MS +
-                                  t_cnt.QuadPart %
-                                  query_performance_frequency * MS /
-                                  query_performance_frequency);
-    }
-  }
+  win_init_time();
+  win_init_registry();
 
-  {
-    /*
-      Open HKEY_LOCAL_MACHINE\SOFTWARE\MySQL and set any strings found
-      there as environment variables
-    */
-    HKEY key_handle;
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, (LPCTSTR)"SOFTWARE\\MySQL",
-                     0, KEY_READ, &key_handle) == ERROR_SUCCESS)
-    {
-      LONG ret;
-      DWORD index= 0;
-      DWORD type;
-      char key_name[256], key_data[1024];
-      DWORD key_name_len= sizeof(key_name) - 1;
-      DWORD key_data_len= sizeof(key_data) - 1;
-
-      while ((ret= RegEnumValue(key_handle, index++,
-                                key_name, &key_name_len,
-                                NULL, &type, (LPBYTE)&key_data,
-                                &key_data_len)) != ERROR_NO_MORE_ITEMS)
-      {
-        char env_string[sizeof(key_name) + sizeof(key_data) + 2];
-
-        if (ret == ERROR_MORE_DATA)
-        {
-          /* Registry value larger than 'key_data', skip it */
-          DBUG_PRINT("error", ("Skipped registry value that was too large"));
-        }
-        else if (ret == ERROR_SUCCESS)
-        {
-          if (type == REG_SZ)
-          {
-            strxmov(env_string, key_name, "=", key_data, NullS);
-
-            /* variable for putenv must be allocated ! */
-            putenv(strdup(env_string)) ;
-          }
-        }
-        else
-        {
-          /* Unhandled error, break out of loop */
-          break;
-        }
-
-        key_name_len= sizeof(key_name) - 1;
-        key_data_len= sizeof(key_data) - 1;
-      }
-
-      RegCloseKey(key_handle) ;
-    }
-  }
-  DBUG_VOID_RETURN ;
+  DBUG_VOID_RETURN;
 }
 
 
@@ -456,7 +423,7 @@ static my_bool win32_init_tcp_ip()
 {
   if (win32_have_tcpip())
   {
-    WORD wVersionRequested = MAKEWORD( 2, 0 );
+    WORD wVersionRequested = MAKEWORD( 2, 2 );
     WSADATA wsaData;
  	/* Be a good citizen: maybe another lib has already initialised
  		sockets, so dont clobber them unless necessary */
@@ -485,56 +452,116 @@ static my_bool win32_init_tcp_ip()
 }
 #endif /* __WIN__ */
 
+PSI_stage_info stage_waiting_for_table_level_lock=
+{0, "Waiting for table level lock", 0};
 
-#ifdef __NETWARE__
-/*
-  Basic initialisation for netware
-*/
+#ifdef HAVE_PSI_INTERFACE
 
-static void netware_init()
+#if !defined(HAVE_PREAD) && !defined(_WIN32)
+PSI_mutex_key key_my_file_info_mutex;
+#endif /* !defined(HAVE_PREAD) && !defined(_WIN32) */
+
+#if !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R)
+PSI_mutex_key key_LOCK_localtime_r;
+#endif /* !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R) */
+
+PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
+  key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_LOCK_alarm,
+  key_my_thread_var_mutex, key_THR_LOCK_charset, key_THR_LOCK_heap,
+  key_THR_LOCK_lock, key_THR_LOCK_malloc,
+  key_THR_LOCK_mutex, key_THR_LOCK_myisam, key_THR_LOCK_net,
+  key_THR_LOCK_open, key_THR_LOCK_threads,
+  key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
+
+static PSI_mutex_info all_mysys_mutexes[]=
 {
-  char cwd[PATH_MAX], *name;
+#if !defined(HAVE_PREAD) && !defined(_WIN32)
+  { &key_my_file_info_mutex, "st_my_file_info:mutex", 0},
+#endif /* !defined(HAVE_PREAD) && !defined(_WIN32) */
+#if !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R)
+  { &key_LOCK_localtime_r, "LOCK_localtime_r", PSI_FLAG_GLOBAL},
+#endif /* !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R) */
+  { &key_BITMAP_mutex, "BITMAP::mutex", 0},
+  { &key_IO_CACHE_append_buffer_lock, "IO_CACHE::append_buffer_lock", 0},
+  { &key_IO_CACHE_SHARE_mutex, "IO_CACHE::SHARE_mutex", 0},
+  { &key_KEY_CACHE_cache_lock, "KEY_CACHE::cache_lock", 0},
+  { &key_LOCK_alarm, "LOCK_alarm", PSI_FLAG_GLOBAL},
+  { &key_my_thread_var_mutex, "my_thread_var::mutex", 0},
+  { &key_THR_LOCK_charset, "THR_LOCK_charset", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_heap, "THR_LOCK_heap", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_lock, "THR_LOCK_lock", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_malloc, "THR_LOCK_malloc", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_mutex, "THR_LOCK::mutex", 0},
+  { &key_THR_LOCK_myisam, "THR_LOCK_myisam", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_net, "THR_LOCK_net", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_open, "THR_LOCK_open", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_threads, "THR_LOCK_threads", PSI_FLAG_GLOBAL},
+  { &key_TMPDIR_mutex, "TMPDIR_mutex", PSI_FLAG_GLOBAL},
+  { &key_THR_LOCK_myisam_mmap, "THR_LOCK_myisam_mmap", PSI_FLAG_GLOBAL}
+};
 
-  DBUG_ENTER("netware_init");
+PSI_cond_key key_COND_alarm, key_IO_CACHE_SHARE_cond,
+  key_IO_CACHE_SHARE_cond_writer, key_my_thread_var_suspend,
+  key_THR_COND_threads;
 
-  /* init only if we are not a client library */
-  if (my_progname)
-  {
-#if SUPPORTED_BY_LIBC   /* Removed until supported in Libc */
-    struct termios tp;
-    /* Disable control characters */
-    tcgetattr(STDIN_FILENO, &tp);
-    tp.c_cc[VINTR] = _POSIX_VDISABLE;
-    tp.c_cc[VEOF] = _POSIX_VDISABLE;
-    tp.c_cc[VSUSP] = _POSIX_VDISABLE;
-    tcsetattr(STDIN_FILENO, TCSANOW, &tp);
-#endif /* SUPPORTED_BY_LIBC */
+static PSI_cond_info all_mysys_conds[]=
+{
+  { &key_COND_alarm, "COND_alarm", PSI_FLAG_GLOBAL},
+  { &key_IO_CACHE_SHARE_cond, "IO_CACHE_SHARE::cond", 0},
+  { &key_IO_CACHE_SHARE_cond_writer, "IO_CACHE_SHARE::cond_writer", 0},
+  { &key_my_thread_var_suspend, "my_thread_var::suspend", 0},
+  { &key_THR_COND_threads, "THR_COND_threads", 0}
+};
 
-    /* With stdout redirection */
-    if (!isatty(STDOUT_FILENO))
-    {
-      setscreenmode(SCR_AUTOCLOSE_ON_EXIT);      /* auto close the screen */
-    }
-    else
-    {
-      setscreenmode(SCR_NO_MODE);		/* keep the screen up */
-    }
+#ifdef USE_ALARM_THREAD
+PSI_thread_key key_thread_alarm;
 
-    /* Parse program name and change to base format */
-    name= (char*) my_progname;
-    for (; *name; name++)
-    {
-      if (*name == '\\')
-      {
-        *name = '/';
-      }
-      else
-      {
-        *name = tolower(*name);
-      }
-    }
-  }
+static PSI_thread_info all_mysys_threads[]=
+{
+  { &key_thread_alarm, "alarm", PSI_FLAG_GLOBAL}
+};
+#endif /* USE_ALARM_THREAD */
 
-  DBUG_VOID_RETURN;
+#ifdef HUGETLB_USE_PROC_MEMINFO
+PSI_file_key key_file_proc_meminfo;
+#endif /* HUGETLB_USE_PROC_MEMINFO */
+PSI_file_key key_file_charset, key_file_cnf;
+
+static PSI_file_info all_mysys_files[]=
+{
+#ifdef HUGETLB_USE_PROC_MEMINFO
+  { &key_file_proc_meminfo, "proc_meminfo", 0},
+#endif /* HUGETLB_USE_PROC_MEMINFO */
+  { &key_file_charset, "charset", 0},
+  { &key_file_cnf, "cnf", 0}
+};
+
+PSI_stage_info *all_mysys_stages[]=
+{
+  & stage_waiting_for_table_level_lock
+};
+
+void my_init_mysys_psi_keys()
+{
+  const char* category= "mysys";
+  int count;
+
+  count= sizeof(all_mysys_mutexes)/sizeof(all_mysys_mutexes[0]);
+  mysql_mutex_register(category, all_mysys_mutexes, count);
+
+  count= sizeof(all_mysys_conds)/sizeof(all_mysys_conds[0]);
+  mysql_cond_register(category, all_mysys_conds, count);
+
+#ifdef USE_ALARM_THREAD
+  count= sizeof(all_mysys_threads)/sizeof(all_mysys_threads[0]);
+  mysql_thread_register(category, all_mysys_threads, count);
+#endif /* USE_ALARM_THREAD */
+
+  count= sizeof(all_mysys_files)/sizeof(all_mysys_files[0]);
+  mysql_file_register(category, all_mysys_files, count);
+
+  count= array_elements(all_mysys_stages);
+  mysql_stage_register(category, all_mysys_stages, count);
 }
-#endif /* __NETWARE__ */
+#endif /* HAVE_PSI_INTERFACE */
+

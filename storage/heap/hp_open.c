@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,11 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* open a heap-database */
 
 #include "heapdef.h"
-#ifdef VMS
-#include "hp_static.c"			/* Stupid vms-linker */
-#endif
-
 #include "my_sys.h"
 
 /*
@@ -41,9 +37,7 @@ HP_INFO *heap_open_from_share(HP_SHARE *share, int mode)
     DBUG_RETURN(0);
   }
   share->open_count++; 
-#ifdef THREAD
   thr_lock_data_init(&share->lock,&info->lock,NULL);
-#endif
   info->s= share;
   info->lastkey= (uchar*) (info + 1);
   info->recbuf= (uchar*) (info->lastkey + share->max_key_length);
@@ -69,16 +63,37 @@ HP_INFO *heap_open_from_share_and_register(HP_SHARE *share, int mode)
   HP_INFO *info;
   DBUG_ENTER("heap_open_from_share_and_register");
 
-  pthread_mutex_lock(&THR_LOCK_heap);
+  mysql_mutex_lock(&THR_LOCK_heap);
   if ((info= heap_open_from_share(share, mode)))
   {
     info->open_list.data= (void*) info;
     heap_open_list= list_add(heap_open_list,&info->open_list);
+    /* Unpin the share, it is now pinned by the file. */
+    share->open_count--;
   }
-  pthread_mutex_unlock(&THR_LOCK_heap);
+  mysql_mutex_unlock(&THR_LOCK_heap);
   DBUG_RETURN(info);
 }
 
+
+/**
+  Dereference a HEAP share and free it if it's not referenced.
+  We don't check open_count for internal tables since they
+  are always thread-local, i.e. referenced by a single thread.
+*/
+void heap_release_share(HP_SHARE *share, my_bool internal_table)
+{
+  /* Couldn't open table; Remove the newly created table */
+  if (internal_table)
+    hp_free(share);
+  else
+  {
+    mysql_mutex_lock(&THR_LOCK_heap);
+    if (--share->open_count == 0)
+      hp_free(share);
+    mysql_mutex_unlock(&THR_LOCK_heap);
+  }
+}
 
 /*
   Open heap table based on name
@@ -94,11 +109,11 @@ HP_INFO *heap_open(const char *name, int mode)
   HP_SHARE *share;
   DBUG_ENTER("heap_open");
 
-  pthread_mutex_lock(&THR_LOCK_heap);
+  mysql_mutex_lock(&THR_LOCK_heap);
   if (!(share= hp_find_named_heap(name)))
   {
     my_errno= ENOENT;
-    pthread_mutex_unlock(&THR_LOCK_heap);
+    mysql_mutex_unlock(&THR_LOCK_heap);
     DBUG_RETURN(0);
   }
   if ((info= heap_open_from_share(share, mode)))
@@ -106,7 +121,7 @@ HP_INFO *heap_open(const char *name, int mode)
     info->open_list.data= (void*) info;
     heap_open_list= list_add(heap_open_list,&info->open_list);
   }
-  pthread_mutex_unlock(&THR_LOCK_heap);
+  mysql_mutex_unlock(&THR_LOCK_heap);
   DBUG_RETURN(info);
 }
 

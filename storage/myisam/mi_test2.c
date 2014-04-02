@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Test av isam-databas: stor test */
 
@@ -23,9 +21,6 @@
 #ifdef DBUG_OFF
 #undef DBUG_OFF
 #endif
-#ifndef SAFEMALLOC
-#define SAFEMALLOC
-#endif
 #include "myisamdef.h"
 #include <m_ctype.h>
 #include <my_bit.h>
@@ -33,7 +28,7 @@
 #define STANDARD_LENGTH 37
 #define MYISAM_KEYS 6
 #define MAX_PARTS 4
-#if !defined(MSDOS) && !defined(labs)
+#if !defined(labs)
 #define labs(a) abs(a)
 #endif
 
@@ -206,7 +201,7 @@ int main(int argc, char *argv[])
   /*  DBUG_PUSH(""); */
   /* my_delete(filename,MYF(0)); */	/* Remove old locks under gdb */
   file= 0;
-  bzero((char*) &create_info,sizeof(create_info));
+  memset(&create_info, 0, sizeof(create_info));
   create_info.max_rows=(ha_rows) (rec_pointer_size ?
 				  (1L << (rec_pointer_size*8))/
 				  reclength : 0);
@@ -508,7 +503,7 @@ int main(int argc, char *argv[])
     key2[i]=0;
 
     /* The following row is just to catch some bugs in the key code */
-    bzero((char*) file->lastkey,file->s->base.max_key_length*2);
+    memset(file->lastkey, 0, file->s->base.max_key_length*2);
     if (mi_rkey(file,read_record,0,key2,(uint) i,HA_READ_PREFIX))
       goto err;
     if (memcmp(read_record+start,key,(uint) i))
@@ -858,13 +853,13 @@ reads:      %10lu\n",
   }
   end_key_cache(dflt_key_cache,1);
   if (blob_buffer)
-    my_free(blob_buffer,MYF(0));
+    my_free(blob_buffer);
   my_end(silent ? MY_CHECK_ERROR : MY_CHECK_ERROR | MY_GIVE_INFO);
   return(0);
 err:
   printf("got error: %d when using MyISAM-database\n",my_errno);
   if (file)
-    VOID(mi_close(file));
+    (void) mi_close(file);
   return(1);
 } /* main */
 
@@ -1035,7 +1030,7 @@ static void put_blob_in_record(uchar *blob_pos, char **blob_buffer)
       for (i=0 ; i < length ; i++)
 	(*blob_buffer)[i]=(char) (length+i);
       int4store(blob_pos,length);
-      memcpy_fixed(blob_pos+4,(char*) blob_buffer,sizeof(char*));
+      memcpy(blob_pos+4, blob_buffer, sizeof(char*));
     }
     else
     {
@@ -1057,3 +1052,5 @@ static void copy_key(MI_INFO *info,uint inx,uchar *rec,uchar *key_buff)
   }
   return;
 }
+
+#include "mi_extrafunc.h"

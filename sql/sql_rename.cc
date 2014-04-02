@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,17 +10,24 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /*
   Atomic rename of table;  RENAME TABLE t1 to t2, tmp to t1 [,...]
 */
 
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "sql_rename.h"
+#include "sql_cache.h"                          // query_cache_*
+#include "sql_table.h"                         // build_table_filename
+#include "sql_view.h"             // mysql_frm_type, mysql_rename_view
 #include "sql_trigger.h"
-
+#include "lock.h"       // MYSQL_OPEN_SKIP_TEMPORARY
+#include "sql_base.h"   // tdc_remove_table, lock_table_names,
+#include "sql_handler.h"                        // mysql_ha_rm_tables
+#include "datadict.h"
 
 static TABLE_LIST *rename_tables(THD *thd, TABLE_LIST *table_list,
 				 bool skip_error);
@@ -29,8 +35,8 @@ static TABLE_LIST *rename_tables(THD *thd, TABLE_LIST *table_list,
 static TABLE_LIST *reverse_table_list(TABLE_LIST *table_list);
 
 /*
-  Every second entry in the table_list is the original name and every
-  second entry is the new name.
+  Every two entries in the table_list form a pair of original name and
+  the new name.
 */
 
 bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
@@ -47,17 +53,14 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
     if the user is trying to to do this in a transcation context
   */
 
-  if (thd->locked_tables || thd->active_transaction())
+  if (thd->locked_tables_mode || thd->in_active_multi_stmt_transaction())
   {
     my_message(ER_LOCK_OR_ACTIVE_TRANSACTION,
                ER(ER_LOCK_OR_ACTIVE_TRANSACTION), MYF(0));
     DBUG_RETURN(1);
   }
 
-  mysql_ha_rm_tables(thd, table_list, FALSE);
-
-  if (wait_if_global_read_lock(thd,0,1))
-    DBUG_RETURN(1);
+  mysql_ha_rm_tables(thd, table_list);
 
   if (logger.is_log_table_enabled(QUERY_LOG_GENERAL) ||
       logger.is_log_table_enabled(QUERY_LOG_SLOW))
@@ -136,14 +139,18 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
     }
   }
 
-  pthread_mutex_lock(&LOCK_open);
-  if (lock_table_names_exclusively(thd, table_list))
-  {
-    pthread_mutex_unlock(&LOCK_open);
+  if (lock_table_names(thd, table_list, 0, thd->variables.lock_wait_timeout, 0))
     goto err;
-  }
+
+  for (ren_table= table_list; ren_table; ren_table= ren_table->next_local)
+    tdc_remove_table(thd, TDC_RT_REMOVE_ALL, ren_table->db,
+                     ren_table->table_name, FALSE);
 
   error=0;
+  /*
+    An exclusive lock on table names is satisfactory to ensure
+    no other thread accesses this table.
+  */
   if ((ren_table=rename_tables(thd,table_list,0)))
   {
     /* Rename didn't succeed;  rename back the tables in reverse order */
@@ -165,17 +172,6 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
 
     error= 1;
   }
-  /*
-    An exclusive lock on table names is satisfactory to ensure
-    no other thread accesses this table.
-    However, NDB assumes that handler::rename_tables is called under
-    LOCK_open. And it indeed is, from ALTER TABLE.
-    TODO: remove this limitation.
-    We still should unlock LOCK_open as early as possible, to provide
-    higher concurrency - query_cache_invalidate can take minutes to
-    complete.
-  */
-  pthread_mutex_unlock(&LOCK_open);
 
   if (!silent && !error)
   {
@@ -187,12 +183,7 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
   if (!error)
     query_cache_invalidate3(thd, table_list, 0);
 
-  pthread_mutex_lock(&LOCK_open);
-  unlock_table_names(thd, table_list, (TABLE_LIST*) 0);
-  pthread_mutex_unlock(&LOCK_open);
-
 err:
-  start_waiting_global_read_lock(thd);
   DBUG_RETURN(error || binlog_error);
 }
 
@@ -276,7 +267,7 @@ do_rename(THD *thd, TABLE_LIST *ren_table, char *new_db, char *new_table_name,
   build_table_filename(name, sizeof(name) - 1,
                        ren_table->db, old_alias, reg_ext, 0);
 
-  frm_type= mysql_frm_type(thd, name, &table_type);
+  frm_type= dd_frm_type(thd, name, &table_type);
   switch (frm_type)
   {
     case FRMTYPE_TABLE:
@@ -288,6 +279,7 @@ do_rename(THD *thd, TABLE_LIST *ren_table, char *new_db, char *new_table_name,
         {
           if ((rc= Table_triggers_list::change_table_name(thd, ren_table->db,
                                                           old_alias,
+                                                          ren_table->table_name,
                                                           new_db,
                                                           new_alias)))
           {
@@ -300,7 +292,7 @@ do_rename(THD *thd, TABLE_LIST *ren_table, char *new_db, char *new_table_name,
             (void) mysql_rename_table(ha_resolve_by_legacy_type(thd,
                                                                 table_type),
                                       new_db, new_alias,
-                                      ren_table->db, old_alias, 0);
+                                      ren_table->db, old_alias, NO_FK_CHECKS);
           }
         }
       }
@@ -321,9 +313,17 @@ do_rename(THD *thd, TABLE_LIST *ren_table, char *new_db, char *new_table_name,
     default:
       DBUG_ASSERT(0); // should never happen
     case FRMTYPE_ERROR:
-      my_error(ER_FILE_NOT_FOUND, MYF(0), name, my_errno);
+      { 
+        char errbuf[MYSYS_STRERROR_SIZE];
+        my_error(ER_FILE_NOT_FOUND, MYF(0), name,
+                 my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      }
       break;
   }
+
+  thd->add_to_binlog_accessed_dbs(ren_table->db);
+  thd->add_to_binlog_accessed_dbs(new_db);
+
   if (rc && !skip_error)
     DBUG_RETURN(1);
 

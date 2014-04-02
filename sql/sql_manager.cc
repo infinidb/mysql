@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2000, 2002, 2005-2007 MySQL AB, 2008 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,9 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /* 
  * sql_manager.cc
@@ -24,15 +21,17 @@
  *   o Berkeley DB: removing unneeded log files.
  */
 
-#include "mysql_priv.h"
-
+#include "sql_priv.h"
+#include "sql_manager.h"
+#include "unireg.h"                    // REQUIRED: for other includes
+#include "sql_base.h"                           // flush_tables
 
 static bool volatile manager_thread_in_use;
 static bool abort_manager;
 
 pthread_t manager_thread;
-pthread_mutex_t LOCK_manager;
-pthread_cond_t COND_manager;
+mysql_mutex_t LOCK_manager;
+mysql_cond_t COND_manager;
 
 struct handler_cb {
    struct handler_cb *next;
@@ -45,7 +44,7 @@ bool mysql_manager_submit(void (*action)())
 {
   bool result= FALSE;
   struct handler_cb * volatile *cb;
-  pthread_mutex_lock(&LOCK_manager);
+  mysql_mutex_lock(&LOCK_manager);
   cb= &cb_list;
   while (*cb && (*cb)->action != action)
     cb= &(*cb)->next;
@@ -60,7 +59,7 @@ bool mysql_manager_submit(void (*action)())
       (*cb)->action= action;
     }
   }
-  pthread_mutex_unlock(&LOCK_manager);
+  mysql_mutex_unlock(&LOCK_manager);
   return result;
 }
 
@@ -79,7 +78,7 @@ pthread_handler_t handle_manager(void *arg __attribute__((unused)))
 
   for (;;)
   {
-    pthread_mutex_lock(&LOCK_manager);
+    mysql_mutex_lock(&LOCK_manager);
     /* XXX: This will need to be made more general to handle different
      * polling needs. */
     if (flush_time)
@@ -90,26 +89,26 @@ pthread_handler_t handle_manager(void *arg __attribute__((unused)))
         reset_flush_time = FALSE;
       }
       while ((!error || error == EINTR) && !abort_manager)
-        error= pthread_cond_timedwait(&COND_manager, &LOCK_manager, &abstime);
+        error= mysql_cond_timedwait(&COND_manager, &LOCK_manager, &abstime);
     }
     else
     {
       while ((!error || error == EINTR) && !abort_manager)
-        error= pthread_cond_wait(&COND_manager, &LOCK_manager);
+        error= mysql_cond_wait(&COND_manager, &LOCK_manager);
     }
     if (cb == NULL)
     {
       cb= cb_list;
       cb_list= NULL;
     }
-    pthread_mutex_unlock(&LOCK_manager);
+    mysql_mutex_unlock(&LOCK_manager);
 
     if (abort_manager)
       break;
 
     if (error == ETIMEDOUT || error == ETIME)
     {
-      flush_tables();
+      tdc_flush_unused_tables();
       error = 0;
       reset_flush_time = TRUE;
     }
@@ -118,7 +117,7 @@ pthread_handler_t handle_manager(void *arg __attribute__((unused)))
     {
       struct handler_cb *next= cb->next;
       cb->action();
-      my_free((uchar*)cb, MYF(0));
+      my_free(cb);
       cb= next;
     }
   }
@@ -137,8 +136,12 @@ void start_handle_manager()
   if (flush_time && flush_time != ~(ulong) 0L)
   {
     pthread_t hThread;
-    if (pthread_create(&hThread,&connection_attrib,handle_manager,0))
-      sql_print_warning("Can't create handle_manager thread");
+    int error;
+    if ((error= mysql_thread_create(key_thread_handle_manager,
+                                    &hThread, &connection_attrib,
+                                    handle_manager, 0)))
+      sql_print_warning("Can't create handle_manager thread (errno= %d)",
+                        error);
   }
   DBUG_VOID_RETURN;
 }
@@ -149,14 +152,14 @@ void stop_handle_manager()
 {
   DBUG_ENTER("stop_handle_manager");
   abort_manager = true;
-  pthread_mutex_lock(&LOCK_manager);
+  mysql_mutex_lock(&LOCK_manager);
   if (manager_thread_in_use)
   {
     DBUG_PRINT("quit", ("initiate shutdown of handle manager thread: 0x%lx",
                         (ulong)manager_thread));
-   pthread_cond_signal(&COND_manager);
+    mysql_cond_signal(&COND_manager);
   }
-  pthread_mutex_unlock(&LOCK_manager);
+  mysql_mutex_unlock(&LOCK_manager);
   DBUG_VOID_RETURN;
 }
 

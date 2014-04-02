@@ -22,8 +22,8 @@ show create table t1;
 show create table t2;
 show create table t3;
 
-SET DEBUG_SYNC='alter_table_before_rename_result_table
-   SIGNAL update_can_proceed WAIT_FOR dict_unfreeze';
+SET DEBUG_SYNC='innodb_rename_table_ready SIGNAL update_can_proceed
+                   WAIT_FOR dict_unfreeze';
 
 --send
 alter table t2 add constraint z1 foreign key (f2)

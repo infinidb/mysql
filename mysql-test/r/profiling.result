@@ -9,8 +9,6 @@ profiling_history_size	15
 select @@profiling;
 @@profiling
 0
-set global profiling = ON;
-ERROR HY000: Variable 'profiling' is a SESSION variable and can't be used with SET GLOBAL
 set @start_value= @@global.profiling_history_size;
 set global profiling_history_size=100;
 show global variables like 'profil%';
@@ -125,8 +123,8 @@ select query_id, count(*), sum(duration) from information_schema.profiling group
 select CPU_user, CPU_system, Context_voluntary, Context_involuntary, Block_ops_in, Block_ops_out, Messages_sent, Messages_received, Page_faults_major, Page_faults_minor, Swaps, Source_function, Source_file, Source_line from information_schema.profiling;
 drop table if exists t1, t2, t3;
 Warnings:
-Note	1051	Unknown table 't2'
-Note	1051	Unknown table 't3'
+Note	1051	Unknown table 'test.t2'
+Note	1051	Unknown table 'test.t3'
 create table t1 (id int );
 create table t2 (id int not null);
 create table t3 (id int not null primary key);
@@ -298,13 +296,20 @@ id
 1
 2
 3
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
 select @@profiling;
 @@profiling
 1
 set session profiling = OFF;
 drop table if exists profile_log;
 Warnings:
-Note	1051	Unknown table 'profile_log'
+Note	1051	Unknown table 'test.profile_log'
 create table profile_log (how_many int);
 drop procedure if exists p1;
 drop procedure if exists p2;

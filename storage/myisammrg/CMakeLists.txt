@@ -1,5 +1,4 @@
-# Copyright (c) 2006-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,11 +11,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
-
-INCLUDE("${PROJECT_SOURCE_DIR}/storage/mysql_storage_engine.cmake")
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 SET(MYISAMMRG_SOURCES  myrg_close.c myrg_create.c myrg_delete.c myrg_extra.c myrg_info.c
 				ha_myisammrg.cc
@@ -25,4 +20,4 @@ SET(MYISAMMRG_SOURCES  myrg_close.c myrg_create.c myrg_delete.c myrg_extra.c myr
 				myrg_rprev.c myrg_rrnd.c myrg_rsame.c myrg_static.c myrg_update.c
 				myrg_write.c myrg_records.c)
 
-MYSQL_STORAGE_ENGINE(MYISAMMRG)
+MYSQL_ADD_PLUGIN(myisammrg ${MYISAMMRG_SOURCES} STORAGE_ENGINE MANDATORY RECOMPILE_FOR_EMBEDDED)

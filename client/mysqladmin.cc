@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,14 +18,14 @@
 /* maintaince of mysql databases */
 
 #include "client_priv.h"
+#include "my_default.h"
 #include <signal.h>
-#ifdef THREAD
 #include <my_pthread.h>				/* because of signal()	*/
-#endif
 #include <sys/stat.h>
 #include <mysql.h>
 #include <sql_common.h>
 #include <welcome_copyright_notice.h>           /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
+#include <mysqld_error.h>                       /* to check server error codes */
 
 #define ADMIN_VERSION "8.42"
 #define MAX_MYSQL_VAR 512
@@ -33,19 +33,23 @@
 #define MAX_TRUNC_LENGTH 3
 
 char *host= NULL, *user= 0, *opt_password= 0,
-     *default_charset= NULL;
+     *default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME;
 char truncated_var_names[MAX_MYSQL_VAR][MAX_TRUNC_LENGTH];
 char ex_var_names[MAX_MYSQL_VAR][FN_REFLEN];
 ulonglong last_values[MAX_MYSQL_VAR];
 static int interval=0;
 static my_bool option_force=0,interrupted=0,new_line=0,
                opt_compress=0, opt_relative=0, opt_verbose=0, opt_vertical=0,
-               tty_password= 0, opt_nobeep;
+               tty_password= 0, opt_nobeep, opt_secure_auth= TRUE;
 static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static uint tcp_port = 0, option_wait = 0, option_silent=0, nr_iterations;
 static uint opt_count_iterations= 0, my_end_arg;
+static char *opt_bind_addr = NULL;
 static ulong opt_connect_timeout, opt_shutdown_timeout;
 static char * unix_port=0;
+static char *opt_plugin_dir= 0, *opt_default_auth= 0;
+static uint opt_enable_cleartext_plugin= 0;
+static my_bool using_opt_enable_cleartext_plugin= 0;
 
 #ifdef HAVE_SMEM
 static char *shared_memory_base_name=0;
@@ -119,10 +123,9 @@ static TYPELIB command_typelib=
 
 static struct my_option my_long_options[] =
 {
-#ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Automatically close the screen on exit for Netware.",
-   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#endif
+  {"bind-address", 0, "IP address to bind to.",
+   (uchar**) &opt_bind_addr, (uchar**) &opt_bind_addr, 0, GET_STR,
+   REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"count", 'c',
    "Number of iterations to make. This works with -i (--sleep) only.",
    &nr_iterations, &nr_iterations, 0, GET_UINT,
@@ -138,7 +141,8 @@ static struct my_option my_long_options[] =
    &debug_info_flag, &debug_info_flag,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"force", 'f',
-   "Don't ask for confirmation on drop database; with multiple commands, continue even if an error occurs.",
+   "Don't ask for confirmation on drop database; with multiple commands, "
+   "continue even if an error occurs.",
    &option_force, &option_force, 0, GET_BOOL, NO_ARG, 0, 0,
    0, 0, 0, 0},
   {"compress", 'C', "Use compression in server/client protocol.",
@@ -158,7 +162,7 @@ static struct my_option my_long_options[] =
    &opt_nobeep, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0}, 
   {"password", 'p',
    "Password to use when connecting to server. If password is not given it's asked from the tty.",
-   0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+   0, 0, 0, GET_PASSWORD, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #ifdef __WIN__
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -169,8 +173,7 @@ static struct my_option my_long_options[] =
    "/etc/services, "
 #endif
    "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
-   &tcp_port,
-   &tcp_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   &tcp_port, &tcp_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"protocol", OPT_MYSQL_PROTOCOL, "The protocol to use for connection (tcp, socket, pipe, memory).",
     0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"relative", 'r',
@@ -178,10 +181,9 @@ static struct my_option my_long_options[] =
    "Currently only works with extended-status.",
    &opt_relative, &opt_relative, 0, GET_BOOL, NO_ARG, 0, 0, 0,
   0, 0, 0},
-  {"set-variable", 'O',
-   "Change the value of a variable. Please note that this option is "
-   "deprecated; you can set variables directly with --variable-name=value.",
-   0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
+    " uses old (pre-4.1.1) protocol.", &opt_secure_auth,
+    &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", &shared_memory_base_name, &shared_memory_base_name,
@@ -216,6 +218,17 @@ static struct my_option my_long_options[] =
   {"shutdown_timeout", OPT_SHUTDOWN_TIMEOUT, "", &opt_shutdown_timeout,
    &opt_shutdown_timeout, 0, GET_ULONG, REQUIRED_ARG,
    SHUTDOWN_DEF_TIMEOUT, 0, 3600*12, 0, 1, 0},
+  {"plugin_dir", OPT_PLUGIN_DIR, "Directory for client-side plugins.",
+    &opt_plugin_dir, &opt_plugin_dir, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"default_auth", OPT_DEFAULT_AUTH,
+   "Default authentication client-side plugin to use.",
+   &opt_default_auth, &opt_default_auth, 0,
+   GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"enable_cleartext_plugin", OPT_ENABLE_CLEARTEXT_PLUGIN, 
+    "Enable/disable the clear text authentication plugin.",
+   &opt_enable_cleartext_plugin, &opt_enable_cleartext_plugin, 
+   0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -229,11 +242,6 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
   int error = 0;
 
   switch(optid) {
-#ifdef __NETWARE__
-  case OPT_AUTO_CLOSE:
-    setscreenmode(SCR_AUTOCLOSE_ON_EXIT);
-    break;
-#endif
   case 'c':
     opt_count_iterations= 1;
     break;
@@ -243,7 +251,7 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     if (argument)
     {
       char *start=argument;
-      my_free(opt_password,MYF(MY_ALLOW_ZERO_PTR));
+      my_free(opt_password);
       opt_password=my_strdup(argument,MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
       if (*start)
@@ -287,12 +295,12 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     charsets_dir = argument;
 #endif
     break;
-  case 'O':
-    WARN_DEPRECATED(VER_CELOSIA, "--set-variable", "--variable-name=value");
-    break;
   case OPT_MYSQL_PROTOCOL:
     opt_protocol= find_type_or_exit(argument, &sql_protocol_typelib,
                                     opt->name);
+    break;
+  case OPT_ENABLE_CLEARTEXT_PLUGIN:
+    using_opt_enable_cleartext_plugin= TRUE;
     break;
   }
   if (error)
@@ -307,12 +315,18 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
 int main(int argc,char *argv[])
 {
   int error= 0, ho_error;
+  int first_command;
+  my_bool can_handle_passwords;
   MYSQL mysql;
   char **commands, **save_argv;
 
   MY_INIT(argv[0]);
   mysql_init(&mysql);
-  load_defaults("my",load_default_groups,&argc,&argv);
+  my_getopt_use_args_separator= TRUE;
+  if (load_defaults("my",load_default_groups,&argc,&argv))
+   exit(1); 
+  my_getopt_use_args_separator= FALSE;
+
   save_argv = argv;				/* Save for free_defaults */
   if ((ho_error=handle_options(&argc, &argv, my_long_options, get_one_option)))
   {
@@ -333,9 +347,13 @@ int main(int argc,char *argv[])
   if (tty_password)
     opt_password = get_tty_password(NullS);
 
-  VOID(signal(SIGINT,endprog));			/* Here if abort */
-  VOID(signal(SIGTERM,endprog));		/* Here if abort */
+  (void) signal(SIGINT,endprog);			/* Here if abort */
+  (void) signal(SIGTERM,endprog);		/* Here if abort */
 
+  if (opt_bind_addr)
+    mysql_options(&mysql,MYSQL_OPT_BIND,opt_bind_addr);
+  if (!opt_secure_auth)
+    mysql_options(&mysql, MYSQL_SECURE_AUTH,(char*)&opt_secure_auth);
   if (opt_compress)
     mysql_options(&mysql,MYSQL_OPT_COMPRESS,NullS);
   if (opt_connect_timeout)
@@ -345,8 +363,12 @@ int main(int argc,char *argv[])
   }
 #ifdef HAVE_OPENSSL
   if (opt_use_ssl)
+  {
     mysql_ssl_set(&mysql, opt_ssl_key, opt_ssl_cert, opt_ssl_ca,
 		  opt_ssl_capath, opt_ssl_cipher);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRL, opt_ssl_crl);
+    mysql_options(&mysql, MYSQL_OPT_SSL_CRLPATH, opt_ssl_crlpath);
+  }
   mysql_options(&mysql,MYSQL_OPT_SSL_VERIFY_SERVER_CERT,
                 (char*)&opt_ssl_verify_server_cert);
 #endif
@@ -356,9 +378,28 @@ int main(int argc,char *argv[])
   if (shared_memory_base_name)
     mysql_options(&mysql,MYSQL_SHARED_MEMORY_BASE_NAME,shared_memory_base_name);
 #endif
-  if (default_charset)
-    mysql_options(&mysql, MYSQL_SET_CHARSET_NAME, default_charset);
+  mysql_options(&mysql, MYSQL_SET_CHARSET_NAME, default_charset);
   error_flags= (myf)(opt_nobeep ? 0 : ME_BELL);
+
+  if (opt_plugin_dir && *opt_plugin_dir)
+    mysql_options(&mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+
+  if (opt_default_auth && *opt_default_auth)
+    mysql_options(&mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
+
+  mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
+  mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
+                 "program_name", "mysqladmin");
+  if (using_opt_enable_cleartext_plugin)
+    mysql_options(&mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN, 
+                  (char*) &opt_enable_cleartext_plugin);
+
+  first_command= find_type(argv[0], &command_typelib, FIND_TYPE_BASIC);
+  can_handle_passwords= 
+    (first_command == ADMIN_PASSWORD || first_command == ADMIN_OLD_PASSWORD) ?
+    TRUE : FALSE;
+  mysql_options(&mysql, MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
+                &can_handle_passwords);
 
   if (sql_connect(&mysql, option_wait))
   {
@@ -375,7 +416,8 @@ int main(int argc,char *argv[])
       /* Return 0 if all commands are PING */
       for (; argc > 0; argv++, argc--)
       {
-        if (find_type(argv[0], &command_typelib, 2) != ADMIN_PING)
+        if (find_type(argv[0], &command_typelib, FIND_TYPE_BASIC) !=
+            ADMIN_PING)
         {
           error= 1;
           break;
@@ -461,10 +503,10 @@ int main(int argc,char *argv[])
   }                                             /* got connection */
 
   mysql_close(&mysql);
-  my_free(opt_password,MYF(MY_ALLOW_ZERO_PTR));
-  my_free(user,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(opt_password);
+  my_free(user);
 #ifdef HAVE_SMEM
-  my_free(shared_memory_base_name,MYF(MY_ALLOW_ZERO_PTR));
+  my_free(shared_memory_base_name);
 #endif
   free_defaults(save_argv);
   my_end(my_end_arg);
@@ -598,7 +640,8 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
 
   for (; argc > 0 ; argv++,argc--)
   {
-    switch (find_type(argv[0],&command_typelib,2)) {
+    int option;
+    switch (option= find_type(argv[0], &command_typelib, FIND_TYPE_BASIC)) {
     case ADMIN_CREATE:
     {
       char buff[FN_REFLEN+20];
@@ -911,37 +954,63 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
     {
       char buff[128],crypted_pw[64];
       time_t start_time;
+      char *typed_password= NULL, *verified= NULL;
+      bool log_off= true, err= false;
+      int retry_count= 0;                       /* Attempts to SET PASSWORD */
+
+      bool old= (option == ADMIN_OLD_PASSWORD);
+
       /* Do initialization the same way as we do in mysqld */
       start_time=time((time_t*) 0);
       randominit(&rand_st,(ulong) start_time,(ulong) start_time/2);
 
-      if (argc < 2)
+      if (argc < 1)
       {
 	my_printf_error(0, "Too few arguments to change password", error_flags);
 	return 1;
       }
-      if (argv[1][0])
+      else if (argc == 1)
       {
-        char *pw= argv[1];
-        bool old= (find_type(argv[0], &command_typelib, 2) ==
-                   ADMIN_OLD_PASSWORD);
+        /* prompt for password */
+        typed_password= get_tty_password("New password: ");
+        verified= get_tty_password("Confirm new password: ");
+        if (strcmp(typed_password, verified) != 0)
+        {
+          my_printf_error(0,"Passwords don't match",MYF(ME_BELL));
+          err= true;
+          goto error;
+        }
+      }
+      else
+        typed_password= argv[1];
+
+      if (typed_password[0])
+      {
 #ifdef __WIN__
-        uint pw_len= (uint) strlen(pw);
-        if (pw_len > 1 && pw[0] == '\'' && pw[pw_len-1] == '\'')
+        size_t pw_len= strlen(typed_password);
+        if (pw_len > 1 && typed_password[0] == '\'' &&
+            typed_password[pw_len-1] == '\'')
           printf("Warning: single quotes were not trimmed from the password by"
                  " your command\nline client, as you might have expected.\n");
 #endif
         /*
-           If we don't already know to use an old-style password, see what
-           the server is using
+           If we don't already know to use an old-style password, see
+           (if possible) what the server is using.
         */
         if (!old)
         {
           if (mysql_query(mysql, "SHOW VARIABLES LIKE 'old_passwords'"))
           {
-            my_printf_error(0, "Could not determine old_passwords setting from server; error: '%s'",
-                	    error_flags, mysql_error(mysql));
-            return -1;
+            bool fatal= (mysql_errno(mysql) != ER_MUST_CHANGE_PASSWORD);
+            if (fatal || opt_verbose)
+              my_printf_error(0, "Could not determine old_passwords setting "
+                              "from server; error: '%s'.", error_flags,
+                              mysql_error(mysql));
+            if (fatal)
+            {
+              err= true;
+              goto error;
+            }
           }
           else
           {
@@ -950,42 +1019,64 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
             {
               my_printf_error(0,
                               "Could not get old_passwords setting from "
-                              "server; error: '%s'",
-        		      error_flags, mysql_error(mysql));
-              return -1;
+                              "server; error: '%s'.",
+                              error_flags, mysql_error(mysql));
+              err= true;
+              goto error;
             }
             if (!mysql_num_rows(res))
               old= 1;
             else
             {
               MYSQL_ROW row= mysql_fetch_row(res);
-              old= !strncmp(row[1], "ON", 2);
+              old= (!strncmp(row[1], "ON", 2) || !strncmp(row[1], "1", 1));
             }
             mysql_free_result(res);
           }
         }
+      /* turn logging off if we can */
+      if (mysql_query(mysql,"set sql_log_off=1"))
+      {
+        if (opt_verbose)
+          fprintf(stderr, "Note: Can't turn off logging; '%s'", mysql_error(mysql));
+        log_off= false;
+      }
+
+retry:
+        /*
+          In case the password_expired flag is set ('Y'), then there is no way
+          to determine the password format. So, we first try to set the
+          password using native format. If it fails with ER_PASSWORD_LENGTH,
+          we will give one more try with old format.
+        */
         if (old)
-          make_scrambled_password_323(crypted_pw, pw);
+          make_scrambled_password_323(crypted_pw, typed_password);
         else
-          make_scrambled_password(crypted_pw, pw);
+          make_scrambled_password(crypted_pw, typed_password);
       }
       else
 	crypted_pw[0]=0;			/* No password */
-      sprintf(buff,"set password='%s',sql_log_off=0",crypted_pw);
 
-      if (mysql_query(mysql,"set sql_log_off=1"))
-      {
-	my_printf_error(0, "Can't turn off logging; error: '%s'",
-			error_flags, mysql_error(mysql));
-	return -1;
-      }
+      sprintf(buff, "set password='%s'", crypted_pw);
+
       if (mysql_query(mysql,buff))
       {
+        if ((mysql_errno(mysql) == ER_PASSWD_LENGTH) &&
+            !(option == ADMIN_OLD_PASSWORD) && !retry_count)
+        {
+          /* Try to set the password using old format. */
+          memset(crypted_pw, 0, 64);
+          old= 0;
+          retry_count ++;
+          goto retry;
+        }
+
 	if (mysql_errno(mysql)!=1290)
 	{
 	  my_printf_error(0,"unable to change password; error: '%s'",
 			  error_flags, mysql_error(mysql));
-	  return -1;
+          err= true;
+          goto error;
 	}
 	else
 	{
@@ -999,9 +1090,25 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
 			  " --skip-grant-tables).\n"
 			  "Use: \"mysqladmin flush-privileges password '*'\""
 			  " instead", error_flags);
-	  return -1;
+          err= true;
+          goto error;
 	}
       }
+      if (log_off && mysql_query(mysql, "set sql_log_off=0"))
+      {
+        if (opt_verbose)
+          fprintf(stderr, "Note: Can't turn on logging; '%s'", mysql_error(mysql));
+      }
+error:
+      /* free up memory from prompted password */
+      if (typed_password != argv[1]) 
+      {
+        my_free(typed_password);
+        my_free(verified);
+      }
+      if (err)
+        return -1;
+
       argc--; argv++;
       break;
     }
@@ -1059,13 +1166,11 @@ static int execute_commands(MYSQL *mysql,int argc, char **argv)
   return 0;
 }
 
-#include <help_start.h>
 
 static void print_version(void)
 {
   printf("%s  Ver %s Distrib %s, for %s on %s\n",my_progname,ADMIN_VERSION,
 	 MYSQL_SERVER_VERSION,SYSTEM_TYPE,MACHINE_TYPE);
-  NETWARE_SET_SCREEN_MODE(1);
 }
 
 
@@ -1092,8 +1197,8 @@ static void usage(void)
   kill id,id,...	Kill mysql threads");
 #if MYSQL_VERSION_ID >= 32200
   puts("\
-  password new-password Change old password to new-password, MySQL 4.1 hashing.\n\
-  old-password new-password Change old password to new-password in old format.\n");
+  password [new-password] Change old password to new-password in current format\n\
+  old-password [new-password] Change old password to new-password in old format");
 #endif
   puts("\
   ping			Check if mysqld is alive\n\
@@ -1108,7 +1213,6 @@ static void usage(void)
   version		Get version info from server");
 }
 
-#include <help_end.h>
 
 static int drop_db(MYSQL *mysql, const char *db)
 {

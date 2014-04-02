@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Please read ha_exmple.cc before reading this file.
@@ -21,10 +19,6 @@
   that are required to be implemented. handler.h has a full list of methods
   that you can implement.
 */
-
-#ifdef USE_PRAGMA_INTERFACE
-#pragma interface			/* gcc class implementation */
-#endif
 
 #include <mysql.h>
 
@@ -73,7 +67,7 @@ typedef struct st_federated_share {
   ushort port;
 
   size_t table_name_length, server_name_length, connect_string_length, use_count;
-  pthread_mutex_t mutex;
+  mysql_mutex_t mutex;
   THR_LOCK lock;
 } FEDERATED_SHARE;
 
@@ -146,12 +140,14 @@ public:
   ulonglong table_flags() const
   {
     /* fix server to be able to get remote server table flags */
-    return (HA_PRIMARY_KEY_IN_READ_INDEX | HA_FILE_BASED
-            | HA_REC_NOT_IN_SEQ | HA_AUTO_PART_KEY | HA_CAN_INDEX_BLOBS |
+    return (HA_PRIMARY_KEY_IN_READ_INDEX |
+            HA_PRIMARY_KEY_REQUIRED_FOR_POSITION | HA_FILE_BASED |
+            HA_REC_NOT_IN_SEQ | HA_AUTO_PART_KEY | HA_CAN_INDEX_BLOBS |
             HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE |
             HA_NO_PREFIX_CHAR_KEYS | HA_PRIMARY_KEY_REQUIRED_FOR_DELETE |
             HA_NO_TRANSACTIONS /* until fixed by WL#2952 */ |
-            HA_PARTIAL_COLUMN_READ | HA_NULL_IN_KEY);
+            HA_PARTIAL_COLUMN_READ | HA_NULL_IN_KEY |
+            HA_CAN_REPAIR);
   }
   /*
     This is a bitmap of flags that says how the storage engine
@@ -218,6 +214,9 @@ public:
   int delete_row(const uchar *buf);
   int index_init(uint keynr, bool sorted);
   ha_rows estimate_rows_upper_bound();
+  int index_read_idx_map(uchar *buf, uint index, const uchar *key,
+                                key_part_map keypart_map,
+                                enum ha_rkey_function find_flag);
   int index_read(uchar *buf, const uchar *key,
                  uint key_len, enum ha_rkey_function find_flag);
   int index_read_idx(uchar *buf, uint idx, const uchar *key,
@@ -239,6 +238,7 @@ public:
   int rnd_init(bool scan);                                      //required
   int rnd_end();
   int rnd_next(uchar *buf);                                      //required
+  int rnd_next_int(uchar *buf);
   int rnd_pos(uchar *buf, uchar *pos);                            //required
   void position(const uchar *record);                            //required
   int info(uint);                                              //required
@@ -249,6 +249,7 @@ public:
   int optimize(THD* thd, HA_CHECK_OPT* check_opt);
 
   int delete_all_rows(void);
+  int truncate();
   int create(const char *name, TABLE *form,
              HA_CREATE_INFO *create_info);                      //required
   ha_rows records_in_range(uint inx, key_range *start_key,

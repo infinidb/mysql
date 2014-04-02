@@ -2,7 +2,7 @@ CREATE TABLE t2(a int);
 CREATE TABLE t1(a int) ENGINE=FEDERATED
 CONNECTION='mysql://root@localhost:$MASTER_MYPORT/test/t2';
 Warnings:
-Warning	1286	Unknown table engine 'FEDERATED'
+Warning	1286	Unknown storage engine 'FEDERATED'
 Warning	1266	Using storage engine MyISAM for table 't1'
 DROP TABLE t1;
 INSTALL PLUGIN federated SONAME 'FEDERATED_PLUGIN';

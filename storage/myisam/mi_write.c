@@ -12,14 +12,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Write a row to a MyISAM table */
 
 #include "fulltext.h"
 #include "rt_index.h"
-#include "my_compare.h"
 
 #define MAX_POINTER_LENGTH 8
 
@@ -63,12 +61,7 @@ int mi_write(MI_INFO *info, uchar *record)
   }
   if (_mi_readinfo(info,F_WRLCK,1))
     DBUG_RETURN(my_errno);
-  dont_break();				/* Dont allow SIGHUP or SIGINT */
-#if !defined(NO_LOCKING) && defined(USE_RECORD_LOCK)
-  if (!info->locked && my_lock(info->dfile,F_WRLCK,0L,F_TO_EOF,
-			       MYF(MY_SEEK_NOT_DONE) | info->lock_wait))
-    goto err;
-#endif
+
   filepos= ((share->state.dellink != HA_OFFSET_ERROR &&
              !info->append_insert_at_end) ?
 	    share->state.dellink :
@@ -113,7 +106,7 @@ int mi_write(MI_INFO *info, uchar *record)
                                   is_tree_inited(&info->bulk_insert[i])));
       if (local_lock_tree)
       {
-	rw_wrlock(&share->key_root_lock[i]);
+        mysql_rwlock_wrlock(&share->key_root_lock[i]);
 	share->keyinfo[i].version++;
       }
       if (share->keyinfo[i].flag & HA_FULLTEXT )
@@ -121,7 +114,7 @@ int mi_write(MI_INFO *info, uchar *record)
         if (_mi_ft_add(info,i, buff, record, filepos))
         {
 	  if (local_lock_tree)
-	    rw_unlock(&share->key_root_lock[i]);
+            mysql_rwlock_unlock(&share->key_root_lock[i]);
           DBUG_PRINT("error",("Got error: %d on write",my_errno));
           goto err;
         }
@@ -132,7 +125,7 @@ int mi_write(MI_INFO *info, uchar *record)
 			_mi_make_key(info,i,buff,record,filepos)))
         {
           if (local_lock_tree)
-            rw_unlock(&share->key_root_lock[i]);
+            mysql_rwlock_unlock(&share->key_root_lock[i]);
           DBUG_PRINT("error",("Got error: %d on write",my_errno));
           goto err;
         }
@@ -142,7 +135,7 @@ int mi_write(MI_INFO *info, uchar *record)
       info->update&= ~HA_STATE_RNEXT_SAME;
 
       if (local_lock_tree)
-        rw_unlock(&share->key_root_lock[i]);
+        mysql_rwlock_unlock(&share->key_root_lock[i]);
     }
   }
   if (share->calc_checksum)
@@ -161,7 +154,7 @@ int mi_write(MI_INFO *info, uchar *record)
   info->state->records++;
   info->lastpos=filepos;
   myisam_log_record(MI_LOG_WRITE,info,record,filepos,0);
-  VOID(_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE));
+  (void) _mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
   if (info->invalidator != 0)
   {
     DBUG_PRINT("info", ("invalidator... '%s' (update)", info->filename));
@@ -180,7 +173,6 @@ int mi_write(MI_INFO *info, uchar *record)
   if (share->is_log_table)
     mi_update_status((void*) info);
 
-  allow_break();				/* Allow SIGHUP & SIGINT */
   DBUG_RETURN(0);
 
 err:
@@ -203,13 +195,13 @@ err:
                                   !(info->bulk_insert &&
                                     is_tree_inited(&info->bulk_insert[i])));
 	if (local_lock_tree)
-	  rw_wrlock(&share->key_root_lock[i]);
+          mysql_rwlock_wrlock(&share->key_root_lock[i]);
 	if (share->keyinfo[i].flag & HA_FULLTEXT)
         {
           if (_mi_ft_del(info,i, buff,record,filepos))
 	  {
 	    if (local_lock_tree)
-	      rw_unlock(&share->key_root_lock[i]);
+              mysql_rwlock_unlock(&share->key_root_lock[i]);
             break;
 	  }
         }
@@ -219,12 +211,12 @@ err:
 	  if (share->keyinfo[i].ck_delete(info, i, buff, key_length))
 	  {
 	    if (local_lock_tree)
-	      rw_unlock(&share->key_root_lock[i]);
+              mysql_rwlock_unlock(&share->key_root_lock[i]);
 	    break;
 	  }
 	}
 	if (local_lock_tree)
-	  rw_unlock(&share->key_root_lock[i]);
+          mysql_rwlock_unlock(&share->key_root_lock[i]);
       }
     }
   }
@@ -238,8 +230,7 @@ err:
 err2:
   save_errno=my_errno;
   myisam_log_record(MI_LOG_WRITE,info,record,filepos,my_errno);
-  VOID(_mi_writeinfo(info,WRITEINFO_UPDATE_KEYFILE));
-  allow_break();			/* Allow SIGHUP & SIGINT */
+  (void) _mi_writeinfo(info,WRITEINFO_UPDATE_KEYFILE);
   DBUG_RETURN(my_errno=save_errno);
 } /* mi_write */
 
@@ -292,7 +283,7 @@ int _mi_ck_write_btree(register MI_INFO *info, uint keynr, uchar *key,
     if (!error)
       error= _mi_ft_convert_to_ft2(info, keynr, key);
     delete_dynamic(info->ft1_to_ft2);
-    my_free((uchar*)info->ft1_to_ft2, MYF(0));
+    my_free(info->ft1_to_ft2);
     info->ft1_to_ft2=0;
   }
   DBUG_RETURN(error);
@@ -949,7 +940,7 @@ static int keys_free(uchar *key, TREE_FREE mode, bulk_insert_param *param)
   case free_init:
     if (param->info->s->concurrent_insert)
     {
-      rw_wrlock(&param->info->s->key_root_lock[param->keynr]);
+      mysql_rwlock_wrlock(&param->info->s->key_root_lock[param->keynr]);
       param->info->s->keyinfo[param->keynr].version++;
     }
     return 0;
@@ -961,7 +952,7 @@ static int keys_free(uchar *key, TREE_FREE mode, bulk_insert_param *param)
 			      keylen - param->info->s->rec_reflength);
   case free_end:
     if (param->info->s->concurrent_insert)
-      rw_unlock(&param->info->s->key_root_lock[param->keynr]);
+      mysql_rwlock_unlock(&param->info->s->key_root_lock[param->keynr]);
     return 0;
   }
   return -1;
@@ -1051,7 +1042,7 @@ void mi_end_bulk_insert(MI_INFO *info)
         delete_tree(& info->bulk_insert[i]);
       }
     }
-    my_free((void *)info->bulk_insert, MYF(0));
+    my_free(info->bulk_insert);
     info->bulk_insert=0;
   }
 }

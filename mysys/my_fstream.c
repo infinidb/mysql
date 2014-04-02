@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2000, 2001, 2004, 2006, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* USE_MY_STREAM isn't set because we can't thrust my_fclose! */
 
@@ -58,12 +55,20 @@ size_t my_fread(FILE *stream, uchar *Buffer, size_t Count, myf MyFlags)
     if (MyFlags & (MY_WME | MY_FAE | MY_FNABP))
     {
       if (ferror(stream))
-	my_error(EE_READ, MYF(ME_BELL+ME_WAITTANG),
-		 my_filename(fileno(stream)),errno);
+      {
+        char errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_READ, MYF(ME_BELL+ME_WAITTANG),
+                 my_filename(my_fileno(stream)),
+                 errno, my_strerror(errbuf, sizeof(errbuf), errno));
+      }
       else
       if (MyFlags & (MY_NABP | MY_FNABP))
-	my_error(EE_EOFERR, MYF(ME_BELL+ME_WAITTANG),
-		 my_filename(fileno(stream)),errno);
+      {
+        char errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_EOFERR, MYF(ME_BELL+ME_WAITTANG),
+                 my_filename(my_fileno(stream)), errno,
+                 my_strerror(errbuf, sizeof(errbuf), errno));
+      }
     }
     my_errno=errno ? errno : -1;
     if (ferror(stream) || MyFlags & (MY_NABP | MY_FNABP))
@@ -122,33 +127,34 @@ size_t my_fwrite(FILE *stream, const uchar *Buffer, size_t Count, myf MyFlags)
 #ifdef EINTR
       if (errno == EINTR)
       {
-	VOID(my_fseek(stream,seekptr,MY_SEEK_SET,MYF(0)));
+	(void) my_fseek(stream,seekptr,MY_SEEK_SET,MYF(0));
 	continue;
       }
 #endif
 #if !defined(NO_BACKGROUND) && defined(USE_MY_STREAM)
-#ifdef THREAD
       if (my_thread_var->abort)
 	MyFlags&= ~ MY_WAIT_IF_FULL;		/* End if aborted by user */
-#endif
+
       if ((errno == ENOSPC || errno == EDQUOT) &&
           (MyFlags & MY_WAIT_IF_FULL))
       {
         wait_for_free_space("[stream]", errors);
         errors++;
-        VOID(my_fseek(stream,seekptr,MY_SEEK_SET,MYF(0)));
+        (void) my_fseek(stream,seekptr,MY_SEEK_SET,MYF(0));
         continue;
       }
 #endif
       if (ferror(stream) || (MyFlags & (MY_NABP | MY_FNABP)))
       {
-	if (MyFlags & (MY_WME | MY_FAE | MY_FNABP))
-	{
-	  my_error(EE_WRITE, MYF(ME_BELL+ME_WAITTANG),
-		   my_filename(fileno(stream)),errno);
-	}
-	writtenbytes= (size_t) -1;        /* Return that we got error */
-	break;
+        if (MyFlags & (MY_WME | MY_FAE | MY_FNABP))
+        {
+          char errbuf[MYSYS_STRERROR_SIZE];
+          my_error(EE_WRITE, MYF(ME_BELL+ME_WAITTANG),
+                   my_filename(my_fileno(stream)),
+                   errno, my_strerror(errbuf, sizeof(errbuf), errno));
+        }
+        writtenbytes= (size_t) -1;        /* Return that we got error */
+        break;
       }
     }
     if (MyFlags & (MY_NABP | MY_FNABP))
@@ -185,3 +191,14 @@ my_off_t my_ftell(FILE *stream, myf MyFlags __attribute__((unused)))
   DBUG_PRINT("exit",("ftell: %lu",(ulong) pos));
   DBUG_RETURN((my_off_t) pos);
 } /* my_ftell */
+
+
+/* Get a File corresponding to the stream*/
+int my_fileno(FILE *f)
+{
+#ifdef _WIN32
+  return my_win_fileno(f);
+#else
+ return fileno(f);
+#endif
+}

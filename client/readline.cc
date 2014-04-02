@@ -45,27 +45,49 @@ LINE_BUFFER *batch_readline_init(ulong max_size,FILE *file)
   if (!(line_buff=(LINE_BUFFER*)
         my_malloc(sizeof(*line_buff),MYF(MY_WME | MY_ZEROFILL))))
     return 0;
-  if (init_line_buffer(line_buff,fileno(file),IO_SIZE,max_size))
+  if (init_line_buffer(line_buff,my_fileno(file),IO_SIZE,max_size))
   {
-    my_free(line_buff,MYF(0));
+    my_free(line_buff);
     return 0;
   }
   return line_buff;
 }
 
 
-char *batch_readline(LINE_BUFFER *line_buff)
+char *batch_readline(LINE_BUFFER *line_buff, bool binary_mode)
 {
   char *pos;
-  ulong out_length= 0;
+  ulong out_length;
 
   if (!(pos=intern_read_line(line_buff, &out_length)))
     return 0;
   if (out_length && pos[out_length-1] == '\n')
-    if (--out_length && pos[out_length-1] == '\r')  /* Remove '\n' */
-      out_length--;                                 /* Remove '\r' */
+  {
+#if defined(__WIN__)
+    /*
+      On Windows platforms we also need to remove '\r', 
+      unconditionally.
+     */
+
+    /* Remove '\n' */
+    if (--out_length && pos[out_length-1] == '\r')  
+      /* Remove '\r' */
+      out_length--;                                 
+#else
+    /*
+      On Unix-like platforms we only remove it if we are not 
+      on binary mode.
+     */
+
+    /* Remove '\n' */
+    if (--out_length && !binary_mode && pos[out_length-1] == '\r')
+      /* Remove '\r' */
+      out_length--;                                 
+#endif
+  }
   line_buff->read_length=out_length;
   pos[out_length]=0;
+  DBUG_DUMP("Query: ", (unsigned char *) pos, out_length);
   return pos;
 }
 
@@ -74,8 +96,8 @@ void batch_readline_end(LINE_BUFFER *line_buff)
 {
   if (line_buff)
   {
-    my_free(line_buff->buffer,MYF(MY_ALLOW_ZERO_PTR));
-    my_free(line_buff,MYF(0));
+    my_free(line_buff->buffer);
+    my_free(line_buff);
   }
 }
 
@@ -88,7 +110,7 @@ LINE_BUFFER *batch_readline_command(LINE_BUFFER *line_buff, char * str)
       return 0;
   if (init_line_buffer_from_string(line_buff,str))
   {
-    my_free(line_buff,MYF(0));
+    my_free(line_buff);
     return 0;
   }
   return line_buff;
@@ -225,7 +247,7 @@ char *intern_read_line(LINE_BUFFER *buffer, ulong *out_length)
   for (;;)
   {
     pos=buffer->end_of_line;
-    while (*pos != '\n' && *pos)
+    while (*pos != '\n' && pos != buffer->end)
       pos++;
     if (pos == buffer->end)
     {
@@ -251,6 +273,8 @@ char *intern_read_line(LINE_BUFFER *buffer, ulong *out_length)
       buffer->truncated= 0;
     buffer->end_of_line=pos+1;
     *out_length=(ulong) (pos + 1 - buffer->eof - buffer->start_of_line);
+
+    DBUG_DUMP("Query: ", (unsigned char *) buffer->start_of_line, *out_length);
     DBUG_RETURN(buffer->start_of_line);
   }
 }

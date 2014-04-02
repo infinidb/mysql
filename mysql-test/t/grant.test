@@ -15,6 +15,7 @@ drop table if exists t1;
 drop database if exists mysqltest;
 --enable_warnings
 
+call mtr.add_suppression("Did not write failed .* ");
 connect (master,localhost,root,,);
 connection master;
 SET NAMES binary;
@@ -29,7 +30,7 @@ flush privileges;
 grant select on mysqltest.* to mysqltest_1@localhost require cipher "EDH-RSA-DES-CBC3-SHA";
 show grants for mysqltest_1@localhost;
 grant delete on mysqltest.* to mysqltest_1@localhost;
-select * from mysql.user where user="mysqltest_1";
+query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 revoke delete on mysqltest.* from mysqltest_1@localhost;
 show grants for mysqltest_1@localhost;
@@ -48,10 +49,10 @@ flush privileges;
 delete from mysql.user where user='mysqltest_1';
 flush privileges;
 grant usage on *.* to mysqltest_1@localhost with max_queries_per_hour 10;
-select * from mysql.user where user="mysqltest_1";
+query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 grant usage on *.* to mysqltest_1@localhost with max_updates_per_hour 20 max_connections_per_hour 30;
-select * from mysql.user where user="mysqltest_1";
+query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 # This is just to double check that one won't ignore results of selects
 flush privileges;
@@ -1578,9 +1579,10 @@ drop database mysqltest1;
 #
 # Bug#21432 Database/Table name limited to 64 bytes, not chars, problems with multi-byte
 #
+--character_set utf8
 set names utf8;
 grant select on test.* to юзер_юзер@localhost;
---exec $MYSQL --default-character-set=utf8 --user=юзер_юзер -e "select user()"
+--execw $MYSQL --default-character-set=utf8 --user=юзер_юзер -e "select user()"
 revoke all on test.* from юзер_юзер@localhost;
 drop user юзер_юзер@localhost;
 --error ER_WRONG_STRING_LENGTH
@@ -1675,6 +1677,7 @@ FLUSH PRIVILEGES;
 CREATE DATABASE mysqltest1;
 CREATE PROCEDURE mysqltest1.test() SQL SECURITY DEFINER
   SELECT 1;
+CREATE FUNCTION mysqltest1.test() RETURNS INT RETURN 1;
 --error ER_NO_SUCH_TABLE
 GRANT EXECUTE ON FUNCTION mysqltest1.test TO mysqltest_1@localhost;
 GRANT ALL PRIVILEGES ON test.* TO mysqltest_1@localhost;
@@ -1696,11 +1699,6 @@ GRANT CREATE ROUTINE ON dbbug33464.* TO 'userbug33464'@'localhost';
 --replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
 connect (connbug33464, localhost, userbug33464, , dbbug33464);
 --source suite/funcs_1/include/show_connection.inc
-
---disable_warnings
-DROP PROCEDURE IF EXISTS sp3;
-DROP FUNCTION IF EXISTS fn1;
---enable_warnings
 
 delimiter //;
 CREATE PROCEDURE sp3(v1 char(20))
@@ -1804,6 +1802,34 @@ DROP USER 'user2';
 DROP DATABASE db1;
 
 
+--echo #
+--echo # Bug #25863 No database selected error, but documentation 
+--echo #            says * for global allowed
+--echo #
+
+connect(conn1,localhost,root,,*NO-ONE*);
+
+--error ER_NO_DB_ERROR
+GRANT ALL ON * TO mysqltest_1;
+
+GRANT ALL ON *.* TO mysqltest_1;
+SHOW GRANTS FOR mysqltest_1;
+DROP USER mysqltest_1;
+
+USE test;
+
+GRANT ALL ON * TO mysqltest_1;
+SHOW GRANTS FOR mysqltest_1;
+DROP USER mysqltest_1;
+
+GRANT ALL ON *.* TO mysqltest_1;
+SHOW GRANTS FOR mysqltest_1;
+DROP USER mysqltest_1;
+
+connection default;
+disconnect conn1;
+
+
 #
 # Bug #53371: COM_FIELD_LIST can be abused to bypass table level grants.
 #
@@ -1838,5 +1864,422 @@ revoke select on Foo.* from myuser@localhost;
 delete from mysql.user where User='myuser';
 flush privileges;
 
+--echo #########################################################################
+--echo #
+--echo # Bug#38347: ALTER ROUTINE privilege allows SHOW CREATE TABLE.
+--echo #
+--echo #########################################################################
+
+--echo
+--echo # --
+--echo # -- Prepare the environment.
+--echo # --
+
+DELETE FROM mysql.user WHERE User LIKE 'mysqltest_%';
+DELETE FROM mysql.db WHERE User LIKE 'mysqltest_%';
+DELETE FROM mysql.tables_priv WHERE User LIKE 'mysqltest_%';
+DELETE FROM mysql.columns_priv WHERE User LIKE 'mysqltest_%';
+FLUSH PRIVILEGES;
+
+--disable_warnings
+DROP DATABASE IF EXISTS mysqltest_db1;
+--enable_warnings
+
+CREATE DATABASE mysqltest_db1;
+
+CREATE TABLE mysqltest_db1.t1(a INT);
+
+--echo
+--echo # --
+--echo # -- Check that global privileges don't allow SHOW CREATE TABLE.
+--echo # --
+
+GRANT EVENT                   ON mysqltest_db1.* TO mysqltest_u1@localhost;
+GRANT CREATE TEMPORARY TABLES ON mysqltest_db1.* TO mysqltest_u1@localhost;
+GRANT LOCK TABLES             ON mysqltest_db1.* TO mysqltest_u1@localhost;
+GRANT ALTER ROUTINE           ON mysqltest_db1.* TO mysqltest_u1@localhost;
+GRANT CREATE ROUTINE          ON mysqltest_db1.* TO mysqltest_u1@localhost;
+GRANT EXECUTE                 ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+GRANT FILE                    ON *.* TO mysqltest_u1@localhost;
+GRANT CREATE USER             ON *.* TO mysqltest_u1@localhost;
+GRANT PROCESS                 ON *.* TO mysqltest_u1@localhost;
+GRANT RELOAD                  ON *.* TO mysqltest_u1@localhost;
+GRANT REPLICATION CLIENT      ON *.* TO mysqltest_u1@localhost;
+GRANT REPLICATION SLAVE       ON *.* TO mysqltest_u1@localhost;
+GRANT SHOW DATABASES          ON *.* TO mysqltest_u1@localhost;
+GRANT SHUTDOWN                ON *.* TO mysqltest_u1@localhost;
+GRANT USAGE                   ON *.* TO mysqltest_u1@localhost;
+
+--echo
+SHOW GRANTS FOR mysqltest_u1@localhost;
+
+--echo
+--echo # connection: con1 (mysqltest_u1@mysqltest_db1)
+--connect (con1,localhost,mysqltest_u1,,mysqltest_db1)
+--connection con1
+
+--echo
+--error ER_TABLEACCESS_DENIED_ERROR
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # connection: default
+--connection default
+
+--disconnect con1
+
+--echo
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM mysqltest_u1@localhost;
+SHOW GRANTS FOR mysqltest_u1@localhost;
+
+--echo
+--echo # -- 
+--echo # -- Check that global SELECT allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT SELECT ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global INSERT allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT INSERT ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global UPDATE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT UPDATE ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global DELETE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT DELETE ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global CREATE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT CREATE ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global DROP allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT DROP ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global ALTER allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT ALTER ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global INDEX allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT INDEX ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global REFERENCES allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT REFERENCES ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global GRANT OPTION allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT GRANT OPTION ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global CREATE VIEW allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT CREATE VIEW ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that global SHOW VIEW allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT SHOW VIEW ON mysqltest_db1.* TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level SELECT allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT SELECT ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level INSERT allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT INSERT ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level UPDATE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT UPDATE ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level DELETE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT DELETE ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level CREATE allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT CREATE ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level DROP allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT DROP ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level ALTER allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT ALTER ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level INDEX allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT INDEX ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level REFERENCES allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT REFERENCES ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level GRANT OPTION allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT GRANT OPTION ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level CREATE VIEW allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT CREATE VIEW ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Check that table-level SHOW VIEW allows SHOW CREATE TABLE.
+--echo # -- 
+
+--echo
+GRANT SHOW VIEW ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
+
+--source include/bug38347.inc
+
+--echo
+--echo # -- 
+--echo # -- Cleanup.
+--echo # -- 
+
+--echo
+DROP DATABASE mysqltest_db1;
+
+DROP USER mysqltest_u1@localhost;
+
+--echo
+--echo # End of Bug#38347.
+--echo
+
+
+--echo #
+--echo # BUG#11759114 - '51401: GRANT TREATS NONEXISTENT FUNCTIONS/PRIVILEGES
+--echo #                 DIFFERENTLY'.
+--echo #
+--disable_warnings
+drop database if exists mysqltest_db1;
+--enable_warnings
+create database mysqltest_db1;
+create user mysqltest_u1;
+--echo # Both GRANT statements below should fail with the same error.
+--error ER_SP_DOES_NOT_EXIST
+grant execute on function mysqltest_db1.f1 to mysqltest_u1;
+--error ER_SP_DOES_NOT_EXIST
+grant execute on procedure mysqltest_db1.p1 to mysqltest_u1;
+--echo # Let us show that GRANT behaviour for routines is consistent
+--echo # with GRANT behaviour for tables. Attempt to grant privilege
+--echo # on non-existent table also results in an error.
+--error ER_NO_SUCH_TABLE
+grant select on mysqltest_db1.t1 to mysqltest_u1;
+show grants for mysqltest_u1;
+drop database mysqltest_db1;
+drop user mysqltest_u1;
+
+
+--echo #
+--echo # Bug#11756966 - 48958: STORED PROCEDURES CAN BE LEVERAGED TO BYPASS
+--echo #                DATABASE SECURITY
+--echo #
+
+--disable_warnings
+DROP DATABASE IF EXISTS secret;
+DROP DATABASE IF EXISTS no_such_db;
+--enable_warnings
+
+CREATE DATABASE secret;
+GRANT USAGE ON *.* TO 'untrusted'@localhost;
+
+--echo # Connection con1
+connect (con1, localhost, untrusted);
+SHOW GRANTS;
+SHOW DATABASES;
+
+--echo # Both statements below should fail with the same error.
+--echo # They used to give different errors, thereby
+--echo # hinting that the secret database exists.
+--error ER_DBACCESS_DENIED_ERROR
+CREATE PROCEDURE no_such_db.foo() BEGIN END;
+--error ER_DBACCESS_DENIED_ERROR
+CREATE PROCEDURE secret.peek_at_secret() BEGIN END;
+
+--echo # Connection default
+--connection default
+disconnect con1;
+DROP USER 'untrusted'@localhost;
+DROP DATABASE secret;
+
+--echo #
+--echo # Bug#12766319 - 61865: RENAME USER DOES NOT WORK CORRECTLY - 
+--echo #                       REQUIRES FLUSH PRIVILEGES
+--echo #
+
+CREATE USER foo@'127.0.0.1';
+GRANT ALL ON *.* TO foo@'127.0.0.1';
+
+--echo # First attempt, should connect successfully 
+connect (conn1, '127.0.0.1', foo,,test); 
+SELECT user(), current_user(); 
+
+--echo # Rename the user
+RENAME USER foo@'127.0.0.1' to foo@'127.0.0.0/255.0.0.0';
+
+--echo # Second attempt, should connect successfully as its valid mask
+--echo # This was failing without fix 
+connect (conn2, '127.0.0.1', foo,,test); 
+SELECT user(), current_user(); 
+
+--echo # Rename the user back to original
+RENAME USER foo@'127.0.0.0/255.0.0.0' to foo@'127.0.0.1';
+
+--echo # Third attempt, should connect successfully 
+connect (conn3, '127.0.0.1', foo,,test); 
+SELECT user(), current_user(); 
+
+--echo # Clean-up
+connection default;
+disconnect conn1;
+disconnect conn2;
+disconnect conn3;
+DROP USER foo@'127.0.0.1'; 
+
+--echo # End of Bug#12766319
+
 # Wait till we reached the initial number of concurrent sessions
 --source include/wait_until_count_sessions.inc
+

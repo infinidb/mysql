@@ -1,4 +1,4 @@
-# Copyright (c) 2005, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -139,7 +139,7 @@
    obj:/lib/ld-*.so
 }
 
-{  
+{
    strlen/_dl_init_paths/dl_main/_dl_sysdep_start(Cond)
    Memcheck:Cond
    fun:strlen
@@ -187,52 +187,6 @@
    fun:longest_match
    fun:deflate_slow
    fun:deflate
-   fun:do_flush
-}
-
-{
-   libz longest_match2
-   Memcheck:Cond
-   fun:longest_match
-   fun:deflate_slow
-   fun:deflate
-   fun:compress2
-}
-
-{
-   libz longest_match 3
-   Memcheck:Cond
-   fun:longest_match
-   fun:deflate_slow
-   fun:deflate
-   fun:gzclose
-}
-
-{
-   libz longest_match 4 
-   Memcheck:Cond
-   fun:longest_match
-   fun:deflate_slow
-   fun:deflate
-   fun:gzflush
-}
-
-{
-   libz longest_match3
-   Memcheck:Cond
-   fun:longest_match
-   fun:deflate_slow
-   fun:deflate
-   fun:azflush
-}
-
-{
-   libz longest_match3
-   Memcheck:Cond
-   fun:longest_match
-   fun:deflate_slow
-   fun:deflate
-   fun:azclose
 }
 
 {
@@ -261,6 +215,16 @@
    obj:*/libz.so.*
    fun:deflate
    fun:do_flush
+}
+
+{
+  libz deflate4
+  Memcheck:Param
+  write(buf)
+  fun:*
+  fun:my_write
+  fun:do_flush
+  fun:azclose
 }
 
 #
@@ -448,7 +412,7 @@
    fun:malloc
    fun:_dl_map_object
    fun:openaux
-   fun:_dl_catch_error 
+   fun:_dl_catch_error
 }
 
 {
@@ -732,7 +696,7 @@
 #
 {
    pthread allocate_tls memory loss in 2.6.1.
-   Memcheck:Leak 
+   Memcheck:Leak
    fun:calloc
    obj:*/ld-*.so
    fun:_dl_allocate_tls
@@ -743,6 +707,161 @@
    buf_buddy_relocate peeking (space,page) in potentially free blocks
    Memcheck:Addr1
    fun:buf_buddy_relocate
+}
+
+#
+# See related Bug#56666
+# Race condition between the server main thread and the kill server thread.
+#
+# Because of this race condition, the call to shutdown_performance_schema()
+# was commented in sql/mysqld.cc, causing the reported leaks.
+#
+
+{
+   missing shutdown_performance_schema 1a
+   Memcheck:Leak
+   fun:malloc
+   fun:_Z10pfs_mallocmi
+}
+
+{
+   missing shutdown_performance_schema 1b
+   Memcheck:Leak
+   fun:memalign
+   fun:posix_memalign
+   fun:_Z10pfs_mallocmi
+}
+
+{
+   missing shutdown_performance_schema 2
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_alloc_new
+   fun:lf_hash_insert
+}
+
+#
+# Note that initialize_bucket() is reccursive,
+# can't provide more stack context.
+#
+{
+   missing shutdown_performance_schema 3a
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:initialize_bucket
+}
+
+{
+   missing shutdown_performance_schema 3b
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_dynarray_lvalue
+   fun:initialize_bucket
+}
+
+{
+   missing shutdown_performance_schema 4
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_dynarray_lvalue
+   fun:_lf_pinbox_get_pins
+}
+
+{
+   missing shutdown_performance_schema 5
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_dynarray_lvalue
+   fun:lf_hash_insert
+}
+
+{
+   missing shutdown_performance_schema 6
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_dynarray_lvalue
+   fun:lf_hash_delete
+}
+
+{
+   missing shutdown_performance_schema 7
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_lf_dynarray_lvalue
+   fun:lf_hash_search
+}
+
+{
+   missing shutdown_performance_schema 8
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_Z22add_pfs_instr_to_arrayPKcS0_
+   fun:mysqld_get_one_option
+   fun:my_handle_options
+   fun:handle_options
+   fun:_Z20handle_early_optionsv
+}
+
+{
+   missing shutdown_performance_schema 9
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:init_dynamic_array2
+   fun:_Z25init_pfs_instrument_arrayv
+   fun:_Z11mysqld_mainiPPc
+   fun:main
+}
+
+{
+   missing shutdown_performance_schema 9a
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:_Z22add_pfs_instr_to_arrayPKcS0_
+   fun:mysqld_get_one_option
+   fun:my_handle_options
+   fun:_Z20handle_early_optionsv
+   fun:_Z11mysqld_mainiPPc
+}
+
+# Same as shutdown_performance_schema 9,
+# but the compiler/linker can sometime change the
+# calls from:
+# main()
+#   --> init_pfs_instrument_array()
+#     --> init_dynamic_array2()
+# to:
+# main()
+#   --> init_dynamic_array2()
+# when building with optimizations.
+
+{
+   missing shutdown_performance_schema 10
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:init_dynamic_array2
+   fun:_Z11mysqld_mainiPPc
+   fun:main
+}
+
+{
+   missing shutdown_performance_schema 11
+   Memcheck:Leak
+   fun:malloc
+   fun:my_malloc
+   fun:init_dynamic_array2
+   fun:_Z11mysqld_mainiPPc
+   fun:(below main)
 }
 
 {
@@ -767,10 +886,90 @@
    fun:*
    fun:deflate
    fun:page_zip_compress
+}
+
+{
+   In page0zip.c we have already checked that the memory is initialized before calling deflate()
+   Memcheck:Cond
+   fun:*
+   fun:*
+   fun:deflate
+   fun:page_zip_compress_deflate
+}
+
+{
+   In page0zip.c we have already checked that the memory is initialized before calling deflate()
+   Memcheck:Cond
+   obj:*/libz.so*
+   obj:*/libz.so*
+   fun:deflate
+   fun:page_zip_compress
+   fun:page_zip_reorganize
    fun:page_cur_insert_rec_zip_reorg
    fun:page_cur_insert_rec_zip
    fun:page_cur_tuple_insert
    fun:btr_cur_optimistic_insert
+   fun:btr_cur_pessimistic_insert
+   fun:row_ins_index_entry_low
+   fun:row_ins_index_entry
+   fun:row_ins_index_entry_step
+   fun:row_ins
+   fun:row_ins_step
+   fun:row_insert_for_mysql
+}
+
+{
+   In page0zip.c we have already checked that the memory is initialized before calling deflate()
+   Memcheck:Cond
+   obj:*/libz.so*
+   obj:*/libz.so*
+   fun:deflate
+   fun:page_zip_compress
+   fun:page_zip_reorganize
+   fun:page_cur_insert_rec_zip_reorg
+   fun:page_cur_insert_rec_zip
+   fun:page_cur_tuple_insert
+   fun:btr_cur_optimistic_insert
+   fun:row_ins_index_entry_low
+   fun:row_ins_index_entry
+   fun:row_ins_index_entry_step
+   fun:row_ins
+   fun:row_ins_step
+   fun:row_insert_for_mysql
+}
+
+{
+   In page0zip.c we have already checked that the memory is initialized before calling deflate()
+   Memcheck:Cond
+   obj:*/libz.so*
+   obj:*/libz.so*
+   fun:deflate
+   fun:page_zip_compress
+   fun:page_copy_rec_list_end
+   fun:page_move_rec_list_end
+   fun:btr_page_split_and_insert
+   fun:btr_root_raise_and_insert
+   fun:btr_cur_pessimistic_insert
+   fun:row_ins_index_entry_low
+   fun:row_ins_index_entry
+   fun:row_ins_index_entry_step
+   fun:row_ins
+   fun:row_ins_step
+   fun:row_insert_for_mysql
+}
+
+{
+   In page0zip.c we have already checked that the memory is initialized before calling deflate()
+   Memcheck:Cond
+   obj:*/libz.so*
+   obj:*/libz.so*
+   fun:deflate
+   fun:page_zip_compress
+   fun:page_cur_insert_rec_zip_reorg
+   fun:page_cur_insert_rec_zip
+   fun:page_cur_tuple_insert
+   fun:btr_cur_optimistic_insert
+   fun:btr_cur_pessimistic_insert
    fun:row_ins_index_entry_low
    fun:row_ins_index_entry
    fun:row_ins_index_entry_step
@@ -786,45 +985,117 @@
    fun:buf_buddy_relocate
    fun:buf_buddy_free_low
    fun:buf_buddy_free
-   fun:buf_LRU_block_remove_hashed_page
-   fun:buf_LRU_invalidate_tablespace
-   fun:fil_delete_tablespace
-   fun:row_drop_table_for_mysql
 }
 
 # Note the wildcard in the (mangled) function signatures of
 # write_keys() and find_all_keys().
 # They both return ha_rows, which is platform dependent.
+#
+# The '...' wildcards are for 'fun:inline_mysql_file_write' which *may*
+# be inlined.
 {
    Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / one
    Memcheck:Param
    write(buf)
-   obj:*/libpthread*.so
-   fun:my_write
+   ...
    fun:my_b_flush_io_cache
    fun:_my_b_write
-   fun:_Z*10write_keysP13st_sort_paramPPhjP11st_io_cacheS4_
-   fun:_Z*13find_all_keysP13st_sort_paramP10SQL_SELECTPPhP11st_io_cacheS6_S6_
-   fun:_Z8filesortP3THDP8st_tableP13st_sort_fieldjP10SQL_SELECTybPy
+   fun:_Z*10write_keysP10Sort_paramP13Filesort_infojP11st_io_cacheS4_
+   fun:_Z*13find_all_keysP10Sort_paramP10SQL_SELECTP13Filesort_infoP11st_io_cacheS6_P13Bounded_queueIhhEPy
+   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
 }
 
 {
    Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / two
    Memcheck:Param
    write(buf)
-   obj:*/libpthread*.so
-   fun:my_write
+   ...
    fun:my_b_flush_io_cache
-   fun:_Z15merge_many_buffP13st_sort_paramPhP10st_buffpekPjP11st_io_cache
-   fun:_Z8filesortP3THDP8st_tableP13st_sort_fieldjP10SQL_SELECTybPy
+   fun:_Z15merge_many_buffP10Sort_paramPhP10st_buffpekPjP11st_io_cache
+   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
 }
 
 {
    Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / three
    Memcheck:Param
    write(buf)
-   obj:*/libpthread*.so
-   fun:my_write
+   ...
    fun:my_b_flush_io_cache
-   fun:_Z8filesortP3THDP8st_tableP13st_sort_fieldjP10SQL_SELECTybPy
+   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
+}
+
+{
+   Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / four
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:my_b_flush_io_cache
+   fun:_my_b_write
+   fun:_Z*10write_keysP10Sort_paramP13Filesort_infojP11st_io_cacheS4_
+   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
+}
+
+{
+   OpenSSL still reachable.
+   Memcheck:Leak
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:sk_new
+   fun:load_builtin_compressions
+   fun:SSL_COMP_get_compression_methods
+   fun:SSL_library_init
+}
+{
+   BUG#14801497 CONDITIONAL JUMP OR MOVE DEPENDS ON UNINITIALISED VALUE(S) IN CREATE_TMP_TABLE
+   Memcheck:Cond
+   fun:_Z16create_tmp_tableP3THDP15TMP_TABLE_PARAMR4ListI4ItemEP8st_orderbbyyPKc
+   fun:_Z19create_schema_tableP3THDP10TABLE_LIST
+   fun:_Z18mysql_schema_tableP3THDP3LEXP10TABLE_LIST
+   ...
+   fun:_Z11open_tablesP3THDPP10TABLE_LISTPjjP19Prelocking_strategy
+   fun:_Z20open_and_lock_tablesP3THDP10TABLE_LISTbjP19Prelocking_strategy
+   fun:_Z20open_and_lock_tablesP3THDP10TABLE_LISTbj
+   fun:_Z21mysql_execute_commandP3THD
+   fun:_Z11mysql_parseP3THDPcjP12Parser_state
+   fun:_Z16dispatch_command19enum_server_commandP3THDPcj
+   fun:_Z24do_handle_one_connectionP3THD
+   fun:handle_one_connection
+   fun:pfs_spawn_thread
+}
+
+
+{
+   Bug#16039908 "BYTES STILL REACHABLE" IN VALGRIND TEST ON 5.6/TRUNK
+   Memcheck:Leak
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlclose
+   fun:_ZL15free_plugin_memP12st_plugin_dl
+   fun:_ZL13plugin_dl_delPK19st_mysql_lex_string
+   fun:_ZL10plugin_delP13st_plugin_int
+   fun:_ZL12reap_pluginsv
+   fun:_Z15plugin_shutdownv
+   fun:_ZL8clean_upb
+   fun:_Z10unireg_endv
+   fun:_ZL11kill_serverPv
+   fun:kill_server_thread
+}
+
+#Suppress warnings from glibc implementation of 'malloc_info' 
+{
+   Malloc_info uninitialised value of size 8
+   Memcheck:Value8
+   fun:_itoa_word
+   fun:vfprintf
+   fun:fprintf
+   fun:mi_arena.*
+   fun:malloc_info
+}
+
+{
+   Malloc_info conditional jump depends on uninitialised values
+   Memcheck:Cond
+   ...
+   fun:mi_arena.*
+   fun:malloc_info
 }

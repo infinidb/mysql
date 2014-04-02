@@ -1,6 +1,6 @@
 #ifndef _EVENT_SCHEDULER_H_
 #define _EVENT_SCHEDULER_H_
-/* Copyright (c) 2004-2007 MySQL AB
+/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +12,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 /**
   @addtogroup Event_Scheduler
@@ -34,7 +34,9 @@
 class Event_queue;
 class Event_job_data;
 class Event_db_repository;
+class Event_queue_element_for_exec;
 class Events;
+class THD;
 
 void
 pre_init_event_thread(THD* thd);
@@ -76,7 +78,7 @@ public:
   /* State changing methods follow */
 
   bool
-  start();
+  start(int *err_no);
 
   bool
   stop();
@@ -112,10 +114,10 @@ private:
   unlock_data(const char *func, uint line);
 
   void
-  cond_wait(THD *thd, struct timespec *abstime, const char* msg,
-            const char *func, uint line);
+  cond_wait(THD *thd, struct timespec *abstime, const PSI_stage_info *stage,
+            const char *src_func, const char *src_file, uint src_line);
 
-  pthread_mutex_t LOCK_scheduler_state;
+  mysql_mutex_t LOCK_scheduler_state;
 
   enum enum_state
   {
@@ -129,7 +131,7 @@ private:
 
   THD *scheduler_thd;
 
-  pthread_cond_t COND_state;
+  mysql_cond_t COND_state;
 
   Event_queue *queue;
 

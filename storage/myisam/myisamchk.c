@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,12 +11,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 /* Describe, check and repair of MyISAM tables */
 
 #include "fulltext.h"
+#include "my_default.h"
 
 #include <m_ctype.h>
 #include <stdarg.h>
@@ -28,12 +27,6 @@
 #endif
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
-#endif
-SET_STACK_SIZE(9000)			/* Minimum stack size for program */
-
-#ifndef USE_RAID
-#define my_raid_create(A,B,C,D,E,F,G) my_create(A,B,C,G)
-#define my_raid_delete(A,B,C) my_delete(A,B)
 #endif
 
 static uint decode_bits;
@@ -101,8 +94,8 @@ int main(int argc, char **argv)
     int new_error=myisamchk(&check_param, *(argv++));
     if ((check_param.testflag & T_REP_ANY) != T_REP)
       check_param.testflag&= ~T_REP;
-    VOID(fflush(stdout));
-    VOID(fflush(stderr));
+    (void) fflush(stdout);
+    (void) fflush(stderr);
     if ((check_param.error_printed | check_param.warning_printed) &&
 	(check_param.testflag & T_FORCE_CREATE) &&
 	(!(check_param.testflag & (T_REP | T_REP_BY_SORT | T_SORT_RECORDS |
@@ -114,15 +107,15 @@ int main(int argc, char **argv)
       check_param.testflag&= ~T_EXTEND;			/* Don't needed  */
       error|=myisamchk(&check_param, argv[-1]);
       check_param.testflag= old_testflag;
-      VOID(fflush(stdout));
-      VOID(fflush(stderr));
+      (void) fflush(stdout);
+      (void) fflush(stderr);
     }
     else
       error|=new_error;
     if (argc && (!(check_param.testflag & T_SILENT) || check_param.testflag & T_INFO))
     {
       puts("\n---------\n");
-      VOID(fflush(stdout));
+      (void) fflush(stdout);
     }
   }
   if (check_param.total_files > 1)
@@ -150,7 +143,7 @@ enum options_mc {
   OPT_READ_BUFFER_SIZE, OPT_WRITE_BUFFER_SIZE, OPT_SORT_BUFFER_SIZE,
   OPT_SORT_KEY_BLOCKS, OPT_DECODE_BITS, OPT_FT_MIN_WORD_LEN,
   OPT_FT_MAX_WORD_LEN, OPT_FT_STOPWORD_FILE,
-  OPT_MAX_RECORD_LENGTH, OPT_AUTO_CLOSE, OPT_STATS_METHOD
+  OPT_MAX_RECORD_LENGTH, OPT_STATS_METHOD
 };
 
 static struct my_option my_long_options[] =
@@ -158,10 +151,6 @@ static struct my_option my_long_options[] =
   {"analyze", 'a',
    "Analyze distribution of keys. Will make some joins in MySQL faster. You can check the calculated distribution.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#ifdef __NETWARE__
-  {"autoclose", OPT_AUTO_CLOSE, "Auto close the screen on exit for Netware.",
-   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#endif
   {"block-search", 'b',
    "No help available.",
    0, 0, 0, GET_ULONG, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
@@ -254,9 +243,6 @@ static struct my_option my_long_options[] =
   {"set-collation", OPT_SET_COLLATION,
    "Change the collation used by the index",
    &set_collation_name, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"set-variable", 'O',
-   "Change the value of a variable. Please note that this option is deprecated; you can set variables directly with --variable-name=value.",
-   0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"silent", 's',
    "Only print errors. One can use two -s to make myisamchk very silent.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -310,18 +296,18 @@ static struct my_option my_long_options[] =
     &check_param.write_buffer_length, 0, GET_ULONG, REQUIRED_ARG,
     (long) READ_BUFFER_INIT, (long) MALLOC_OVERHEAD,
     INT_MAX32, (long) MALLOC_OVERHEAD, (long) 1L, 0},
-  { "sort_buffer_size", OPT_SORT_BUFFER_SIZE, 
+  { "sort_buffer_size", OPT_SORT_BUFFER_SIZE,
     "Deprecated. myisam_sort_buffer_size alias is being used",
     &check_param.sort_buffer_length,
-    &check_param.sort_buffer_length, 0, GET_ULONG, REQUIRED_ARG,
+    &check_param.sort_buffer_length, 0, GET_ULL, REQUIRED_ARG,
     (long) SORT_BUFFER_INIT, (long) (MIN_SORT_BUFFER + MALLOC_OVERHEAD),
-    ULONG_MAX, (long) MALLOC_OVERHEAD, (long) 1L, 0},
+    SIZE_T_MAX, (long) MALLOC_OVERHEAD, (long) 1L, 0},
   { "myisam_sort_buffer_size", OPT_SORT_BUFFER_SIZE, 
     "Alias of sort_buffer_size parameter",
     &check_param.sort_buffer_length,
-    &check_param.sort_buffer_length, 0, GET_ULONG, REQUIRED_ARG,
+    &check_param.sort_buffer_length, 0, GET_ULL, REQUIRED_ARG,
     (long) SORT_BUFFER_INIT, (long) (MIN_SORT_BUFFER + MALLOC_OVERHEAD),
-    ULONG_MAX, (long) MALLOC_OVERHEAD, (long) 1L, 0},
+    SIZE_T_MAX, (long) MALLOC_OVERHEAD, (long) 1L, 0},
   { "sort_key_blocks", OPT_SORT_KEY_BLOCKS, "",
     &check_param.sort_key_blocks,
     &check_param.sort_key_blocks, 0, GET_ULONG, REQUIRED_ARG,
@@ -348,13 +334,10 @@ static struct my_option my_long_options[] =
 };
 
 
-#include <help_start.h>
-
 static void print_version(void)
 {
   printf("%s  Ver 2.7 for %s at %s\n", my_progname, SYSTEM_TYPE,
 	 MACHINE_TYPE);
-  NETWARE_SET_SCREEN_MODE(1);
 }
 
 
@@ -374,13 +357,9 @@ static void usage(void)
   printf("\
   -H, --HELP          Display this help and exit.\n\
   -?, --help          Display this help and exit.\n\
-  -O, --set-variable var=option.\n\
-                      Change the value of a variable. Please note that\n\
-                      this option is deprecated; you can set variables\n\
-                      directly with '--variable-name=value'.\n\
   -t, --tmpdir=path   Path for temporary files. Multiple paths can be\n\
                       specified, separated by ");
-#if defined( __WIN__) || defined(__NETWARE__)
+#if defined( __WIN__)
    printf("semicolon (;)");
 #else
    printf("colon (:)");
@@ -476,7 +455,6 @@ static void usage(void)
   my_print_variables(my_long_options);
 }
 
-#include <help_end.h>
 
 const char *myisam_stats_method_names[] = {"nulls_unequal", "nulls_equal",
                                            "nulls_ignored", NullS};
@@ -492,11 +470,6 @@ get_one_option(int optid,
 	       char *argument)
 {
   switch (optid) {
-#ifdef __NETWARE__
-  case OPT_AUTO_CLOSE:
-    setscreenmode(SCR_AUTOCLOSE_ON_EXIT);
-    break;
-#endif
   case 'a':
     if (argument == disabled_my_option)
       check_param.testflag&= ~T_STATISTICS;
@@ -708,7 +681,8 @@ get_one_option(int optid,
     int method;
     enum_mi_stats_method UNINIT_VAR(method_conv);
     myisam_stats_method_str= argument;
-    if ((method=find_type(argument, &myisam_stats_method_typelib, 2)) <= 0)
+    if ((method= find_type(argument, &myisam_stats_method_typelib,
+                           FIND_TYPE_BASIC)) <= 0)
     {
       fprintf(stderr, "Invalid value of stats_method: %s.\n", argument);
       exit(1);
@@ -748,7 +722,9 @@ static void get_options(register int *argc,register char ***argv)
 {
   int ho_error;
 
-  load_defaults("my", load_default_groups, argc, argv);
+  if (load_defaults("my", load_default_groups, argc, argv))
+    exit(1);
+
   default_argv= *argv;
   if (isatty(fileno(stdout)))
     check_param.testflag|=T_WRITE_LOOP;
@@ -770,9 +746,9 @@ static void get_options(register int *argc,register char ***argv)
   if ((check_param.testflag & T_UNPACK) &&
       (check_param.testflag & (T_QUICK | T_SORT_RECORDS)))
   {
-    VOID(fprintf(stderr,
+    (void) fprintf(stderr,
 		 "%s: --unpack can't be used with --quick or --sort-records\n",
-		 my_progname_short));
+		 my_progname_short);
     exit(1);
   }
   if ((check_param.testflag & T_READONLY) &&
@@ -780,9 +756,9 @@ static void get_options(register int *argc,register char ***argv)
        (T_REP_ANY | T_STATISTICS | T_AUTO_INC |
 	T_SORT_RECORDS | T_SORT_INDEX | T_FORCE_CREATE)))
   {
-    VOID(fprintf(stderr,
+    (void) fprintf(stderr,
 		 "%s: Can't use --readonly when repairing or sorting\n",
-		 my_progname_short));
+		 my_progname_short);
     exit(1);
   }
 
@@ -808,7 +784,6 @@ static int myisamchk(MI_CHECK *param, char * filename)
 {
   int error,lock_type,recreate;
   int rep_quick= param->testflag & (T_QUICK | T_FORCE_UNIQUENESS);
-  uint raid_chunks;
   MI_INFO *info;
   File datafile;
   char llbuff[22],llbuff2[22];
@@ -870,7 +845,6 @@ static int myisamchk(MI_CHECK *param, char * filename)
   share->options&= ~HA_OPTION_READ_ONLY_DATA; /* We are modifing it */
   share->tot_locks-= share->r_locks;
   share->r_locks=0;
-  raid_chunks=share->base.raid_chunks;
 
   /*
     Skip the checking of the file if:
@@ -936,9 +910,9 @@ static int myisamchk(MI_CHECK *param, char * filename)
       param->language= set_collation->number;
     if (recreate_table(param, &info,filename))
     {
-      VOID(fprintf(stderr,
+      (void) fprintf(stderr,
 		   "MyISAM-table '%s' is not fixed because of errors\n",
-	      filename));
+	      filename);
       return(-1);
     }
     recreate=1;
@@ -1038,10 +1012,8 @@ static int myisamchk(MI_CHECK *param, char * filename)
 #ifndef TO_BE_REMOVED
 	if (param->out_flag & O_NEW_DATA)
 	{			/* Change temp file to org file */
-	  VOID(my_close(info->dfile,MYF(MY_WME))); /* Close new file */
-	  error|=change_to_newfile(filename,MI_NAME_DEXT,DATA_TMP_EXT,
-				   raid_chunks,
-				   MYF(0));
+	  (void) my_close(info->dfile,MYF(MY_WME)); /* Close new file */
+	  error|=change_to_newfile(filename, MI_NAME_DEXT, DATA_TMP_EXT, MYF(0));
 	  if (mi_open_datafile(info,info->s, NULL, -1))
 	    error=1;
 	  param->out_flag&= ~O_NEW_DATA; /* We are using new datafile */
@@ -1109,23 +1081,23 @@ static int myisamchk(MI_CHECK *param, char * filename)
 	  !(param->testflag & (T_FAST | T_FORCE_CREATE)))
       {
 	if (param->testflag & (T_EXTEND | T_MEDIUM))
-	  VOID(init_key_cache(dflt_key_cache,opt_key_cache_block_size,
-                              (size_t) param->use_buffers, 0, 0));
-	VOID(init_io_cache(&param->read_cache,datafile,
+	  (void) init_key_cache(dflt_key_cache,opt_key_cache_block_size,
+                              param->use_buffers, 0, 0);
+	(void) init_io_cache(&param->read_cache,datafile,
 			   (uint) param->read_buffer_length,
 			   READ_CACHE,
 			   (param->start_check_pos ?
 			    param->start_check_pos :
 			    share->pack.header_length),
 			   1,
-			   MYF(MY_WME)));
+			   MYF(MY_WME));
 	lock_memory(param);
 	if ((info->s->options & (HA_OPTION_PACK_RECORD |
 				 HA_OPTION_COMPRESS_RECORD)) ||
 	    (param->testflag & (T_EXTEND | T_MEDIUM)))
 	  error|=chk_data_link(param, info, param->testflag & T_EXTEND);
 	error|=flush_blocks(param, share->key_cache, share->kfile);
-	VOID(end_io_cache(&param->read_cache));
+	(void) end_io_cache(&param->read_cache);
       }
       if (!error)
       {
@@ -1146,7 +1118,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
   if ((param->testflag & T_AUTO_INC) ||
       ((param->testflag & T_REP_ANY) && info->s->base.auto_key))
     update_auto_increment_key(param, info,
-			      (my_bool) !test(param->testflag & T_AUTO_INC));
+			      (my_bool) !MY_TEST(param->testflag & T_AUTO_INC));
 
   if (!(param->testflag & T_DESCRIPT))
   {
@@ -1158,7 +1130,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
 				(state_updated ? UPDATE_STAT : 0) |
 				((param->testflag & T_SORT_RECORDS) ?
 				 UPDATE_SORT : 0)));
-    VOID(lock_file(param, share->kfile,0L,F_UNLCK,"indexfile",filename));
+    (void) lock_file(param, share->kfile,0L,F_UNLCK,"indexfile",filename);
     info->update&= ~HA_STATE_CHANGED;
   }
   mi_lock_database(info, F_UNLCK);
@@ -1172,37 +1144,35 @@ end2:
   {
     if (param->out_flag & O_NEW_DATA)
       error|=change_to_newfile(filename,MI_NAME_DEXT,DATA_TMP_EXT,
-			       raid_chunks,
 			       ((param->testflag & T_BACKUP_DATA) ?
 				MYF(MY_REDEL_MAKE_BACKUP) : MYF(0)));
     if (param->out_flag & O_NEW_INDEX)
-      error|=change_to_newfile(filename,MI_NAME_IEXT,INDEX_TMP_EXT,0,
-			       MYF(0));
+      error|=change_to_newfile(filename, MI_NAME_IEXT, INDEX_TMP_EXT, MYF(0));
   }
-  VOID(fflush(stdout)); VOID(fflush(stderr));
+  (void) fflush(stdout); (void) fflush(stderr);
   if (param->error_printed)
   {
     if (param->testflag & (T_REP_ANY | T_SORT_RECORDS | T_SORT_INDEX))
     {
-      VOID(fprintf(stderr,
+      (void) fprintf(stderr,
 		   "MyISAM-table '%s' is not fixed because of errors\n",
-		   filename));
+		   filename);
       if (param->testflag & T_REP_ANY)
-	VOID(fprintf(stderr,
-		     "Try fixing it by using the --safe-recover (-o), the --force (-f) option or by not using the --quick (-q) flag\n"));
+	(void) fprintf(stderr,
+		     "Try fixing it by using the --safe-recover (-o), the --force (-f) option or by not using the --quick (-q) flag\n");
     }
     else if (!(param->error_printed & 2) &&
 	     !(param->testflag & T_FORCE_CREATE))
-      VOID(fprintf(stderr,
+      (void) fprintf(stderr,
       "MyISAM-table '%s' is corrupted\nFix it using switch \"-r\" or \"-o\"\n",
-	      filename));
+	      filename);
   }
   else if (param->warning_printed &&
 	   ! (param->testflag & (T_REP_ANY | T_SORT_RECORDS | T_SORT_INDEX |
 			  T_FORCE_CREATE)))
-    VOID(fprintf(stderr, "MyISAM-table '%s' is usable but should be fixed\n",
-		 filename));
-  VOID(fflush(stderr));
+    (void) fprintf(stderr, "MyISAM-table '%s' is usable but should be fixed\n",
+		 filename);
+  (void) fflush(stderr);
   DBUG_RETURN(error);
 } /* myisamchk */
 
@@ -1273,16 +1243,9 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	     share->base.auto_key,
 	     llstr(share->state.auto_increment,llbuff));
     }
-    if (share->base.raid_type)
-    {
-      printf("RAID:                Type:  %u   Chunks: %u  Chunksize: %lu\n",
-	     share->base.raid_type,
-	     share->base.raid_chunks,
-	     share->base.raid_chunksize);
-    }
     if (share->options & (HA_OPTION_CHECKSUM | HA_OPTION_COMPRESS_RECORD))
       printf("Checksum:  %23s\n",llstr(info->state->checksum,llbuff));
-;
+
     if (share->options & HA_OPTION_DELAY_KEY_WRITE)
       printf("Keys are only flushed at close\n");
 
@@ -1329,7 +1292,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
   printf("Key Start Len Index   Type");
   if (param->testflag & T_VERBOSE)
     printf("                     Rec/key         Root  Blocksize");
-  VOID(putchar('\n'));
+  (void) putchar('\n');
 
   for (key=keyseg_nr=0, keyinfo= &share->keyinfo[0] ;
        key < share->base.keys;
@@ -1368,7 +1331,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
       printf("%11lu %12s %10d",
 	     share->state.rec_per_key_part[keyseg_nr++],
 	     buff,keyinfo->block_length);
-    VOID(putchar('\n'));
+    (void) putchar('\n');
     while ((++keyseg)->type != HA_KEYTYPE_END)
     {
       pos=buff;
@@ -1387,7 +1350,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	     (long) keyseg->start+1,keyseg->length,buff);
       if (param->testflag & T_VERBOSE)
 	printf("%11lu", share->state.rec_per_key_part[keyseg_nr++]);
-      VOID(putchar('\n'));
+      (void) putchar('\n');
     }
     keyseg++;
   }
@@ -1425,7 +1388,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
     printf("\nField Start Length Nullpos Nullbit Type");
     if (share->options & HA_OPTION_COMPRESS_RECORD)
       printf("                         Huff tree  Bits");
-    VOID(putchar('\n'));
+    (void) putchar('\n');
     start=1;
     for (field=0 ; field < share->base.fields ; field++)
     {
@@ -1464,7 +1427,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 		 (uint) (share->rec[field].huff_tree-share->decode_trees)+1,
 		 share->rec[field].huff_tree->quick_table_bits);
       }
-      VOID(putchar('\n'));
+      (void) putchar('\n');
       start+=share->rec[field].length;
     }
   }
@@ -1492,8 +1455,8 @@ static int mi_sort_records(MI_CHECK *param,
   MI_SORT_PARAM sort_param;
   DBUG_ENTER("sort_records");
 
-  bzero((char*)&sort_info,sizeof(sort_info));
-  bzero((char*)&sort_param,sizeof(sort_param));
+  memset(&sort_info, 0, sizeof(sort_info));
+  memset(&sort_param, 0, sizeof(sort_param));
   sort_param.sort_info=&sort_info;
   sort_info.param=param;
   keyinfo= &share->keyinfo[sort_key];
@@ -1553,14 +1516,11 @@ static int mi_sort_records(MI_CHECK *param,
     goto err;
   }
   fn_format(param->temp_filename,name,"", MI_NAME_DEXT,2+4+32);
-  new_file=my_raid_create(fn_format(param->temp_filename,
-				    param->temp_filename,"",
-				    DATA_TMP_EXT,2+4),
-			  0,param->tmpfile_createflag,
-			  share->base.raid_type,
-			  share->base.raid_chunks,
-			  share->base.raid_chunksize,
-			  MYF(0));
+  new_file= my_create(fn_format(param->temp_filename,
+                                param->temp_filename, "",
+                                DATA_TMP_EXT, 2+4),
+                      0, param->tmpfile_createflag,
+                      MYF(0));
   if (new_file < 0)
   {
     mi_check_print_error(param,"Can't create new tempfile: '%s'",
@@ -1612,7 +1572,7 @@ static int mi_sort_records(MI_CHECK *param,
     goto err;
   }
 
-  VOID(my_close(info->dfile,MYF(MY_WME)));
+  (void) my_close(info->dfile,MYF(MY_WME));
   param->out_flag|=O_NEW_DATA;			/* Data in new file */
   info->dfile=new_file;				/* Use new datafile */
   info->state->del=0;
@@ -1626,27 +1586,25 @@ static int mi_sort_records(MI_CHECK *param,
 
   if (param->testflag & T_WRITE_LOOP)
   {
-    VOID(fputs("          \r",stdout)); VOID(fflush(stdout));
+    (void) fputs("          \r",stdout); (void) fflush(stdout);
   }
   got_error=0;
 
 err:
   if (got_error && new_file >= 0)
   {
-    VOID(end_io_cache(&info->rec_cache));
+    (void) end_io_cache(&info->rec_cache);
     (void) my_close(new_file,MYF(MY_WME));
-    (void) my_raid_delete(param->temp_filename, share->base.raid_chunks,
-			  MYF(MY_WME));
+    (void) my_delete(param->temp_filename, MYF(MY_WME));
   }
   if (temp_buff)
   {
     my_afree((uchar*) temp_buff);
   }
-  my_free(mi_get_rec_buff_ptr(info, sort_param.record),
-          MYF(MY_ALLOW_ZERO_PTR));
+  my_free(mi_get_rec_buff_ptr(info, sort_param.record));
   info->opt_flag&= ~(READ_CACHE_USED | WRITE_CACHE_USED);
-  VOID(end_io_cache(&info->rec_cache));
-  my_free(sort_info.buff,MYF(MY_ALLOW_ZERO_PTR));
+  (void) end_io_cache(&info->rec_cache);
+  my_free(sort_info.buff);
   sort_info.buff=0;
   share->state.sortkey=sort_key;
   DBUG_RETURN(flush_blocks(param, share->key_cache, share->kfile) |
@@ -1686,7 +1644,6 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
   endpos=buff+used_length;
   for ( ;; )
   {
-    _sanity(__FILE__,__LINE__);
     if (nod_flag)
     {
       next_page=_mi_kpos(nod_flag,keypos);
@@ -1702,7 +1659,6 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
 			    new_file, update_index))
 	goto err;
     }
-    _sanity(__FILE__,__LINE__);
     if (keypos >= endpos ||
 	(key_length=(*keyinfo->get_key)(keyinfo,nod_flag,&keypos,lastkey))
 	== 0)
@@ -1729,7 +1685,7 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
       goto err;
   }
   /* Clear end of block to get better compression if the table is backuped */
-  bzero((uchar*) buff+used_length,keyinfo->block_length-used_length);
+  memset(buff+used_length, 0, keyinfo->block_length-used_length);
   if (my_pwrite(info->s->kfile,(uchar*) buff,(uint) keyinfo->block_length,
 		page,param->myf_rw))
   {
@@ -1769,8 +1725,8 @@ void mi_check_print_info(MI_CHECK *param __attribute__((unused)),
   va_list args;
 
   va_start(args,fmt);
-  VOID(vfprintf(stdout, fmt, args));
-  VOID(fputc('\n',stdout));
+  (void) vfprintf(stdout, fmt, args);
+  (void) fputc('\n',stdout);
   va_end(args);
 }
 
@@ -1792,8 +1748,8 @@ void mi_check_print_warning(MI_CHECK *param, const char *fmt,...)
   param->warning_printed=1;
   va_start(args,fmt);
   fprintf(stderr,"%s: warning: ",my_progname_short);
-  VOID(vfprintf(stderr, fmt, args));
-  VOID(fputc('\n',stderr));
+  (void) vfprintf(stderr, fmt, args);
+  (void) fputc('\n',stderr);
   fflush(stderr);
   va_end(args);
   DBUG_VOID_RETURN;
@@ -1817,9 +1773,11 @@ void mi_check_print_error(MI_CHECK *param, const char *fmt,...)
   param->error_printed|=1;
   va_start(args,fmt);
   fprintf(stderr,"%s: error: ",my_progname_short);
-  VOID(vfprintf(stderr, fmt, args));
-  VOID(fputc('\n',stderr));
+  (void) vfprintf(stderr, fmt, args);
+  (void) fputc('\n',stderr);
   fflush(stderr);
   va_end(args);
   DBUG_VOID_RETURN;
 }
+
+#include "mi_extrafunc.h"

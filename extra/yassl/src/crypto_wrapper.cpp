@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +10,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; see the file COPYING. If not, write to the
-   Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
-   MA  02110-1301  USA.
-*/
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 /*  The crypto wrapper source implements the policies for the cipher
  *  components used by SSL.
@@ -953,9 +950,9 @@ x509* PemToDer(FILE* file, CertType type, EncryptedInfo* info)
                     info->set = true;
                 }
             }
-            // get blank line
-            if (fgets(line, sizeof(line), file))
             begin = ftell(file);
+            if (fgets(line,sizeof(line), file)) // get blank line
+              begin = ftell(file);
         }
           
     }

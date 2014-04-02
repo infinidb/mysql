@@ -1,21 +1,9 @@
 -- source include/have_ndb.inc
--- source include/not_embedded.inc
 
 --disable_warnings
 DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
 drop database if exists mysqltest;
 --enable_warnings
-
-# workaround for bug#16445
-# remove to reproduce bug and run tests from ndb start
-# and with ndb_autodiscover disabled. Fails on Linux 50 % of the times
-CREATE TABLE t1 (
-  pk1 INT NOT NULL PRIMARY KEY,
-  attr1 INT NOT NULL,
-  attr2 INT,
-  attr3 VARCHAR(10)
-) ENGINE=ndbcluster;
-drop table t1;
 
 #
 # Basic test to show that the NDB 
@@ -26,9 +14,12 @@ drop table t1;
 # Show status and variables
 #
 --replace_column 2 #
-SHOW GLOBAL STATUS LIKE 'ndb%';
+--sorted_result
+SHOW GLOBAL STATUS LIKE 'ndb\_%';
 --replace_column 2 #
-SHOW GLOBAL VARIABLES LIKE 'ndb%';
+--sorted_result
+SHOW GLOBAL VARIABLES WHERE Variable_name LIKE 'ndb\_%' and 
+                            Variable_name NOT LIKE 'ndb_check_shares';
 
 #
 # Create a normal table with primary key
@@ -411,147 +402,62 @@ drop table t1;
 
 #
 # test the limit of no of attributes in one table
+#  - use while loop to build dynamic sql string
 #
-# also tests bug#17179, more than 31 attributes in
-# a partitioned table
-#
-create table t1 (
-c1 int,
-c2 int,
-c3 int,
-c4 int,
-c5 int,
-c6 int,
-c7 int,
-c8 int,
-c9 int,
-c10 int,
-c11 int,
-c12 int,
-c13 int,
-c14 int,
-c15 int,
-c16 int,
-c17 int,
-c18 int,
-c19 int,
-c20 int,
-c21 int,
-c22 int,
-c23 int,
-c24 int,
-c25 int,
-c26 int,
-c27 int,
-c28 int,
-c29 int,
-c30 int,
-c31 int,
-c32 int,
-c33 int,
-c34 int,
-c35 int,
-c36 int,
-c37 int,
-c38 int,
-c39 int,
-c40 int,
-c41 int,
-c42 int,
-c43 int,
-c44 int,
-c45 int,
-c46 int,
-c47 int,
-c48 int,
-c49 int,
-c50 int,
-c51 int,
-c52 int,
-c53 int,
-c54 int,
-c55 int,
-c56 int,
-c57 int,
-c58 int,
-c59 int,
-c60 int,
-c61 int,
-c62 int,
-c63 int,
-c64 int,
-c65 int,
-c66 int,
-c67 int,
-c68 int,
-c69 int,
-c70 int,
-c71 int,
-c72 int,
-c73 int,
-c74 int,
-c75 int,
-c76 int,
-c77 int,
-c78 int,
-c79 int,
-c80 int,
-c81 int,
-c82 int,
-c83 int,
-c84 int,
-c85 int,
-c86 int,
-c87 int,
-c88 int,
-c89 int,
-c90 int,
-c91 int,
-c92 int,
-c93 int,
-c94 int,
-c95 int,
-c96 int,
-c97 int,
-c98 int,
-c99 int,
-c100 int,
-c101 int,
-c102 int,
-c103 int,
-c104 int,
-c105 int,
-c106 int,
-c107 int,
-c108 int,
-c109 int,
-c110 int,
-c111 int,
-c112 int,
-c113 int,
-c114 int,
-c115 int,
-c116 int,
-c117 int,
-c118 int,
-c119 int,
-c120 int,
-c121 int,
-c122 int,
-c123 int,
-c124 int,
-c125 int,
-c126 int,
-c127 int,
-c128 int,
-primary key using hash(c1)) engine=ndb partition by key(c1);
+let $i=511; # The current max number of attributes
+let $separator=;
+let $sql=create table t1 (;
+while ($i)
+{
+  let $sql=$sql$separator c$i int;
+  let $separator=,;
+  dec $i;
+}
+let $sql=$sql, c512 varchar(10000);
+let $sql=$sql, primary key using hash(c1)) engine=ndb;
+let $sql=$sql partition by key(c1);
+#             ^^^^^^^^^^^^^^^^^^^^
+#             also tests bug#17179, more than 31
+#             attributes in a partitioned table
+
+eval $sql; # eval the sql and create the table
+
+set @v10 = '0123456789';
+set @v100 = concat(@v10,@v10,@v10,@v10,@v10,@v10,@v10,@v10,@v10,@v10);
+set @v1000 =concat(@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100);
+set @v10000 = concat(@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000);
+set @v13000 = concat(@v10000, @v1000,@v1000,@v1000);
+
+insert into t1 (c1,c512) values (1,@v10000), (2,@v10000), (3,@v10000);
+select c1, length(c512) from t1 order by 1;
+delete from t1;
 drop table t1;
+
+create table t1 (a int primary key, b varchar(13000)) engine = ndb;
+insert into t1 values (1,@v13000), (2,@v13000);
+select length(b) from t1 order by 1;
+drop table t1;
+
+let $i=50;
+let $separator=;
+let $sql=create table t1 (;
+while ($i)
+{
+  let $sql=$sql$separator c$i char(255);
+  let $separator=,;
+  dec $i;
+}
+let $sql=$sql, primary key using hash(c1)) engine=ndb;
+
+--error 1005
+eval $sql; # eval the sql and create the table
+show warnings;
 
 #
 # test bug#53354 - crash when creating partitioned table with multiple columns in the partition key
 #
 
---error ER_FIELD_NOT_FOUND_PART_ERROR
+--error ER_SAME_NAME_PARTITION_FIELD
 create table `t1` (`a` int, b int, primary key (a,b)) engine=ndb partition by key(`a`,`b`,`a`);
 
 #
@@ -747,10 +653,10 @@ drop table t1;
 # Bug#16561 Unknown ERROR msg "ERROR 1186 (HY000): Binlog closed" by perror
 #
 
-# As long there is no error code 1186 defined by NDB
-# we should get a message "Illegal ndb error code: 1186"
+# As long there is no error code XXX defined by NDB
+# we should get a message "Illegal ndb error code: XXX"
 --error 1
---exec $MY_PERROR --ndb 1186 2>&1
+--exec $MY_PERROR --ndb 123456 2>&1
 
 #
 # Bug #25746 - VARCHAR UTF8 PK issue
@@ -864,5 +770,71 @@ create table t2 like t1;
 # multi rename
 rename table t1 to t10, t2 to t20;
 drop table t10,t20;
+
+--echo #
+--echo # bug #39872 - explain causes segv
+--echo # (ndb_index_stat_enable=1 must be set to trigger bug)
+--echo # index stats v4: do not set, the v2 setting was local
+--echo #
+# set ndb_index_stat_enable=1;
+CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8;
+CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `obj_id` int(11) DEFAULT NULL,
+  UNIQUE KEY `id` (`id`),
+  KEY `obj_id` (`obj_id`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8;
+--echo # here we used to segv
+--replace_column 9 #
+explain SELECT t1.id FROM t1 INNER JOIN t2 ON t1.id = t2.id WHERE t2.obj_id=1;
+drop table t1, t2;
+
+--echo #
+--echo # Bug #47054 Cluster only deletes first matched row in delete with left join
+--echo #
+
+CREATE TABLE child
+( id INT AUTO_INCREMENT PRIMARY KEY
+, parent_id INT
+) ENGINE=ndb;
+
+CREATE TABLE parent 
+( id INT AUTO_INCREMENT PRIMARY KEY
+) ENGINE=ndb;
+
+INSERT INTO parent VALUES (NULL),(NULL),(NULL);
+
+INSERT INTO child VALUES (NULL, 1),(NULL,2),(NULL,3),(NULL,4),(NULL,5);
+
+SELECT * FROM child ORDER BY id;
+
+SELECT * 
+FROM child AS c 
+  LEFT JOIN parent AS p ON c.parent_id = p.id 
+WHERE p.id IS NULL AND c.id < 100  ORDER BY c.id;
+
+DELETE c.* 
+FROM child AS c 
+  LEFT JOIN parent AS p ON c.parent_id = p.id 
+WHERE p.id IS NULL AND c.id < 100;
+
+SELECT * FROM child ORDER BY id;
+
+DROP TABLE child, parent;
+
+#
+# bug#59756
+#
+--error 1005
+CREATE TABLE t1 (a INT PRIMARY KEY, b TEXT)
+ENGINE=ndb PARTITION BY KEY(a) PARTITIONS 24;
+show warnings;
+CREATE TABLE t1 (a INT PRIMARY KEY, b TEXT)
+ENGINE=ndb;
+show warnings;
+drop table t1;
 
 --echo End of 5.1 tests

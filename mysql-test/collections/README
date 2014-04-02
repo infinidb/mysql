@@ -1,5 +1,7 @@
 This directory contains collections of test runs that we run during our
-integration and release testing. Each file contains zero or more lines,
+integration and release testing. These files are not directly useful 
+outside this context, but need to be part of the source repository 
+and are included for reference.Each file contains zero or more lines,
 with one invocation of mysql-test-run.pl on each. These invocations are
 written so that, with the assumption that perl is in your search path,
 any collection can run as a shell script or a batch file, with the parent
@@ -28,3 +30,11 @@ these steps:
 5) The commands from the collection are run line by line via execv() or
    similar system calls. They are not run as a shell script. Shell 
    expansions are not guaranteed to work and most likely won't.
+
+The directory may contain collections that are "super sets" of others,
+identified by a file name suffix ".in". These files may contain lines
+"#include <filename>", or lines with mysql-test-run.pl invocations.
+CMake will create a new file without the .in suffix where
+the include lines are replaced with the contents of the referred
+file. Filename is local to the collections directory, and includes do
+not nest.

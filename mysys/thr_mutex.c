@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This makes a wrapper for mutex handling to make it easier to debug mutex */
 
@@ -21,7 +19,7 @@
 #if defined(TARGET_OS_LINUX) && !defined (__USE_UNIX98)
 #define __USE_UNIX98			/* To get rw locks under Linux */
 #endif
-#if defined(THREAD) && defined(SAFE_MUTEX)
+#if defined(SAFE_MUTEX)
 #undef SAFE_MUTEX			/* Avoid safe_mutex redefinitions */
 #include "mysys_priv.h"
 #include "my_static.h"
@@ -41,6 +39,7 @@
 #endif
 #endif /* DO_NOT_REMOVE_THREAD_WRAPPERS */
 
+/* Not instrumented */
 static pthread_mutex_t THR_LOCK_mutex;
 static ulong safe_mutex_count= 0;		/* Number of mutexes created */
 #ifdef SAFE_MUTEX_DETECT_DESTROY
@@ -58,7 +57,7 @@ int safe_mutex_init(safe_mutex_t *mp,
 		    const char *file,
 		    uint line)
 {
-  bzero((char*) mp,sizeof(*mp));
+  memset(mp, 0, sizeof(*mp));
   pthread_mutex_init(&mp->global,MY_MUTEX_INIT_ERRCHK);
   pthread_mutex_init(&mp->mutex,attr);
   /* Mark that mutex is initialized */
@@ -87,7 +86,9 @@ int safe_mutex_init(safe_mutex_t *mp,
     pthread_mutex_unlock(&THR_LOCK_mutex);
   }
 #else
-  thread_safe_increment(safe_mutex_count, &THR_LOCK_mutex);
+  pthread_mutex_lock(&THR_LOCK_mutex);
+  safe_mutex_count++;
+  pthread_mutex_unlock(&THR_LOCK_mutex);
 #endif /* SAFE_MUTEX_DETECT_DESTROY */
   return 0;
 }
@@ -346,7 +347,9 @@ int safe_mutex_destroy(safe_mutex_t *mp, const char *file, uint line)
     mp->info= NULL;				/* Get crash if double free */
   }
 #else
-  thread_safe_sub(safe_mutex_count, 1, &THR_LOCK_mutex);
+  pthread_mutex_lock(&THR_LOCK_mutex);
+  safe_mutex_count--;
+  pthread_mutex_unlock(&THR_LOCK_mutex);
 #endif /* SAFE_MUTEX_DETECT_DESTROY */
   return error;
 }
@@ -392,9 +395,9 @@ void safe_mutex_end(FILE *file __attribute__((unused)))
 #endif /* SAFE_MUTEX_DETECT_DESTROY */
 }
 
-#endif /* THREAD && SAFE_MUTEX */
+#endif /* SAFE_MUTEX */
 
-#if defined(THREAD) && defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX)
+#if defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX)
 
 #include "mysys_priv.h"
 #include "my_static.h"
@@ -497,4 +500,4 @@ void fastmutex_global_init(void)
 #endif
 }
   
-#endif /* defined(THREAD) && defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX) */ 
+#endif /* defined(MY_PTHREAD_FASTMUTEX) && !defined(SAFE_MUTEX) */ 

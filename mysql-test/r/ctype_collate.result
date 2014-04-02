@@ -519,7 +519,7 @@ explain extended SELECT charset('a'),collation('a'),coercibility('a'),'a'='A';
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
-Note	1003	select charset('a') AS `charset('a')`,collation('a') AS `collation('a')`,coercibility('a') AS `coercibility('a')`,('a' = 'A') AS `'a'='A'`
+Note	1003	/* select#1 */ select charset('a') AS `charset('a')`,collation('a') AS `collation('a')`,coercibility('a') AS `coercibility('a')`,('a' = 'A') AS `'a'='A'`
 SET CHARACTER SET koi8r;
 SHOW VARIABLES LIKE 'collation_client';
 Variable_name	Value
@@ -548,6 +548,36 @@ SELECT * FROM t1 WHERE s2 = s3;
 s1	s2	s3
 a	A	A
 DROP TABLE t1;
+create table t1 (a varchar(1) character set latin1 collate latin1_general_ci);
+insert into t1 values ('A'),('a'),('B'),('b'),('C'),('c');
+select * from t1 where a > 'B' collate latin1_bin;
+a
+a
+b
+C
+c
+select * from t1 where a <> 'B' collate latin1_bin;
+a
+A
+a
+b
+C
+c
+create index i on t1 (a);
+select * from t1 where a > 'B' collate latin1_bin;
+a
+a
+b
+C
+c
+select * from t1 where a <> 'B' collate latin1_bin;
+a
+A
+a
+b
+C
+c
+drop table t1;
 SET NAMES latin1;
 CREATE TABLE t1 
 (s1 char(10) COLLATE latin1_german1_ci,
@@ -566,31 +596,31 @@ INSERT INTO t1 VALUES ('i','i');
 INSERT INTO t1 VALUES ('j','j');
 EXPLAIN SELECT * FROM t1 WHERE s1='a';
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	s1	s1	11	const	1	Using where
+1	SIMPLE	t1	ref	s1	s1	11	const	1	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s2='a';
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	s2	s2	11	const	1	Using where
+1	SIMPLE	t1	ref	s2	s2	11	const	1	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s1='a' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	s1	s1	11	const	1	Using where
+1	SIMPLE	t1	ref	s1	s1	11	const	1	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s2='a' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	ALL	s2	NULL	NULL	NULL	10	Using where
 EXPLAIN SELECT * FROM t1 WHERE s1 BETWEEN 'a' AND 'b' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	s1	s1	11	NULL	2	Using where
+1	SIMPLE	t1	range	s1	s1	11	NULL	2	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s2 BETWEEN 'a' AND 'b' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	ALL	s2	NULL	NULL	NULL	10	Using where
 EXPLAIN SELECT * FROM t1 WHERE s1 IN  ('a','b' COLLATE latin1_german1_ci);
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	s1	s1	11	NULL	2	Using where
+1	SIMPLE	t1	range	s1	s1	11	NULL	2	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s2 IN  ('a','b' COLLATE latin1_german1_ci);
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	ALL	s2	NULL	NULL	NULL	10	Using where
 EXPLAIN SELECT * FROM t1 WHERE s1 LIKE 'a' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	s1	s1	11	NULL	1	Using where
+1	SIMPLE	t1	range	s1	s1	11	NULL	1	Using index condition
 EXPLAIN SELECT * FROM t1 WHERE s2 LIKE 'a' COLLATE latin1_german1_ci;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	ALL	s2	NULL	NULL	NULL	10	Using where
@@ -630,3 +660,62 @@ latin5_turkish_ci then 2 else 3 end
 select concat(_latin1'a',_latin2'b',_latin5'c' collate latin5_turkish_ci);
 concat(_latin1'a',_latin2'b',_latin5'c' collate latin5_turkish_ci)
 abc
+#
+# Bug#11765016 57926: ILLEGAL MIX OF COLLATIONS FOR OPERATION 'UNION' .. USING CONCAT/FUNCTION/
+# Not a bug: only adding coverage tests
+#
+SET NAMES latin1 COLLATE latin1_german2_ci;
+CREATE DATABASE test1 DEFAULT CHARACTER SET latin1 COLLATE latin1_german2_ci;
+USE test1;
+#
+# Using "COLLATE latin1_swedish_ci" as the default collation for latin1
+#
+CREATE FUNCTION `getText`() RETURNS varchar(20) CHARSET latin1
+BEGIN
+RETURN "Testtext";
+END;//
+SELECT getText(), CHARSET(getText()), COLLATION(getText()), COERCIBILITY(getText());
+getText()	CHARSET(getText())	COLLATION(getText())	COERCIBILITY(getText())
+Testtext	latin1	latin1_swedish_ci	4
+CREATE TABLE t1 AS SELECT ' - ' AS a UNION SELECT getText();
+ERROR HY000: Illegal mix of collations for operation 'UNION'
+DROP FUNCTION getText;
+#
+# Using "CHARACTER SET latin1 COLLATE latin1_german2_ci" as the database defaults
+#
+CREATE FUNCTION `getText`() RETURNS varchar(20)
+BEGIN
+RETURN "Testtext";
+END;//
+SELECT getText(), CHARSET(getText()), COLLATION(getText()), COERCIBILITY(getText());
+getText()	CHARSET(getText())	COLLATION(getText())	COERCIBILITY(getText())
+Testtext	latin1	latin1_german2_ci	4
+CREATE TABLE t1 AS SELECT ' - ' AS a UNION SELECT getText();
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` varchar(20) COLLATE latin1_german2_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_german2_ci
+DROP TABLE t1;
+DROP FUNCTION getText;
+#
+# Using explicit "CHARACTER SET latin1 COLLATE latin1_german2_ci"
+#
+CREATE FUNCTION `getText`() RETURNS varchar(20) CHARACTER SET latin1 COLLATE latin1_german2_ci
+BEGIN
+RETURN "Testtext";
+END;//
+SELECT getText(), CHARSET(getText()), COLLATION(getText()), COERCIBILITY(getText());
+getText()	CHARSET(getText())	COLLATION(getText())	COERCIBILITY(getText())
+Testtext	latin1	latin1_german2_ci	4
+CREATE TABLE t1 AS SELECT ' - ' AS a UNION SELECT getText();
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` varchar(20) COLLATE latin1_german2_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_german2_ci
+DROP TABLE t1;
+DROP FUNCTION getText;
+DROP DATABASE test1;
+USE test;
+SET NAMES latin1;

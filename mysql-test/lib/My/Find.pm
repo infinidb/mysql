@@ -1,5 +1,5 @@
 # -*- cperl -*-
-# Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -166,16 +166,16 @@ sub my_find_paths {
   }
 
   # -------------------------------------------------------
-  # Windows specific
+  # CMake generator specific (Visual Studio and Xcode have multimode builds)
   # -------------------------------------------------------
-  if (IS_WINDOWS) {
-    # Add the default extra build dirs unless a specific one has
-    # already been selected
-    push(@extra_dirs,
-	 ("release",
-	  "relwithdebinfo",
-	  "debug")) if @extra_dirs == 0;
-  }
+
+  # Add the default extra build dirs unless a specific one has
+  # already been selected
+  push(@extra_dirs,
+   ("Release",
+    "Relwithdebinfo",
+    "Debug")) if @extra_dirs == 0;
+
 
   #print "extra_build_dir: @extra_dirs\n";
 

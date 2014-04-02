@@ -19,13 +19,8 @@
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif
-#ifdef VMS
-#include <rms.h>
-#include <iodef.h>
-#include <descrip.h>
-#endif /* VMS */
 
-static char * NEAR_F expand_tilde(char * *path);
+static char * expand_tilde(char **path);
 
 	/* Pack a dirname ; Changes HOME to ~/ and current dev to ./ */
 	/* from is a dirname (from dirname() ?) ending with FN_LIBCHAR */
@@ -198,7 +193,8 @@ size_t cleanup_dirname(register char *to, const char *from)
 	  end_parentdir=pos;
 	  while (pos >= start && *pos != FN_LIBCHAR)	/* remove prev dir */
 	    pos--;
-	  if (pos[1] == FN_HOMELIB || memcmp(pos,parent,length) == 0)
+          if (pos[1] == FN_HOMELIB ||
+              (pos >= start && memcmp(pos, parent, length) == 0))
 	  {					/* Don't remove ~user/ */
 	    pos=strmov(end_parentdir+1,parent);
 	    *pos=FN_LIBCHAR;
@@ -244,7 +240,7 @@ size_t cleanup_dirname(register char *to, const char *from)
 my_bool my_use_symdir=0;	/* Set this if you want to use symdirs */
 
 #ifdef USE_SYMDIR
-void symdirget(char *dir)
+void symdirget(char *dir, my_bool *is_symdir)
 {
   char buff[FN_REFLEN+1];
   char *pos=strend(dir);
@@ -269,6 +265,8 @@ void symdirget(char *dir)
 	  *pos++=FN_LIBCHAR;
 
 	strmake(dir,buff, (size_t) (pos-buff));
+
+        *is_symdir= TRUE;
       }
       my_close(file, MYF(0));
     }
@@ -301,8 +299,7 @@ size_t normalize_dirname(char *to, const char *from)
 
   /*
     Despite the name, this actually converts the name to the system's
-    format (TODO: rip out the non-working VMS stuff and name this
-    properly).
+    format (TODO: name this properly).
   */
   (void) intern_filename(buff, from);
   length= strlen(buff);			/* Fix that '/' is last */
@@ -330,6 +327,9 @@ size_t normalize_dirname(char *to, const char *from)
 
   @param to     Result buffer, FN_REFLEN characters. May be == from
   @param from   'Packed' directory name (may contain ~)
+  @param[out] is_symdir  Indicates that directory in question turned
+                         out to be fake .sym symbolic link, which was
+                         resolved to real directory it points to.
 
   @details
   - Uses normalize_dirname()
@@ -341,11 +341,13 @@ size_t normalize_dirname(char *to, const char *from)
    Length of new directory name (= length of to)
 */
 
-size_t unpack_dirname(char * to, const char *from)
+size_t unpack_dirname(char * to, const char *from, my_bool *is_symdir)
 {
   size_t length, h_length;
   char buff[FN_REFLEN+1+4],*suffix,*tilde_expansion;
   DBUG_ENTER("unpack_dirname");
+
+  *is_symdir= FALSE;
 
   length= normalize_dirname(buff, from);
 
@@ -369,7 +371,7 @@ size_t unpack_dirname(char * to, const char *from)
   }
 #ifdef USE_SYMDIR
   if (my_use_symdir)
-    symdirget(buff);
+    symdirget(buff, is_symdir);
 #endif
   DBUG_RETURN(system_filename(to,buff));	/* Fix for open */
 } /* unpack_dirname */
@@ -378,7 +380,7 @@ size_t unpack_dirname(char * to, const char *from)
 	/* Expand tilde to home or user-directory */
 	/* Path is reset to point at FN_LIBCHAR after ~xxx */
 
-static char * NEAR_F expand_tilde(char * *path)
+static char * expand_tilde(char **path)
 {
   if (path[0][0] == FN_LIBCHAR)
     return home_dir;			/* ~/ expanded to home */
@@ -425,10 +427,11 @@ size_t unpack_filename(char * to, const char *from)
 {
   size_t length, n_length, buff_length;
   char buff[FN_REFLEN];
+  my_bool not_used;
   DBUG_ENTER("unpack_filename");
 
   length=dirname_part(buff, from, &buff_length);/* copy & convert dirname */
-  n_length=unpack_dirname(buff,buff);
+  n_length=unpack_dirname(buff, buff, &not_used);
   if (n_length+strlen(from+length) < FN_REFLEN)
   {
     (void) strmov(buff+n_length,from+length);
@@ -444,73 +447,10 @@ size_t unpack_filename(char * to, const char *from)
 	/* Used before system command's like open(), create() .. */
 	/* Returns used length of to; total length should be FN_REFLEN */
 
-size_t system_filename(char * to, const char *from)
+size_t system_filename(char *to, const char *from)
 {
-#ifndef FN_C_BEFORE_DIR
   return (size_t) (strmake(to,from,FN_REFLEN-1)-to);
-#else	/* VMS */
-
-	/* change 'dev:lib/xxx' to 'dev:[lib]xxx' */
-	/* change 'dev:xxx' to 'dev:xxx' */
-	/* change './xxx' to 'xxx' */
-	/* change './lib/' or lib/ to '[.lib]' */
-	/* change '/x/y/z to '[x.y]x' */
-	/* change 'dev:/x' to 'dev:[000000]x' */
-
-  int libchar_found;
-  size_t length;
-  char * to_pos,from_pos,pos;
-  char buff[FN_REFLEN];
-  DBUG_ENTER("system_filename");
-
-  libchar_found=0;
-  (void) strmov(buff,from);			 /* If to == from */
-  from_pos= buff;
-  if ((pos=strrchr(from_pos,FN_DEVCHAR)))	/* Skip device part */
-  {
-    pos++;
-    to_pos=strnmov(to,from_pos,(size_t) (pos-from_pos));
-    from_pos=pos;
-  }
-  else
-    to_pos=to;
-
-  if (from_pos[0] == FN_CURLIB && from_pos[1] == FN_LIBCHAR)
-    from_pos+=2;				/* Skip './' */
-  if (strchr(from_pos,FN_LIBCHAR))
-  {
-    *(to_pos++) = FN_C_BEFORE_DIR;
-    if (strinstr(from_pos,FN_ROOTDIR) == 1)
-    {
-      from_pos+=strlen(FN_ROOTDIR);		/* Actually +1 but... */
-      if (! strchr(from_pos,FN_LIBCHAR))
-      {						/* No dir, use [000000] */
-	to_pos=strmov(to_pos,FN_C_ROOT_DIR);
-	libchar_found++;
-      }
-    }
-    else
-      *(to_pos++)=FN_C_DIR_SEP;			/* '.' gives current dir */
-
-    while ((pos=strchr(from_pos,FN_LIBCHAR)))
-    {
-      if (libchar_found++)
-	*(to_pos++)=FN_C_DIR_SEP;		/* Add '.' between dirs */
-      if (strinstr(from_pos,FN_PARENTDIR) == 1 &&
-	  from_pos+strlen(FN_PARENTDIR) == pos)
-	to_pos=strmov(to_pos,FN_C_PARENT_DIR);	/* Found '../' */
-      else
-	to_pos=strnmov(to_pos,from_pos,(size_t) (pos-from_pos));
-      from_pos=pos+1;
-    }
-    *(to_pos++)=FN_C_AFTER_DIR;
-  }
-  length= (size_t) (strmov(to_pos,from_pos)-to);
-  DBUG_PRINT("exit",("name: '%s'",to));
-  DBUG_RETURN(length);
-#endif
-} /* system_filename */
-
+}
 
 	/* Fix a filename to intern (UNIX format) */
 

@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000-2002, 2004, 2006-2008 MySQL AB, 2009 Sun Microsystems, Inc.
+/* Copyright (c) 2000-2002, 2004, 2006-2008 MySQL AB, 2009 Sun Microsystems, Inc.
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -13,8 +12,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file should be included when using merge_isam_funktions */
 
@@ -78,7 +76,7 @@ typedef struct st_myrg_info
   LIST	 open_list;
   QUEUE  by_key;
   ulong *rec_per_key_part;			/* for sql optimizing */
-  pthread_mutex_t mutex;
+  mysql_mutex_t mutex;
 } MYRG_INFO;
 
 

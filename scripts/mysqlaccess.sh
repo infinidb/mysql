@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (c) 2000, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-# Use is subject to license terms.
+# Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -54,7 +53,7 @@ BEGIN {
         $MYSQLDUMP = '@bindir@/mysqldump';
                                          #path to mysqldump executable
 
-        $MYSQLADMIN= 'http://foobar.com/MySQLadmin';
+        $MYSQLADMIN= 'http://example.com/MySQLadmin';
                                          #URL of CGI for manipulating
                                          #the temporary grant-tables
 }
@@ -2394,7 +2393,8 @@ sub Print_Header {
     print "$MySQLaccess::script Version $MySQLaccess::VERSION\n"
          ."By RUG-AIV, by Yves Carlier (Yves.Carlier\@rug.ac.be)\n"
          ."Changes by Steve Harvey (sgh\@vex.net)\n"
-         ."This software comes with ABSOLUTELY NO WARRANTY.\n";
+         ."This software comes with ABSOLUTELY NO WARRANTY.\n"
+	 ."\nWarning: $MySQLaccess::script is deprecated and will be removed in a future version.\n";
     }
     if ($MySQLaccess::CGI) { #CGI-BIN mode
     print "content-type: text/html\n\n" 
@@ -2408,6 +2408,7 @@ sub Print_Header {
          ."By RUG-AIV, by Yves Carlier (<a href=mailto:Yves.Carlier\@rug.ac.be>Yves.Carlier\@rug.ac.be</a>)<BR>\n"
          ."Changes by Steve Harvey (<a href=mailto:sgh\@vex.net>sgh\@vex.net</a>)<BR>\n"
          ."This software comes with ABSOLUTELY NO WARRANTY.<BR>\n"
+         ."<BR>\nWarning: $MySQLaccess::script is deprecated and will be removed in a future version.<BR>\n"
          ."</ADDRESS>\n</CENTER>\n"
          ."<HR>\n";
     Print_Taskbar();
@@ -2423,7 +2424,7 @@ sub Print_Header {
 sub Print_Footer {
     if ($MySQLaccess::CMD) { #command-line mode
     print "\n"
-         ."BUGs can be reported by email to bugs\@mysql.com\n";
+         ."BUGs can be reported at http://bugs.mysql.com/\n";
     }
     if ($MySQLaccess::CGI) { #CGI-BIN mode
     if ($MySQLaccess::Param{'brief'}) {
@@ -2431,7 +2432,7 @@ sub Print_Footer {
     }
     print "<HR>\n"
          ."<ADDRESS>\n"
-         ."BUGs can be reported by email to <a href=mailto:bugs\@mysql.com>bugs\@mysql.com</a><BR>\n"
+         ."BUGs can be reported at <a href=\"http://bugs.mysql.com/\">http://bugs.mysql.com/</a><BR>\n"
 #         ."Don't forget to mention the version $VERSION!<BR>\n"
          ."</ADDRESS>\n"
          ."</BODY>\n"

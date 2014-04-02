@@ -1,3 +1,4 @@
+call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
 drop table if exists t1,t2,t3,t4;
 drop database if exists client_test_db;
 create table t1
@@ -50,7 +51,7 @@ execute stmt4;
 prepare stmt4 from 'drop table t2';
 execute stmt4;
 execute stmt4;
-ERROR 42S02: Unknown table 't2'
+ERROR 42S02: Unknown table 'test.t2'
 prepare stmt5 from 'select ? + a from t1';
 set @a=1;
 execute stmt5 using @a;
@@ -519,7 +520,7 @@ FOUND_ROWS()
 deallocate prepare stmt;
 drop table if exists t1;
 Warnings:
-Note	1051	Unknown table 't1'
+Note	1051	Unknown table 'test.t1'
 create table t1 (c1 int(11) not null, c2 int(11) not null,
 primary key  (c1,c2), key c2 (c2), key c1 (c1));
 insert into t1 values (200887, 860);
@@ -695,11 +696,11 @@ REPEATABLE-READ
 set transaction isolation level read committed;
 execute stmt;
 @@tx_isolation
-READ-COMMITTED
+REPEATABLE-READ
 set transaction isolation level serializable;
 execute stmt;
 @@tx_isolation
-SERIALIZABLE
+REPEATABLE-READ
 set @@tx_isolation=default;
 execute stmt;
 @@tx_isolation
@@ -1007,7 +1008,7 @@ NULL	NULL
 SET @a = 1;
 EXECUTE stmt USING @a;
 (VARIANCE(i) = 1)	VARIANCE(i)
-0	0.0000
+0	0
 SET @a = 0;
 EXECUTE stmt USING @a;
 (VARIANCE(i) = 1)	VARIANCE(i)
@@ -1020,7 +1021,7 @@ NULL	NULL
 SET @a = 1;
 EXECUTE stmt USING @a;
 (STDDEV(i) = 1)	STDDEV(i)
-0	0.0000
+0	0
 SET @a = 0;
 EXECUTE stmt USING @a;
 (STDDEV(i) = 1)	STDDEV(i)
@@ -1194,13 +1195,13 @@ SET @aux= "SELECT COUNT(*)
 prepare my_stmt from @aux;
 execute my_stmt;
 COUNT(*)
-39
+43
 execute my_stmt;
 COUNT(*)
-39
+43
 execute my_stmt;
 COUNT(*)
-39
+43
 deallocate prepare my_stmt;
 drop procedure if exists p1|
 drop table if exists t1|
@@ -2107,52 +2108,52 @@ Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 call proc_1();
 show open tables from mysql;
 Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 call proc_1();
 show open tables from mysql;
 Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 call proc_1();
 show open tables from mysql;
 Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 flush tables;
 create function func_1() returns int begin flush tables; return 1; end|
 ERROR 0A000: FLUSH is not allowed in stored function or trigger
@@ -2164,13 +2165,13 @@ drop procedure proc_1;
 flush tables;
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 prepare abc from "flush tables";
 execute abc;
 show open tables from mysql;
@@ -2178,39 +2179,39 @@ Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 execute abc;
 show open tables from mysql;
 Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 execute abc;
 show open tables from mysql;
 Database	Table	In_use	Name_locked
 mysql	general_log	0	0
 select Host, User from mysql.user limit 0;
 Host	User
-select Host, Db from mysql.host limit 0;
+select Host, Db from mysql.db limit 0;
 Host	Db
 show open tables from mysql;
 Database	Table	In_use	Name_locked
-mysql	user	0	0
 mysql	general_log	0	0
-mysql	host	0	0
+mysql	db	0	0
+mysql	user	0	0
 flush tables;
 deallocate prepare abc;
 create procedure proc_1() flush logs;
@@ -2244,32 +2245,6 @@ prepare abc from "flush status";
 execute abc;
 execute abc;
 execute abc;
-deallocate prepare abc;
-create procedure proc_1() flush slave;
-call proc_1();
-call proc_1();
-call proc_1();
-create function func_1() returns int begin flush slave; return 1; end|
-ERROR 0A000: FLUSH is not allowed in stored function or trigger
-create function func_1() returns int begin call proc_1(); return 1; end|
-select func_1(), func_1(), func_1() from dual;
-ERROR 0A000: FLUSH is not allowed in stored function or trigger
-drop function func_1;
-drop procedure proc_1;
-prepare abc from "flush slave";
-execute abc;
-execute abc;
-execute abc;
-deallocate prepare abc;
-create procedure proc_1() flush master;
-create function func_1() returns int begin flush master; return 1; end|
-ERROR 0A000: FLUSH is not allowed in stored function or trigger
-create function func_1() returns int begin call proc_1(); return 1; end|
-select func_1(), func_1(), func_1() from dual;
-ERROR 0A000: FLUSH is not allowed in stored function or trigger
-drop function func_1;
-drop procedure proc_1;
-prepare abc from "flush master";
 deallocate prepare abc;
 create procedure proc_1() flush des_key_file;
 call proc_1();
@@ -2382,15 +2357,15 @@ create procedure a() select 42;
 create procedure proc_1(a char(2)) show create procedure a;
 call proc_1("bb");
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 call proc_1("bb");
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 call proc_1("bb");
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop procedure proc_1;
 create function func_1() returns int begin show create procedure a; return 1; end|
@@ -2402,15 +2377,15 @@ ERROR 42000: FUNCTION test.func_1 does not exist
 prepare abc from "show create procedure a";
 execute abc;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 execute abc;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 execute abc;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `a`()
 select 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 deallocate prepare abc;
 drop procedure a;
@@ -2419,15 +2394,15 @@ create function a() returns int return 42+13;
 create procedure proc_1(a char(2)) show create function a;
 call proc_1("bb");
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 call proc_1("bb");
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 call proc_1("bb");
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop procedure proc_1;
 create function func_1() returns int begin show create function a; return 1; end|
@@ -2439,15 +2414,15 @@ ERROR 42000: FUNCTION test.func_1 does not exist
 prepare abc from "show create function a";
 execute abc;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 execute abc;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 execute abc;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-a		CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
+a	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `a`() RETURNS int(11)
 return 42+13	latin1	latin1_swedish_ci	latin1_swedish_ci
 deallocate prepare abc;
 drop function a;
@@ -2792,44 +2767,48 @@ drop table if exists t2;
 create procedure proc_1() show warnings;
 drop table if exists t1;
 Warnings:
-Note	1051	Unknown table 't1'
+Note	1051	Unknown table 'test.t1'
 call proc_1();
 Level	Code	Message
+Note	1051	Unknown table 'test.t1'
 drop table if exists t2;
 Warnings:
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t2'
 call proc_1();
 Level	Code	Message
+Note	1051	Unknown table 'test.t2'
 drop table if exists t1, t2;
 Warnings:
-Note	1051	Unknown table 't1'
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
 call proc_1();
 Level	Code	Message
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
 drop procedure proc_1;
 create function func_1() returns int begin show warnings; return 1; end|
 ERROR 0A000: Not allowed to return a result set from a function
 prepare abc from "show warnings";
 drop table if exists t1;
 Warnings:
-Note	1051	Unknown table 't1'
+Note	1051	Unknown table 'test.t1'
 execute abc;
 Level	Code	Message
-Note	1051	Unknown table 't1'
+Note	1051	Unknown table 'test.t1'
 drop table if exists t2;
 Warnings:
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t2'
 execute abc;
 Level	Code	Message
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t2'
 drop table if exists t1, t2;
 Warnings:
-Note	1051	Unknown table 't1'
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
 execute abc;
 Level	Code	Message
-Note	1051	Unknown table 't1'
-Note	1051	Unknown table 't2'
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
 deallocate prepare abc;
 set @my_password="password";
 set @my_data="clear text to encode";
@@ -2915,7 +2894,7 @@ i	j
 DROP TABLE t1, t2;
 drop table if exists t1;
 Warnings:
-Note	1051	Unknown table 't1'
+Note	1051	Unknown table 'test.t1'
 prepare stmt
 from "create table t1 (c char(100) character set utf8, key (c(10)))";
 execute stmt;
@@ -3009,16 +2988,16 @@ INSERT INTO t1 VALUES (1),(2);
 PREPARE stmt FROM 'EXPLAIN EXTENDED SELECT 1 FROM t1 RIGHT JOIN t1 t2 ON 1';
 EXECUTE stmt;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	
+1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Using join buffer (Block Nested Loop)
 Warnings:
-Note	1003	select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
 EXECUTE stmt;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	
+1	SIMPLE	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Using join buffer (Block Nested Loop)
 Warnings:
-Note	1003	select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` `t2` left join `test`.`t1` on(1) where 1
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 #
@@ -3029,17 +3008,718 @@ INSERT INTO t1 VALUES (1),(1);
 PREPARE stmt FROM 'EXPLAIN SELECT 1 FROM t1 WHERE (SELECT (SELECT 1 FROM t1 GROUP BY f1))';
 EXECUTE stmt;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	
+1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	NULL
 2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 3	SUBQUERY	t1	ALL	NULL	NULL	NULL	NULL	2	Using temporary; Using filesort
 EXECUTE stmt;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	
+1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	NULL
 2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 3	SUBQUERY	t1	ALL	NULL	NULL	NULL	NULL	2	Using temporary; Using filesort
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
+
 End of 5.1 tests.
+
+#
+# WL#4435: Support OUT-parameters in prepared statements.
+#
+
+DROP PROCEDURE IF EXISTS p_string;
+DROP PROCEDURE IF EXISTS p_double;
+DROP PROCEDURE IF EXISTS p_int;
+DROP PROCEDURE IF EXISTS p_decimal;
+
+CREATE PROCEDURE p_string(
+IN v0 INT,
+OUT v1 CHAR(32),
+IN v2 CHAR(32),
+INOUT v3 CHAR(32))
+BEGIN
+SET v0 = -1;
+SET v1 = 'test_v1';
+SET v2 = 'n/a';
+SET v3 = 'test_v3';
+END|
+
+CREATE PROCEDURE p_double(
+IN v0 INT,
+OUT v1 DOUBLE(4, 2),
+IN v2 DOUBLE(4, 2),
+INOUT v3 DOUBLE(4, 2))
+BEGIN
+SET v0 = -1;
+SET v1 = 12.34;
+SET v2 = 98.67;
+SET v3 = 56.78;
+END|
+
+CREATE PROCEDURE p_int(
+IN v0 CHAR(10),
+OUT v1 INT,
+IN v2 INT,
+INOUT v3 INT)
+BEGIN
+SET v0 = 'n/a';
+SET v1 = 1234;
+SET v2 = 9876;
+SET v3 = 5678;
+END|
+
+CREATE PROCEDURE p_decimal(
+IN v0 INT,
+OUT v1 DECIMAL(4, 2),
+IN v2 DECIMAL(4, 2),
+INOUT v3 DECIMAL(4, 2))
+BEGIN
+SET v0 = -1;
+SET v1 = 12.34;
+SET v2 = 98.67;
+SET v3 = 56.78;
+END|
+
+PREPARE stmt_str FROM 'CALL p_string(?, ?, ?, ?)';
+PREPARE stmt_dbl FROM 'CALL p_double(?, ?, ?, ?)';
+PREPARE stmt_int FROM 'CALL p_int(?, ?, ?, ?)';
+PREPARE stmt_dec FROM 'CALL p_decimal(?, ?, ?, ?)';
+
+SET @x_str_1 = NULL;
+SET @x_str_2 = NULL;
+SET @x_str_3 = NULL;
+SET @x_dbl_1 = NULL;
+SET @x_dbl_2 = NULL;
+SET @x_dbl_3 = NULL;
+SET @x_int_1 = NULL;
+SET @x_int_2 = NULL;
+SET @x_int_3 = NULL;
+SET @x_dec_1 = NULL;
+SET @x_dec_2 = NULL;
+SET @x_dec_3 = NULL;
+
+-- Testing strings...
+
+EXECUTE stmt_str USING @x_int_1, @x_str_1, @x_str_2, @x_str_3;
+SELECT @x_int_1, @x_str_1, @x_str_2, @x_str_3;
+@x_int_1	@x_str_1	@x_str_2	@x_str_3
+NULL	test_v1	NULL	test_v3
+
+EXECUTE stmt_str USING @x_int_1, @x_str_1, @x_str_2, @x_str_3;
+SELECT @x_int_1, @x_str_1, @x_str_2, @x_str_3;
+@x_int_1	@x_str_1	@x_str_2	@x_str_3
+NULL	test_v1	NULL	test_v3
+
+-- Testing doubles...
+
+EXECUTE stmt_dbl USING @x_int_1, @x_dbl_1, @x_dbl_2, @x_dbl_3;
+SELECT @x_int_1, @x_dbl_1, @x_dbl_2, @x_dbl_3;
+@x_int_1	@x_dbl_1	@x_dbl_2	@x_dbl_3
+NULL	12.34	NULL	56.78
+
+EXECUTE stmt_dbl USING @x_int_1, @x_dbl_1, @x_dbl_2, @x_dbl_3;
+SELECT @x_int_1, @x_dbl_1, @x_dbl_2, @x_dbl_3;
+@x_int_1	@x_dbl_1	@x_dbl_2	@x_dbl_3
+NULL	12.34	NULL	56.78
+
+-- Testing ints...
+
+EXECUTE stmt_int USING @x_str_1, @x_int_1, @x_int_2, @x_int_3;
+SELECT @x_str_1, @x_int_1, @x_int_2, @x_int_3;
+@x_str_1	@x_int_1	@x_int_2	@x_int_3
+test_v1	1234	NULL	5678
+
+EXECUTE stmt_int USING @x_str_1, @x_int_1, @x_int_2, @x_int_3;
+SELECT @x_str_1, @x_int_1, @x_int_2, @x_int_3;
+@x_str_1	@x_int_1	@x_int_2	@x_int_3
+test_v1	1234	NULL	5678
+
+-- Testing decs...
+
+EXECUTE stmt_dec USING @x_int_1, @x_dec_1, @x_dec_2, @x_dec_3;
+SELECT @x_int_1, @x_dec_1, @x_dec_2, @x_dec_3;
+@x_int_1	@x_dec_1	@x_dec_2	@x_dec_3
+1234	12.34	NULL	56.78
+
+EXECUTE stmt_dec USING @x_int_1, @x_dec_1, @x_dec_2, @x_dec_3;
+SELECT @x_int_1, @x_dec_1, @x_dec_2, @x_dec_3;
+@x_int_1	@x_dec_1	@x_dec_2	@x_dec_3
+1234	12.34	NULL	56.78
+
+DEALLOCATE PREPARE stmt_str;
+DEALLOCATE PREPARE stmt_dbl;
+DEALLOCATE PREPARE stmt_int;
+DEALLOCATE PREPARE stmt_dec;
+
+DROP PROCEDURE p_string;
+DROP PROCEDURE p_double;
+DROP PROCEDURE p_int;
+DROP PROCEDURE p_decimal;
+
+DROP PROCEDURE IF EXISTS p1;
+DROP PROCEDURE IF EXISTS p2;
+
+CREATE PROCEDURE p1(OUT v1 CHAR(10))
+SET v1 = 'test1';
+
+CREATE PROCEDURE p2(OUT v2 CHAR(10))
+BEGIN
+SET @query = 'CALL p1(?)';
+PREPARE stmt1 FROM @query;
+EXECUTE stmt1 USING @u1;
+DEALLOCATE PREPARE stmt1;
+SET v2 = @u1;
+END|
+
+CALL p2(@a);
+SELECT @a;
+@a
+test1
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+
+TINYINT
+
+CREATE PROCEDURE p1(OUT v TINYINT)
+SET v = 127;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 127;
+@a	@a = 127
+127	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+SMALLINT
+
+CREATE PROCEDURE p1(OUT v SMALLINT)
+SET v = 32767;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 32767;
+@a	@a = 32767
+32767	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+MEDIUMINT
+
+CREATE PROCEDURE p1(OUT v MEDIUMINT)
+SET v = 8388607;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 8388607;
+@a	@a = 8388607
+8388607	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+INT
+
+CREATE PROCEDURE p1(OUT v INT)
+SET v = 2147483647;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 2147483647;
+@a	@a = 2147483647
+2147483647	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+BIGINT
+
+CREATE PROCEDURE p1(OUT v BIGINT)
+SET v = 9223372036854775807;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 9223372036854775807;
+@a	@a = 9223372036854775807
+9223372036854775807	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+BIT(11)
+
+CREATE PROCEDURE p1(OUT v BIT(11))
+SET v = b'10100100101';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = b'10100100101';
+@a	@a = b'10100100101'
+1317	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+TIMESTAMP
+
+CREATE PROCEDURE p1(OUT v TIMESTAMP)
+SET v = '2007-11-18 15:01:02';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = '2007-11-18 15:01:02';
+@a	@a = '2007-11-18 15:01:02'
+2007-11-18 15:01:02	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+DATETIME
+
+CREATE PROCEDURE p1(OUT v DATETIME)
+SET v = '1234-11-12 12:34:59';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = '1234-11-12 12:34:59';
+@a	@a = '1234-11-12 12:34:59'
+1234-11-12 12:34:59	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+TIME
+
+CREATE PROCEDURE p1(OUT v TIME)
+SET v = '123:45:01';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = '123:45:01';
+@a	@a = '123:45:01'
+123:45:01	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+DATE
+
+CREATE PROCEDURE p1(OUT v DATE)
+SET v = '1234-11-12';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = '1234-11-12';
+@a	@a = '1234-11-12'
+1234-11-12	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+YEAR
+
+CREATE PROCEDURE p1(OUT v YEAR)
+SET v = 2010;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` bigint(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 2010;
+@a	@a = 2010
+2010	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+FLOAT(7, 4)
+
+CREATE PROCEDURE p1(OUT v FLOAT(7, 4))
+SET v = 123.4567;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` double DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a - 123.4567 < 0.00001;
+@a	@a - 123.4567 < 0.00001
+123.45670318603516	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+DOUBLE(8, 5)
+
+CREATE PROCEDURE p1(OUT v DOUBLE(8, 5))
+SET v = 123.45678;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` double DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a - 123.45678 < 0.000001;
+@a	@a - 123.45678 < 0.000001
+123.45678	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+DECIMAL(9, 6)
+
+CREATE PROCEDURE p1(OUT v DECIMAL(9, 6))
+SET v = 123.456789;
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` decimal(65,30) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 123.456789;
+@a	@a = 123.456789
+123.456789	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+CHAR(32)
+
+CREATE PROCEDURE p1(OUT v CHAR(32))
+SET v = REPEAT('a', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('a', 16);
+@a	@a = REPEAT('a', 16)
+aaaaaaaaaaaaaaaa	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+VARCHAR(32)
+
+CREATE PROCEDURE p1(OUT v VARCHAR(32))
+SET v = REPEAT('b', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('b', 16);
+@a	@a = REPEAT('b', 16)
+bbbbbbbbbbbbbbbb	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+TINYTEXT
+
+CREATE PROCEDURE p1(OUT v TINYTEXT)
+SET v = REPEAT('c', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('c', 16);
+@a	@a = REPEAT('c', 16)
+cccccccccccccccc	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+TEXT
+
+CREATE PROCEDURE p1(OUT v TEXT)
+SET v = REPEAT('d', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('d', 16);
+@a	@a = REPEAT('d', 16)
+dddddddddddddddd	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+MEDIUMTEXT
+
+CREATE PROCEDURE p1(OUT v MEDIUMTEXT)
+SET v = REPEAT('e', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('e', 16);
+@a	@a = REPEAT('e', 16)
+eeeeeeeeeeeeeeee	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+LONGTEXT
+
+CREATE PROCEDURE p1(OUT v LONGTEXT)
+SET v = REPEAT('f', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('f', 16);
+@a	@a = REPEAT('f', 16)
+ffffffffffffffff	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+BINARY(32)
+
+CREATE PROCEDURE p1(OUT v BINARY(32))
+SET v = REPEAT('g', 32);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('g', 32);
+@a	@a = REPEAT('g', 32)
+gggggggggggggggggggggggggggggggg	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+VARBINARY(32)
+
+CREATE PROCEDURE p1(OUT v VARBINARY(32))
+SET v = REPEAT('h', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('h', 16);
+@a	@a = REPEAT('h', 16)
+hhhhhhhhhhhhhhhh	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+TINYBLOB
+
+CREATE PROCEDURE p1(OUT v TINYBLOB)
+SET v = REPEAT('i', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('i', 16);
+@a	@a = REPEAT('i', 16)
+iiiiiiiiiiiiiiii	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+BLOB
+
+CREATE PROCEDURE p1(OUT v BLOB)
+SET v = REPEAT('j', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('j', 16);
+@a	@a = REPEAT('j', 16)
+jjjjjjjjjjjjjjjj	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+MEDIUMBLOB
+
+CREATE PROCEDURE p1(OUT v MEDIUMBLOB)
+SET v = REPEAT('k', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('k', 16);
+@a	@a = REPEAT('k', 16)
+kkkkkkkkkkkkkkkk	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+LONGBLOB
+
+CREATE PROCEDURE p1(OUT v LONGBLOB)
+SET v = REPEAT('l', 16);
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = REPEAT('l', 16);
+@a	@a = REPEAT('l', 16)
+llllllllllllllll	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+SET('aaa', 'bbb')
+
+CREATE PROCEDURE p1(OUT v SET('aaa', 'bbb'))
+SET v = 'aaa';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 'aaa';
+@a	@a = 'aaa'
+aaa	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+ENUM('aaa', 'bbb')
+
+CREATE PROCEDURE p1(OUT v ENUM('aaa', 'bbb'))
+SET v = 'aaa';
+PREPARE stmt1 FROM 'CALL p1(?)';
+EXECUTE stmt1 USING @a;
+CREATE TEMPORARY TABLE tmp1 AS SELECT @a AS c1;
+SHOW CREATE TABLE tmp1;
+Table	Create Table
+tmp1	CREATE TEMPORARY TABLE `tmp1` (
+  `c1` longblob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
+SELECT @a, @a = 'aaa';
+@a	@a = 'aaa'
+aaa	1
+DROP TEMPORARY TABLE tmp1;
+DROP PROCEDURE p1;
+
+# End of WL#4435.
+#
+# WL#4284: Transactional DDL locking
+#
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (a INT);
+BEGIN;
+SELECT * FROM t1;
+a
+# Test that preparing a CREATE TABLE does not take a exclusive metdata lock.
+PREPARE stmt1 FROM "CREATE TABLE t1 AS SELECT 1";
+EXECUTE stmt1;
+ERROR 42S01: Table 't1' already exists
+DEALLOCATE PREPARE stmt1;
+DROP TABLE t1;
+#
+# WL#4284: Transactional DDL locking
+#
+# Test that metadata locks taken during prepare are released.
+#
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (a INT);
+BEGIN;
+PREPARE stmt1 FROM "SELECT * FROM t1";
+DROP TABLE t1;
+
+#
+# Bug#56115: invalid memory reads when PS selecting from
+#            information_schema tables
+# Bug#58701: crash in Field::make_field, cursor-protocol
+#
+# NOTE: MTR should be run both with --ps-protocol and --cursor-protocol.
+#
+
+SELECT *
+FROM (SELECT 1 UNION SELECT 2) t;
+1
+1
+2
 
 # Bug#13805127: Stored program cache produces wrong result in same THD
 
@@ -3143,3 +3823,100 @@ c1	c2	count(c3)
 2012-03-01 01:00:00	3	1
 2012-03-01 02:00:00	3	1
 DEALLOCATE PREPARE s1;
+#
+# End of 5.5 tests.
+#
+# Bug#12603141: JOIN::flatten_subqueries asrt/simplify_joins sig11/...
+# Bug#12603457: SEGFAULT IN REINIT_STMT_BEFORE_USE
+#
+CREATE TABLE t1(a INTEGER);
+CREATE TABLE t2(a INTEGER);
+PREPARE stmt FROM '
+SELECT (SELECT 1 FROM t2 WHERE ot.a) AS d
+FROM t1 AS ot
+GROUP BY d';
+EXECUTE stmt;
+d
+EXECUTE stmt;
+d
+INSERT INTO t1 VALUES (0),(1),(2);
+INSERT INTO t2 VALUES (1);
+EXECUTE stmt;
+d
+NULL
+1
+EXECUTE stmt;
+d
+NULL
+1
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1, t2;
+#
+# Bug#12582849
+# ASSERTION FAILURE IN __CXA_PURE_VIRTUAL/ITEM_COND::FIX_FIELDS
+#
+CREATE TABLE t1 (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER,
+col_int_key INTEGER,
+col_varchar_key VARCHAR(1),
+col_varchar_nokey VARCHAR(1),
+PRIMARY KEY (pk),
+KEY (col_int_key),
+KEY (col_varchar_key, col_int_key)
+);
+INSERT INTO t1 (
+col_int_key, col_int_nokey,
+col_varchar_key, col_varchar_nokey
+) VALUES 
+(4,    2, 'v', 'v'),
+(62, 150, 'v', 'v');
+CREATE TABLE t2 (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER,
+col_int_key INTEGER,
+col_varchar_key VARCHAR(1),
+col_varchar_nokey VARCHAR(1),
+PRIMARY KEY (pk),
+KEY (col_int_key),
+KEY (col_varchar_key, col_int_key)
+);
+INSERT INTO t2 (
+col_int_key, col_int_nokey,
+col_varchar_key, col_varchar_nokey
+) VALUES 
+(8, NULL, 'x', 'x'),
+(7, 8,    'd', 'd');
+PREPARE stmt FROM ' 
+SELECT
+  ( SELECT MAX( SQ1_alias2 .col_int_nokey ) AS SQ1_field1
+    FROM ( t2 AS SQ1_alias1 RIGHT JOIN t1 AS SQ1_alias2
+           ON ( SQ1_alias2.col_varchar_key = SQ1_alias1.col_varchar_nokey )
+         )
+    WHERE SQ1_alias2.pk < alias1.col_int_nokey OR alias1.pk
+  ) AS field1
+FROM ( t1 AS alias1 JOIN t2 AS alias2 ON alias2.pk )
+GROUP BY field1
+';
+EXECUTE stmt;
+field1
+150
+EXECUTE stmt;
+field1
+150
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1, t2;
+#
+# Bug#12661349 assert in protocol::end_statement
+#
+# Note: This test case should be run with --ps-protocol
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (col1 INT);
+# Connection con1
+# Connection default
+KILL QUERY <con1_id>;
+# Connection con1
+SELECT * FROM t1;
+ERROR 70100: Query execution was interrupted
+# Connection default
+DROP TABLE t1;

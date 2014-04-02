@@ -14,7 +14,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
 ** Ask for a password from tty
@@ -35,7 +35,7 @@
 #include <pwd.h>
 #endif /* HAVE_PWD_H */
 #else /* ! HAVE_GETPASS */
-#if !defined(__WIN__) && !defined(__NETWARE__)
+#if !defined(__WIN__)
 #include <sys/ioctl.h>
 #ifdef HAVE_TERMIOS_H				/* For tty-password */
 #include	<termios.h>
@@ -54,9 +54,7 @@
 #include <asm/termiobits.h>
 #endif
 #else
-#ifndef __NETWARE__
 #include <conio.h>
-#endif /* __NETWARE__ */
 #endif /* __WIN__ */
 #endif /* HAVE_GETPASS */
 
@@ -64,16 +62,8 @@
 #define getpass(A) getpassphrase(A)
 #endif
 
-#if defined( __WIN__) || defined(__NETWARE__)
+#if defined(__WIN__)
 /* were just going to fake it here and get input from the keyboard */
-
-#ifdef __NETWARE__
-#undef _getch
-#undef _cputs
-#define _getch getcharacter
-#define _cputs(A) putstring(A)
-#endif
-
 char *get_tty_password(const char *opt_message)
 {
   char to[80];

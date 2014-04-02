@@ -55,7 +55,7 @@
 # Set the SESSION DEFAULT STORAGE ENGINE to a value <> storage engine
 # to be tested. This must not affect any CREATE TABLE statement, where
 # the storage engine is assigned explicitely,
-eval SET SESSION STORAGE_ENGINE = $other_engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $other_engine_type;
 
 #
 # Small basic test with ignore
@@ -500,7 +500,7 @@ drop table t1;
 # Test of opening table twice and timestamps
 #
 set @a:=now();
-eval CREATE TABLE t1 (a int not null, b timestamp not null, primary key (a)) engine=$engine_type;
+eval CREATE TABLE t1 (a int not null, b timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, primary key (a)) engine=$engine_type;
 insert into t1 (a) values(1),(2),(3);
 select t1.a from t1 natural join t1 as t2 where t1.b >= @a order by t1.a;
 select a from t1 natural join t1 as t2 where b >= @a order by a;
@@ -727,9 +727,9 @@ eval CREATE TABLE t1 (
   cname char(15) NOT NULL default '',
   carrier_id smallint(6) NOT NULL default '0',
   privacy tinyint(4) NOT NULL default '0',
-  last_mod_date timestamp NOT NULL,
+  last_mod_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   last_mod_id smallint(6) NOT NULL default '0',
-  last_app_date timestamp NOT NULL,
+  last_app_date timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   last_app_id smallint(6) default '-1',
   version smallint(6) NOT NULL default '0',
   assigned_scps int(11) default '0',
@@ -746,9 +746,9 @@ eval CREATE TABLE t2 (
   cname char(15) NOT NULL default '',
   carrier_id smallint(6) NOT NULL default '0',
   privacy tinyint(4) NOT NULL default '0',
-  last_mod_date timestamp NOT NULL,
+  last_mod_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   last_mod_id smallint(6) NOT NULL default '0',
-  last_app_date timestamp NOT NULL,
+  last_app_date timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   last_app_id smallint(6) default '-1',
   version smallint(6) NOT NULL default '0',
   assigned_scps int(11) default '0',
@@ -1359,6 +1359,11 @@ drop table t1;
 
 eval create table t1 (a int not null, b int not null, c blob not null, d int not null, e int, primary key (a,b,c(255),d)) engine=$engine_type;
 insert into t1 values (2,2,"b",2,2),(1,1,"a",1,1),(3,3,"ab",3,3);
+-- disable_query_log
+-- disable_result_log
+analyze table t1;
+-- enable_result_log
+-- enable_query_log
 select * from t1 order by a,b,c,d;
 explain select * from t1 order by a,b,c,d;
 drop table t1;
@@ -1457,8 +1462,8 @@ show variables like "innodb_thread_sleep_delay";
 # Test varchar
 #
 
-let $default=`select @@storage_engine`;
-eval set storage_engine=$engine_type;
+let $default=`select @@default_storage_engine`;
+eval set default_storage_engine=$engine_type;
 source include/varchar.inc;
 
 #
@@ -1477,7 +1482,7 @@ create table t1 (v varchar(65530) character set utf8);
 show create table t1;
 drop table t1;
 
-eval set storage_engine=$default;
+eval set default_storage_engine=$default;
 
 # InnoDB specific varchar tests
 eval create table t1 (v varchar(16384)) engine=$engine_type;
@@ -1994,6 +1999,7 @@ commit;
 connection b;
 set autocommit = 0;
 update t1 set b = 5 where a = 2;
+commit;
 connection a;
 delimiter |;
 create trigger t1t before insert on t1 for each row begin set NEW.b = NEW.a * 10 + 5, NEW.c = NEW.a / 10; end |
@@ -2056,6 +2062,7 @@ update t2 set b = b + 5 where a = 1;
 update t3 set b = b + 5 where a = 1;
 update t4 set b = b + 5 where a = 1;
 insert into t5(a) values(20);
+commit;
 connection b;
 set autocommit = 0;
 insert into t1(a) values(7);
@@ -2097,7 +2104,7 @@ INSERT INTO t1 VALUES ('other', 'anyvalue');
 INSERT INTO t2 VALUES ('old');
 INSERT INTO t2 VALUES ('other');
 
---error ER_FOREIGN_DUPLICATE_KEY
+--error ER_FOREIGN_DUPLICATE_KEY_WITH_CHILD_INFO
 UPDATE t1 SET field1 = 'other' WHERE field2 = 'somevalu';
 
 DROP TABLE t2;
@@ -2268,25 +2275,25 @@ drop table t1, t2, t3;
 # 3) CREATE ... SELECT
 
 connect (a,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (b,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (c,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (d,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (e,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (f,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (g,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (h,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (i,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connect (j,localhost,root,,);
-eval SET SESSION STORAGE_ENGINE = $engine_type;
+eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
 connection a;
 create table t1(a int not null, b int, primary key(a));
 insert into t1 values (1,2),(5,3),(4,2);

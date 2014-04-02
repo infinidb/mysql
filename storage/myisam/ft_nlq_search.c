@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
@@ -41,7 +39,7 @@ typedef struct st_all_in_one
 {
   MI_INFO    *info;
   uint	      keynr;
-  CHARSET_INFO *charset;
+  const CHARSET_INFO *charset;
   uchar      *keybuff;
   TREE	      dtree;
 } ALL_IN_ONE;
@@ -91,7 +89,7 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
   doc_cnt=0;
 
   if (share->concurrent_insert)
-    rw_rdlock(&share->key_root_lock[aio->keynr]);
+    mysql_rwlock_rdlock(&share->key_root_lock[aio->keynr]);
 
   key_root= share->state.key_root[aio->keynr];
 
@@ -105,7 +103,7 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
     ;
 
   if (share->concurrent_insert)
-    rw_unlock(&share->key_root_lock[aio->keynr]);
+    mysql_rwlock_unlock(&share->key_root_lock[aio->keynr]);
 
   info->update|= HA_STATE_AKTIV;              /* for _mi_test_if_changed() */
 
@@ -131,7 +129,7 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
       key_root=info->lastpos;
       keylen=0;
       if (share->concurrent_insert)
-        rw_rdlock(&share->key_root_lock[aio->keynr]);
+        mysql_rwlock_rdlock(&share->key_root_lock[aio->keynr]);
       r=_mi_search_first(info, keyinfo, key_root);
       goto do_skip;
     }
@@ -167,7 +165,7 @@ static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
       gweight=0;
 
     if (share->concurrent_insert)
-      rw_rdlock(&share->key_root_lock[aio->keynr]);
+      mysql_rwlock_rdlock(&share->key_root_lock[aio->keynr]);
 
     if (_mi_test_if_changed(info) == 0)
 	r=_mi_search_next(info, keyinfo, info->lastkey, info->lastkey_length,
@@ -182,7 +180,7 @@ do_skip:
                          SEARCH_BIGGER, key_root);
 
     if (share->concurrent_insert)
-      rw_unlock(&share->key_root_lock[aio->keynr]);
+      mysql_rwlock_unlock(&share->key_root_lock[aio->keynr]);
   }
   word->weight=gweight;
 
@@ -215,7 +213,8 @@ static int walk_and_push(FT_SUPERDOC *from,
 static int FT_DOC_cmp(void *unused __attribute__((unused)),
                       FT_DOC *a, FT_DOC *b)
 {
-  return sgn(b->weight - a->weight);
+  double c= b->weight - a->weight;
+  return ((c < 0) ? -1 : (c > 0) ? 1 : 0);
 }
 
 
@@ -246,7 +245,7 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
   if (! (ftparser_param= ftparser_call_initializer(info, keynr, 0)))
     goto err;
 
-  bzero(&wtree,sizeof(wtree));
+  memset(&wtree, 0, sizeof(wtree));
 
   init_tree(&aio.dtree,0,0,sizeof(FT_SUPERDOC),(qsort_cmp2)&FT_SUPERDOC_cmp,0,
             NULL, NULL);
@@ -375,7 +374,7 @@ float ft_nlq_find_relevance(FT_INFO *handler,
 
 void ft_nlq_close_search(FT_INFO *handler)
 {
-  my_free((uchar*)handler,MYF(0));
+  my_free(handler);
 }
 
 

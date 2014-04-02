@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -13,15 +11,12 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifdef USE_PRAGMA_IMPLEMENTATION
-#pragma implementation        // gcc: Class implementation
-#endif
-
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include <mysql/psi/mysql_file.h>
 #include "transparent_file.h"
+#include "my_sys.h"          // MY_WME, MY_ALLOW_ZERO_PTR, MY_SEEK_SET
 
 Transparent_file::Transparent_file() : lower_bound(0), buff_size(IO_SIZE)
 { 
@@ -30,7 +25,7 @@ Transparent_file::Transparent_file() : lower_bound(0), buff_size(IO_SIZE)
 
 Transparent_file::~Transparent_file()
 { 
-  my_free((uchar*)buff, MYF(MY_ALLOW_ZERO_PTR)); 
+  my_free(buff);
 }
 
 void Transparent_file::init_buff(File filedes_arg)
@@ -38,9 +33,9 @@ void Transparent_file::init_buff(File filedes_arg)
   filedes= filedes_arg;
   /* read the beginning of the file */
   lower_bound= 0;
-  VOID(my_seek(filedes, 0, MY_SEEK_SET, MYF(0)));
+  mysql_file_seek(filedes, 0, MY_SEEK_SET, MYF(0));
   if (filedes && buff)
-    upper_bound= my_read(filedes, buff, buff_size, MYF(0));
+    upper_bound= mysql_file_read(filedes, buff, buff_size, MYF(0));
 }
 
 uchar *Transparent_file::ptr()
@@ -66,7 +61,8 @@ my_off_t Transparent_file::read_next()
      No need to seek here, as the file managed by Transparent_file class
      always points to upper_bound byte
   */
-  if ((bytes_read= my_read(filedes, buff, buff_size, MYF(0))) == MY_FILE_ERROR)
+  if ((bytes_read= mysql_file_read(filedes, buff, buff_size, MYF(0)))
+      == MY_FILE_ERROR)
     return (my_off_t) -1;
 
   /* end of file */
@@ -88,10 +84,10 @@ char Transparent_file::get_value(my_off_t offset)
   if ((lower_bound <= offset) && (((my_off_t) offset) < upper_bound))
     return buff[offset - lower_bound];
 
-  VOID(my_seek(filedes, offset, MY_SEEK_SET, MYF(0)));
+  mysql_file_seek(filedes, offset, MY_SEEK_SET, MYF(0));
   /* read appropriate portion of the file */
-  if ((bytes_read= my_read(filedes, buff, buff_size,
-                           MYF(0))) == MY_FILE_ERROR)
+  if ((bytes_read= mysql_file_read(filedes, buff, buff_size,
+                                   MYF(0))) == MY_FILE_ERROR)
     return 0;
 
   lower_bound= offset;

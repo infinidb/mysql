@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
@@ -94,6 +92,8 @@ static double *nwghts=_nwghts+5; /* nwghts[i] = -0.5*1.5**i */
 #define FTB_FLAG_NO    4
 #define FTB_FLAG_WONLY 8
 
+#define CMP_NUM(a,b)    (((a) < (b)) ? -1 : ((a) == (b)) ? 0 : 1)
+
 typedef struct st_ftb_expr FTB_EXPR;
 struct st_ftb_expr
 {
@@ -133,7 +133,7 @@ typedef struct st_ft_info
 {
   struct _ft_vft *please;
   MI_INFO   *info;
-  CHARSET_INFO *charset;
+  const CHARSET_INFO *charset;
   FTB_EXPR  *root;
   FTB_WORD **list;
   FTB_WORD  *last_word;
@@ -288,7 +288,7 @@ static int ftb_parse_query_internal(MYSQL_FTPARSER_PARAM *param,
 {
   MY_FTB_PARAM *ftb_param= param->mysql_ftparam;
   MYSQL_FTPARSER_BOOLEAN_INFO info;
-  CHARSET_INFO *cs= ftb_param->ftb->charset;
+  const CHARSET_INFO *cs= ftb_param->ftb->charset;
   uchar **start= (uchar**) &query;
   uchar *end= (uchar*) query + len;
   FT_WORD w;
@@ -331,7 +331,7 @@ static int _ftb_parse_query(FTB *ftb, uchar *query, uint len,
 }
 
 
-static int _ftb_no_dupes_cmp(void* not_used __attribute__((unused)),
+static int _ftb_no_dupes_cmp(const void* not_used __attribute__((unused)),
                              const void *a,const void *b)
 {
   return CMP_NUM((*((my_off_t*)a)), (*((my_off_t*)b)));
@@ -487,10 +487,10 @@ static int _ft2_search(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
   int r;
   MYISAM_SHARE *share= ftb->info->s;
   if (share->concurrent_insert)
-    rw_rdlock(&share->key_root_lock[ftb->keynr]);
+    mysql_rwlock_rdlock(&share->key_root_lock[ftb->keynr]);
   r= _ft2_search_no_lock(ftb, ftbw, init_search);
   if (share->concurrent_insert)
-    rw_unlock(&share->key_root_lock[ftb->keynr]);
+    mysql_rwlock_unlock(&share->key_root_lock[ftb->keynr]);
   return r;
 }
 
@@ -533,7 +533,7 @@ static void _ftb_init_index_search(FT_INFO *ftb)
       {
         if (ftbe->flags & FTB_FLAG_NO ||                     /* 2 */
             ftbe->up->ythresh - ftbe->up->yweaks >
-            (uint) test(ftbe->flags & FTB_FLAG_YES))         /* 1 */
+            (uint) MY_TEST(ftbe->flags & FTB_FLAG_YES))      /* 1 */
         {
           FTB_EXPR *top_ftbe=ftbe->up;
           ftbw->docid[0]=HA_OFFSET_ERROR;
@@ -564,7 +564,7 @@ static void _ftb_init_index_search(FT_INFO *ftb)
 
 
 FT_INFO * ft_init_boolean_search(MI_INFO *info, uint keynr, uchar *query,
-                                 uint query_len, CHARSET_INFO *cs)
+                                 uint query_len, const CHARSET_INFO *cs)
 {
   FTB       *ftb;
   FTB_EXPR  *ftbe;
@@ -580,7 +580,7 @@ FT_INFO * ft_init_boolean_search(MI_INFO *info, uint keynr, uchar *query,
   DBUG_ASSERT(keynr==NO_SUCH_KEY || cs == info->s->keyinfo[keynr].seg->charset);
   ftb->with_scan=0;
   ftb->lastpos=HA_OFFSET_ERROR;
-  bzero(& ftb->no_dupes, sizeof(TREE));
+  memset(&ftb->no_dupes, 0, sizeof(TREE));
   ftb->last_word= 0;
 
   init_alloc_root(&ftb->mem_root, 1024, 1024);
@@ -622,7 +622,7 @@ FT_INFO * ft_init_boolean_search(MI_INFO *info, uint keynr, uchar *query,
   return ftb;
 err:
   free_root(& ftb->mem_root, MYF(0));
-  my_free((uchar*)ftb,MYF(0));
+  my_free(ftb);
   return 0;
 }
 
@@ -631,7 +631,7 @@ typedef struct st_my_ftb_phrase_param
 {
   LIST *phrase;
   LIST *document;
-  CHARSET_INFO *cs;
+  const CHARSET_INFO *cs;
   uint phrase_length;
   uint document_length;
   uint match;
@@ -1046,7 +1046,7 @@ void ft_boolean_close_search(FT_INFO *ftb)
     delete_tree(& ftb->no_dupes);
   }
   free_root(& ftb->mem_root, MYF(0));
-  my_free((uchar*)ftb,MYF(0));
+  my_free(ftb);
 }
 
 

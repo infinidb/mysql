@@ -3,47 +3,29 @@
 
 binlog.binlog_multi_engine               # joro : NDB tests marked as experimental as agreed with bochklin
 
-
 funcs_1.charset_collation_1              # depends on compile-time decisions
-funcs_1.is_cml_ndb                       # joro : NDB tests marked as experimental as agreed with bochklin
-funcs_1.is_columns_ndb                   # joro : NDB tests marked as experimental as agreed with bochklin
-funcs_1.is_engines_ndb                   # joro : NDB tests marked as experimental as agreed with bochklin
-funcs_1.is_tables_ndb                    # joro : NDB tests marked as experimental as agreed with bochklin
-funcs_1.ndb*                             # joro : NDB tests marked as experimental as agreed with bochklin
 
-funcs_2.ndb_charset                      # joro : NDB tests marked as experimental as agreed with bochklin
+main.func_math @freebsd                  # Bug#11751977 2010-05-04 alik main.func_math fails on FreeBSD in PB2
+main.mysqlslap @windows                  # Bug#11761520 2010-08-10 alik mysqlslap fails sporadically starting from Dahlia
 
-innodb_plugin.*  @solaris                # Bug#11763366 InnoDB Plugin mysql-tests fail on Solaris
-
-main.ctype_gbk_binlog  @solaris          # Bug#11754407: main.ctype_gbk_binlog fails sporadically : Table 't2' already exists
-main.func_str  @solaris                  # joro: Bug#11750406
-main.sp @solaris                         # joro : Bug#11761625
-main.query_cache_28249                   # Bug#12584161 2009-03-25 main.query_cache_28249 fails sporadically
+main.index_merge_innodb                  # BUG#11754168 2012-05-08 jorgen Doing an attempt at reenabling tests disabled by bug. EXPLAIN's row estimates varies for innodb so marked experimental for a while
 
 
-ndb.*                                    # joro : NDB tests marked as experimental as agreed with bochklin
+parts.partition_debug_innodb             # Bug#14150368 2013-03-07 anitha Failing very frequently on PB2
 
+rpl.rpl_delayed_slave                    # BUG#11764654 rpl_delayed_slave fails sporadically in pb
 rpl.rpl_innodb_bug28430                  # Bug#11754425
-rpl.rpl_insert                           # Sven: BUG#12764817
-rpl.rpl_row_sp011         @solaris       # Joro : Bug #11753919
-rpl.rpl_stop_slave                       # Sven : BUG#12345981
+rpl.rpl_show_slave_running               # BUG#12346048 2011-04-11 sven fails sporadically on pb2
+rpl.rpl_spec_variables @solaris          # Bug #17337114 2013-08-20 Luis Soares failing on pb2 with timeout for 'CHECK WARNINGS'
+rpl.rpl_gtid_logs_without_rotate_or_stop_event @windows    # Bug#16207800 2013-02-09 anitha Fails very frequently on windows
 
-rpl_ndb.*                                # joro : NDB tests marked as experimental as agreed with bochklin
-rpl_ndb.rpl_ndb_log                      # Bug#11749433
+perfschema.socket_summary_by_instance_func  # bug#16274580
+innodb.innodb_bug14676111                   # bug#17026780  2013-07-08 anitha Originally made experimental due to bug#16371942 which is now fixed. Now fails with mismatch in CLUST_INDEX_SIZE
 
-stress.ddl_ndb                           # joro : NDB tests marked as experimental as agreed with bochklin
+# This file is for marking internal tests as experimental.
+# Use the same way as the "normal" default.experimental
+# The contents of this file will be appended to it in PB2 but not for
+# normal developer builds.
+# Internal tests should *not* be listed in the public default.experimental!
 
-parts.ndb_dd_backuprestore               # joro : NDB tests marked as experimental as agreed with bochklin
-parts.part_supported_sql_func_ndb        # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_alter1_1_ndb             # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_alter1_1_2_ndb           # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_alter1_2_ndb             # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_auto_increment_ndb       # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_basic_ndb                # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_engine_ndb               # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_int_ndb                  # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_mgm_lc0_ndb              # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_mgm_lc1_ndb              # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_mgm_lc2_ndb              # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_syntax_ndb               # joro : NDB tests marked as experimental as agreed with bochklin
-parts.partition_value_ndb                # joro : NDB tests marked as experimental as agreed with bochklin
+i_innodb.innodb_bug14712710 bug#14765080 has been assigned to Thayu

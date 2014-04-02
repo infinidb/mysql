@@ -646,6 +646,10 @@ select conv(255 AS p1, 10 AS p2, 16 AS p3);
 
 # Native function with a variable number of arguments
 
+# Bug in libm.so on Solaris:
+#   atan(10) from 32-bit version returns 1.4711276743037347
+#   atan(10) from 64-bit version returns 1.4711276743037345
+--replace_result 1.4711276743037345 1.4711276743037347
 select atan(10);
 -- error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
 select atan(10 AS p1);
@@ -728,3 +732,100 @@ DROP TABLE t1, t2, t3;
 --echo #
 --echo # End of 5.1 tests
 --echo #
+
+#
+# Bug#31293 - Incorrect parser errors for create/alter/drop logfile group/tablespace
+#
+
+--echo # Should use myisam
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create logfile group ndb_lg1 add undofile 'ndb_undo1' initial_size=32M; 
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create logfile group ndb_lg1 add undofile 'ndb_undo1' engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create logfile group ndb_lg1 add undofile 'ndb_undo1';
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create tablespace ndb_ts1 add datafile 'ndb_ts1.dat' use logfile group ndb_lg1 engine=myisam initial_size=32M;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create tablespace ndb_ts1 add datafile 'ndb_ts1.dat' use logfile group ndb_lg1 engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+create tablespace ndb_ts1 add datafile 'ndb_ts1.dat' use logfile group ndb_lg1;
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter logfile group ndb_lg1 add undofile 'ndb_undo1' wait;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter logfile group ndb_lg1 add undofile 'ndb_undo1' engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter logfile group ndb_lg1 add undofile 'ndb_undo1';
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter tablespace ndb_ts1 add datafile 'ndb_ts1.dat' initial_size=32M;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter tablespace ndb_ts1 add datafile 'ndb_ts1.dat' engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+alter tablespace ndb_ts1 add datafile 'ndb_ts1.dat';
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+drop logfile group ndb_lg1 engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+drop logfile group ndb_lg1;
+
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+drop tablespace ndb_ts1 engine=myisam;
+-- error ER_ILLEGAL_HA_CREATE_OPTION
+drop tablespace ndb_ts1;
+
+#
+# Bug#12546960 - 60993: NAME QUOTED WITH QUOTE INSTEAD OF BACKTICK 
+#                       GIVES NO SYNTAX ERROR
+#
+CREATE TABLE t (id INT PRIMARY KEY);
+--error ER_PARSE_ERROR
+--query ALTER TABLE t RENAME TO `t1';
+DROP TABLE t;
+
+--echo #
+--echo # Bug#13819100 BROKEN SYNTAX ACCEPTED FOR START SLAVE, STOP SLAVE
+--echo #
+
+--error ER_PARSE_ERROR
+STOP SLAVE ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,, ;
+--error ER_PARSE_ERROR
+STOP SLAVE ,,,,,,,,,,,,, sql_thread, ,,,,,,,,,,,,,,,,,,, ;
+--error ER_PARSE_ERROR
+STOP SLAVE ,,,,,,,,,,,,, io_thread, ,,,,,,,,,,,,,,,,,,, ;
+
+--echo #
+--echo # Bug#13819132 BROKEN SYNTAX ACCEPTED FOR START TRANSACTION
+--echo #
+
+--error ER_PARSE_ERROR
+START TRANSACTION ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,, ;
+
+--echo #
+--echo # Bug#17075846 : unquoted file names for variable values are
+--echo #                accepted but parsed incorrectly
+--echo #
+--error ER_WRONG_TYPE_FOR_VAR 
+SET default_storage_engine=a.myisam;
+--error ER_WRONG_TYPE_FOR_VAR 
+SET default_storage_engine = .a.MyISAM;
+--error ER_WRONG_TYPE_FOR_VAR 
+SET default_storage_engine = a.b.MyISAM;
+--error ER_WRONG_TYPE_FOR_VAR 
+SET default_storage_engine = `a`.MyISAM;
+--error ER_WRONG_TYPE_FOR_VAR 
+SET default_storage_engine = `a`.`MyISAM`; 
+--error ER_UNKNOWN_STORAGE_ENGINE 
+set default_storage_engine = "a.MYISAM";
+--error ER_UNKNOWN_STORAGE_ENGINE 
+set default_storage_engine = 'a.MYISAM';
+--error ER_UNKNOWN_STORAGE_ENGINE 
+set default_storage_engine = `a.MYISAM`;
+CREATE TABLE t1 (s VARCHAR(100));
+--ERROR ER_BAD_FIELD_ERROR
+CREATE TRIGGER trigger1 BEFORE INSERT ON t1 FOR EACH ROW
+SET default_storage_engine = NEW.INNODB;
+DROP TABLE t1;

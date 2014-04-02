@@ -1,7 +1,24 @@
-/**********************************************************************
-File-based utilities
+/*****************************************************************************
 
-(c) 1995 Innobase Oy
+Copyright (c) 1995, 2009, Oracle and/or its affiliates. All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+
+*****************************************************************************/
+
+/******************************************************************//**
+@file include/fut0fut.h
+File-based utilities
 
 Created 12/13/1995 Heikki Tuuri
 ***********************************************************************/
@@ -15,18 +32,20 @@ Created 12/13/1995 Heikki Tuuri
 #include "fil0fil.h"
 #include "mtr0mtr.h"
 
-/************************************************************************
-Gets a pointer to a file address and latches the page. */
+/********************************************************************//**
+Gets a pointer to a file address and latches the page.
+@return pointer to a byte in a frame; the file page in the frame is
+bufferfixed and latched */
 UNIV_INLINE
 byte*
 fut_get_ptr(
 /*========*/
-				/* out: pointer to a byte in a frame; the file
-				page in the frame is bufferfixed and latched */
-	ulint		space,	/* in: space id */
-	fil_addr_t	addr,	/* in: file address */
-	ulint		rw_latch, /* in: RW_S_LATCH, RW_X_LATCH */
-	mtr_t*		mtr);	/* in: mtr handle */
+	ulint		space,	/*!< in: space id */
+	ulint		zip_size,/*!< in: compressed page size in bytes
+				or 0 for uncompressed pages */
+	fil_addr_t	addr,	/*!< in: file address */
+	ulint		rw_latch, /*!< in: RW_S_LATCH, RW_X_LATCH */
+	mtr_t*		mtr);	/*!< in: mtr handle */
 
 #ifndef UNIV_NONINL
 #include "fut0fut.ic"

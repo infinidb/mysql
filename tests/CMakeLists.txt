@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2007 MySQL AB
+# Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,17 +11,20 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-# About "mysqlclient_notls", see note in "client/CMakeLists.txt"
-
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSAFEMALLOC -DSAFE_MUTEX")
 ADD_DEFINITIONS("-DMYSQL_CLIENT")
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
 
-ADD_EXECUTABLE(mysql_client_test mysql_client_test.c ../mysys/my_memmem.c)
-TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient_notls wsock32)
+ADD_EXECUTABLE(mysql_client_test mysql_client_test.c)
+TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient)
+SET_TARGET_PROPERTIES(mysql_client_test PROPERTIES LINKER_LANGUAGE CXX)
 
-ADD_EXECUTABLE(bug25714 bug25714.c)
-TARGET_LINK_LIBRARIES(bug25714 mysqlclient_notls wsock32)
+IF(WITH_UNIT_TESTS)
+  ADD_EXECUTABLE(bug25714 bug25714.c)
+  TARGET_LINK_LIBRARIES(bug25714 mysqlclient)
+  SET_TARGET_PROPERTIES(bug25714 PROPERTIES LINKER_LANGUAGE CXX)
+ENDIF()
+
+INSTALL(TARGETS mysql_client_test DESTINATION ${INSTALL_BINDIR} COMPONENT Test)

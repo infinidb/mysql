@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2002, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
 #include <my_dir.h>
@@ -37,29 +37,33 @@ int my_rename(const char *from, const char *to, myf MyFlags)
       my_errno=EEXIST;
       error= -1;
       if (MyFlags & MY_FAE+MY_WME)
-	my_error(EE_LINK, MYF(ME_BELL+ME_WAITTANG),from,to,my_errno);
+      {
+        char errbuf[MYSYS_STRERROR_SIZE];
+        my_error(EE_LINK, MYF(ME_BELL+ME_WAITTANG), from, to,
+                 my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      }
       DBUG_RETURN(error);
     }
     my_errno=save_errno;
   }
 #endif
-#if defined(HAVE_RENAME)
-#if defined(__WIN__) || defined(__NETWARE__)
-  /*
-    On windows we can't rename over an existing file:
-    Remove any conflicting files:
-  */
-  (void) my_delete(to, MYF(0));
-#endif
-  if (rename(from,to))
-#else
-  if (link(from, to) || unlink(from))
-#endif
+#if defined(__WIN__)
+  if(!MoveFileEx(from, to, MOVEFILE_COPY_ALLOWED|
+                           MOVEFILE_REPLACE_EXISTING))
   {
+    my_osmaperr(GetLastError());
+#else
+  if (rename(from,to))
+  {
+#endif
     my_errno=errno;
     error = -1;
     if (MyFlags & (MY_FAE+MY_WME))
-      my_error(EE_LINK, MYF(ME_BELL+ME_WAITTANG),from,to,my_errno);
+    {
+      char errbuf[MYSYS_STRERROR_SIZE];
+      my_error(EE_LINK, MYF(ME_BELL+ME_WAITTANG), from, to,
+               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+    }
   }
   else if (MyFlags & MY_SYNC_DIR)
   {

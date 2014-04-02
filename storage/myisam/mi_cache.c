@@ -1,4 +1,4 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
+/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Functions for read record cacheing with myisam
@@ -26,10 +26,10 @@
   expected to hit the cache again.
 
   Allows "partial read" errors in the record header (when READING_HEADER flag
-  is set) - unread part is bzero'ed
+  is set) - unread part is zerofilled.
 
   Note: out-of-cache reads are enabled for shared IO_CACHE's too,
-  as these reads will be cached by OS cache (and my_pread is always atomic)
+  as these reads will be cached by OS cache (and mysql_file_pread is always atomic)
 */
 
 
@@ -49,7 +49,7 @@ int _mi_read_cache(IO_CACHE *info, uchar *buff, my_off_t pos, uint length,
     if ((my_off_t) read_length > (my_off_t) (info->pos_in_file-pos))
       read_length=(uint) (info->pos_in_file-pos);
     info->seek_not_done=1;
-    if (my_pread(info->file,buff,read_length,pos,MYF(MY_NABP)))
+    if (mysql_file_pread(info->file, buff, read_length, pos, MYF(MY_NABP)))
       DBUG_RETURN(1);
     if (!(length-=read_length))
       DBUG_RETURN(0);
@@ -61,7 +61,7 @@ int _mi_read_cache(IO_CACHE *info, uchar *buff, my_off_t pos, uint length,
       (my_off_t) (info->read_end - info->request_pos))
   {
     in_buff_pos=info->request_pos+(uint) offset;
-    in_buff_length= min(length, (size_t) (info->read_end-in_buff_pos));
+    in_buff_length= MY_MIN(length, (size_t) (info->read_end-in_buff_pos));
     memcpy(buff,info->request_pos+(uint) offset,(size_t) in_buff_length);
     if (!(length-=in_buff_length))
       DBUG_RETURN(0);
@@ -88,7 +88,8 @@ int _mi_read_cache(IO_CACHE *info, uchar *buff, my_off_t pos, uint length,
   else
   {
     info->seek_not_done=1;
-    if ((read_length=my_pread(info->file,buff,length,pos,MYF(0))) == length)
+    if ((read_length= mysql_file_pread(info->file, buff, length, pos,
+                                       MYF(0))) == length)
       DBUG_RETURN(0);
   }
   if (!(flag & READING_HEADER) || (int) read_length == -1 ||
@@ -101,7 +102,7 @@ int _mi_read_cache(IO_CACHE *info, uchar *buff, my_off_t pos, uint length,
       my_errno=HA_ERR_WRONG_IN_RECORD;
     DBUG_RETURN(1);
   }
-  bzero(buff+read_length,MI_BLOCK_INFO_HEADER_LENGTH - in_buff_length -
-        read_length);
+  memset(buff+read_length, 0,
+         MI_BLOCK_INFO_HEADER_LENGTH - in_buff_length - read_length);
   DBUG_RETURN(0);
 } /* _mi_read_cache */

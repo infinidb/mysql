@@ -1,22 +1,28 @@
-/* Copyright (c) 2000-2003, 2005-2007 MySQL AB
-   
+/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; version 2 of the License.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA */
+   along with this program; if not, write to the Free Software Foundation,
+   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #ifndef RPL_FILTER_H
 #define RPL_FILTER_H
 
 #include "mysql.h"
+#include "sql_list.h"                           /* I_List */
+#include "hash.h"                               /* HASH */
+
+class String;
+struct TABLE_LIST;
+typedef struct st_dynamic_array DYNAMIC_ARRAY;
 
 typedef struct st_table_rule_ent
 {
@@ -48,10 +54,14 @@ public:
 
   bool is_on();
 
-  /* Setters - add filtering rules */
+  bool is_rewrite_empty();
 
-  int add_do_table(const char* table_spec);
-  int add_ignore_table(const char* table_spec);
+  /* Setters - add filtering rules */
+  int build_do_table_hash();
+  int build_ignore_table_hash();
+
+  int add_do_table_array(const char* table_spec);
+  int add_ignore_table_array(const char* table_spec);
 
   int add_wild_do_table(const char* table_spec);
   int add_wild_ignore_table(const char* table_spec);
@@ -80,8 +90,8 @@ private:
   void init_table_rule_hash(HASH* h, bool* h_inited);
   void init_table_rule_array(DYNAMIC_ARRAY* a, bool* a_inited);
 
-  int add_table_rule(HASH* h, const char* table_spec);
-  int add_wild_table_rule(DYNAMIC_ARRAY* a, const char* table_spec);
+  int add_table_rule_to_array(DYNAMIC_ARRAY* a, const char* table_spec);
+  int add_table_rule_to_hash(HASH* h, const char* table_spec, uint len);
 
   void free_string_array(DYNAMIC_ARRAY *a);
 
@@ -90,17 +100,27 @@ private:
                                            bool inited);
   TABLE_RULE_ENT* find_wild(DYNAMIC_ARRAY *a, const char* key, int len);
 
+  int build_table_hash_from_array(DYNAMIC_ARRAY *table_array, HASH *table_hash,
+                                  bool array_inited, bool *hash_inited);
+
   /*
-    Those 4 structures below are uninitialized memory unless the
+    Those 6 structures below are uninitialized memory unless the
     corresponding *_inited variables are "true".
   */
-  HASH do_table;
-  HASH ignore_table;
+  /* For quick search */
+  HASH do_table_hash;
+  HASH ignore_table_hash;
+
+  DYNAMIC_ARRAY do_table_array;
+  DYNAMIC_ARRAY ignore_table_array;
+
   DYNAMIC_ARRAY wild_do_table;
   DYNAMIC_ARRAY wild_ignore_table;
 
-  bool do_table_inited;
-  bool ignore_table_inited;
+  bool do_table_hash_inited;
+  bool ignore_table_hash_inited;
+  bool do_table_array_inited;
+  bool ignore_table_array_inited;
   bool wild_do_table_inited;
   bool wild_ignore_table_inited;
 

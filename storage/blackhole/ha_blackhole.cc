@@ -1,6 +1,4 @@
-/*
-   Copyright (c) 2005-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -13,17 +11,21 @@
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
-#ifdef USE_PRAGMA_IMPLEMENTATION
-#pragma implementation				// gcc: Class implementation
-#endif
 
 #define MYSQL_SERVER 1
-#include "mysql_priv.h"
+#include "sql_priv.h"
+#include "unireg.h"
+#include "probes_mysql.h"
 #include "ha_blackhole.h"
+#include "sql_class.h"                          // THD, SYSTEM_THREAD_SLAVE_*
+
+static bool is_slave_applier(THD *thd)
+{
+  return thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+    thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER;
+}
 
 /* Static declarations for handlerton */
 
@@ -37,7 +39,7 @@ static handler *blackhole_create_handler(handlerton *hton,
 
 /* Static declarations for shared structures */
 
-static pthread_mutex_t blackhole_mutex;
+static mysql_mutex_t blackhole_mutex;
 static HASH blackhole_open_tables;
 
 static st_blackhole_share *get_share(const char *table_name);
@@ -87,6 +89,16 @@ int ha_blackhole::create(const char *name, TABLE *table_arg,
   DBUG_RETURN(0);
 }
 
+/*
+  Intended to support partitioning.
+  Allows a particular partition to be truncated.
+*/
+int ha_blackhole::truncate()
+{
+  DBUG_ENTER("ha_blackhole::truncate");
+  DBUG_RETURN(0);
+}
+
 const char *ha_blackhole::index_type(uint key_number)
 {
   DBUG_ENTER("ha_blackhole::index_type");
@@ -108,7 +120,7 @@ int ha_blackhole::update_row(const uchar *old_data, uchar *new_data)
 {
   DBUG_ENTER("ha_blackhole::update_row");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
+  if (is_slave_applier(thd) && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 }
@@ -117,7 +129,7 @@ int ha_blackhole::delete_row(const uchar *buf)
 {
   DBUG_ENTER("ha_blackhole::delete_row");
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
+  if (is_slave_applier(thd) && thd->query() == NULL)
     DBUG_RETURN(0);
   DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 }
@@ -131,18 +143,28 @@ int ha_blackhole::rnd_init(bool scan)
 
 int ha_blackhole::rnd_next(uchar *buf)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::rnd_next");
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       TRUE);
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
-    DBUG_RETURN(0);
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  if (is_slave_applier(thd) && thd->query() == NULL)
+    rc= 0;
+  else
+    rc= HA_ERR_END_OF_FILE;
+  MYSQL_READ_ROW_DONE(rc);
+  table->status= rc ? STATUS_NOT_FOUND : 0;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::rnd_pos(uchar * buf, uchar *pos)
 {
   DBUG_ENTER("ha_blackhole::rnd_pos");
+  MYSQL_READ_ROW_START(table_share->db.str, table_share->table_name.str,
+                       FALSE);
   DBUG_ASSERT(0);
+  MYSQL_READ_ROW_DONE(0);
   DBUG_RETURN(0);
 }
 
@@ -159,7 +181,7 @@ int ha_blackhole::info(uint flag)
 {
   DBUG_ENTER("ha_blackhole::info");
 
-  bzero((char*) &stats, sizeof(stats));
+  memset(&stats, 0, sizeof(stats));
   if (flag & HA_STATUS_AUTO)
     stats.auto_increment_value= 1;
   DBUG_RETURN(0);
@@ -213,11 +235,17 @@ int ha_blackhole::index_read_map(uchar * buf, const uchar * key,
                                  key_part_map keypart_map,
                              enum ha_rkey_function find_flag)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_read");
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
-    DBUG_RETURN(0);
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  if (is_slave_applier(thd) && thd->query() == NULL)
+    rc= 0;
+  else
+    rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= rc ? STATUS_NOT_FOUND : 0;
+  DBUG_RETURN(rc);
 }
 
 
@@ -225,50 +253,82 @@ int ha_blackhole::index_read_idx_map(uchar * buf, uint idx, const uchar * key,
                                  key_part_map keypart_map,
                                  enum ha_rkey_function find_flag)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_read_idx");
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
-    DBUG_RETURN(0);
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  if (is_slave_applier(thd) && thd->query() == NULL)
+    rc= 0;
+  else
+    rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= rc ? STATUS_NOT_FOUND : 0;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::index_read_last_map(uchar * buf, const uchar * key,
                                       key_part_map keypart_map)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_read_last");
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
   THD *thd= ha_thd();
-  if (thd->system_thread == SYSTEM_THREAD_SLAVE_SQL && thd->query() == NULL)
-    DBUG_RETURN(0);
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  if (is_slave_applier(thd) && thd->query() == NULL)
+    rc= 0;
+  else
+    rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= rc ? STATUS_NOT_FOUND : 0;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::index_next(uchar * buf)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_next");
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= STATUS_NOT_FOUND;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::index_prev(uchar * buf)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_prev");
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= STATUS_NOT_FOUND;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::index_first(uchar * buf)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_first");
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= STATUS_NOT_FOUND;
+  DBUG_RETURN(rc);
 }
 
 
 int ha_blackhole::index_last(uchar * buf)
 {
+  int rc;
   DBUG_ENTER("ha_blackhole::index_last");
-  DBUG_RETURN(HA_ERR_END_OF_FILE);
+  MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
+  rc= HA_ERR_END_OF_FILE;
+  MYSQL_INDEX_READ_ROW_DONE(rc);
+  table->status= STATUS_NOT_FOUND;
+  DBUG_RETURN(rc);
 }
 
 
@@ -278,10 +338,11 @@ static st_blackhole_share *get_share(const char *table_name)
   uint length;
 
   length= (uint) strlen(table_name);
-  pthread_mutex_lock(&blackhole_mutex);
+  mysql_mutex_lock(&blackhole_mutex);
     
-  if (!(share= (st_blackhole_share*) hash_search(&blackhole_open_tables,
-                                                 (uchar*) table_name, length)))
+  if (!(share= (st_blackhole_share*)
+        my_hash_search(&blackhole_open_tables,
+                       (uchar*) table_name, length)))
   {
     if (!(share= (st_blackhole_share*) my_malloc(sizeof(st_blackhole_share) +
                                                  length,
@@ -293,7 +354,7 @@ static st_blackhole_share *get_share(const char *table_name)
     
     if (my_hash_insert(&blackhole_open_tables, (uchar*) share))
     {
-      my_free((uchar*) share, MYF(0));
+      my_free(share);
       share= NULL;
       goto error;
     }
@@ -303,22 +364,22 @@ static st_blackhole_share *get_share(const char *table_name)
   share->use_count++;
   
 error:
-  pthread_mutex_unlock(&blackhole_mutex);
+  mysql_mutex_unlock(&blackhole_mutex);
   return share;
 }
 
 static void free_share(st_blackhole_share *share)
 {
-  pthread_mutex_lock(&blackhole_mutex);
+  mysql_mutex_lock(&blackhole_mutex);
   if (!--share->use_count)
-    hash_delete(&blackhole_open_tables, (uchar*) share);
-  pthread_mutex_unlock(&blackhole_mutex);
+    my_hash_delete(&blackhole_open_tables, (uchar*) share);
+  mysql_mutex_unlock(&blackhole_mutex);
 }
 
 static void blackhole_free_key(st_blackhole_share *share)
 {
   thr_lock_delete(&share->lock);
-  my_free((uchar*) share, MYF(0));
+  my_free(share);
 }
 
 static uchar* blackhole_get_key(st_blackhole_share *share, size_t *length,
@@ -328,27 +389,51 @@ static uchar* blackhole_get_key(st_blackhole_share *share, size_t *length,
   return (uchar*) share->table_name;
 }
 
+#ifdef HAVE_PSI_INTERFACE
+static PSI_mutex_key bh_key_mutex_blackhole;
+
+static PSI_mutex_info all_blackhole_mutexes[]=
+{
+  { &bh_key_mutex_blackhole, "blackhole", PSI_FLAG_GLOBAL}
+};
+
+void init_blackhole_psi_keys()
+{
+  const char* category= "blackhole";
+  int count;
+
+  count= array_elements(all_blackhole_mutexes);
+  mysql_mutex_register(category, all_blackhole_mutexes, count);
+}
+#endif
+
 static int blackhole_init(void *p)
 {
   handlerton *blackhole_hton;
+
+#ifdef HAVE_PSI_INTERFACE
+  init_blackhole_psi_keys();
+#endif
+
   blackhole_hton= (handlerton *)p;
   blackhole_hton->state= SHOW_OPTION_YES;
   blackhole_hton->db_type= DB_TYPE_BLACKHOLE_DB;
   blackhole_hton->create= blackhole_create_handler;
   blackhole_hton->flags= HTON_CAN_RECREATE;
-  
-  VOID(pthread_mutex_init(&blackhole_mutex, MY_MUTEX_INIT_FAST));
-  (void) hash_init(&blackhole_open_tables, system_charset_info,32,0,0,
-                   (hash_get_key) blackhole_get_key,
-                   (hash_free_key) blackhole_free_key, 0);
+
+  mysql_mutex_init(bh_key_mutex_blackhole,
+                   &blackhole_mutex, MY_MUTEX_INIT_FAST);
+  (void) my_hash_init(&blackhole_open_tables, system_charset_info,32,0,0,
+                      (my_hash_get_key) blackhole_get_key,
+                      (my_hash_free_key) blackhole_free_key, 0);
 
   return 0;
 }
 
 static int blackhole_fini(void *p)
 {
-  hash_free(&blackhole_open_tables);
-  pthread_mutex_destroy(&blackhole_mutex);
+  my_hash_free(&blackhole_open_tables);
+  mysql_mutex_destroy(&blackhole_mutex);
 
   return 0;
 }
@@ -369,6 +454,7 @@ mysql_declare_plugin(blackhole)
   0x0100 /* 1.0 */,
   NULL,                       /* status variables                */
   NULL,                       /* system variables                */
-  NULL                        /* config options                  */
+  NULL,                       /* config options                  */
+  0,                          /* flags                           */
 }
 mysql_declare_plugin_end;

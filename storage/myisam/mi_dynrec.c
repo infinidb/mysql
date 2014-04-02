@@ -1,5 +1,4 @@
-/*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -12,8 +11,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-*/
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Functions to handle space-packed-records and blobs
@@ -41,13 +39,11 @@ static int delete_dynamic_record(MI_INFO *info,my_off_t filepos,
 static int _mi_cmp_buffer(File file, const uchar *buff, my_off_t filepos,
 			  uint length);
 
-#ifdef THREAD
 /* Play it safe; We have a small stack when using threads */
 #undef my_alloca
 #undef my_afree
 #define my_alloca(A) my_malloc((A),MYF(0))
-#define my_afree(A) my_free((A),MYF(0))
-#endif
+#define my_afree(A) my_free((A))
 
 	/* Interface function from MI_INFO */
 
@@ -121,7 +117,7 @@ int mi_munmap_file(MI_INFO *info)
 {
   int ret;
   DBUG_ENTER("mi_unmap_file");
-  if ((ret= my_munmap(info->s->file_map, info->s->mmaped_length)))
+  if ((ret= my_munmap((void*) info->s->file_map, info->s->mmaped_length)))
     DBUG_RETURN(ret);
   info->s->file_read= mi_nommap_pread;
   info->s->file_write= mi_nommap_pwrite;
@@ -172,7 +168,7 @@ size_t mi_mmap_pread(MI_INFO *info, uchar *Buffer,
 {
   DBUG_PRINT("info", ("mi_read with mmap %d\n", info->dfile));
   if (info->s->concurrent_insert)
-    rw_rdlock(&info->s->mmap_lock);
+    mysql_rwlock_rdlock(&info->s->mmap_lock);
 
   /*
     The following test may fail in the following cases:
@@ -185,24 +181,24 @@ size_t mi_mmap_pread(MI_INFO *info, uchar *Buffer,
   {
     memcpy(Buffer, info->s->file_map + offset, Count);
     if (info->s->concurrent_insert)
-      rw_unlock(&info->s->mmap_lock);
+      mysql_rwlock_unlock(&info->s->mmap_lock);
     return 0;
   }
   else
   {
     if (info->s->concurrent_insert)
-      rw_unlock(&info->s->mmap_lock);
-    return my_pread(info->dfile, Buffer, Count, offset, MyFlags);
+      mysql_rwlock_unlock(&info->s->mmap_lock);
+    return mysql_file_pread(info->dfile, Buffer, Count, offset, MyFlags);
   }
 }
 
 
-        /* wrapper for my_pread in case if mmap isn't used */
+        /* wrapper for mysql_file_pread in case if mmap isn't used */
 
 size_t mi_nommap_pread(MI_INFO *info, uchar *Buffer,
                        size_t Count, my_off_t offset, myf MyFlags)
 {
-  return my_pread(info->dfile, Buffer, Count, offset, MyFlags);
+  return mysql_file_pread(info->dfile, Buffer, Count, offset, MyFlags);
 }
 
 
@@ -227,7 +223,7 @@ size_t mi_mmap_pwrite(MI_INFO *info, const uchar *Buffer,
 {
   DBUG_PRINT("info", ("mi_write with mmap %d\n", info->dfile));
   if (info->s->concurrent_insert)
-    rw_rdlock(&info->s->mmap_lock);
+    mysql_rwlock_rdlock(&info->s->mmap_lock);
 
   /*
     The following test may fail in the following cases:
@@ -240,26 +236,26 @@ size_t mi_mmap_pwrite(MI_INFO *info, const uchar *Buffer,
   {
     memcpy(info->s->file_map + offset, Buffer, Count); 
     if (info->s->concurrent_insert)
-      rw_unlock(&info->s->mmap_lock);
+      mysql_rwlock_unlock(&info->s->mmap_lock);
     return 0;
   }
   else
   {
     info->s->nonmmaped_inserts++;
     if (info->s->concurrent_insert)
-      rw_unlock(&info->s->mmap_lock);
-    return my_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
+      mysql_rwlock_unlock(&info->s->mmap_lock);
+    return mysql_file_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
   }
 
 }
 
 
-        /* wrapper for my_pwrite in case if mmap isn't used */
+        /* wrapper for mysql_file_pwrite in case if mmap isn't used */
 
 size_t mi_nommap_pwrite(MI_INFO *info, const uchar *Buffer,
                       size_t Count, my_off_t offset, myf MyFlags)
 {
-  return my_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
+  return mysql_file_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
 }
 
 
@@ -285,13 +281,6 @@ int _mi_write_blob_record(MI_INFO *info, const uchar *record)
 	  MI_DYN_DELETE_BLOCK_HEADER+1);
   reclength= (info->s->base.pack_reclength +
 	      _my_calc_total_blob_length(info,record)+ extra);
-#ifdef NOT_USED					/* We now support big rows */
-  if (reclength > MI_DYN_MAX_ROW_LENGTH)
-  {
-    my_errno=HA_ERR_TO_BIG_ROW;
-    return -1;
-  }
-#endif
   if (!(rec_buff=(uchar*) my_alloca(reclength)))
   {
     my_errno= HA_ERR_OUT_OF_MEM; /* purecov: inspected */
@@ -319,13 +308,6 @@ int _mi_update_blob_record(MI_INFO *info, my_off_t pos, const uchar *record)
 	  MI_DYN_DELETE_BLOCK_HEADER);
   reclength= (info->s->base.pack_reclength+
 	      _my_calc_total_blob_length(info,record)+ extra);
-#ifdef NOT_USED					/* We now support big rows */
-  if (reclength > MI_DYN_MAX_ROW_LENGTH)
-  {
-    my_errno=HA_ERR_TO_BIG_ROW;
-    return -1;
-  }
-#endif
   if (!(rec_buff=(uchar*) my_alloca(reclength)))
   {
     my_errno= HA_ERR_OUT_OF_MEM; /* purecov: inspected */
@@ -432,7 +414,7 @@ static int _mi_find_writepos(MI_INFO *info,
   {
     /* No deleted blocks;  Allocate a new block */
     *filepos=info->state->data_file_length;
-    if ((tmp=reclength+3 + test(reclength >= (65520-3))) <
+    if ((tmp=reclength+3 + MY_TEST(reclength >= (65520-3))) <
 	info->s->base.min_block_length)
       tmp= info->s->base.min_block_length;
     else
@@ -595,7 +577,7 @@ static int delete_dynamic_record(MI_INFO *info, my_off_t filepos,
     mi_int3store(block_info.header+1,length);
     mi_sizestore(block_info.header+4,info->s->state.dellink);
     if (b_type & BLOCK_LAST)
-      bfill(block_info.header+12,8,255);
+      memset(block_info.header + 12, 255, 8);
     else
       mi_sizestore(block_info.header+12,block_info.next_filepos);
     if (info->s->file_write(info,(uchar*) block_info.header,20,filepos,
@@ -730,7 +712,7 @@ int _mi_write_part_record(MI_INFO *info,
   del_length=(res_length ? MI_DYN_DELETE_BLOCK_HEADER : 0);
   bmove((uchar*) (*record-head_length),(uchar*) temp,head_length);
   memcpy(temp,record_end,(size_t) (extra_length+del_length));
-  bzero((uchar*) record_end,extra_length);
+  memset(record_end, 0, extra_length);
 
   if (res_length)
   {
@@ -757,7 +739,7 @@ int _mi_write_part_record(MI_INFO *info,
     pos[0]= '\0';
     mi_int3store(pos+1,res_length);
     mi_sizestore(pos+4,info->s->state.dellink);
-    bfill(pos+12,8,255);			/* End link */
+    memset(pos + 12, 255, 8);			/* End link */
     next_delete_block=info->s->state.dellink;
     info->s->state.dellink= filepos+length+extra_length;
     info->state->del++;
@@ -880,9 +862,9 @@ static int update_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *record,
       if (length < reclength)
       {
 	uint tmp=MY_ALIGN(reclength - length + 3 +
-			  test(reclength >= 65520L),MI_DYN_ALIGN_SIZE);
+			  MY_TEST(reclength >= 65520L),MI_DYN_ALIGN_SIZE);
 	/* Don't create a block bigger than MI_MAX_BLOCK_LENGTH */
-	tmp= min(length+tmp, MI_MAX_BLOCK_LENGTH)-length;
+	tmp= MY_MIN(length+tmp, MI_MAX_BLOCK_LENGTH)-length;
 	/* Check if we can extend this block */
 	if (block_info.filepos + block_info.block_len ==
 	    info->state->data_file_length &&
@@ -935,7 +917,7 @@ static int update_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *record,
 	      del_block.header[0]=0;
 	      mi_int3store(del_block.header+1, rest_length);
 	      mi_sizestore(del_block.header+4,info->s->state.dellink);
-	      bfill(del_block.header+12,8,255);
+	      memset(del_block.header + 12, 255, 8);
 	      if (info->s->file_write(info,(uchar*) del_block.header,20, next_pos,
 			    MYF(MY_NABP)))
 		DBUG_RETURN(1);
@@ -1011,7 +993,7 @@ uint _mi_rec_pack(MI_INFO *info, register uchar *to,
 	  char *temp_pos;
 	  size_t tmp_length=length-portable_sizeof_char_ptr;
 	  memcpy((uchar*) to,from,tmp_length);
-	  memcpy_fixed(&temp_pos,from+tmp_length,sizeof(char*));
+	  memcpy(&temp_pos,from+tmp_length,sizeof(char*));
 	  memcpy(to+tmp_length,temp_pos,(size_t) blob->length);
 	  to+=tmp_length+blob->length;
 	}
@@ -1041,7 +1023,7 @@ uint _mi_rec_pack(MI_INFO *info, register uchar *to,
 	    pos++;
 	}
 	new_length=(uint) (end-pos);
-	if (new_length +1 + test(rec->length > 255 && new_length > 127)
+	if (new_length +1 + MY_TEST(rec->length > 255 && new_length > 127)
 	    < length)
 	{
 	  if (rec->length > 255 && new_length > 127)
@@ -1161,7 +1143,7 @@ my_bool _mi_rec_check(MI_INFO *info,const uchar *record, uchar *rec_buff,
 	    pos++;
 	}
 	new_length=(uint) (end-pos);
-	if (new_length +1 + test(rec->length > 255 && new_length > 127)
+	if (new_length +1 + MY_TEST(rec->length > 255 && new_length > 127)
 	    < length)
 	{
 	  if (!(flag & bit))
@@ -1213,7 +1195,7 @@ my_bool _mi_rec_check(MI_INFO *info,const uchar *record, uchar *rec_buff,
     else
       to+= length;
   }
-  if (packed_length != (uint) (to - rec_buff) + test(info->s->calc_checksum) ||
+  if (packed_length != (uint) (to - rec_buff) + MY_TEST(info->s->calc_checksum) ||
       (bit != 1 && (flag & ~(bit - 1))))
     goto err;
   if (with_checksum && ((uchar) info->checksum != (uchar) *to))
@@ -1284,7 +1266,7 @@ ulong _mi_rec_unpack(register MI_INFO *info, register uchar *to, uchar *from,
       if (flag & bit)
       {
 	if (type == FIELD_BLOB || type == FIELD_SKIP_ZERO)
-	  bzero((uchar*) to,rec_length);
+	  memset(to, 0, rec_length);
 	else if (type == FIELD_SKIP_ENDSPACE ||
 		 type == FIELD_SKIP_PRESPACE)
 	{
@@ -1307,11 +1289,11 @@ ulong _mi_rec_unpack(register MI_INFO *info, register uchar *to, uchar *from,
 	  if (type == FIELD_SKIP_ENDSPACE)
 	  {
 	    memcpy(to,(uchar*) from,(size_t) length);
-	    bfill((uchar*) to+length,rec_length-length,' ');
+	    memset(to + length, ' ', rec_length-length);
 	  }
 	  else
 	  {
-	    bfill((uchar*) to,rec_length-length,' ');
+	    memset(to, ' ', rec_length-length);
 	    memcpy(to+rec_length-length,(uchar*) from,(size_t) length);
 	  }
 	  from+=length;
@@ -1326,9 +1308,9 @@ ulong _mi_rec_unpack(register MI_INFO *info, register uchar *to, uchar *from,
             from_left - size_length < blob_length ||
             from_left - size_length - blob_length < min_pack_length)
           goto err;
-	memcpy((uchar*) to,(uchar*) from,(size_t) size_length);
+	memcpy(to, from, (size_t) size_length);
 	from+=size_length;
-	memcpy_fixed((uchar*) to+size_length,(uchar*) &from,sizeof(char*));
+	memcpy(to+size_length, &from, sizeof(char*));
 	from+=blob_length;
       }
       else
@@ -1403,7 +1385,7 @@ ulong _mi_calc_blob_length(uint length, const uchar *pos)
 }
 
 
-void _my_store_blob_length(uchar *pos,uint pack_length,uint length)
+void _mi_store_blob_length(uchar *pos,uint pack_length,uint length)
 {
   switch (pack_length) {
   case 1:
@@ -1552,7 +1534,7 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf)
 panic:
   my_errno=HA_ERR_WRONG_IN_RECORD;
 err:
-  VOID(_mi_writeinfo(info,0));
+  (void) _mi_writeinfo(info,0);
   DBUG_RETURN(-1);
 }
 
@@ -1577,7 +1559,7 @@ int _mi_cmp_dynamic_unique(MI_INFO *info, MI_UNIQUEDEF *def,
     error=mi_unique_comp(def, record, old_record, def->null_are_equal);
   if (info->s->base.blobs)
   {
-    my_free(mi_get_rec_buff_ptr(info, info->rec_buff), MYF(MY_ALLOW_ZERO_PTR));
+    my_free(mi_get_rec_buff_ptr(info, info->rec_buff));
     info->rec_buff=rec_buff;
   }
   my_afree(old_record);
@@ -1594,9 +1576,6 @@ int _mi_cmp_dynamic_record(register MI_INFO *info, register const uchar *record)
   uchar *buffer;
   MI_BLOCK_INFO block_info;
   DBUG_ENTER("_mi_cmp_dynamic_record");
-
-	/* We are going to do changes; dont let anybody disturb */
-  dont_break();				/* Dont allow SIGHUP or SIGINT */
 
   if (info->opt_flag & WRITE_CACHE_USED)
   {
@@ -1679,7 +1658,7 @@ static int _mi_cmp_buffer(File file, const uchar *buff, my_off_t filepos,
 
   while (length > IO_SIZE*2)
   {
-    if (my_pread(file,temp_buff,next_length,filepos, MYF(MY_NABP)) ||
+    if (mysql_file_pread(file, temp_buff, next_length, filepos, MYF(MY_NABP)) ||
 	memcmp(buff, temp_buff, next_length))
       goto err;
     filepos+=next_length;
@@ -1687,7 +1666,7 @@ static int _mi_cmp_buffer(File file, const uchar *buff, my_off_t filepos,
     length-= next_length;
     next_length=IO_SIZE*2;
   }
-  if (my_pread(file,temp_buff,length,filepos,MYF(MY_NABP)))
+  if (mysql_file_pread(file, temp_buff, length, filepos, MYF(MY_NABP)))
     goto err;
   DBUG_RETURN(memcmp(buff,temp_buff,length));
 err:
@@ -1809,6 +1788,14 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf,
       }
       if (b_type & (BLOCK_DELETED | BLOCK_SYNC_ERROR))
       {
+        /*
+          If we're not on the first block of a record and
+          the block is marked as deleted or out of sync,
+          something's gone wrong: the record is damaged.
+        */
+        if (block_of_record != 0)
+          goto panic;
+
 	my_errno=HA_ERR_RECORD_DELETED;
 	info->lastpos=block_info.filepos;
 	info->nextpos=block_info.filepos+block_info.block_len;
@@ -1868,8 +1855,9 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf,
             block_info.filepos + block_info.data_len &&
             flush_io_cache(&info->rec_cache))
           goto err;
-	/* VOID(my_seek(info->dfile,filepos,MY_SEEK_SET,MYF(0))); */
-	if (my_read(info->dfile,(uchar*) to,block_info.data_len,MYF(MY_NABP)))
+        /* mysql_file_seek(info->dfile, filepos, MY_SEEK_SET, MYF(0)); */
+        if (mysql_file_read(info->dfile, (uchar*) to, block_info.data_len,
+                            MYF(MY_NABP)))
 	{
 	  if (my_errno == -1)
 	    my_errno= HA_ERR_WRONG_IN_RECORD;	/* Unexpected end of file */
@@ -1902,7 +1890,7 @@ panic:
   my_errno=HA_ERR_WRONG_IN_RECORD;		/* Something is fatal wrong */
 err:
   save_errno=my_errno;
-  VOID(_mi_writeinfo(info,0));
+  (void) _mi_writeinfo(info,0);
   DBUG_RETURN(my_errno=save_errno);
 }
 
@@ -1917,12 +1905,12 @@ uint _mi_get_block_info(MI_BLOCK_INFO *info, File file, my_off_t filepos)
   if (file >= 0)
   {
     /*
-      We do not use my_pread() here because we want to have the file
+      We do not use mysql_file_pread() here because we want to have the file
       pointer set to the end of the header after this function.
-      my_pread() may leave the file pointer untouched.
+      mysql_file_pread() may leave the file pointer untouched.
     */
-    VOID(my_seek(file,filepos,MY_SEEK_SET,MYF(0)));
-    if (my_read(file, header, sizeof(info->header),MYF(0)) !=
+    mysql_file_seek(file, filepos, MY_SEEK_SET, MYF(0));
+    if (mysql_file_read(file, header, sizeof(info->header), MYF(0)) !=
 	sizeof(info->header))
       goto err;
   }
