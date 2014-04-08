@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /**
   @file
 
@@ -82,6 +84,8 @@ When one supplies long data for a placeholder:
     it got the data or not; if there is any error, then it will be returned
     at statement execute.
 */
+#include <string>
+#include <sstream>
 
 #include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
 #include "sql_priv.h"
@@ -121,91 +125,15 @@ When one supplies long data for a placeholder:
 using std::max;
 using std::min;
 
-/**
-  A result class used to send cursor rows using the binary protocol.
-*/
+#include "sp_head.h"
+#include "sp.h"
+#include "sp_cache.h"
+#include "events.h"
+#include "sql_trigger.h"
+#include "sp_pcontext.h"
 
-class Select_fetch_protocol_binary: public select_send
-{
-  Protocol_binary protocol;
-public:
-  Select_fetch_protocol_binary(THD *thd);
-  virtual bool send_result_set_metadata(List<Item> &list, uint flags);
-  virtual bool send_data(List<Item> &items);
-  virtual bool send_eof();
-#ifdef EMBEDDED_LIBRARY
-  void begin_dataset()
-  {
-    protocol.begin_dataset();
-  }
-#endif
-};
-
-/****************************************************************************/
-
-/**
-  Prepared_statement: a statement that can contain placeholders.
-*/
-
-class Prepared_statement: public Statement
-{
-public:
-  enum flag_values
-  {
-    IS_IN_USE= 1,
-    IS_SQL_PREPARE= 2
-  };
-
-  THD *thd;
-  Select_fetch_protocol_binary result;
-  Item_param **param_array;
-  Server_side_cursor *cursor;
-  uint param_count;
-  uint last_errno;
-  uint flags;
-  char last_error[MYSQL_ERRMSG_SIZE];
-#ifndef EMBEDDED_LIBRARY
-  bool (*set_params)(Prepared_statement *st, uchar *data, uchar *data_end,
-                     uchar *read_pos, String *expanded_query);
-#else
-  bool (*set_params_data)(Prepared_statement *st, String *expanded_query);
-#endif
-  bool (*set_params_from_vars)(Prepared_statement *stmt,
-                               List<LEX_STRING>& varnames,
-                               String *expanded_query);
-public:
-  Prepared_statement(THD *thd_arg);
-  virtual ~Prepared_statement();
-  void setup_set_params();
-  virtual Query_arena::Type type() const;
-  virtual void cleanup_stmt();
-  bool set_name(LEX_STRING *name);
-  inline void close_cursor() { delete cursor; cursor= 0; }
-  inline bool is_in_use() { return flags & (uint) IS_IN_USE; }
-  inline bool is_sql_prepare() const { return flags & (uint) IS_SQL_PREPARE; }
-  void set_sql_prepare() { flags|= (uint) IS_SQL_PREPARE; }
-  bool prepare(const char *packet, uint packet_length);
-  bool execute_loop(String *expanded_query,
-                    bool open_cursor,
-                    uchar *packet_arg, uchar *packet_end_arg);
-  bool execute_server_runnable(Server_runnable *server_runnable);
-  /* Destroy this statement */
-  void deallocate();
-private:
-  /**
-    The memory root to allocate parsed tree elements (instances of Item,
-    SELECT_LEX and other classes).
-  */
-  MEM_ROOT main_mem_root;
-private:
-  bool set_db(const char *db, uint db_length);
-  bool set_parameters(String *expanded_query,
-                      uchar *packet, uchar *packet_end);
-  bool execute(String *expanded_query, bool open_cursor);
-  bool reprepare();
-  bool validate_metadata(Prepared_statement  *copy);
-  void swap_prepared_statement(Prepared_statement *copy);
-};
+// InfiniDB vtable processing
+extern int idb_vtable_process(THD* thd, Statement* stmt = NULL);
 
 /**
   Execute one SQL statement in an isolated context.
@@ -2333,7 +2261,7 @@ void mysqld_stmt_prepare(THD *thd, const char *packet, uint packet_length)
     0         in case of error (out of memory)
 */
 
-static const char *get_dynamic_sql_string(LEX *lex, uint *query_len)
+char *get_dynamic_sql_string(LEX *lex, uint *query_len)
 {
   THD *thd= lex->thd;
   char *query_str= 0;
@@ -2912,7 +2840,9 @@ void mysqld_stmt_close(THD *thd, char *packet, uint packet_length)
     The only way currently a statement can be deallocated when it's
     in use is from within Dynamic SQL.
   */
-  DBUG_ASSERT(! stmt->is_in_use());
+  // @InfiniDB relax the assertion for vtable create
+  //if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE)
+  //	DBUG_ASSERT(! stmt->is_in_use());
   stmt->deallocate();
   general_log_print(thd, thd->get_command(), NullS);
 
@@ -3526,7 +3456,9 @@ bool Prepared_statement::prepare(const char *packet, uint packet_len)
   DBUG_RETURN(error);
 }
 
-
+void
+Prepared_statement::close_cursor()
+{ delete cursor; cursor= 0; }
 /**
   Assign parameter values either from variables, in case of SQL PS
   or from the execute packet.
@@ -3893,6 +3825,9 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
   Query_arena *old_stmt_arena;
   bool error= TRUE;
 
+  TABLE_LIST* global_list = NULL;
+  bool hasCalpont = FALSE;
+
   char saved_cur_db_name_buf[NAME_LEN+1];
   LEX_STRING saved_cur_db_name=
     { saved_cur_db_name_buf, sizeof(saved_cur_db_name_buf) };
@@ -3964,6 +3899,59 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), expanded_query->length());
     goto error;
   }
+
+  // @infinidb. vtable process around stmt_execute. 
+  // @bug3742. mysqli php support for prepare/execute stmt
+  // @bug4833. the state checking will be done inside idb_vtable_process() function
+  // check infinidb table
+  // @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
+  //TABLE_LIST* global_list = thd->lex->query_tables;
+  //bool hasCalpont = FALSE;
+  global_list = thd->lex->query_tables;
+
+  for (; global_list; global_list = global_list->next_global)
+  {
+    //if (!global_list->table || !global_list->table->s->db_plugin)
+    if (!(global_list->table && global_list->table->s && global_list->table->s->db_plugin))
+      continue;
+    //Windows never has SAFE_MUTEX defined...
+    // @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union" 
+    if (global_list->table && global_list->table->isInfiniDB())
+    {
+      hasCalpont = true;
+      continue;
+    }
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+    else if (global_list->table &&
+             global_list->table->s &&
+	     global_list->table->s->db_plugin &&
+	     (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
+	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+#else
+    else if (global_list->table &&
+             global_list->table->s &&
+             global_list->table->s->db_plugin &&
+             (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
+	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+#endif				
+    {
+      continue;
+    }
+  }
+ 
+  if (hasCalpont && thd->lex->sql_command == SQLCOM_EXECUTE)
+  {
+    // @bug5298. disable re-prepare observer for infinidb query
+    //thd->m_reprepare_observer = NULL;
+    if (thd->lex)
+      thd->lex->result = 0;
+    flags|= IS_IN_USE;
+    if (idb_vtable_process(thd, this)) // if failed, fall through to normal path
+      thd->infinidb_vtable.vtable_state = THD::INFINIDB_DISABLE_VTABLE;
+    else
+      return false;
+  }
+  
   /*
     Expanded query is needed for slow logging, so we want thd->query
     to point at it even after we restore from backup. This is ok, as

@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /*
 ** Common definition between mysql server & client
 */
@@ -22,7 +24,7 @@
 
 #define HOSTNAME_LENGTH 60
 #define SYSTEM_CHARSET_MBMAXLEN 3
-#define NAME_CHAR_LEN	64              /* Field/table name length */
+#define NAME_CHAR_LEN	128              /* Field/table name length */
 #define USERNAME_CHAR_LENGTH 16
 #define NAME_LEN                (NAME_CHAR_LEN*SYSTEM_CHARSET_MBMAXLEN)
 #define USERNAME_LENGTH         (USERNAME_CHAR_LENGTH*SYSTEM_CHARSET_MBMAXLEN)

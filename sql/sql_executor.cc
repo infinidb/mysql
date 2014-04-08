@@ -107,6 +107,144 @@ JOIN::exec()
   DBUG_ASSERT(!tables || thd->lex->is_query_tables_locked());
   DBUG_ASSERT(!(select_options & SELECT_DESCRIBE));
 
+  // ------------------------------ Calpont InfiniDB ------------------------------
+	if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE/* && tables_list*/)
+	{
+		// by pass MySQL union trips
+		if (thd->infinidb_vtable.isUnion)
+			DBUG_VOID_RETURN;
+
+		//@todo special api to send plan
+		TABLE_LIST* tl = 0; //tables_list;
+		bool hasCalpont = false;
+		//bool hasNonCalpont = false;
+		TABLE_LIST* IDBtable = NULL;
+
+		// @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
+		TABLE_LIST* global_list = thd->lex->query_tables;
+
+		for (; global_list; global_list = global_list->next_global)
+		{
+			//if (!global_list->table || !global_list->table->s->db_plugin)
+			if (!(global_list->table && global_list->table->s && global_list->table->s->db_plugin))
+				continue;
+			//Windows never has SAFE_MUTEX defined...
+			// @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union"
+			if (global_list->table && global_list->table->isInfiniDB())
+			{
+				hasCalpont = true;
+				IDBtable = global_list;
+				continue;
+			}
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+			else if ( global_list->table &&
+				       global_list->table->s &&
+				       global_list->table->s->db_plugin &&
+				       (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+#else
+			else if (global_list->table &&
+				       global_list->table->s &&
+				       global_list->table->s->db_plugin &&
+				       (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 ||
+				       global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+#endif
+			{
+				continue;
+			}
+			else
+			{
+				//hasNonCalpont = true;
+			}
+		}
+
+		// @bug 2839. only memory table in table list. redo_query.
+		if (!hasCalpont)
+		{
+			thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
+			DBUG_VOID_RETURN;
+		}
+		// @InfiniDB. Cross engine support
+		else if (/*hasNonCalpont && hasCalpont*/false)
+		{
+			const char* emsg = "IDB-7001: Non InfiniDB table(s) on the FROM clause.";
+			thd->infinidb_vtable.vtable_state = THD::INFINIDB_ERROR;
+			if (!thd->infinidb_vtable.autoswitch)
+			{
+				thd->killed = THD::KILL_QUERY;
+				//thd->main_da.can_overwrite_status = true;
+				//thd->main_da.set_error_status(thd, ER_UNKNOWN_ERROR, emsg);
+			}
+			else
+			{
+				//thd->main_da.can_overwrite_status = true;
+				push_warning(thd, Sql_condition::WARN_LEVEL_WARN, 9999, emsg);
+			}
+			DBUG_VOID_RETURN;
+		}
+
+		if (tables_list && tables_list->table && tables_list->table->isInfiniDB())
+			// ZZ: In deriived_tables_processing phase, the plan out of mysql's optimizer may not be
+			// complete. IDB will skip the phase in case of plan error instead of error out, so
+			// MySQL will continue it's optimization. Now the first table in tables_list may not
+			// be an IDB table (could be a derived table, for example). In such case, we use an IDB table
+			// to trigger rnd_init; otherwise, still use the first table in the list.
+			// @todo always use IDBtable without checking the first table. Still have some plan
+			// mistery to solve.
+			IDBtable = tables_list;
+		if (IDBtable && IDBtable->table && IDBtable->table->file && IDBtable->table->file->ha_rnd_init(1))
+				thd->infinidb_vtable.vtable_state = THD::INFINIDB_ERROR;
+
+		for (global_list = thd->lex->query_tables; global_list; global_list = global_list->next_global)
+		{
+			if (global_list->table && global_list->table->file)
+				global_list->table->file->inited = handler::NONE;
+		}
+
+	// @bug 2547
+	if (zero_result_cause)
+	{
+		tl = tables_list;
+
+			for (; tl; tl= tl->next_global)
+			{
+				// @InfiniDB. Bug4422. Need to check all pointer not null
+				if (tl->table && tl->table->file)
+					tl->table->file->inited = handler::NONE;
+			}
+		}
+		DBUG_VOID_RETURN;
+	}
+
+  // for some derived table case, mysql make tables_list empty.
+  // example: select count(*) from (select * from nation) a;
+  else if (!(thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE) &&
+  	         thd->lex &&
+  	         thd->lex->derived_tables &&
+  	         thd->infinidb_vtable.isUnion)
+  {
+  	//thd->infinidb_vtable.isUnion = false; // imply derived table
+  	DBUG_VOID_RETURN;
+  }
+  else if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE
+  	 && !tables_list
+  	 && !union_part
+  	 && thd->lex
+  	 && select_lex == &thd->lex->select_lex) // from dual case
+  {
+  	thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
+  	DBUG_VOID_RETURN;
+  }
+  else if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1)
+  {
+  	if (!union_part)
+  	{
+  		thd->infinidb_vtable.vtable_state = THD::INFINIDB_CREATE_VTABLE;
+  		thd->infinidb_vtable.isUnion = true; // make it skip rnd_init for redo phase.
+  	}
+  	DBUG_VOID_RETURN;
+  }
+
   THD_STAGE_INFO(thd, stage_executing);
 
   // Ignore errors of execution if option IGNORE present

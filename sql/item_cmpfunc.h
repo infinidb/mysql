@@ -16,6 +16,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /* compare and test functions */
 
@@ -1325,7 +1327,6 @@ public:
 
 class Item_func_case :public Item_func
 {
-  int first_expr_num, else_expr_num;
   enum Item_result cached_result_type, left_result_type;
   String tmp_value;
   uint ncases;
@@ -1336,8 +1337,9 @@ class Item_func_case :public Item_func
   cmp_item *case_item;
 public:
   Item_func_case(List<Item> &list, Item *first_expr_arg, Item *else_expr_arg)
-    :Item_func(), first_expr_num(-1), else_expr_num(-1),
-    cached_result_type(INT_RESULT), left_result_type(INT_RESULT), case_item(0)
+    :Item_func(), 
+    cached_result_type(INT_RESULT), left_result_type(INT_RESULT), case_item(0),
+    first_expr_num(-1), else_expr_num(-1) //@InfiniDB
   {
     ncases= list.elements;
     if (first_expr_arg)
@@ -1371,6 +1373,8 @@ public:
   const CHARSET_INFO *compare_collation() { return cmp_collation.collation; }
   void cleanup();
   void agg_num_lengths(Item *arg);
+  // @InfiniDB. Moved this to public place
+  int first_expr_num, else_expr_num;
 };
 
 /*

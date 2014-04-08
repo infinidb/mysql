@@ -405,6 +405,9 @@ private:
   Item *remove_in2exists_conds(Item* conds);
 
 public:
+  // @InfiniDB. make this accessible to the connector code.
+  const Item_in_optimizer* getOptimizer() const { return optimizer; }
+
   /* Used to trigger on/off conditions that were pushed down to subselect */
   bool *pushed_cond_guards;
   

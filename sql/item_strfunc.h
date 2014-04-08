@@ -16,6 +16,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /* This file defines all string functions */
 #include "crypt_genhash_impl.h"
@@ -719,6 +721,16 @@ public:
   {
     collation.set(default_charset());
     decimals=0;
+#if 0
+    //TODO: FIXME
+    // InfiniDB fix max length to be 16 for numeric argument
+    if (args[0]->result_type() == DECIMAL_RESULT ||
+      args[0]->result_type() == REAL_RESULT ||
+      args[0]->result_type() == INT_RESULT)
+      max_length=16*collation.collation->mbmaxlen;
+    else
+      max_length=args[0]->max_length*2*collation.collation->mbmaxlen;
+#endif
     fix_char_length(args[0]->max_length * 2);
   }
 };

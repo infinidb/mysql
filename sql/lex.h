@@ -16,6 +16,8 @@
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /* This file includes all reserved words and functions */
 
@@ -228,6 +230,7 @@ static SYMBOL symbols[] = {
   { "FLOAT4",		SYM(FLOAT_SYM)},
   { "FLOAT8",		SYM(DOUBLE_SYM)},
   { "FLUSH",		SYM(FLUSH_SYM)},
+  { "FOLLOWING",        SYM(FOLLOWING_SYM)},
   { "FOR",		SYM(FOR_SYM)},
   { "FORCE",		SYM(FORCE_SYM)},
   { "FOREIGN",		SYM(FOREIGN)},
@@ -394,7 +397,9 @@ static SYMBOL symbols[] = {
   { "NONE",		SYM(NONE_SYM)},
   { "NOT",		SYM(NOT_SYM)},
   { "NO_WRITE_TO_BINLOG",  SYM(NO_WRITE_TO_BINLOG)},
+  { "NTH_VALUE",	SYM(NTH_VALUE_SYM)},
   { "NULL",		SYM(NULL_SYM)},
+  { "NULLS",            SYM(NULLS_SYM)},
   { "NUMBER",           SYM(NUMBER_SYM)},
   { "NUMERIC",		SYM(NUMERIC_SYM)},
   { "NVARCHAR",		SYM(NVARCHAR_SYM)},
@@ -413,6 +418,7 @@ static SYMBOL symbols[] = {
   { "OUT",              SYM(OUT_SYM)},
   { "OUTER",		SYM(OUTER)},
   { "OUTFILE",		SYM(OUTFILE)},
+  { "OVER",             SYM(OVER_SYM)},
   { "OWNER",		SYM(OWNER_SYM)},
   { "PACK_KEYS",	SYM(PACK_KEYS_SYM)},
   { "PARSER",           SYM(PARSER_SYM)},
@@ -422,6 +428,8 @@ static SYMBOL symbols[] = {
   { "PARTITIONING",     SYM(PARTITIONING_SYM)},
   { "PARTITIONS",       SYM(PARTITIONS_SYM)},
   { "PASSWORD",		SYM(PASSWORD)},
+  { "PERCENTILE_CONT",  SYM(PERCENTILE_CONT_SYM)},
+  { "PERCENTILE_DISC",  SYM(PERCENTILE_DISC_SYM)},
   { "PHASE",            SYM(PHASE_SYM)},
   { "PLUGIN",           SYM(PLUGIN_SYM)},
   { "PLUGINS",          SYM(PLUGINS_SYM)},
@@ -429,6 +437,7 @@ static SYMBOL symbols[] = {
   { "POINT",		SYM(POINT_SYM)},
   { "POLYGON",		SYM(POLYGON)},
   { "PORT",		SYM(PORT_SYM)},
+  { "PRECEDING",        SYM(PRECEDING_SYM)},
   { "PRECISION",	SYM(PRECISION)},
   { "PREPARE",          SYM(PREPARE_SYM)},
   { "PRESERVE",		SYM(PRESERVE_SYM)},
@@ -470,6 +479,7 @@ static SYMBOL symbols[] = {
   { "REORGANIZE",	SYM(REORGANIZE_SYM)},
   { "REPAIR",		SYM(REPAIR)},
   { "REPEATABLE",	SYM(REPEATABLE_SYM)},
+  { "RESPECT",          SYM(RESPECT_SYM)},
   { "REPLACE",		SYM(REPLACE)},
   { "REPLICATION",	SYM(REPLICATION)},
   { "REPEAT",           SYM(REPEAT_SYM)},
@@ -539,6 +549,7 @@ static SYMBOL symbols[] = {
   { "SQL_CACHE",        SYM(SQL_CACHE_SYM)},
   { "SQL_CALC_FOUND_ROWS", SYM(SQL_CALC_FOUND_ROWS)},
   { "SQL_NO_CACHE",	SYM(SQL_NO_CACHE_SYM)},
+  { "INFINIDB_ORDERED",	SYM(INFINIDB_ORDERED_SYM)},
   { "SQL_SMALL_RESULT", SYM(SQL_SMALL_RESULT)},
   { "SQL_THREAD",	SYM(SQL_THREAD)},
   { "SQL_TSI_SECOND",   SYM(SECOND_SYM)},
@@ -596,6 +607,7 @@ static SYMBOL symbols[] = {
   { "TRUNCATE",		SYM(TRUNCATE_SYM)},
   { "TYPE",		SYM(TYPE_SYM)},
   { "TYPES",		SYM(TYPES_SYM)},
+  { "UNBOUNDED",        SYM(UNBOUNDED_SYM)},
   { "UNCOMMITTED",	SYM(UNCOMMITTED_SYM)},
   { "UNDEFINED",	SYM(UNDEFINED_SYM)},
   { "UNDO_BUFFER_SIZE",	SYM(UNDO_BUFFER_SIZE_SYM)},
@@ -636,6 +648,7 @@ static SYMBOL symbols[] = {
   { "WHILE",            SYM(WHILE_SYM)},
   { "VIEW",		SYM(VIEW_SYM)},
   { "WITH",		SYM(WITH)},
+  { "WITHIN",           SYM(WITHIN)},
   { "WORK",		SYM(WORK_SYM)},
   { "WRAPPER",		SYM(WRAPPER_SYM)},
   { "WRITE",		SYM(WRITE_SYM)},

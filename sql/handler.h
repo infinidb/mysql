@@ -25,6 +25,12 @@
 #include <algorithm>
 #include "sql_const.h"
 #include "mysqld.h"                             /* server_id */
+#ifdef _MSC_VER
+#ifndef STDINT_H
+typedef unsigned long long uint64_t;
+#endif
+#endif
+
 #include "sql_plugin.h"        /* plugin_ref, st_plugin_int, plugin */
 #include "thr_lock.h"          /* thr_lock_type, THR_LOCK_DATA */
 #include "sql_cache.h"
@@ -746,6 +752,8 @@ struct handler_log_file_data {
   enum log_status status;
 };
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 enum handler_iterator_type
 {
@@ -878,6 +886,8 @@ struct handlerton
    void (*drop_database)(handlerton *hton, char* path);
    int (*panic)(handlerton *hton, enum ha_panic_function flag);
    int (*start_consistent_snapshot)(handlerton *hton, THD *thd);
+   void (*set_error)(THD*, unsigned long long errCode, LEX_STRING*, uint argCount); //@InfiniDB Window Function Error util
+
    bool (*flush_logs)(handlerton *hton);
    bool (*show_status)(handlerton *hton, THD *thd, stat_print_fn *print, enum ha_stat_type stat);
    uint (*partition_flags)();

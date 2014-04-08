@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 #ifndef _SP_HEAD_H_
 #define _SP_HEAD_H_
 
@@ -464,6 +466,9 @@ public:
       SQL, READS SQL DATA, MODIFIES SQL DATA clauses. The latter are
       accepted by parser but pretty much ignored after that.
       We don't rely on them:
+	// InfiniDB adds accessor
+	sp_pcontext* context() { return m_pcont; }
+	uint sp_elements() {return m_instr.elements;}
       a) for compatibility reasons.
       b) because in CONTAINS SQL case they don't provide enough
       information anyway.

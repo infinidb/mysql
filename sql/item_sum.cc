@@ -14,6 +14,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /**
   @file
@@ -372,7 +374,7 @@ bool Item_sum::register_sum_func(THD *thd, Item **ref)
 
 
 Item_sum::Item_sum(List<Item> &list) :next(NULL), arg_count(list.elements), 
-  forced_const(FALSE)
+  forced_const(FALSE), IDB_thd(0)
 {
   if ((args=(Item**) sql_alloc(sizeof(Item*)*arg_count)))
   {
@@ -407,7 +409,8 @@ Item_sum::Item_sum(THD *thd, Item_sum *item):
   quick_group(item->quick_group),
   arg_count(item->arg_count), orig_args(NULL),
   used_tables_cache(item->used_tables_cache),
-  forced_const(item->forced_const) 
+  forced_const(item->forced_const),
+  IDB_thd(thd)
 {
   if (arg_count <= 2)
   {
@@ -436,6 +439,8 @@ void Item_sum::mark_as_sum_func()
   cur_select->n_sum_items++;
   cur_select->with_sum_func= 1;
   with_sum_func= 1;
+  // @InfiniDB. Store thd pointer for future reference.
+  IDB_thd = current_thd;
 }
 
 
@@ -3150,13 +3155,12 @@ Item_func_group_concat(Name_resolution_context *context_arg,
                        String *separator_arg)
   :tmp_table_param(0), separator(separator_arg), tree(0),
    unique_filter(NULL), table(0),
-   order(0), context(context_arg),
    arg_count_order(order_list.elements),
    arg_count_field(select_list->elements),
    row_count(0),
    distinct(distinct_arg),
    warning_for_row(FALSE),
-   force_copy_fields(0), original(0)
+   force_copy_fields(0), original(0), order(0), context(context_arg)
 {
   Item *item_select;
   Item **arg_ptr;
@@ -3212,7 +3216,6 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   tree(item->tree),
   unique_filter(item->unique_filter),
   table(item->table),
-  context(item->context),
   arg_count_order(item->arg_count_order),
   arg_count_field(item->arg_count_field),
   row_count(item->row_count),
@@ -3220,7 +3223,7 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   warning_for_row(item->warning_for_row),
   always_null(item->always_null),
   force_copy_fields(item->force_copy_fields),
-  original(item)
+  original(item), context(item->context)
 {
   quick_group= item->quick_group;
   result.set_charset(collation.collation);
@@ -3251,7 +3254,17 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   }
 }
 
-
+//@InfiniDB. Moved this function to .cc file to access select_lex.
+enum_field_types Item_func_group_concat::field_type() const
+{
+	if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB &&
+	   !(context && context->select_lex && context->select_lex->join &&
+	    context->select_lex->join->thd &&
+	    context->select_lex->join->thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE))
+	    return MYSQL_TYPE_BLOB;
+	else
+		return MYSQL_TYPE_VARCHAR;
+}
 
 void Item_func_group_concat::cleanup()
 {

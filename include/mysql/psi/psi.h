@@ -976,7 +976,7 @@ struct PSI_digest_locker_state
 typedef struct PSI_digest_locker_state PSI_digest_locker_state;
 
 /* Duplicate of NAME_LEN, to avoid dependency on mysql_com.h */
-#define PSI_SCHEMA_NAME_LEN (64 * 3)
+#define PSI_SCHEMA_NAME_LEN (128 * 3)
 
 /**
   State data storage for @c get_thread_statement_locker_v1_t,

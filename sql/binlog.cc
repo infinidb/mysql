@@ -5133,6 +5133,39 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
          (!event_info->is_no_filter_event() && 
           !binlog_filter->db_ok(local_db))))
       DBUG_RETURN(0);
+
+    // InfiniDB does not allow INSERT SELECT and CREATE TABLE AS SELECT to replicate
+    // on the slave if there is InfiniDB table involved on the select part.
+    // This is to prevent the senario that a immediate "DROP TABLE" statement
+    // on master has already dropped the InfiniDB table on slave.
+    // Push warning for INSERT SELECT on ALTER_VTABLE phase to make sure the same
+    // warning be pushed just once.
+    if ((!thd->infinidb_vtable.isInfiniDBDML && 
+         thd->infinidb_vtable.hasInfiniDBTable && 
+         thd->infinidb_vtable.vtable_state == THD::INFINIDB_SELECT_VTABLE) ||
+        (thd->lex->sql_command == SQLCOM_CREATE_TABLE && thd->infinidb_vtable.hasInfiniDBTable))
+    {
+      push_warning(thd, Sql_condition::WARN_LEVEL_WARN, 9999, 
+                          "This statement was not replicated. "
+                          "Statements that insert or update rows in tables "
+                          "with other engines based on rows in InfiniDB tables "
+                          "are not replicated.");
+      DBUG_RETURN(0);
+    }
+
+    // makes replication ignore infinidb_vtable and infinidb_querystats
+    if ((thd->infinidb_vtable.vtable_state == THD::INFINIDB_SELECT_VTABLE ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_ALTER_VTABLE ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_DROP_VTABLE ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_QUERY ||
+        thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1 || 
+        thd->infinidb_vtable.isInfiniDBDML) ||
+        (local_db && strncmp(local_db, "infinidb", 8) == 0))
+    {
+      DBUG_RETURN(0);
+    }
+
 #endif /* HAVE_REPLICATION */
 
     DBUG_ASSERT(event_info->is_using_trans_cache() || event_info->is_using_stmt_cache());

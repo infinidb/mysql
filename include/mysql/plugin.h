@@ -136,6 +136,13 @@ enum enum_mysql_show_type
   SHOW_LONGLONG,   ///< shown as _unsigned_ longlong
   SHOW_CHAR, SHOW_CHAR_PTR,
   SHOW_ARRAY, SHOW_FUNC, SHOW_DOUBLE,
+#if 0
+#ifdef MYSQL_SERVER
+#ifndef SHOW_always_last
+#error SHOW_always_last not defined!
+#endif
+#endif
+#endif
   SHOW_always_last
 };
 

@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /** @file handler.cc
 
     @brief
@@ -834,6 +836,22 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
                                    void *unused)
 {
   handlerton *hton= plugin_data(plugin, handlerton *);
+  //Not all storage engines can handle a close_connection() on startup, so...
+  //There's got to be a better way to do this. ha_resolve_by_name() doesn't seem to work.
+  // @InfiniDB
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+  if ((*plugin)->name.length == 8 && strncmp((*plugin)->name.str, "InfiniDB", 8) == 0)
+#else
+  if (plugin->name.length == 8 && strncmp(plugin->name.str, "InfiniDB", 8) == 0)
+#endif
+  {
+    if (hton->state == SHOW_OPTION_YES && hton->close_connection)
+    {
+      hton->close_connection(hton, thd);
+    }
+  }
+  else
+  {
   /*
     there's no need to rollback here as all transactions must
     be rolled back already
@@ -845,6 +863,8 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
     /* make sure ha_data is reset and ha_data_lock is released */
     thd_set_ha_data(thd, hton, NULL);
   }
+  }
+
   return FALSE;
 }
 
@@ -1345,6 +1365,8 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
     flags will not get propagated to its normal transaction's
     counterpart.
   */
+  // @InfiniDB
+	if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_ALTER_VTABLE && thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
   DBUG_ASSERT(thd->transaction.stmt.ha_list == NULL ||
               trans == &thd->transaction.stmt);
 
@@ -1372,7 +1394,11 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
   MDL_request mdl_request;
   bool release_mdl= false;
 
-  if (ha_info)
+
+	// @bug 1809. Skip commit/rollback with vtable transaction
+	// @bug 2106. Follow the normal transaction path for table mode
+  if (ha_info && (thd->infinidb_vtable.vtable_state == THD::INFINIDB_INIT || 
+  	              thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE))
   {
     uint rw_ha_count;
     bool rw_trans;

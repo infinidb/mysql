@@ -64,6 +64,8 @@ bool check_reserved_words(LEX_STRING *name)
   return FALSE;
 }
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /**
   @return
@@ -119,6 +121,7 @@ Item_func::Item_func(THD *thd, Item_func *item)
    not_null_tables_cache(item->not_null_tables_cache),
    arg_count(item->arg_count)
 {
+	fThd = thd;
   if (arg_count)
   {
     if (arg_count <=2)
@@ -170,6 +173,8 @@ bool
 Item_func::fix_fields(THD *thd, Item **ref)
 {
   DBUG_ASSERT(fixed == 0 || basic_const_item());
+  //@InfiniDB. Assign new protected field thd for some functions use.
+  fThd = thd;
 
   Item **arg,**arg_end;
   uchar buff[STACK_BUFF_ALLOC];			// Max argument in function

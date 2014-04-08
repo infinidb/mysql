@@ -16,6 +16,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /* Function items used by mysql */
 
@@ -39,6 +41,8 @@ protected:
   uint allowed_arg_cols;
   /// Value used in calculation of result of used_tables()
   table_map used_tables_cache;
+  // @InfiniDB. Added for the use of some functi
+  THD* fThd; // will be assinged by fix_fields()
   /// Value used in calculation of result of not_null_tables()
   table_map not_null_tables_cache;
 public:
@@ -65,26 +69,26 @@ public:
   enum Type type() const { return FUNC_ITEM; }
   virtual enum Functype functype() const   { return UNKNOWN_FUNC; }
   Item_func(void):
-    allowed_arg_cols(1), arg_count(0)
+    allowed_arg_cols(1), fThd(0), arg_count(0)
   {
     with_sum_func= 0;
   }
   Item_func(Item *a):
-    allowed_arg_cols(1), arg_count(1)
+    allowed_arg_cols(1), fThd(0), arg_count(1)
   {
     args= tmp_arg;
     args[0]= a;
     with_sum_func= a->with_sum_func;
   }
   Item_func(Item *a,Item *b):
-    allowed_arg_cols(1), arg_count(2)
+    allowed_arg_cols(1), fThd(0), arg_count(2)
   {
     args= tmp_arg;
     args[0]= a; args[1]= b;
     with_sum_func= a->with_sum_func || b->with_sum_func;
   }
   Item_func(Item *a,Item *b,Item *c):
-    allowed_arg_cols(1)
+    allowed_arg_cols(1), fThd(0)
   {
     arg_count= 0;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*3)))
@@ -95,7 +99,7 @@ public:
     }
   }
   Item_func(Item *a,Item *b,Item *c,Item *d):
-    allowed_arg_cols(1)
+    allowed_arg_cols(1), fThd(0)
   {
     arg_count= 0;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*4)))
@@ -107,7 +111,7 @@ public:
     }
   }
   Item_func(Item *a,Item *b,Item *c,Item *d,Item* e):
-    allowed_arg_cols(1)
+    allowed_arg_cols(1), fThd(0)
   {
     arg_count= 5;
     if ((args= (Item**) sql_alloc(sizeof(Item*)*5)))

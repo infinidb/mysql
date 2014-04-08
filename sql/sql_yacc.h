@@ -1,24 +1,23 @@
-/* A Bison parser, made by GNU Bison 2.3.  */
+
+/* A Bison parser, made by GNU Bison 2.4.1.  */
 
 /* Skeleton interface for Bison's Yacc-like parsers in C
-
-   Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   
+      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
    Free Software Foundation, Inc.
-
-   This program is free software; you can redistribute it and/or modify
+   
+   This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
-   any later version.
-
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -29,9 +28,10 @@
    special exception, which will cause the skeleton and the resulting
    Bison output files to be licensed under the GNU General Public
    License without this special exception.
-
+   
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
+
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
@@ -220,443 +220,454 @@
      FLOAT_NUM = 436,
      FLOAT_SYM = 437,
      FLUSH_SYM = 438,
-     FORCE_SYM = 439,
-     FOREIGN = 440,
-     FOR_SYM = 441,
-     FORMAT_SYM = 442,
-     FOUND_SYM = 443,
-     FROM = 444,
-     FULL = 445,
-     FULLTEXT_SYM = 446,
-     FUNCTION_SYM = 447,
-     GE = 448,
-     GENERAL = 449,
-     GEOMETRYCOLLECTION = 450,
-     GEOMETRY_SYM = 451,
-     GET_FORMAT = 452,
-     GET_SYM = 453,
-     GLOBAL_SYM = 454,
-     GRANT = 455,
-     GRANTS = 456,
-     GROUP_SYM = 457,
-     GROUP_CONCAT_SYM = 458,
-     GT_SYM = 459,
-     HANDLER_SYM = 460,
-     HASH_SYM = 461,
-     HAVING = 462,
-     HELP_SYM = 463,
-     HEX_NUM = 464,
-     HIGH_PRIORITY = 465,
-     HOST_SYM = 466,
-     HOSTS_SYM = 467,
-     HOUR_MICROSECOND_SYM = 468,
-     HOUR_MINUTE_SYM = 469,
-     HOUR_SECOND_SYM = 470,
-     HOUR_SYM = 471,
-     IDENT = 472,
-     IDENTIFIED_SYM = 473,
-     IDENT_QUOTED = 474,
-     IF = 475,
-     IGNORE_SYM = 476,
-     IGNORE_SERVER_IDS_SYM = 477,
-     IMPORT = 478,
-     INDEXES = 479,
-     INDEX_SYM = 480,
-     INFILE = 481,
-     INITIAL_SIZE_SYM = 482,
-     INNER_SYM = 483,
-     INOUT_SYM = 484,
-     INSENSITIVE_SYM = 485,
-     INSERT = 486,
-     INSERT_METHOD = 487,
-     INSTALL_SYM = 488,
-     INTERVAL_SYM = 489,
-     INTO = 490,
-     INT_SYM = 491,
-     INVOKER_SYM = 492,
-     IN_SYM = 493,
-     IO_AFTER_GTIDS = 494,
-     IO_BEFORE_GTIDS = 495,
-     IO_SYM = 496,
-     IPC_SYM = 497,
-     IS = 498,
-     ISOLATION = 499,
-     ISSUER_SYM = 500,
-     ITERATE_SYM = 501,
-     JOIN_SYM = 502,
-     KEYS = 503,
-     KEY_BLOCK_SIZE = 504,
-     KEY_SYM = 505,
-     KILL_SYM = 506,
-     LANGUAGE_SYM = 507,
-     LAST_SYM = 508,
-     LE = 509,
-     LEADING = 510,
-     LEAVES = 511,
-     LEAVE_SYM = 512,
-     LEFT = 513,
-     LESS_SYM = 514,
-     LEVEL_SYM = 515,
-     LEX_HOSTNAME = 516,
-     LIKE = 517,
-     LIMIT = 518,
-     LINEAR_SYM = 519,
-     LINES = 520,
-     LINESTRING = 521,
-     LIST_SYM = 522,
-     LOAD = 523,
-     LOCAL_SYM = 524,
-     LOCATOR_SYM = 525,
-     LOCKS_SYM = 526,
-     LOCK_SYM = 527,
-     LOGFILE_SYM = 528,
-     LOGS_SYM = 529,
-     LONGBLOB = 530,
-     LONGTEXT = 531,
-     LONG_NUM = 532,
-     LONG_SYM = 533,
-     LOOP_SYM = 534,
-     LOW_PRIORITY = 535,
-     LT = 536,
-     MASTER_AUTO_POSITION_SYM = 537,
-     MASTER_BIND_SYM = 538,
-     MASTER_CONNECT_RETRY_SYM = 539,
-     MASTER_DELAY_SYM = 540,
-     MASTER_HOST_SYM = 541,
-     MASTER_LOG_FILE_SYM = 542,
-     MASTER_LOG_POS_SYM = 543,
-     MASTER_PASSWORD_SYM = 544,
-     MASTER_PORT_SYM = 545,
-     MASTER_RETRY_COUNT_SYM = 546,
-     MASTER_SERVER_ID_SYM = 547,
-     MASTER_SSL_CAPATH_SYM = 548,
-     MASTER_SSL_CA_SYM = 549,
-     MASTER_SSL_CERT_SYM = 550,
-     MASTER_SSL_CIPHER_SYM = 551,
-     MASTER_SSL_CRL_SYM = 552,
-     MASTER_SSL_CRLPATH_SYM = 553,
-     MASTER_SSL_KEY_SYM = 554,
-     MASTER_SSL_SYM = 555,
-     MASTER_SSL_VERIFY_SERVER_CERT_SYM = 556,
-     MASTER_SYM = 557,
-     MASTER_USER_SYM = 558,
-     MASTER_HEARTBEAT_PERIOD_SYM = 559,
-     MATCH = 560,
-     MAX_CONNECTIONS_PER_HOUR = 561,
-     MAX_QUERIES_PER_HOUR = 562,
-     MAX_ROWS = 563,
-     MAX_SIZE_SYM = 564,
-     MAX_SYM = 565,
-     MAX_UPDATES_PER_HOUR = 566,
-     MAX_USER_CONNECTIONS_SYM = 567,
-     MAX_VALUE_SYM = 568,
-     MEDIUMBLOB = 569,
-     MEDIUMINT = 570,
-     MEDIUMTEXT = 571,
-     MEDIUM_SYM = 572,
-     MEMORY_SYM = 573,
-     MERGE_SYM = 574,
-     MESSAGE_TEXT_SYM = 575,
-     MICROSECOND_SYM = 576,
-     MIGRATE_SYM = 577,
-     MINUTE_MICROSECOND_SYM = 578,
-     MINUTE_SECOND_SYM = 579,
-     MINUTE_SYM = 580,
-     MIN_ROWS = 581,
-     MIN_SYM = 582,
-     MODE_SYM = 583,
-     MODIFIES_SYM = 584,
-     MODIFY_SYM = 585,
-     MOD_SYM = 586,
-     MONTH_SYM = 587,
-     MULTILINESTRING = 588,
-     MULTIPOINT = 589,
-     MULTIPOLYGON = 590,
-     MUTEX_SYM = 591,
-     MYSQL_ERRNO_SYM = 592,
-     NAMES_SYM = 593,
-     NAME_SYM = 594,
-     NATIONAL_SYM = 595,
-     NATURAL = 596,
-     NCHAR_STRING = 597,
-     NCHAR_SYM = 598,
-     NDBCLUSTER_SYM = 599,
-     NE = 600,
-     NEG = 601,
-     NEW_SYM = 602,
-     NEXT_SYM = 603,
-     NODEGROUP_SYM = 604,
-     NONE_SYM = 605,
-     NOT2_SYM = 606,
-     NOT_SYM = 607,
-     NOW_SYM = 608,
-     NO_SYM = 609,
-     NO_WAIT_SYM = 610,
-     NO_WRITE_TO_BINLOG = 611,
-     NULL_SYM = 612,
-     NUM = 613,
-     NUMBER_SYM = 614,
-     NUMERIC_SYM = 615,
-     NVARCHAR_SYM = 616,
-     OFFSET_SYM = 617,
-     OLD_PASSWORD = 618,
-     ON = 619,
-     ONE_SYM = 620,
-     ONLY_SYM = 621,
-     OPEN_SYM = 622,
-     OPTIMIZE = 623,
-     OPTIONS_SYM = 624,
-     OPTION = 625,
-     OPTIONALLY = 626,
-     OR2_SYM = 627,
-     ORDER_SYM = 628,
-     OR_OR_SYM = 629,
-     OR_SYM = 630,
-     OUTER = 631,
-     OUTFILE = 632,
-     OUT_SYM = 633,
-     OWNER_SYM = 634,
-     PACK_KEYS_SYM = 635,
-     PAGE_SYM = 636,
-     PARAM_MARKER = 637,
-     PARSER_SYM = 638,
-     PARTIAL = 639,
-     PARTITION_SYM = 640,
-     PARTITIONS_SYM = 641,
-     PARTITIONING_SYM = 642,
-     PASSWORD = 643,
-     PHASE_SYM = 644,
-     PLUGIN_DIR_SYM = 645,
-     PLUGIN_SYM = 646,
-     PLUGINS_SYM = 647,
-     POINT_SYM = 648,
-     POLYGON = 649,
-     PORT_SYM = 650,
-     POSITION_SYM = 651,
-     PRECISION = 652,
-     PREPARE_SYM = 653,
-     PRESERVE_SYM = 654,
-     PREV_SYM = 655,
-     PRIMARY_SYM = 656,
-     PRIVILEGES = 657,
-     PROCEDURE_SYM = 658,
-     PROCESS = 659,
-     PROCESSLIST_SYM = 660,
-     PROFILE_SYM = 661,
-     PROFILES_SYM = 662,
-     PROXY_SYM = 663,
-     PURGE = 664,
-     QUARTER_SYM = 665,
-     QUERY_SYM = 666,
-     QUICK = 667,
-     RANGE_SYM = 668,
-     READS_SYM = 669,
-     READ_ONLY_SYM = 670,
-     READ_SYM = 671,
-     READ_WRITE_SYM = 672,
-     REAL = 673,
-     REBUILD_SYM = 674,
-     RECOVER_SYM = 675,
-     REDOFILE_SYM = 676,
-     REDO_BUFFER_SIZE_SYM = 677,
-     REDUNDANT_SYM = 678,
-     REFERENCES = 679,
-     REGEXP = 680,
-     RELAY = 681,
-     RELAYLOG_SYM = 682,
-     RELAY_LOG_FILE_SYM = 683,
-     RELAY_LOG_POS_SYM = 684,
-     RELAY_THREAD = 685,
-     RELEASE_SYM = 686,
-     RELOAD = 687,
-     REMOVE_SYM = 688,
-     RENAME = 689,
-     REORGANIZE_SYM = 690,
-     REPAIR = 691,
-     REPEATABLE_SYM = 692,
-     REPEAT_SYM = 693,
-     REPLACE = 694,
-     REPLICATION = 695,
-     REQUIRE_SYM = 696,
-     RESET_SYM = 697,
-     RESIGNAL_SYM = 698,
-     RESOURCES = 699,
-     RESTORE_SYM = 700,
-     RESTRICT = 701,
-     RESUME_SYM = 702,
-     RETURNED_SQLSTATE_SYM = 703,
-     RETURNS_SYM = 704,
-     RETURN_SYM = 705,
-     REVERSE_SYM = 706,
-     REVOKE = 707,
-     RIGHT = 708,
-     ROLLBACK_SYM = 709,
-     ROLLUP_SYM = 710,
-     ROUTINE_SYM = 711,
-     ROWS_SYM = 712,
-     ROW_FORMAT_SYM = 713,
-     ROW_SYM = 714,
-     ROW_COUNT_SYM = 715,
-     RTREE_SYM = 716,
-     SAVEPOINT_SYM = 717,
-     SCHEDULE_SYM = 718,
-     SCHEMA_NAME_SYM = 719,
-     SECOND_MICROSECOND_SYM = 720,
-     SECOND_SYM = 721,
-     SECURITY_SYM = 722,
-     SELECT_SYM = 723,
-     SENSITIVE_SYM = 724,
-     SEPARATOR_SYM = 725,
-     SERIALIZABLE_SYM = 726,
-     SERIAL_SYM = 727,
-     SESSION_SYM = 728,
-     SERVER_SYM = 729,
-     SERVER_OPTIONS = 730,
-     SET = 731,
-     SET_VAR = 732,
-     SHARE_SYM = 733,
-     SHIFT_LEFT = 734,
-     SHIFT_RIGHT = 735,
-     SHOW = 736,
-     SHUTDOWN = 737,
-     SIGNAL_SYM = 738,
-     SIGNED_SYM = 739,
-     SIMPLE_SYM = 740,
-     SLAVE = 741,
-     SLOW = 742,
-     SMALLINT = 743,
-     SNAPSHOT_SYM = 744,
-     SOCKET_SYM = 745,
-     SONAME_SYM = 746,
-     SOUNDS_SYM = 747,
-     SOURCE_SYM = 748,
-     SPATIAL_SYM = 749,
-     SPECIFIC_SYM = 750,
-     SQLEXCEPTION_SYM = 751,
-     SQLSTATE_SYM = 752,
-     SQLWARNING_SYM = 753,
-     SQL_AFTER_GTIDS = 754,
-     SQL_AFTER_MTS_GAPS = 755,
-     SQL_BEFORE_GTIDS = 756,
-     SQL_BIG_RESULT = 757,
-     SQL_BUFFER_RESULT = 758,
-     SQL_CACHE_SYM = 759,
-     SQL_CALC_FOUND_ROWS = 760,
-     SQL_NO_CACHE_SYM = 761,
-     SQL_SMALL_RESULT = 762,
-     SQL_SYM = 763,
-     SQL_THREAD = 764,
-     SSL_SYM = 765,
-     STARTING = 766,
-     STARTS_SYM = 767,
-     START_SYM = 768,
-     STATS_AUTO_RECALC_SYM = 769,
-     STATS_PERSISTENT_SYM = 770,
-     STATS_SAMPLE_PAGES_SYM = 771,
-     STATUS_SYM = 772,
-     STDDEV_SAMP_SYM = 773,
-     STD_SYM = 774,
-     STOP_SYM = 775,
-     STORAGE_SYM = 776,
-     STRAIGHT_JOIN = 777,
-     STRING_SYM = 778,
-     SUBCLASS_ORIGIN_SYM = 779,
-     SUBDATE_SYM = 780,
-     SUBJECT_SYM = 781,
-     SUBPARTITIONS_SYM = 782,
-     SUBPARTITION_SYM = 783,
-     SUBSTRING = 784,
-     SUM_SYM = 785,
-     SUPER_SYM = 786,
-     SUSPEND_SYM = 787,
-     SWAPS_SYM = 788,
-     SWITCHES_SYM = 789,
-     SYSDATE = 790,
-     TABLES = 791,
-     TABLESPACE = 792,
-     TABLE_REF_PRIORITY = 793,
-     TABLE_SYM = 794,
-     TABLE_CHECKSUM_SYM = 795,
-     TABLE_NAME_SYM = 796,
-     TEMPORARY = 797,
-     TEMPTABLE_SYM = 798,
-     TERMINATED = 799,
-     TEXT_STRING = 800,
-     TEXT_SYM = 801,
-     THAN_SYM = 802,
-     THEN_SYM = 803,
-     TIMESTAMP = 804,
-     TIMESTAMP_ADD = 805,
-     TIMESTAMP_DIFF = 806,
-     TIME_SYM = 807,
-     TINYBLOB = 808,
-     TINYINT = 809,
-     TINYTEXT = 810,
-     TO_SYM = 811,
-     TRAILING = 812,
-     TRANSACTION_SYM = 813,
-     TRIGGERS_SYM = 814,
-     TRIGGER_SYM = 815,
-     TRIM = 816,
-     TRUE_SYM = 817,
-     TRUNCATE_SYM = 818,
-     TYPES_SYM = 819,
-     TYPE_SYM = 820,
-     UDF_RETURNS_SYM = 821,
-     ULONGLONG_NUM = 822,
-     UNCOMMITTED_SYM = 823,
-     UNDEFINED_SYM = 824,
-     UNDERSCORE_CHARSET = 825,
-     UNDOFILE_SYM = 826,
-     UNDO_BUFFER_SIZE_SYM = 827,
-     UNDO_SYM = 828,
-     UNICODE_SYM = 829,
-     UNINSTALL_SYM = 830,
-     UNION_SYM = 831,
-     UNIQUE_SYM = 832,
-     UNKNOWN_SYM = 833,
-     UNLOCK_SYM = 834,
-     UNSIGNED = 835,
-     UNTIL_SYM = 836,
-     UPDATE_SYM = 837,
-     UPGRADE_SYM = 838,
-     USAGE = 839,
-     USER = 840,
-     USE_FRM = 841,
-     USE_SYM = 842,
-     USING = 843,
-     UTC_DATE_SYM = 844,
-     UTC_TIMESTAMP_SYM = 845,
-     UTC_TIME_SYM = 846,
-     VALUES = 847,
-     VALUE_SYM = 848,
-     VARBINARY = 849,
-     VARCHAR = 850,
-     VARIABLES = 851,
-     VARIANCE_SYM = 852,
-     VARYING = 853,
-     VAR_SAMP_SYM = 854,
-     VIEW_SYM = 855,
-     WAIT_SYM = 856,
-     WARNINGS = 857,
-     WEEK_SYM = 858,
-     WEIGHT_STRING_SYM = 859,
-     WHEN_SYM = 860,
-     WHERE = 861,
-     WHILE_SYM = 862,
-     WITH = 863,
-     WITH_CUBE_SYM = 864,
-     WITH_ROLLUP_SYM = 865,
-     WORK_SYM = 866,
-     WRAPPER_SYM = 867,
-     WRITE_SYM = 868,
-     X509_SYM = 869,
-     XA_SYM = 870,
-     XML_SYM = 871,
-     XOR = 872,
-     YEAR_MONTH_SYM = 873,
-     YEAR_SYM = 874,
-     ZEROFILL = 875
+     FOLLOWING_SYM = 439,
+     FORCE_SYM = 440,
+     FOREIGN = 441,
+     FOR_SYM = 442,
+     FORMAT_SYM = 443,
+     FOUND_SYM = 444,
+     FROM = 445,
+     FULL = 446,
+     FULLTEXT_SYM = 447,
+     FUNCTION_SYM = 448,
+     GE = 449,
+     GENERAL = 450,
+     GEOMETRYCOLLECTION = 451,
+     GEOMETRY_SYM = 452,
+     GET_FORMAT = 453,
+     GET_SYM = 454,
+     GLOBAL_SYM = 455,
+     GRANT = 456,
+     GRANTS = 457,
+     GROUP_SYM = 458,
+     GROUP_CONCAT_SYM = 459,
+     GT_SYM = 460,
+     HANDLER_SYM = 461,
+     HASH_SYM = 462,
+     HAVING = 463,
+     HELP_SYM = 464,
+     HEX_NUM = 465,
+     HIGH_PRIORITY = 466,
+     HOST_SYM = 467,
+     HOSTS_SYM = 468,
+     HOUR_MICROSECOND_SYM = 469,
+     HOUR_MINUTE_SYM = 470,
+     HOUR_SECOND_SYM = 471,
+     HOUR_SYM = 472,
+     IDENT = 473,
+     IDENTIFIED_SYM = 474,
+     IDENT_QUOTED = 475,
+     IF = 476,
+     IGNORE_SYM = 477,
+     IGNORE_SERVER_IDS_SYM = 478,
+     IMPORT = 479,
+     INDEXES = 480,
+     INDEX_SYM = 481,
+     INFILE = 482,
+     INITIAL_SIZE_SYM = 483,
+     INNER_SYM = 484,
+     INOUT_SYM = 485,
+     INSENSITIVE_SYM = 486,
+     INSERT = 487,
+     INSERT_METHOD = 488,
+     INSTALL_SYM = 489,
+     INTERVAL_SYM = 490,
+     INTO = 491,
+     INT_SYM = 492,
+     INVOKER_SYM = 493,
+     IN_SYM = 494,
+     IO_AFTER_GTIDS = 495,
+     IO_BEFORE_GTIDS = 496,
+     IO_SYM = 497,
+     IPC_SYM = 498,
+     IS = 499,
+     ISOLATION = 500,
+     ISSUER_SYM = 501,
+     ITERATE_SYM = 502,
+     JOIN_SYM = 503,
+     KEYS = 504,
+     KEY_BLOCK_SIZE = 505,
+     KEY_SYM = 506,
+     KILL_SYM = 507,
+     LANGUAGE_SYM = 508,
+     LAST_SYM = 509,
+     LE = 510,
+     LEADING = 511,
+     LEAVES = 512,
+     LEAVE_SYM = 513,
+     LEFT = 514,
+     LESS_SYM = 515,
+     LEVEL_SYM = 516,
+     LEX_HOSTNAME = 517,
+     LIKE = 518,
+     LIMIT = 519,
+     LINEAR_SYM = 520,
+     LINES = 521,
+     LINESTRING = 522,
+     LIST_SYM = 523,
+     LOAD = 524,
+     LOCAL_SYM = 525,
+     LOCATOR_SYM = 526,
+     LOCKS_SYM = 527,
+     LOCK_SYM = 528,
+     LOGFILE_SYM = 529,
+     LOGS_SYM = 530,
+     LONGBLOB = 531,
+     LONGTEXT = 532,
+     LONG_NUM = 533,
+     LONG_SYM = 534,
+     LOOP_SYM = 535,
+     LOW_PRIORITY = 536,
+     LT = 537,
+     MASTER_AUTO_POSITION_SYM = 538,
+     MASTER_BIND_SYM = 539,
+     MASTER_CONNECT_RETRY_SYM = 540,
+     MASTER_DELAY_SYM = 541,
+     MASTER_HOST_SYM = 542,
+     MASTER_LOG_FILE_SYM = 543,
+     MASTER_LOG_POS_SYM = 544,
+     MASTER_PASSWORD_SYM = 545,
+     MASTER_PORT_SYM = 546,
+     MASTER_RETRY_COUNT_SYM = 547,
+     MASTER_SERVER_ID_SYM = 548,
+     MASTER_SSL_CAPATH_SYM = 549,
+     MASTER_SSL_CA_SYM = 550,
+     MASTER_SSL_CERT_SYM = 551,
+     MASTER_SSL_CIPHER_SYM = 552,
+     MASTER_SSL_CRL_SYM = 553,
+     MASTER_SSL_CRLPATH_SYM = 554,
+     MASTER_SSL_KEY_SYM = 555,
+     MASTER_SSL_SYM = 556,
+     MASTER_SSL_VERIFY_SERVER_CERT_SYM = 557,
+     MASTER_SYM = 558,
+     MASTER_USER_SYM = 559,
+     MASTER_HEARTBEAT_PERIOD_SYM = 560,
+     MATCH = 561,
+     MAX_CONNECTIONS_PER_HOUR = 562,
+     MAX_QUERIES_PER_HOUR = 563,
+     MAX_ROWS = 564,
+     MAX_SIZE_SYM = 565,
+     MAX_SYM = 566,
+     MAX_UPDATES_PER_HOUR = 567,
+     MAX_USER_CONNECTIONS_SYM = 568,
+     MAX_VALUE_SYM = 569,
+     MEDIUMBLOB = 570,
+     MEDIUMINT = 571,
+     MEDIUMTEXT = 572,
+     MEDIUM_SYM = 573,
+     MEMORY_SYM = 574,
+     MERGE_SYM = 575,
+     MESSAGE_TEXT_SYM = 576,
+     MICROSECOND_SYM = 577,
+     MIGRATE_SYM = 578,
+     MINUTE_MICROSECOND_SYM = 579,
+     MINUTE_SECOND_SYM = 580,
+     MINUTE_SYM = 581,
+     MIN_ROWS = 582,
+     MIN_SYM = 583,
+     MODE_SYM = 584,
+     MODIFIES_SYM = 585,
+     MODIFY_SYM = 586,
+     MOD_SYM = 587,
+     MONTH_SYM = 588,
+     MULTILINESTRING = 589,
+     MULTIPOINT = 590,
+     MULTIPOLYGON = 591,
+     MUTEX_SYM = 592,
+     MYSQL_ERRNO_SYM = 593,
+     NAMES_SYM = 594,
+     NAME_SYM = 595,
+     NATIONAL_SYM = 596,
+     NATURAL = 597,
+     NCHAR_STRING = 598,
+     NCHAR_SYM = 599,
+     NDBCLUSTER_SYM = 600,
+     NE = 601,
+     NEG = 602,
+     NEW_SYM = 603,
+     NEXT_SYM = 604,
+     NODEGROUP_SYM = 605,
+     NONE_SYM = 606,
+     NOT2_SYM = 607,
+     NOT_SYM = 608,
+     NOW_SYM = 609,
+     NO_SYM = 610,
+     NO_WAIT_SYM = 611,
+     NO_WRITE_TO_BINLOG = 612,
+     NTH_VALUE_SYM = 613,
+     NULL_SYM = 614,
+     NULLS_SYM = 615,
+     NUM = 616,
+     NUMBER_SYM = 617,
+     NUMERIC_SYM = 618,
+     NVARCHAR_SYM = 619,
+     OFFSET_SYM = 620,
+     OLD_PASSWORD = 621,
+     ON = 622,
+     ONE_SYM = 623,
+     ONLY_SYM = 624,
+     OPEN_SYM = 625,
+     OPTIMIZE = 626,
+     OPTIONS_SYM = 627,
+     OPTION = 628,
+     OPTIONALLY = 629,
+     OR2_SYM = 630,
+     ORDER_SYM = 631,
+     OR_OR_SYM = 632,
+     OR_SYM = 633,
+     OUTER = 634,
+     OUTFILE = 635,
+     OUT_SYM = 636,
+     OVER_SYM = 637,
+     OWNER_SYM = 638,
+     PACK_KEYS_SYM = 639,
+     PAGE_SYM = 640,
+     PARAM_MARKER = 641,
+     PARSER_SYM = 642,
+     PARTIAL = 643,
+     PARTITION_SYM = 644,
+     PARTITIONS_SYM = 645,
+     PARTITIONING_SYM = 646,
+     PASSWORD = 647,
+     PERCENTILE_CONT_SYM = 648,
+     PERCENTILE_DISC_SYM = 649,
+     PHASE_SYM = 650,
+     PLUGIN_DIR_SYM = 651,
+     PLUGIN_SYM = 652,
+     PLUGINS_SYM = 653,
+     POINT_SYM = 654,
+     POLYGON = 655,
+     PORT_SYM = 656,
+     POSITION_SYM = 657,
+     PRECEDING_SYM = 658,
+     PRECISION = 659,
+     PREPARE_SYM = 660,
+     PRESERVE_SYM = 661,
+     PREV_SYM = 662,
+     PRIMARY_SYM = 663,
+     PRIVILEGES = 664,
+     PROCEDURE_SYM = 665,
+     PROCESS = 666,
+     PROCESSLIST_SYM = 667,
+     PROFILE_SYM = 668,
+     PROFILES_SYM = 669,
+     PROXY_SYM = 670,
+     PURGE = 671,
+     QUARTER_SYM = 672,
+     QUERY_SYM = 673,
+     QUICK = 674,
+     RANGE_SYM = 675,
+     READS_SYM = 676,
+     READ_ONLY_SYM = 677,
+     READ_SYM = 678,
+     READ_WRITE_SYM = 679,
+     REAL = 680,
+     REBUILD_SYM = 681,
+     RECOVER_SYM = 682,
+     REDOFILE_SYM = 683,
+     REDO_BUFFER_SIZE_SYM = 684,
+     REDUNDANT_SYM = 685,
+     REFERENCES = 686,
+     REGEXP = 687,
+     RELAY = 688,
+     RELAYLOG_SYM = 689,
+     RELAY_LOG_FILE_SYM = 690,
+     RELAY_LOG_POS_SYM = 691,
+     RELAY_THREAD = 692,
+     RELEASE_SYM = 693,
+     RELOAD = 694,
+     REMOVE_SYM = 695,
+     RENAME = 696,
+     REORGANIZE_SYM = 697,
+     REPAIR = 698,
+     REPEATABLE_SYM = 699,
+     REPEAT_SYM = 700,
+     REPLACE = 701,
+     REPLICATION = 702,
+     REQUIRE_SYM = 703,
+     RESET_SYM = 704,
+     RESIGNAL_SYM = 705,
+     RESOURCES = 706,
+     RESPECT_SYM = 707,
+     RESTORE_SYM = 708,
+     RESTRICT = 709,
+     RESUME_SYM = 710,
+     RETURNED_SQLSTATE_SYM = 711,
+     RETURNS_SYM = 712,
+     RETURN_SYM = 713,
+     REVERSE_SYM = 714,
+     REVOKE = 715,
+     RIGHT = 716,
+     ROLLBACK_SYM = 717,
+     ROLLUP_SYM = 718,
+     ROUTINE_SYM = 719,
+     ROWS_SYM = 720,
+     ROW_FORMAT_SYM = 721,
+     ROW_SYM = 722,
+     ROW_COUNT_SYM = 723,
+     RTREE_SYM = 724,
+     SAVEPOINT_SYM = 725,
+     SCHEDULE_SYM = 726,
+     SCHEMA_NAME_SYM = 727,
+     SECOND_MICROSECOND_SYM = 728,
+     SECOND_SYM = 729,
+     SECURITY_SYM = 730,
+     SELECT_SYM = 731,
+     SENSITIVE_SYM = 732,
+     SEPARATOR_SYM = 733,
+     SERIALIZABLE_SYM = 734,
+     SERIAL_SYM = 735,
+     SESSION_SYM = 736,
+     SERVER_SYM = 737,
+     SERVER_OPTIONS = 738,
+     SET = 739,
+     SET_VAR = 740,
+     SHARE_SYM = 741,
+     SHIFT_LEFT = 742,
+     SHIFT_RIGHT = 743,
+     SHOW = 744,
+     SHUTDOWN = 745,
+     SIGNAL_SYM = 746,
+     SIGNED_SYM = 747,
+     SIMPLE_SYM = 748,
+     SLAVE = 749,
+     SLOW = 750,
+     SMALLINT = 751,
+     SNAPSHOT_SYM = 752,
+     SOCKET_SYM = 753,
+     SONAME_SYM = 754,
+     SOUNDS_SYM = 755,
+     SOURCE_SYM = 756,
+     SPATIAL_SYM = 757,
+     SPECIFIC_SYM = 758,
+     SQLEXCEPTION_SYM = 759,
+     SQLSTATE_SYM = 760,
+     SQLWARNING_SYM = 761,
+     SQL_AFTER_GTIDS = 762,
+     SQL_AFTER_MTS_GAPS = 763,
+     SQL_BEFORE_GTIDS = 764,
+     SQL_BIG_RESULT = 765,
+     SQL_BUFFER_RESULT = 766,
+     SQL_CACHE_SYM = 767,
+     SQL_CALC_FOUND_ROWS = 768,
+     SQL_NO_CACHE_SYM = 769,
+     INFINIDB_ORDERED_SYM = 770,
+     SQL_SMALL_RESULT = 771,
+     SQL_SYM = 772,
+     SQL_THREAD = 773,
+     SSL_SYM = 774,
+     STARTING = 775,
+     STARTS_SYM = 776,
+     START_SYM = 777,
+     STATS_AUTO_RECALC_SYM = 778,
+     STATS_PERSISTENT_SYM = 779,
+     STATS_SAMPLE_PAGES_SYM = 780,
+     STATUS_SYM = 781,
+     STDDEV_SAMP_SYM = 782,
+     STD_SYM = 783,
+     STOP_SYM = 784,
+     STORAGE_SYM = 785,
+     STRAIGHT_JOIN = 786,
+     STRING_SYM = 787,
+     SUBCLASS_ORIGIN_SYM = 788,
+     SUBDATE_SYM = 789,
+     SUBJECT_SYM = 790,
+     SUBPARTITIONS_SYM = 791,
+     SUBPARTITION_SYM = 792,
+     SUBSTRING = 793,
+     SUM_SYM = 794,
+     SUPER_SYM = 795,
+     SUSPEND_SYM = 796,
+     SWAPS_SYM = 797,
+     SWITCHES_SYM = 798,
+     SYSDATE = 799,
+     TABLES = 800,
+     TABLESPACE = 801,
+     TABLE_REF_PRIORITY = 802,
+     TABLE_SYM = 803,
+     TABLE_CHECKSUM_SYM = 804,
+     TABLE_NAME_SYM = 805,
+     TEMPORARY = 806,
+     TEMPTABLE_SYM = 807,
+     TERMINATED = 808,
+     TEXT_STRING = 809,
+     TEXT_SYM = 810,
+     THAN_SYM = 811,
+     THEN_SYM = 812,
+     TIMESTAMP = 813,
+     TIMESTAMP_ADD = 814,
+     TIMESTAMP_DIFF = 815,
+     TIME_SYM = 816,
+     TINYBLOB = 817,
+     TINYINT = 818,
+     TINYTEXT = 819,
+     TO_SYM = 820,
+     TRAILING = 821,
+     TRANSACTION_SYM = 822,
+     TRIGGERS_SYM = 823,
+     TRIGGER_SYM = 824,
+     TRIM = 825,
+     TRUE_SYM = 826,
+     TRUNCATE_SYM = 827,
+     TYPES_SYM = 828,
+     TYPE_SYM = 829,
+     UDF_RETURNS_SYM = 830,
+     ULONGLONG_NUM = 831,
+     UNBOUNDED_SYM = 832,
+     UNCOMMITTED_SYM = 833,
+     UNDEFINED_SYM = 834,
+     UNDERSCORE_CHARSET = 835,
+     UNDOFILE_SYM = 836,
+     UNDO_BUFFER_SIZE_SYM = 837,
+     UNDO_SYM = 838,
+     UNICODE_SYM = 839,
+     UNINSTALL_SYM = 840,
+     UNION_SYM = 841,
+     UNIQUE_SYM = 842,
+     UNKNOWN_SYM = 843,
+     UNLOCK_SYM = 844,
+     UNSIGNED = 845,
+     UNTIL_SYM = 846,
+     UPDATE_SYM = 847,
+     UPGRADE_SYM = 848,
+     USAGE = 849,
+     USER = 850,
+     USE_FRM = 851,
+     USE_SYM = 852,
+     USING = 853,
+     UTC_DATE_SYM = 854,
+     UTC_TIMESTAMP_SYM = 855,
+     UTC_TIME_SYM = 856,
+     VALUES = 857,
+     VALUE_SYM = 858,
+     VARBINARY = 859,
+     VARCHAR = 860,
+     VARIABLES = 861,
+     VARIANCE_SYM = 862,
+     VARYING = 863,
+     VAR_SAMP_SYM = 864,
+     VIEW_SYM = 865,
+     WAIT_SYM = 866,
+     WARNINGS = 867,
+     WEEK_SYM = 868,
+     WEIGHT_STRING_SYM = 869,
+     WHEN_SYM = 870,
+     WHERE = 871,
+     WHILE_SYM = 872,
+     WITHIN = 873,
+     WITH = 874,
+     WITH_CUBE_SYM = 875,
+     WITH_ROLLUP_SYM = 876,
+     WORK_SYM = 877,
+     WRAPPER_SYM = 878,
+     WRITE_SYM = 879,
+     X509_SYM = 880,
+     XA_SYM = 881,
+     XML_SYM = 882,
+     XOR = 883,
+     YEAR_MONTH_SYM = 884,
+     YEAR_SYM = 885,
+     ZEROFILL = 886
    };
 #endif
 /* Tokens.  */
@@ -841,451 +852,465 @@
 #define FLOAT_NUM 436
 #define FLOAT_SYM 437
 #define FLUSH_SYM 438
-#define FORCE_SYM 439
-#define FOREIGN 440
-#define FOR_SYM 441
-#define FORMAT_SYM 442
-#define FOUND_SYM 443
-#define FROM 444
-#define FULL 445
-#define FULLTEXT_SYM 446
-#define FUNCTION_SYM 447
-#define GE 448
-#define GENERAL 449
-#define GEOMETRYCOLLECTION 450
-#define GEOMETRY_SYM 451
-#define GET_FORMAT 452
-#define GET_SYM 453
-#define GLOBAL_SYM 454
-#define GRANT 455
-#define GRANTS 456
-#define GROUP_SYM 457
-#define GROUP_CONCAT_SYM 458
-#define GT_SYM 459
-#define HANDLER_SYM 460
-#define HASH_SYM 461
-#define HAVING 462
-#define HELP_SYM 463
-#define HEX_NUM 464
-#define HIGH_PRIORITY 465
-#define HOST_SYM 466
-#define HOSTS_SYM 467
-#define HOUR_MICROSECOND_SYM 468
-#define HOUR_MINUTE_SYM 469
-#define HOUR_SECOND_SYM 470
-#define HOUR_SYM 471
-#define IDENT 472
-#define IDENTIFIED_SYM 473
-#define IDENT_QUOTED 474
-#define IF 475
-#define IGNORE_SYM 476
-#define IGNORE_SERVER_IDS_SYM 477
-#define IMPORT 478
-#define INDEXES 479
-#define INDEX_SYM 480
-#define INFILE 481
-#define INITIAL_SIZE_SYM 482
-#define INNER_SYM 483
-#define INOUT_SYM 484
-#define INSENSITIVE_SYM 485
-#define INSERT 486
-#define INSERT_METHOD 487
-#define INSTALL_SYM 488
-#define INTERVAL_SYM 489
-#define INTO 490
-#define INT_SYM 491
-#define INVOKER_SYM 492
-#define IN_SYM 493
-#define IO_AFTER_GTIDS 494
-#define IO_BEFORE_GTIDS 495
-#define IO_SYM 496
-#define IPC_SYM 497
-#define IS 498
-#define ISOLATION 499
-#define ISSUER_SYM 500
-#define ITERATE_SYM 501
-#define JOIN_SYM 502
-#define KEYS 503
-#define KEY_BLOCK_SIZE 504
-#define KEY_SYM 505
-#define KILL_SYM 506
-#define LANGUAGE_SYM 507
-#define LAST_SYM 508
-#define LE 509
-#define LEADING 510
-#define LEAVES 511
-#define LEAVE_SYM 512
-#define LEFT 513
-#define LESS_SYM 514
-#define LEVEL_SYM 515
-#define LEX_HOSTNAME 516
-#define LIKE 517
-#define LIMIT 518
-#define LINEAR_SYM 519
-#define LINES 520
-#define LINESTRING 521
-#define LIST_SYM 522
-#define LOAD 523
-#define LOCAL_SYM 524
-#define LOCATOR_SYM 525
-#define LOCKS_SYM 526
-#define LOCK_SYM 527
-#define LOGFILE_SYM 528
-#define LOGS_SYM 529
-#define LONGBLOB 530
-#define LONGTEXT 531
-#define LONG_NUM 532
-#define LONG_SYM 533
-#define LOOP_SYM 534
-#define LOW_PRIORITY 535
-#define LT 536
-#define MASTER_AUTO_POSITION_SYM 537
-#define MASTER_BIND_SYM 538
-#define MASTER_CONNECT_RETRY_SYM 539
-#define MASTER_DELAY_SYM 540
-#define MASTER_HOST_SYM 541
-#define MASTER_LOG_FILE_SYM 542
-#define MASTER_LOG_POS_SYM 543
-#define MASTER_PASSWORD_SYM 544
-#define MASTER_PORT_SYM 545
-#define MASTER_RETRY_COUNT_SYM 546
-#define MASTER_SERVER_ID_SYM 547
-#define MASTER_SSL_CAPATH_SYM 548
-#define MASTER_SSL_CA_SYM 549
-#define MASTER_SSL_CERT_SYM 550
-#define MASTER_SSL_CIPHER_SYM 551
-#define MASTER_SSL_CRL_SYM 552
-#define MASTER_SSL_CRLPATH_SYM 553
-#define MASTER_SSL_KEY_SYM 554
-#define MASTER_SSL_SYM 555
-#define MASTER_SSL_VERIFY_SERVER_CERT_SYM 556
-#define MASTER_SYM 557
-#define MASTER_USER_SYM 558
-#define MASTER_HEARTBEAT_PERIOD_SYM 559
-#define MATCH 560
-#define MAX_CONNECTIONS_PER_HOUR 561
-#define MAX_QUERIES_PER_HOUR 562
-#define MAX_ROWS 563
-#define MAX_SIZE_SYM 564
-#define MAX_SYM 565
-#define MAX_UPDATES_PER_HOUR 566
-#define MAX_USER_CONNECTIONS_SYM 567
-#define MAX_VALUE_SYM 568
-#define MEDIUMBLOB 569
-#define MEDIUMINT 570
-#define MEDIUMTEXT 571
-#define MEDIUM_SYM 572
-#define MEMORY_SYM 573
-#define MERGE_SYM 574
-#define MESSAGE_TEXT_SYM 575
-#define MICROSECOND_SYM 576
-#define MIGRATE_SYM 577
-#define MINUTE_MICROSECOND_SYM 578
-#define MINUTE_SECOND_SYM 579
-#define MINUTE_SYM 580
-#define MIN_ROWS 581
-#define MIN_SYM 582
-#define MODE_SYM 583
-#define MODIFIES_SYM 584
-#define MODIFY_SYM 585
-#define MOD_SYM 586
-#define MONTH_SYM 587
-#define MULTILINESTRING 588
-#define MULTIPOINT 589
-#define MULTIPOLYGON 590
-#define MUTEX_SYM 591
-#define MYSQL_ERRNO_SYM 592
-#define NAMES_SYM 593
-#define NAME_SYM 594
-#define NATIONAL_SYM 595
-#define NATURAL 596
-#define NCHAR_STRING 597
-#define NCHAR_SYM 598
-#define NDBCLUSTER_SYM 599
-#define NE 600
-#define NEG 601
-#define NEW_SYM 602
-#define NEXT_SYM 603
-#define NODEGROUP_SYM 604
-#define NONE_SYM 605
-#define NOT2_SYM 606
-#define NOT_SYM 607
-#define NOW_SYM 608
-#define NO_SYM 609
-#define NO_WAIT_SYM 610
-#define NO_WRITE_TO_BINLOG 611
-#define NULL_SYM 612
-#define NUM 613
-#define NUMBER_SYM 614
-#define NUMERIC_SYM 615
-#define NVARCHAR_SYM 616
-#define OFFSET_SYM 617
-#define OLD_PASSWORD 618
-#define ON 619
-#define ONE_SYM 620
-#define ONLY_SYM 621
-#define OPEN_SYM 622
-#define OPTIMIZE 623
-#define OPTIONS_SYM 624
-#define OPTION 625
-#define OPTIONALLY 626
-#define OR2_SYM 627
-#define ORDER_SYM 628
-#define OR_OR_SYM 629
-#define OR_SYM 630
-#define OUTER 631
-#define OUTFILE 632
-#define OUT_SYM 633
-#define OWNER_SYM 634
-#define PACK_KEYS_SYM 635
-#define PAGE_SYM 636
-#define PARAM_MARKER 637
-#define PARSER_SYM 638
-#define PARTIAL 639
-#define PARTITION_SYM 640
-#define PARTITIONS_SYM 641
-#define PARTITIONING_SYM 642
-#define PASSWORD 643
-#define PHASE_SYM 644
-#define PLUGIN_DIR_SYM 645
-#define PLUGIN_SYM 646
-#define PLUGINS_SYM 647
-#define POINT_SYM 648
-#define POLYGON 649
-#define PORT_SYM 650
-#define POSITION_SYM 651
-#define PRECISION 652
-#define PREPARE_SYM 653
-#define PRESERVE_SYM 654
-#define PREV_SYM 655
-#define PRIMARY_SYM 656
-#define PRIVILEGES 657
-#define PROCEDURE_SYM 658
-#define PROCESS 659
-#define PROCESSLIST_SYM 660
-#define PROFILE_SYM 661
-#define PROFILES_SYM 662
-#define PROXY_SYM 663
-#define PURGE 664
-#define QUARTER_SYM 665
-#define QUERY_SYM 666
-#define QUICK 667
-#define RANGE_SYM 668
-#define READS_SYM 669
-#define READ_ONLY_SYM 670
-#define READ_SYM 671
-#define READ_WRITE_SYM 672
-#define REAL 673
-#define REBUILD_SYM 674
-#define RECOVER_SYM 675
-#define REDOFILE_SYM 676
-#define REDO_BUFFER_SIZE_SYM 677
-#define REDUNDANT_SYM 678
-#define REFERENCES 679
-#define REGEXP 680
-#define RELAY 681
-#define RELAYLOG_SYM 682
-#define RELAY_LOG_FILE_SYM 683
-#define RELAY_LOG_POS_SYM 684
-#define RELAY_THREAD 685
-#define RELEASE_SYM 686
-#define RELOAD 687
-#define REMOVE_SYM 688
-#define RENAME 689
-#define REORGANIZE_SYM 690
-#define REPAIR 691
-#define REPEATABLE_SYM 692
-#define REPEAT_SYM 693
-#define REPLACE 694
-#define REPLICATION 695
-#define REQUIRE_SYM 696
-#define RESET_SYM 697
-#define RESIGNAL_SYM 698
-#define RESOURCES 699
-#define RESTORE_SYM 700
-#define RESTRICT 701
-#define RESUME_SYM 702
-#define RETURNED_SQLSTATE_SYM 703
-#define RETURNS_SYM 704
-#define RETURN_SYM 705
-#define REVERSE_SYM 706
-#define REVOKE 707
-#define RIGHT 708
-#define ROLLBACK_SYM 709
-#define ROLLUP_SYM 710
-#define ROUTINE_SYM 711
-#define ROWS_SYM 712
-#define ROW_FORMAT_SYM 713
-#define ROW_SYM 714
-#define ROW_COUNT_SYM 715
-#define RTREE_SYM 716
-#define SAVEPOINT_SYM 717
-#define SCHEDULE_SYM 718
-#define SCHEMA_NAME_SYM 719
-#define SECOND_MICROSECOND_SYM 720
-#define SECOND_SYM 721
-#define SECURITY_SYM 722
-#define SELECT_SYM 723
-#define SENSITIVE_SYM 724
-#define SEPARATOR_SYM 725
-#define SERIALIZABLE_SYM 726
-#define SERIAL_SYM 727
-#define SESSION_SYM 728
-#define SERVER_SYM 729
-#define SERVER_OPTIONS 730
-#define SET 731
-#define SET_VAR 732
-#define SHARE_SYM 733
-#define SHIFT_LEFT 734
-#define SHIFT_RIGHT 735
-#define SHOW 736
-#define SHUTDOWN 737
-#define SIGNAL_SYM 738
-#define SIGNED_SYM 739
-#define SIMPLE_SYM 740
-#define SLAVE 741
-#define SLOW 742
-#define SMALLINT 743
-#define SNAPSHOT_SYM 744
-#define SOCKET_SYM 745
-#define SONAME_SYM 746
-#define SOUNDS_SYM 747
-#define SOURCE_SYM 748
-#define SPATIAL_SYM 749
-#define SPECIFIC_SYM 750
-#define SQLEXCEPTION_SYM 751
-#define SQLSTATE_SYM 752
-#define SQLWARNING_SYM 753
-#define SQL_AFTER_GTIDS 754
-#define SQL_AFTER_MTS_GAPS 755
-#define SQL_BEFORE_GTIDS 756
-#define SQL_BIG_RESULT 757
-#define SQL_BUFFER_RESULT 758
-#define SQL_CACHE_SYM 759
-#define SQL_CALC_FOUND_ROWS 760
-#define SQL_NO_CACHE_SYM 761
-#define SQL_SMALL_RESULT 762
-#define SQL_SYM 763
-#define SQL_THREAD 764
-#define SSL_SYM 765
-#define STARTING 766
-#define STARTS_SYM 767
-#define START_SYM 768
-#define STATS_AUTO_RECALC_SYM 769
-#define STATS_PERSISTENT_SYM 770
-#define STATS_SAMPLE_PAGES_SYM 771
-#define STATUS_SYM 772
-#define STDDEV_SAMP_SYM 773
-#define STD_SYM 774
-#define STOP_SYM 775
-#define STORAGE_SYM 776
-#define STRAIGHT_JOIN 777
-#define STRING_SYM 778
-#define SUBCLASS_ORIGIN_SYM 779
-#define SUBDATE_SYM 780
-#define SUBJECT_SYM 781
-#define SUBPARTITIONS_SYM 782
-#define SUBPARTITION_SYM 783
-#define SUBSTRING 784
-#define SUM_SYM 785
-#define SUPER_SYM 786
-#define SUSPEND_SYM 787
-#define SWAPS_SYM 788
-#define SWITCHES_SYM 789
-#define SYSDATE 790
-#define TABLES 791
-#define TABLESPACE 792
-#define TABLE_REF_PRIORITY 793
-#define TABLE_SYM 794
-#define TABLE_CHECKSUM_SYM 795
-#define TABLE_NAME_SYM 796
-#define TEMPORARY 797
-#define TEMPTABLE_SYM 798
-#define TERMINATED 799
-#define TEXT_STRING 800
-#define TEXT_SYM 801
-#define THAN_SYM 802
-#define THEN_SYM 803
-#define TIMESTAMP 804
-#define TIMESTAMP_ADD 805
-#define TIMESTAMP_DIFF 806
-#define TIME_SYM 807
-#define TINYBLOB 808
-#define TINYINT 809
-#define TINYTEXT 810
-#define TO_SYM 811
-#define TRAILING 812
-#define TRANSACTION_SYM 813
-#define TRIGGERS_SYM 814
-#define TRIGGER_SYM 815
-#define TRIM 816
-#define TRUE_SYM 817
-#define TRUNCATE_SYM 818
-#define TYPES_SYM 819
-#define TYPE_SYM 820
-#define UDF_RETURNS_SYM 821
-#define ULONGLONG_NUM 822
-#define UNCOMMITTED_SYM 823
-#define UNDEFINED_SYM 824
-#define UNDERSCORE_CHARSET 825
-#define UNDOFILE_SYM 826
-#define UNDO_BUFFER_SIZE_SYM 827
-#define UNDO_SYM 828
-#define UNICODE_SYM 829
-#define UNINSTALL_SYM 830
-#define UNION_SYM 831
-#define UNIQUE_SYM 832
-#define UNKNOWN_SYM 833
-#define UNLOCK_SYM 834
-#define UNSIGNED 835
-#define UNTIL_SYM 836
-#define UPDATE_SYM 837
-#define UPGRADE_SYM 838
-#define USAGE 839
-#define USER 840
-#define USE_FRM 841
-#define USE_SYM 842
-#define USING 843
-#define UTC_DATE_SYM 844
-#define UTC_TIMESTAMP_SYM 845
-#define UTC_TIME_SYM 846
-#define VALUES 847
-#define VALUE_SYM 848
-#define VARBINARY 849
-#define VARCHAR 850
-#define VARIABLES 851
-#define VARIANCE_SYM 852
-#define VARYING 853
-#define VAR_SAMP_SYM 854
-#define VIEW_SYM 855
-#define WAIT_SYM 856
-#define WARNINGS 857
-#define WEEK_SYM 858
-#define WEIGHT_STRING_SYM 859
-#define WHEN_SYM 860
-#define WHERE 861
-#define WHILE_SYM 862
-#define WITH 863
-#define WITH_CUBE_SYM 864
-#define WITH_ROLLUP_SYM 865
-#define WORK_SYM 866
-#define WRAPPER_SYM 867
-#define WRITE_SYM 868
-#define X509_SYM 869
-#define XA_SYM 870
-#define XML_SYM 871
-#define XOR 872
-#define YEAR_MONTH_SYM 873
-#define YEAR_SYM 874
-#define ZEROFILL 875
+#define FOLLOWING_SYM 439
+#define FORCE_SYM 440
+#define FOREIGN 441
+#define FOR_SYM 442
+#define FORMAT_SYM 443
+#define FOUND_SYM 444
+#define FROM 445
+#define FULL 446
+#define FULLTEXT_SYM 447
+#define FUNCTION_SYM 448
+#define GE 449
+#define GENERAL 450
+#define GEOMETRYCOLLECTION 451
+#define GEOMETRY_SYM 452
+#define GET_FORMAT 453
+#define GET_SYM 454
+#define GLOBAL_SYM 455
+#define GRANT 456
+#define GRANTS 457
+#define GROUP_SYM 458
+#define GROUP_CONCAT_SYM 459
+#define GT_SYM 460
+#define HANDLER_SYM 461
+#define HASH_SYM 462
+#define HAVING 463
+#define HELP_SYM 464
+#define HEX_NUM 465
+#define HIGH_PRIORITY 466
+#define HOST_SYM 467
+#define HOSTS_SYM 468
+#define HOUR_MICROSECOND_SYM 469
+#define HOUR_MINUTE_SYM 470
+#define HOUR_SECOND_SYM 471
+#define HOUR_SYM 472
+#define IDENT 473
+#define IDENTIFIED_SYM 474
+#define IDENT_QUOTED 475
+#define IF 476
+#define IGNORE_SYM 477
+#define IGNORE_SERVER_IDS_SYM 478
+#define IMPORT 479
+#define INDEXES 480
+#define INDEX_SYM 481
+#define INFILE 482
+#define INITIAL_SIZE_SYM 483
+#define INNER_SYM 484
+#define INOUT_SYM 485
+#define INSENSITIVE_SYM 486
+#define INSERT 487
+#define INSERT_METHOD 488
+#define INSTALL_SYM 489
+#define INTERVAL_SYM 490
+#define INTO 491
+#define INT_SYM 492
+#define INVOKER_SYM 493
+#define IN_SYM 494
+#define IO_AFTER_GTIDS 495
+#define IO_BEFORE_GTIDS 496
+#define IO_SYM 497
+#define IPC_SYM 498
+#define IS 499
+#define ISOLATION 500
+#define ISSUER_SYM 501
+#define ITERATE_SYM 502
+#define JOIN_SYM 503
+#define KEYS 504
+#define KEY_BLOCK_SIZE 505
+#define KEY_SYM 506
+#define KILL_SYM 507
+#define LANGUAGE_SYM 508
+#define LAST_SYM 509
+#define LE 510
+#define LEADING 511
+#define LEAVES 512
+#define LEAVE_SYM 513
+#define LEFT 514
+#define LESS_SYM 515
+#define LEVEL_SYM 516
+#define LEX_HOSTNAME 517
+#define LIKE 518
+#define LIMIT 519
+#define LINEAR_SYM 520
+#define LINES 521
+#define LINESTRING 522
+#define LIST_SYM 523
+#define LOAD 524
+#define LOCAL_SYM 525
+#define LOCATOR_SYM 526
+#define LOCKS_SYM 527
+#define LOCK_SYM 528
+#define LOGFILE_SYM 529
+#define LOGS_SYM 530
+#define LONGBLOB 531
+#define LONGTEXT 532
+#define LONG_NUM 533
+#define LONG_SYM 534
+#define LOOP_SYM 535
+#define LOW_PRIORITY 536
+#define LT 537
+#define MASTER_AUTO_POSITION_SYM 538
+#define MASTER_BIND_SYM 539
+#define MASTER_CONNECT_RETRY_SYM 540
+#define MASTER_DELAY_SYM 541
+#define MASTER_HOST_SYM 542
+#define MASTER_LOG_FILE_SYM 543
+#define MASTER_LOG_POS_SYM 544
+#define MASTER_PASSWORD_SYM 545
+#define MASTER_PORT_SYM 546
+#define MASTER_RETRY_COUNT_SYM 547
+#define MASTER_SERVER_ID_SYM 548
+#define MASTER_SSL_CAPATH_SYM 549
+#define MASTER_SSL_CA_SYM 550
+#define MASTER_SSL_CERT_SYM 551
+#define MASTER_SSL_CIPHER_SYM 552
+#define MASTER_SSL_CRL_SYM 553
+#define MASTER_SSL_CRLPATH_SYM 554
+#define MASTER_SSL_KEY_SYM 555
+#define MASTER_SSL_SYM 556
+#define MASTER_SSL_VERIFY_SERVER_CERT_SYM 557
+#define MASTER_SYM 558
+#define MASTER_USER_SYM 559
+#define MASTER_HEARTBEAT_PERIOD_SYM 560
+#define MATCH 561
+#define MAX_CONNECTIONS_PER_HOUR 562
+#define MAX_QUERIES_PER_HOUR 563
+#define MAX_ROWS 564
+#define MAX_SIZE_SYM 565
+#define MAX_SYM 566
+#define MAX_UPDATES_PER_HOUR 567
+#define MAX_USER_CONNECTIONS_SYM 568
+#define MAX_VALUE_SYM 569
+#define MEDIUMBLOB 570
+#define MEDIUMINT 571
+#define MEDIUMTEXT 572
+#define MEDIUM_SYM 573
+#define MEMORY_SYM 574
+#define MERGE_SYM 575
+#define MESSAGE_TEXT_SYM 576
+#define MICROSECOND_SYM 577
+#define MIGRATE_SYM 578
+#define MINUTE_MICROSECOND_SYM 579
+#define MINUTE_SECOND_SYM 580
+#define MINUTE_SYM 581
+#define MIN_ROWS 582
+#define MIN_SYM 583
+#define MODE_SYM 584
+#define MODIFIES_SYM 585
+#define MODIFY_SYM 586
+#define MOD_SYM 587
+#define MONTH_SYM 588
+#define MULTILINESTRING 589
+#define MULTIPOINT 590
+#define MULTIPOLYGON 591
+#define MUTEX_SYM 592
+#define MYSQL_ERRNO_SYM 593
+#define NAMES_SYM 594
+#define NAME_SYM 595
+#define NATIONAL_SYM 596
+#define NATURAL 597
+#define NCHAR_STRING 598
+#define NCHAR_SYM 599
+#define NDBCLUSTER_SYM 600
+#define NE 601
+#define NEG 602
+#define NEW_SYM 603
+#define NEXT_SYM 604
+#define NODEGROUP_SYM 605
+#define NONE_SYM 606
+#define NOT2_SYM 607
+#define NOT_SYM 608
+#define NOW_SYM 609
+#define NO_SYM 610
+#define NO_WAIT_SYM 611
+#define NO_WRITE_TO_BINLOG 612
+#define NTH_VALUE_SYM 613
+#define NULL_SYM 614
+#define NULLS_SYM 615
+#define NUM 616
+#define NUMBER_SYM 617
+#define NUMERIC_SYM 618
+#define NVARCHAR_SYM 619
+#define OFFSET_SYM 620
+#define OLD_PASSWORD 621
+#define ON 622
+#define ONE_SYM 623
+#define ONLY_SYM 624
+#define OPEN_SYM 625
+#define OPTIMIZE 626
+#define OPTIONS_SYM 627
+#define OPTION 628
+#define OPTIONALLY 629
+#define OR2_SYM 630
+#define ORDER_SYM 631
+#define OR_OR_SYM 632
+#define OR_SYM 633
+#define OUTER 634
+#define OUTFILE 635
+#define OUT_SYM 636
+#define OVER_SYM 637
+#define OWNER_SYM 638
+#define PACK_KEYS_SYM 639
+#define PAGE_SYM 640
+#define PARAM_MARKER 641
+#define PARSER_SYM 642
+#define PARTIAL 643
+#define PARTITION_SYM 644
+#define PARTITIONS_SYM 645
+#define PARTITIONING_SYM 646
+#define PASSWORD 647
+#define PERCENTILE_CONT_SYM 648
+#define PERCENTILE_DISC_SYM 649
+#define PHASE_SYM 650
+#define PLUGIN_DIR_SYM 651
+#define PLUGIN_SYM 652
+#define PLUGINS_SYM 653
+#define POINT_SYM 654
+#define POLYGON 655
+#define PORT_SYM 656
+#define POSITION_SYM 657
+#define PRECEDING_SYM 658
+#define PRECISION 659
+#define PREPARE_SYM 660
+#define PRESERVE_SYM 661
+#define PREV_SYM 662
+#define PRIMARY_SYM 663
+#define PRIVILEGES 664
+#define PROCEDURE_SYM 665
+#define PROCESS 666
+#define PROCESSLIST_SYM 667
+#define PROFILE_SYM 668
+#define PROFILES_SYM 669
+#define PROXY_SYM 670
+#define PURGE 671
+#define QUARTER_SYM 672
+#define QUERY_SYM 673
+#define QUICK 674
+#define RANGE_SYM 675
+#define READS_SYM 676
+#define READ_ONLY_SYM 677
+#define READ_SYM 678
+#define READ_WRITE_SYM 679
+#define REAL 680
+#define REBUILD_SYM 681
+#define RECOVER_SYM 682
+#define REDOFILE_SYM 683
+#define REDO_BUFFER_SIZE_SYM 684
+#define REDUNDANT_SYM 685
+#define REFERENCES 686
+#define REGEXP 687
+#define RELAY 688
+#define RELAYLOG_SYM 689
+#define RELAY_LOG_FILE_SYM 690
+#define RELAY_LOG_POS_SYM 691
+#define RELAY_THREAD 692
+#define RELEASE_SYM 693
+#define RELOAD 694
+#define REMOVE_SYM 695
+#define RENAME 696
+#define REORGANIZE_SYM 697
+#define REPAIR 698
+#define REPEATABLE_SYM 699
+#define REPEAT_SYM 700
+#define REPLACE 701
+#define REPLICATION 702
+#define REQUIRE_SYM 703
+#define RESET_SYM 704
+#define RESIGNAL_SYM 705
+#define RESOURCES 706
+#define RESPECT_SYM 707
+#define RESTORE_SYM 708
+#define RESTRICT 709
+#define RESUME_SYM 710
+#define RETURNED_SQLSTATE_SYM 711
+#define RETURNS_SYM 712
+#define RETURN_SYM 713
+#define REVERSE_SYM 714
+#define REVOKE 715
+#define RIGHT 716
+#define ROLLBACK_SYM 717
+#define ROLLUP_SYM 718
+#define ROUTINE_SYM 719
+#define ROWS_SYM 720
+#define ROW_FORMAT_SYM 721
+#define ROW_SYM 722
+#define ROW_COUNT_SYM 723
+#define RTREE_SYM 724
+#define SAVEPOINT_SYM 725
+#define SCHEDULE_SYM 726
+#define SCHEMA_NAME_SYM 727
+#define SECOND_MICROSECOND_SYM 728
+#define SECOND_SYM 729
+#define SECURITY_SYM 730
+#define SELECT_SYM 731
+#define SENSITIVE_SYM 732
+#define SEPARATOR_SYM 733
+#define SERIALIZABLE_SYM 734
+#define SERIAL_SYM 735
+#define SESSION_SYM 736
+#define SERVER_SYM 737
+#define SERVER_OPTIONS 738
+#define SET 739
+#define SET_VAR 740
+#define SHARE_SYM 741
+#define SHIFT_LEFT 742
+#define SHIFT_RIGHT 743
+#define SHOW 744
+#define SHUTDOWN 745
+#define SIGNAL_SYM 746
+#define SIGNED_SYM 747
+#define SIMPLE_SYM 748
+#define SLAVE 749
+#define SLOW 750
+#define SMALLINT 751
+#define SNAPSHOT_SYM 752
+#define SOCKET_SYM 753
+#define SONAME_SYM 754
+#define SOUNDS_SYM 755
+#define SOURCE_SYM 756
+#define SPATIAL_SYM 757
+#define SPECIFIC_SYM 758
+#define SQLEXCEPTION_SYM 759
+#define SQLSTATE_SYM 760
+#define SQLWARNING_SYM 761
+#define SQL_AFTER_GTIDS 762
+#define SQL_AFTER_MTS_GAPS 763
+#define SQL_BEFORE_GTIDS 764
+#define SQL_BIG_RESULT 765
+#define SQL_BUFFER_RESULT 766
+#define SQL_CACHE_SYM 767
+#define SQL_CALC_FOUND_ROWS 768
+#define SQL_NO_CACHE_SYM 769
+#define INFINIDB_ORDERED_SYM 770
+#define SQL_SMALL_RESULT 771
+#define SQL_SYM 772
+#define SQL_THREAD 773
+#define SSL_SYM 774
+#define STARTING 775
+#define STARTS_SYM 776
+#define START_SYM 777
+#define STATS_AUTO_RECALC_SYM 778
+#define STATS_PERSISTENT_SYM 779
+#define STATS_SAMPLE_PAGES_SYM 780
+#define STATUS_SYM 781
+#define STDDEV_SAMP_SYM 782
+#define STD_SYM 783
+#define STOP_SYM 784
+#define STORAGE_SYM 785
+#define STRAIGHT_JOIN 786
+#define STRING_SYM 787
+#define SUBCLASS_ORIGIN_SYM 788
+#define SUBDATE_SYM 789
+#define SUBJECT_SYM 790
+#define SUBPARTITIONS_SYM 791
+#define SUBPARTITION_SYM 792
+#define SUBSTRING 793
+#define SUM_SYM 794
+#define SUPER_SYM 795
+#define SUSPEND_SYM 796
+#define SWAPS_SYM 797
+#define SWITCHES_SYM 798
+#define SYSDATE 799
+#define TABLES 800
+#define TABLESPACE 801
+#define TABLE_REF_PRIORITY 802
+#define TABLE_SYM 803
+#define TABLE_CHECKSUM_SYM 804
+#define TABLE_NAME_SYM 805
+#define TEMPORARY 806
+#define TEMPTABLE_SYM 807
+#define TERMINATED 808
+#define TEXT_STRING 809
+#define TEXT_SYM 810
+#define THAN_SYM 811
+#define THEN_SYM 812
+#define TIMESTAMP 813
+#define TIMESTAMP_ADD 814
+#define TIMESTAMP_DIFF 815
+#define TIME_SYM 816
+#define TINYBLOB 817
+#define TINYINT 818
+#define TINYTEXT 819
+#define TO_SYM 820
+#define TRAILING 821
+#define TRANSACTION_SYM 822
+#define TRIGGERS_SYM 823
+#define TRIGGER_SYM 824
+#define TRIM 825
+#define TRUE_SYM 826
+#define TRUNCATE_SYM 827
+#define TYPES_SYM 828
+#define TYPE_SYM 829
+#define UDF_RETURNS_SYM 830
+#define ULONGLONG_NUM 831
+#define UNBOUNDED_SYM 832
+#define UNCOMMITTED_SYM 833
+#define UNDEFINED_SYM 834
+#define UNDERSCORE_CHARSET 835
+#define UNDOFILE_SYM 836
+#define UNDO_BUFFER_SIZE_SYM 837
+#define UNDO_SYM 838
+#define UNICODE_SYM 839
+#define UNINSTALL_SYM 840
+#define UNION_SYM 841
+#define UNIQUE_SYM 842
+#define UNKNOWN_SYM 843
+#define UNLOCK_SYM 844
+#define UNSIGNED 845
+#define UNTIL_SYM 846
+#define UPDATE_SYM 847
+#define UPGRADE_SYM 848
+#define USAGE 849
+#define USER 850
+#define USE_FRM 851
+#define USE_SYM 852
+#define USING 853
+#define UTC_DATE_SYM 854
+#define UTC_TIMESTAMP_SYM 855
+#define UTC_TIME_SYM 856
+#define VALUES 857
+#define VALUE_SYM 858
+#define VARBINARY 859
+#define VARCHAR 860
+#define VARIABLES 861
+#define VARIANCE_SYM 862
+#define VARYING 863
+#define VAR_SAMP_SYM 864
+#define VIEW_SYM 865
+#define WAIT_SYM 866
+#define WARNINGS 867
+#define WEEK_SYM 868
+#define WEIGHT_STRING_SYM 869
+#define WHEN_SYM 870
+#define WHERE 871
+#define WHILE_SYM 872
+#define WITHIN 873
+#define WITH 874
+#define WITH_CUBE_SYM 875
+#define WITH_ROLLUP_SYM 876
+#define WORK_SYM 877
+#define WRAPPER_SYM 878
+#define WRITE_SYM 879
+#define X509_SYM 880
+#define XA_SYM 881
+#define XML_SYM 882
+#define XOR 883
+#define YEAR_MONTH_SYM 884
+#define YEAR_SYM 885
+#define ZEROFILL 886
 
 
 
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 972 "/export/home/pb2/build/sb_0-11763294-1394823679.98/mysql-5.6.17-release-export-6436389_gpl/sql/sql_yacc.yy"
 {
+
+/* Line 1676 of yacc.c  */
+#line 989 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
+
   int  num;
   ulong ulong_num;
   ulonglong ulonglong_number;
@@ -1327,6 +1352,12 @@ typedef union YYSTYPE
   LEX *lex;
   sp_head *sphead;
   struct p_elem_val *p_elem_value;
+  struct Window_context *Window_context;
+  struct Ordering *ordering;
+  struct Frame *frame;
+  struct Boundary *boundary;
+  enum BOUND bound;
+  SQL_I_List<ORDER> *list;
   enum index_hint_type index_hint;
   enum enum_filetype filetype;
   enum Foreign_key::fk_option m_fk_option;
@@ -1341,14 +1372,17 @@ typedef union YYSTYPE
   Condition_information_item::Name cond_info_item_name;
   List<Condition_information_item> *cond_info_list;
   bool is_not_empty;
-}
-/* Line 1529 of yacc.c.  */
-#line 1347 "/export/home/pb2/build/sb_0-11763294-1394823679.98/dist_GPL/sql/sql_yacc.h"
-	YYSTYPE;
+
+
+
+/* Line 1676 of yacc.c  */
+#line 1380 "/home/rdempsey/github/obj/sql/sql_yacc.h"
+} YYSTYPE;
+# define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
-# define YYSTYPE_IS_TRIVIAL 1
 #endif
+
 
 
 

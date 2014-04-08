@@ -2380,7 +2380,6 @@ protected:
   virtual ~Create_func_subtime() {}
 };
 
-
 class Create_func_tan : public Create_func_arg1
 {
 public:

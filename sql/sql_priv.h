@@ -311,7 +311,8 @@ enum enum_parsing_place
   IN_HAVING,
   SELECT_LIST,
   IN_WHERE,
-  IN_ON
+  IN_ON,
+  IN_GROUP_BY
 };
 
 
@@ -368,6 +369,34 @@ inline int hexchar_to_int(char c)
 #define IS_TABLESPACES_MAXIMUM_SIZE       6
 #define IS_TABLESPACES_NODEGROUP_ID       7
 #define IS_TABLESPACES_TABLESPACE_COMMENT 8
+
+#include "errorids.h"
+//#include "m_string.h"
+#include "sql_plugin.h"
+#include "handler.h"
+
+// @InfiniDB util API for error handling
+const LEX_STRING InfiniDB= { C_STRING_WITH_LEN("InfiniDB") };
+
+// generic API
+inline void IDB_set_error(THD* thd, unsigned long long errCode, LEX_STRING* args, uint argCount)
+{
+        plugin_ref plugin =     ha_resolve_by_name(thd, &InfiniDB, FALSE);
+        handlerton* hton = plugin_data(plugin, handlerton*);
+        hton->set_error(thd, errCode, args, argCount);
+}
+
+// one arg API
+inline void IDB_set_error(THD* thd, unsigned long long errCode, char* arg)
+{
+        plugin_ref plugin =     ha_resolve_by_name(thd, &InfiniDB, FALSE);
+        handlerton* hton = plugin_data(plugin, handlerton*);
+        LEX_STRING args[1];
+        args[0].str = arg;
+        hton->set_error(thd, errCode, args, 1);
+}
+
+void item_window_function_create_cleanup(); // @InfiniDB
 
 #endif /* MYSQL_SERVER */
 

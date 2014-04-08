@@ -56,6 +56,8 @@ class Table_cache_element;
 */
 typedef ulonglong nested_join_map;
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 #define tmp_file_prefix "#sql"			/**< Prefix for tmp tables */
 #define tmp_file_prefix_length 4
@@ -227,6 +229,11 @@ typedef struct st_order {
   Field  *field;                        /* If tmp-table group */
   char   *buff;                         /* If tmp-table group */
   table_map used, depend_map;
+  uint   nulls;                         /* @InfiniDB. For window function order by clause 
+                                           2 -- not definied. default nulls last if ascending
+                                                default nulls first if descending
+                                           1 -- nulls first
+                                           0 -- nulls last */
 } ORDER;
 
 /**
@@ -1043,6 +1050,18 @@ public:
   /* Map of keys that can be used to calculate ORDER BY without sorting */
   key_map keys_in_use_for_order_by;
   KEY  *key_info;			/* data of keys defined for the table */
+
+  // @Infinidb if this is InfiniDB table.
+  inline bool isInfiniDB()
+  {
+#if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
+    if (s && s->db_plugin && (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0))
+#else
+    if (s && s->db_plugin && (strcmp(s->db_plugin->name.str, "InfiniDB") == 0))
+#endif
+      return true;
+    return false;
+  }
 
   Field *next_number_field;		/* Set if next_number is activated */
   Field *found_next_number_field;	/* Set on open */

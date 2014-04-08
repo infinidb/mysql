@@ -14,6 +14,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /**
   @file
@@ -3059,6 +3061,10 @@ void Item_func_timestamp_diff::print(String *str, enum_query_type query_type)
     str->append(STRING_WITH_LEN("SECOND"));
     break;		
   case INTERVAL_MICROSECOND:
+    // @infinidb bug4291.
+    if (query_type == QT_INFINIDB || query_type == QT_INFINIDB_NO_QUOTE || query_type == QT_INFINIDB_DERIVED)
+	str->append(STRING_WITH_LEN("MICROSECOND"));
+    else
     str->append(STRING_WITH_LEN("SECOND_FRAC"));
     break;
   default:

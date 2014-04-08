@@ -25,7 +25,7 @@ class Item;
 template <typename T> class SQL_I_List;
 
 int mysql_prepare_delete(THD *thd, TABLE_LIST *table_list, Item **conds);
-bool mysql_delete(THD *thd, TABLE_LIST *table_list, Item *conds,
+bool mysql_delete(THD *thd, TABLE_LIST *table_list, Item *&conds,
                   SQL_I_List<ORDER> *order, ha_rows rows, ulonglong options);
 
 #endif /* SQL_DELETE_INCLUDED */

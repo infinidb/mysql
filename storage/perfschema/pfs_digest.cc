@@ -33,6 +33,7 @@
 #include "sql_get_diagnostics.h"
 #include "sql_string.h"
 #include <string.h>
+#include "item_window_function.h"
 
 /* Generated code */
 #include "../sql/sql_yacc.h"

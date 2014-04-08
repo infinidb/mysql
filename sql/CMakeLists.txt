@@ -57,6 +57,7 @@ SET(SQL_SHARED_SOURCES
   item_buff.cc
   item_cmpfunc.cc 
   item_create.cc
+  item_create_window_function.cc
   item_func.cc
   item_geofunc.cc
   item_row.cc 
@@ -64,6 +65,7 @@ SET(SQL_SHARED_SOURCES
   item_subselect.cc
   item_sum.cc
   item_timefunc.cc 
+  item_window_function.cc
   item_xmlfunc.cc 
   item_inetfunc.cc
   key.cc

@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /**
   @file
 
@@ -28,6 +30,7 @@
 #include "sql_select.h"
 #include "sql_table.h"                          // primary_key_name
 #include "sql_derived.h"
+#include "iostream"
 #include "probes_mysql.h"
 #include "opt_trace.h"
 #include "key.h"                 // key_copy, key_cmp, key_cmp_if_same
@@ -156,6 +159,8 @@ bool types_allow_materialization(Item *outer, Item *inner)
   return TRUE;
 }
 
+// InfiniDB error constant
+const unsigned ERR_NON_IDB_TABLE = 7001;
 
 /*
   Check if the table's rowid is included in the temptable
@@ -838,6 +843,8 @@ err:
 bool
 JOIN::explain()
 {
+
+
   Opt_trace_context * const trace= &thd->opt_trace;
   Opt_trace_object trace_wrapper(trace);
   Opt_trace_object trace_exec(trace, "join_explain");
@@ -907,6 +914,7 @@ bool JOIN::destroy()
     DBUG_ASSERT(!tab->table || !tab->table->sort.record_pointers);
     if (tab->op)
     {
+
       if (tab->op->type() == QEP_operation::OT_TMP_TABLE)
       {
         free_tmp_table(thd, tab->table);
@@ -1089,6 +1097,10 @@ mysql_execute_select(THD *thd, SELECT_LEX *select_lex, bool free_join)
   }
 
   if (thd->is_error())
+    // @bug 3961. mysql treat subquery (with other engine?) as const table so will
+    // remove the columns from the subquery on the order by list. InfiniDB needs to
+    // keep them for the post process. So skip remove_const optimization.
+    if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
     goto err;
 
   if (join->select_options & SELECT_DESCRIBE)
@@ -1296,6 +1308,11 @@ void calc_used_field_length(THD *thd, JOIN_TAB *join_tab)
   }
   /**
     @todo why don't we count the rowids that we might need to store
+  // Calpont InfiniDB change. We don't need tmp table for vtable create phase. Plus
+  // to build tmp table may corrupt some field table_name & db_name (for some reason)
+  if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE)
+  	need_tmp = false;
+  else
     when using DuplicateElimination?
   */
   join_tab->used_fields=fields;
@@ -2511,6 +2528,7 @@ static bool setup_join_buffering(JOIN_TAB *tab, JOIN *join,
       DBUG_ASSERT(tab->use_join_cache == JOIN_CACHE::ALG_NONE);
       goto no_join_cache;
     }
+
 
     if ((options & SELECT_DESCRIBE) ||
         ((tab->op= new JOIN_CACHE_BNL(join, tab, prev_cache)) &&
@@ -5799,3 +5817,6 @@ uint actual_key_flags(KEY *key_info)
 /**
   @} (end of group Query_Optimizer)
 */
+  //printf("before from: %s\n\n", str->ptr());
+
+  //printf("after where: %s\n\n", str->ptr());

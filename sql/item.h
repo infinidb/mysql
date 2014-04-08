@@ -17,6 +17,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 #include "sql_priv.h"                /* STRING_BUFFER_USUAL_SIZE */
 #include "unireg.h"
@@ -671,7 +673,7 @@ public:
              SUBSELECT_ITEM, ROW_ITEM, CACHE_ITEM, TYPE_HOLDER,
              PARAM_ITEM, TRIGGER_FIELD_ITEM, DECIMAL_ITEM,
              XPATH_NODESET, XPATH_NODESET_CMP,
-             VIEW_FIXER_ITEM};
+             VIEW_FIXER_ITEM, WINDOW_FUNC_ITEM, INTERVAL_ITEM};
 
   enum cond_result { COND_UNDEF,COND_OK,COND_TRUE,COND_FALSE };
 
@@ -771,7 +773,8 @@ public:
   void init_make_field(Send_field *tmp_field,enum enum_field_types type);
   virtual void cleanup();
   virtual void make_field(Send_field *field);
-  virtual Field *make_string_field(TABLE *table);
+  // @infinidb pass in thd pointer
+  virtual Field *make_string_field(TABLE *table, THD* IDB_thd = 0);
   virtual bool fix_fields(THD *, Item **);
   /**
     Fix after tables have been moved from one select_lex level to the parent
@@ -1592,7 +1595,8 @@ public:
   // used in row subselects to get value of elements
   virtual void bring_value() {}
 
-  Field *tmp_table_field_from_field_type(TABLE *table, bool fixed_length);
+	// @infinidb pass in thd
+  Field *tmp_table_field_from_field_type(TABLE *table, bool fixed_length, THD* IDB_thd = 0);
   virtual Item_field *field_for_view_update() { return 0; }
 
   virtual Item *neg_transformer(THD *thd) { return NULL; }
@@ -3121,6 +3125,7 @@ public:
     should not be used for runtime type identification, use enum
     {Sum}Functype and Item_func::functype()/Item_sum::sum_func()
     instead.
+#include "item_window_function.h"
     Added here, to the parent class of both Item_func and Item_sum_func.
 
     NOTE: for Items inherited from Item_sum, func_name() return part of
@@ -4215,6 +4220,7 @@ public:
       return INT_RESULT;
     return Field::result_merge_type(example->field_type());
   }
+  Item * get_example() { return example; }
 };
 
 
@@ -4486,12 +4492,30 @@ public:
     return true;
   }
   bool join_types(THD *thd, Item *);
-  Field *make_field_by_type(TABLE *table);
+  // @infinidb pass in thd
+  Field *make_field_by_type(TABLE *table, THD* IDB_thd = 0);
   static uint32 display_length(Item *item);
   static enum_field_types get_real_type(Item *);
   Field::geometry_type get_geometry_type() const { return geometry_type; };
 };
 
+//@ InfiniDB interval item type for window function
+class Item_interval : public Item
+{
+public:
+	Item_interval():Item() {}
+	Item_interval(Item* it):item(it) {}
+	Item_interval(Item* it, const interval_type unit):item(it), interval(unit) {}
+	enum Type type() const { return INTERVAL_ITEM; }
+	double val_real() {assert(0); return 0.0; }
+  longlong val_int() {assert(0); return 0; }
+  my_decimal *val_decimal(my_decimal *) {assert(0); return 0; }
+  String *val_str(String*) {assert(0); return 0; }
+	Item* item;
+	interval_type interval;
+  bool get_date(MYSQL_TIME*, uint) { return FALSE; }
+  bool get_time(MYSQL_TIME*) { return FALSE; }
+};
 
 class st_select_lex;
 void mark_select_range_as_dependent(THD *thd,

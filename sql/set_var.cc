@@ -43,6 +43,8 @@
 static HASH system_variable_hash;
 static PolyLock_mutex PLock_global_system_variables(&LOCK_global_system_variables);
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /**
   Return variable name and length for hashing of variables.
 */
@@ -533,6 +535,33 @@ sys_var *intern_find_sys_var(const char *str, uint length)
   return var;
 }
 
+#if 0
+/* InfiniDB */
+static sys_var_thd_ulong	sys_infinidb_vtable_mode(&vars, "infinidb_vtable_mode",
+					       &SV::infinidb_vtable_mode);
+static sys_var_thd_ulong	sys_infinidb_decimal_scale(&vars, "infinidb_decimal_scale",
+					       &SV::infinidb_decimal_scale);
+static sys_var_thd_bool	sys_infinidb_use_decimal_scale(&vars, "infinidb_use_decimal_scale",
+					       &SV::infinidb_use_decimal_scale);
+static sys_var_thd_bool sys_infinidb_ordered_only(&vars, "infinidb_ordered_only",
+					       &SV::infinidb_ordered_only);
+static sys_var_thd_ulong	sys_infinidb_string_scan_threshold(&vars,
+							"infinidb_string_scan_threshold",
+					       &SV::infinidb_string_scan_threshold);
+static sys_var_thd_ulong	sys_infinidb_compression_type(&vars, "infinidb_compression_type",
+					       &SV::infinidb_compression_type);
+static sys_var_thd_ulong	sys_stringtable_threshold(&vars, "infinidb_stringtable_threshold",
+					       &SV::infinidb_stringtable_threshold);
+static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_always_hex",
+					       &SV::infinidb_varbin_always_hex);
+static sys_var_thd_bool sys_infinidb_double_for_decimal_math(&vars,
+							"infinidb_double_for_decimal_math",
+					       &SV::infinidb_double_for_decimal_math);
+static sys_var_thd_ulong sys_infinidb_local_query(&vars,
+							"infinidb_local_query",
+					       &SV::infinidb_local_query);
+/* InfiniDB */
+#endif
 
 /**
   Execute update of all variables.

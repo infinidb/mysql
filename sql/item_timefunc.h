@@ -16,6 +16,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /* Function items used by mysql */
 
@@ -1050,6 +1052,7 @@ public:
     DBUG_ASSERT(fixed == 1);
     return cached_time.val_str(&str_value);
   }
+  
 };
 
 
@@ -1461,6 +1464,8 @@ public:
   void fix_length_and_dec();
   void print(String *str, enum_query_type query_type);
   const char *func_name() const { return "add_time"; }
+  // @InfiniDB add accessor
+  int get_sign() { return sign; }
 };
 
 
@@ -1515,8 +1520,8 @@ public:
 
 class Item_func_timestamp_diff :public Item_int_func
 {
-  const interval_type int_type;
 public:
+  const interval_type int_type; // @InfiniDB keep in public
   Item_func_timestamp_diff(Item *a,Item *b,interval_type type_arg)
     :Item_int_func(a,b), int_type(type_arg) {}
   const char *func_name() const { return "timestampdiff"; }

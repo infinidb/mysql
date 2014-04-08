@@ -31,6 +31,8 @@
 #include "sha2.h"
 #include "my_global.h"                          // HAVE_*
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 #include "sql_priv.h"
 /*
@@ -2057,6 +2059,11 @@ void Item_func_trim::fix_length_and_dec()
   {
     // Handle character set for args[1] and args[0].
     // Note that we pass args[1] as the first item, and args[0] as the second.
+#if 0
+  //@InfiniDB. @bug3488, update max_length for formatting double data.
+  if (args[0]->result_type() == REAL_RESULT && char_length < 310)
+    char_length = 310;
+#endif
     if (agg_arg_charsets_for_string_result_with_comparison(collation,
                                                            &args[1], 2, -1))
       return;
@@ -3029,6 +3036,16 @@ void Item_func_repeat::fix_length_and_dec()
     longlong count= args[1]->val_int();
     if (args[1]->null_value)
       goto end;
+
+    // @InfiniDB. For negative count, MySQL returns empty string, IDB returns NULL.
+    // set length to 0 so order by can go through
+    if (count < 0 && fThd && (fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0))
+    {
+      max_length = 0;
+      maybe_null = 1;
+      return;
+    }
 
     /* Assumes that the maximum length of a String is < INT_MAX32. */
     /* Set here so that rest of code sees out-of-bound value as such. */

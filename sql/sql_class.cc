@@ -15,6 +15,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 /*****************************************************************************
 **
@@ -705,6 +707,7 @@ extern "C"
 int thd_tx_isolation(const THD *thd)
 {
   return (int) thd->tx_isolation;
+ 
 }
 
 extern "C"
@@ -1044,6 +1047,25 @@ THD::THD(bool enable_plugins)
 #ifndef DBUG_OFF
   gis_debug= 0;
 #endif
+  // ------------------------------ InfiniDB ------------------------------
+  infinidb_vtable.vtable_state = INFINIDB_INIT;
+  infinidb_vtable.has_order_by = false;
+  infinidb_vtable.mysql_optimizer_off = false;
+  infinidb_vtable.duplicate_field_name = false;
+  infinidb_vtable.autoswitch = false;
+  if (variables.infinidb_vtable_mode == 0)
+    infinidb_vtable.vtable_state = INFINIDB_DISABLE_VTABLE;
+  else if (variables.infinidb_vtable_mode == 2)
+    infinidb_vtable.autoswitch = true;  
+  infinidb_vtable.call_sp = false;
+  infinidb_vtable.override_largeside_estimate = false;
+  infinidb_vtable.cal_conn_info = 0;
+  infinidb_vtable.isUnion = false;
+  infinidb_vtable.impossibleWhereOnUnion = false;
+  infinidb_vtable.isUpdateWithDerive = false;
+  infinidb_vtable.isInfiniDBDML = false;
+  infinidb_vtable.hasInfiniDBTable = false;
+  // ------------------------------ InfiniDB ------------------------------
 }
 
 

@@ -14,6 +14,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 #include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
 #include "sql_priv.h"
@@ -2074,8 +2076,14 @@ bool DTCollation::aggregate(DTCollation &dt, uint flags)
     */
     if (collation == &my_charset_bin)
     {
+      //if (derivation <= dt.derivation)
+      //  ; // Do nothing
+      // @InfiniDB @bug5426
       if (derivation <= dt.derivation)
-	; // Do nothing
+      {
+        if (collation->mbmaxlen < dt.collation->mbmaxlen)
+          set(dt);
+      }
       else
       {
 	set(dt); 
@@ -2612,6 +2620,49 @@ void Item_ident::print(String *str, enum_query_type query_type)
   THD *thd= current_thd;
   char d_name_buff[MAX_ALIAS_NAME], t_name_buff[MAX_ALIAS_NAME];
   const char *d_name= db_name, *t_name= table_name;
+ 
+  // @infiniDB
+  if (query_type == QT_INFINIDB || query_type == QT_INFINIDB_NO_QUOTE || query_type == QT_INFINIDB_DERIVED)
+  {
+  	if (query_type != QT_INFINIDB_NO_QUOTE && query_type != QT_INFINIDB_DERIVED)
+  		str->append('`');
+
+  	// print referencing view name for IDB post process
+  	if (cached_table)
+  	{
+  		if (cached_table->db && strlen(cached_table->db) > 0)
+	  	{
+					str->append(cached_table->db, (uint) strlen(cached_table->db));
+					str->append('.');
+			}
+			// IDB: table referenced by view is represented by "viewAlias_tableAlias"
+			if (cached_table->referencing_view && query_type != QT_INFINIDB_DERIVED)
+			{
+				str->append(cached_table->referencing_view->alias, (uint)strlen(cached_table->referencing_view->alias));
+				str->append("_");
+			}
+			str->append(cached_table->alias, (uint)strlen(cached_table->alias));
+			str->append('.');
+		}
+  	else
+  	{
+	  	if (d_name && strlen(d_name) > 0)
+	  	{
+	  		str->append(d_name, (uint) strlen(d_name));
+	  		str->append('.');
+	  	}
+	  	if (t_name && strlen(t_name) > 0)
+	  	{
+	  		str->append(t_name, (uint) strlen(t_name));
+	  		str->append('.');
+	  	}
+	  }
+  	str->append(field_name, (uint) strlen(field_name));
+  	if (query_type != QT_INFINIDB_NO_QUOTE && query_type != QT_INFINIDB_DERIVED)
+  		str->append('`');
+  	return;
+  }
+
   if (lower_case_table_names== 1 ||
       (lower_case_table_names == 2 && !alias_name_used))
   {
@@ -5336,6 +5387,10 @@ bool Item_field::push_to_non_agg_fields(SELECT_LEX *select_lex)
 bool Item_field::fix_fields(THD *thd, Item **reference)
 {
   DBUG_ASSERT(fixed == 0);
+
+  // @InfiniDB @bug5501 context is not always set in InfiniDB context
+  if (!context) return false;
+
   Field *from_field= (Field *)not_found_field;
   bool outer_fixed= false;
 
@@ -5997,11 +6052,22 @@ bool Item::can_be_evaluated_now() const
   @param table		Table for which the field is created
 */
 
-Field *Item::make_string_field(TABLE *table)
+Field *Item::make_string_field(TABLE *table, THD* IDB_thd)
 {
   Field *field;
   DBUG_ASSERT(collation.collation);
-  if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB)
+
+  //@InfiniDB @bug3720 
+  //@InfiniDB @bug3783. 
+  //pass thd here for vtable state checking. skip creating blob field for vtable creation.
+  bool skipBlob = false;
+  if (IDB_thd && IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+    skipBlob = true;
+  else if (!IDB_thd && type() == Item::SUM_FUNC_ITEM && ((Item_sum*)this)->thd() &&
+           ((Item_sum*)this)->thd()->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+    skipBlob = true;
+
+  if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB && !skipBlob)
     field= new Field_blob(max_length, maybe_null, item_name.ptr(),
                           collation.collation, TRUE);
   /* Item_type_holder holds the exact type, do not change it */
@@ -6030,7 +6096,7 @@ Field *Item::make_string_field(TABLE *table)
     \#    Created field
 */
 
-Field *Item::tmp_table_field_from_field_type(TABLE *table, bool fixed_length)
+Field *Item::tmp_table_field_from_field_type(TABLE *table, bool fixed_length, THD* IDB_thd)
 {
   /*
     The field functions defines a field to be not null if null_ptr is not 0
@@ -6111,7 +6177,7 @@ Field *Item::tmp_table_field_from_field_type(TABLE *table, bool fixed_length)
   case MYSQL_TYPE_SET:
   case MYSQL_TYPE_VAR_STRING:
   case MYSQL_TYPE_VARCHAR:
-    return make_string_field(table);
+    return make_string_field(table, IDB_thd); //@infinidb pass in the thd pointer
   case MYSQL_TYPE_TINY_BLOB:
   case MYSQL_TYPE_MEDIUM_BLOB:
   case MYSQL_TYPE_LONG_BLOB:
@@ -7056,7 +7122,8 @@ Item *Item_field::update_value_transformer(uchar *select_arg)
 
 void Item_field::print(String *str, enum_query_type query_type)
 {
-  if (field && field->table->const_table)
+   // @InfiniDB
+  if (field && field->table && field->table->const_table && field->table->const_table != 1)
   {
     char buff[MAX_FIELD_WIDTH];
     String tmp(buff,sizeof(buff),str->charset());
@@ -9464,7 +9531,8 @@ uint32 Item_type_holder::display_length(Item *item)
     created field
 */
 
-Field *Item_type_holder::make_field_by_type(TABLE *table)
+//@infinidb pass in the thd pointer
+Field *Item_type_holder::make_field_by_type(TABLE *table, THD* IDB_thd)
 {
   /*
     The field functions defines a field to be not null if null_ptr is not 0
@@ -9496,7 +9564,7 @@ Field *Item_type_holder::make_field_by_type(TABLE *table)
   default:
     break;
   }
-  return tmp_table_field_from_field_type(table, 0);
+  return tmp_table_field_from_field_type(table, 0, IDB_thd); // @infinidb pass in thd pointer
 }
 
 

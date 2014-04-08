@@ -58,6 +58,8 @@
 #endif
 #include "table_cache.h" // Table_cache_manager, Table_cache
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 
 bool
 No_such_table_error_handler::handle_condition(THD *,
@@ -2271,6 +2273,10 @@ void drop_open_table(THD *thd, TABLE *table, const char *db_name,
 
     @retval  TRUE   Some error occurred
     @retval  FALSE  No error. 'exists' out parameter set accordingly.
+	// @infinidb
+	if (tables->alias && tables->alias[0] == '$')
+		DBUG_RETURN(TRUE);
+
 */
 
 bool check_if_table_exists(THD *thd, TABLE_LIST *table, bool *exists)
@@ -4629,7 +4635,8 @@ open_and_process_table(THD *thd, LEX *lex, TABLE_LIST *tables,
   tables->table->grant= tables->grant;
 
   /* Check and update metadata version of a base table. */
-  error= check_and_update_table_version(thd, tables, tables->table->s);
+  error= thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE &&
+	check_and_update_table_version(thd, tables, tables->table->s);
 
   if (error)
     goto end;
@@ -5372,6 +5379,7 @@ handle_view(THD *thd, Query_tables_list *prelocking_ctx,
   @retval TRUE  - Error.
 */
 
+    
 static bool check_lock_and_start_stmt(THD *thd,
                                       Query_tables_list *prelocking_ctx,
                                       TABLE_LIST *table_list)

@@ -23,6 +23,8 @@
 #include "sql_error.h"                          /* Sql_condition */
 #include "mysql_version.h"                      /* FRM_VER */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /*
 
 Field class hierarchy
@@ -1422,7 +1424,7 @@ protected:
 
 class Field_num :public Field {
 public:
-  const uint8 dec;
+  /*const*/ uint8 dec; //@InfiniDB need to adjust this field due to vtable restriction
   bool zerofill,unsigned_flag;	// Purify cannot handle bit fields
   Field_num(uchar *ptr_arg,uint32 len_arg, uchar *null_ptr_arg,
 	    uchar null_bit_arg, utype unireg_check_arg,

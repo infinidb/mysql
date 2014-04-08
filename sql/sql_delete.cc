@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+/* Copyright (C) 2013 Calpont Corp. */
+
 /*
   Delete of records tables.
 
@@ -44,7 +46,7 @@
   end of dispatch_command().
 */
 
-bool mysql_delete(THD *thd, TABLE_LIST *table_list, Item *conds,
+bool mysql_delete(THD *thd, TABLE_LIST *table_list, Item *&conds,
                   SQL_I_List<ORDER> *order_list, ha_rows limit, ulonglong options)
 {
   bool          will_batch;
@@ -448,6 +450,9 @@ cleanup:
     thd->transaction.stmt.mark_modified_non_trans_table();
   
   /* See similar binlogging code in sql_update.cc, for comments */
+    //@InfiniDB change. @bug4790 Only change for InfiniDB table.
+    // @bug5117. Add isInfiniDBDML to make sure it's InfiniDB dml stmt.
+    if (!(thd->infinidb_vtable.isInfiniDBDML))
   if ((error < 0) || thd->transaction.stmt.cannot_safely_rollback())
   {
     if (mysql_bin_log.is_open())
@@ -1056,6 +1061,8 @@ bool multi_delete::send_eof()
   /* reset used flags */
   THD_STAGE_INFO(thd, stage_end);
 
+    // @Infinidb change. 
+    if ( deleted )
   /*
     We must invalidate the query cache before binlog writing and
     ha_autocommit_...
