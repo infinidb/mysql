@@ -797,7 +797,9 @@ public:
 
 class Item_char_typecast :public Item_str_func
 {
+public:
   int cast_length;
+private:
   const CHARSET_INFO *cast_cs, *from_cs;
   bool charset_conversion;
   String tmp_value;

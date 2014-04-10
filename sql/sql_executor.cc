@@ -172,12 +172,12 @@ JOIN::exec()
 			if (!thd->infinidb_vtable.autoswitch)
 			{
 				thd->killed = THD::KILL_QUERY;
-				//thd->main_da.can_overwrite_status = true;
-				//thd->main_da.set_error_status(thd, ER_UNKNOWN_ERROR, emsg);
+				thd->get_stmt_da()->set_overwrite_status(TRUE);
+				thd->get_stmt_da()->set_error_status(ER_UNKNOWN_ERROR, emsg, mysql_errno_to_sqlstate(ER_UNKNOWN_ERROR), 0);
 			}
 			else
 			{
-				//thd->main_da.can_overwrite_status = true;
+				thd->get_stmt_da()->set_overwrite_status(TRUE);
 				push_warning(thd, Sql_condition::WARN_LEVEL_WARN, 9999, emsg);
 			}
 			DBUG_VOID_RETURN;
