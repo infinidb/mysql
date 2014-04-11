@@ -66,12 +66,17 @@ Create_window_func_arg3 Create_window_func_arg3::s_singleton;
 class Create_window_func_rank : public Create_window_func_arg0
 {
 
-	public:
+public:
 	virtual Item *create(THD *thd, LEX_STRING name)
 	{
 	  return new (thd->mem_root) Item_func_window_rank(name);
 	}
-	
+
+	virtual Item *create(THD *thd, LEX_STRING name, List<Item> *item_list)
+	{
+		return create(thd, name);
+	}
+
 	static Create_window_func_rank s_singleton;
 
 protected:
@@ -84,12 +89,17 @@ Create_window_func_rank Create_window_func_rank::s_singleton;
 // row_number function
 class Create_window_func_rownumber : public Create_window_func_arg0
 {
-	public:
+public:
 	virtual Item *create(THD *thd, LEX_STRING name)
 	{
 	  return new (thd->mem_root) Item_func_window_rownumber(name);
 	}
-	
+
+	virtual Item *create(THD *thd, LEX_STRING name, List<Item> *item_list)
+	{
+		return create(thd, name);
+	}
+
 	static Create_window_func_rownumber s_singleton;
 
 protected:
@@ -217,7 +227,13 @@ public:
 	virtual Item *create(THD *thd, LEX_STRING name, Item *arg1)
 	{
 		return new (thd->mem_root) Item_func_window_median(name, arg1);
-	};
+	}
+
+	virtual Item *create(THD *thd, LEX_STRING name, List<Item> *item_list)
+	{
+		return create(thd, name, item_list->pop());
+	}
+
 	static Create_window_func_median s_singleton;
 
 protected:
@@ -234,7 +250,13 @@ public:
 	virtual Item *create(THD *thd, LEX_STRING name, Item *arg1)
 	{
 		return new (thd->mem_root) Item_func_window_ntile(name, arg1);
-	};
+	}
+
+	virtual Item *create(THD *thd, LEX_STRING name, List<Item> *item_list)
+	{
+		return create(thd, name, item_list->pop());
+	}
+
 	static Create_window_func_ntile s_singleton;
 
 protected:

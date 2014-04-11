@@ -3303,7 +3303,7 @@ void Item_func_group_concat::cleanup()
 }
 
 
-Field *Item_func_group_concat::make_string_field(TABLE *table)
+Field *Item_func_group_concat::make_string_field(TABLE *table, THD *thd)
 {
   Field *field;
   DBUG_ASSERT(collation.collation);

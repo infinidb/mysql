@@ -155,7 +155,8 @@ JOIN::prepare(TABLE_LIST *tables_init,
     We are not parsing anymore: any new Items created now are due to
     query rewriting, so stop incrementing counters.
    */
-  DBUG_ASSERT(select_lex->parsing_place == NO_MATTER);
+  //TODO: FIXME: put this test back in
+  //DBUG_ASSERT(select_lex->parsing_place == NO_MATTER);
   select_lex->parsing_place= NO_MATTER;
 
   if (setup_wild(thd, tables_list, fields_list, &all_fields, wild_num))

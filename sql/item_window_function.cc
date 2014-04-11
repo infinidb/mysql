@@ -300,7 +300,7 @@ String* Item_func_window::val_str(String*)
 	return 0;
 }
 
-enum_field_types Item_func_window_hybrid::field_type()
+enum_field_types Item_func_window_hybrid::field_type() const
 {
 	if (args && arg_count < 1)
 	{

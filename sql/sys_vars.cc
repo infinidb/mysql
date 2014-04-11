@@ -4637,3 +4637,74 @@ static Sys_var_enum Sys_block_encryption_mode(
   "block_encryption_mode", "mode for AES_ENCRYPT/AES_DECRYPT",
   SESSION_VAR(my_aes_mode), CMD_LINE(REQUIRED_ARG),
   my_aes_opmode_names, DEFAULT(my_aes_128_ecb));
+
+static Sys_var_ulong Sys_infinidb_vtable_mode(
+       "infinidb_vtable_mode",
+       "The default mode in which to start InfiniDB.",
+       SESSION_VAR(infinidb_vtable_mode),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, 2), DEFAULT(1), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_infinidb_decimal_scale(
+       "infinidb_decimal_scale",
+       "The default decimal precision for calculated column suboperations in InfiniDB.",
+       SESSION_VAR(infinidb_decimal_scale),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, 18), DEFAULT(8), BLOCK_SIZE(1));
+
+static Sys_var_mybool Sys_infinidb_use_decimal_scale(
+       "infinidb_use_decimal_scale",
+       "Enable/disable the InfiniDB decimal scale to be used internally",
+       SESSION_VAR(infinidb_use_decimal_scale),
+       CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE));
+
+static Sys_var_mybool Sys_infinidb_ordered_only(
+       "infinidb_ordered_only",
+       "Always use the first table in the from clause as the large side table for joins",
+       SESSION_VAR(infinidb_ordered_only),
+       CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE));
+
+static Sys_var_ulong Sys_infinidb_string_scan_threshold(
+       "infinidb_string_scan_threshold",
+       "Max number of blocks in a dictionary file to be scanned for filtering",
+       SESSION_VAR(infinidb_string_scan_threshold),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(10), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_infinidb_compression_type(
+       "infinidb_compression_type",
+       "The column compression algorithm to use for InfiniDB tables.",
+       SESSION_VAR(infinidb_compression_type),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_infinidb_stringtable_threshold(
+       "infinidb_stringtable_threshold",
+       "The minimum width of a string column to be stored in a string table",
+       SESSION_VAR(infinidb_stringtable_threshold),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(9, ULONG_MAX), DEFAULT(20), BLOCK_SIZE(1));
+
+static Sys_var_mybool Sys_infinidb_varbin_always_hex(
+       "infinidb_varbin_always_hex",
+       "Always display/process varbinary columns as if they have been hexified.",
+       SESSION_VAR(infinidb_varbin_always_hex),
+       CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE));
+
+static Sys_var_mybool Sys_infinidb_double_for_decimal_math(
+       "infinidb_double_for_decimal_math",
+       "Enable/disable the InfiniDB to replace DECIMAL with DOUBLE in arithmetic operation.",
+       SESSION_VAR(infinidb_double_for_decimal_math),
+       CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE));
+
+static Sys_var_ulong Sys_infinidb_local_query(
+       "infinidb_local_query",
+       "Enable/disable the Infinidb local PM query only feature.",
+       SESSION_VAR(infinidb_local_query),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
+

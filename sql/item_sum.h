@@ -1479,7 +1479,7 @@ public:
   enum Sumfunctype sum_func () const {return GROUP_CONCAT_FUNC;}
   const char *func_name() const { return "group_concat"; }
   virtual Item_result result_type () const { return STRING_RESULT; }
-  virtual Field *make_string_field(TABLE *table);
+  virtual Field *make_string_field(TABLE *table, THD*);
   enum_field_types field_type() const;
   void clear();
   bool add();

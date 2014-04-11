@@ -634,6 +634,7 @@ append_query_string(THD *thd, const CHARSET_INFO *csinfo,
   return 0;
 }
 
+#ifdef HAVE_REPLICATION
 static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len)
 {
 	char* ptr = 0;
@@ -659,6 +660,7 @@ static bool idb_okay_to_repl(THD* thd, char const* query, uint32 q_len)
 
 	return TRUE;
 }
+#endif
 
 #endif
 
