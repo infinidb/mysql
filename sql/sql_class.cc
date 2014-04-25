@@ -1047,27 +1047,31 @@ THD::THD(bool enable_plugins)
 #ifndef DBUG_OFF
   gis_debug= 0;
 #endif
-  // ------------------------------ InfiniDB ------------------------------
-  infinidb_vtable.vtable_state = INFINIDB_INIT;
-  infinidb_vtable.has_order_by = false;
-  infinidb_vtable.mysql_optimizer_off = false;
-  infinidb_vtable.duplicate_field_name = false;
-  infinidb_vtable.autoswitch = false;
-  if (variables.infinidb_vtable_mode == 0)
-    infinidb_vtable.vtable_state = INFINIDB_DISABLE_VTABLE;
-  else if (variables.infinidb_vtable_mode == 2)
-    infinidb_vtable.autoswitch = true;  
-  infinidb_vtable.call_sp = false;
-  infinidb_vtable.override_largeside_estimate = false;
-  infinidb_vtable.cal_conn_info = 0;
-  infinidb_vtable.isUnion = false;
-  infinidb_vtable.impossibleWhereOnUnion = false;
-  infinidb_vtable.isUpdateWithDerive = false;
-  infinidb_vtable.isInfiniDBDML = false;
-  infinidb_vtable.hasInfiniDBTable = false;
-  // ------------------------------ InfiniDB ------------------------------
+  // @InfiniDB init the session-kept structure
+  infinidb_vtable.init(variables.infinidb_vtable_mode); 
 }
 
+void THD::INFINIDB_VTABLE::init(uint infinidb_vtable_mode)
+{
+  vtable_state = INFINIDB_INIT;
+  has_order_by = false;
+  mysql_optimizer_off = false;
+  duplicate_field_name = false;
+  autoswitch = false;
+  if (infinidb_vtable_mode == 0)
+    vtable_state = INFINIDB_DISABLE_VTABLE;
+  else if (infinidb_vtable_mode == 2)
+    autoswitch = true;  
+  call_sp = false;
+  override_largeside_estimate = false;
+  cal_conn_info = 0;
+  isUnion = false;
+  impossibleWhereOnUnion = false;
+  isUpdateWithDerive = false;
+  isInfiniDBDML = false;
+  hasInfiniDBTable = false;
+  isNewQuery = true;
+}
 
 void THD::push_internal_handler(Internal_error_handler *handler)
 {

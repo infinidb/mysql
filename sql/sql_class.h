@@ -1444,9 +1444,8 @@ private:
   void new_window(ulonglong now);
 
   /**
-	
-	struct INFINIDB_VTABLE; // Calpont InfiniDB
-	
+  struct INFINIDB_VTABLE; // Calpont InfiniDB
+
     Actually print the prepared summary to log.
   */
   void print_summary(THD *thd, ulong suppressed,
@@ -3014,19 +3013,19 @@ public:
   };
   killed_state volatile killed;
 
-  // ------------------------------ Calpont InfiniDB ------------------------------
+  // ------------------------------ InfiniDB ------------------------------
   public:
-  	
+
   enum infinidb_state
   {
-    INFINIDB_INIT_CONNECT = 0,		// intend to use to drop leftover vtable when logon. not being used now.
+    INFINIDB_INIT_CONNECT = 0,	// intend to use to drop leftover vtable when logon. not being used now.
     INFINIDB_INIT,
     INFINIDB_CREATE_VTABLE,
     INFINIDB_ALTER_VTABLE,
     INFINIDB_SELECT_VTABLE,              
     INFINIDB_DROP_VTABLE,  
     INFINIDB_DISABLE_VTABLE,
-    INFINIDB_REDO_PHASE1,	// post process requires to re-create vtable
+    INFINIDB_REDO_PHASE1,		// post process requires to re-create vtable
     INFINIDB_ORDER_BY,			// for Calpont handler to ignore the 2nd scan for order by
     INFINIDB_REDO_QUERY,		// redo query with the normal mysql path
     INFINIDB_ERROR = 32,
@@ -3034,32 +3033,33 @@ public:
   
   struct INFINIDB_VTABLE
   {
-  	String original_query;
-  	String create_vtable_query;
-  	String alter_vtable_query;
-  	String select_vtable_query;
-  	String drop_vtable_query;   
-  	String insert_vtable_query;
-  	infinidb_state vtable_state;  // flag for Calpont MySQL virtual table structure
-  	bool autoswitch;
-  	bool has_order_by;
-  	bool has_limit; // deprecated
-  	bool mysql_optimizer_off;
-  	bool duplicate_field_name; // @bug 1928. duplicate field name in create_phase will be ingored.
-  	bool call_sp;
-  	bool override_largeside_estimate;
-  	void* cal_conn_info;
-  	bool isUnion;
-  	bool impossibleWhereOnUnion;
-  	bool isInsertSelect;
-  	bool isUpdateWithDerive;
-	bool isInfiniDBDML; // default false
-  	bool hasInfiniDBTable; // default false
+    String original_query;
+    String create_vtable_query;
+    String alter_vtable_query;
+    String select_vtable_query;
+    String drop_vtable_query;   
+    String insert_vtable_query;
+    infinidb_state vtable_state;  // flag for Calpont MySQL virtual table structure
+    bool autoswitch;
+    bool has_order_by;
+    bool mysql_optimizer_off;
+    bool duplicate_field_name; // @bug 1928. duplicate field name in create_phase will be ingored.
+    bool call_sp;
+    bool override_largeside_estimate;
+    void* cal_conn_info;
+    bool isUnion;
+    bool impossibleWhereOnUnion;
+    bool isInsertSelect;
+    bool isUpdateWithDerive;
+    bool isInfiniDBDML; // default false
+    bool hasInfiniDBTable; // default false
+    bool isNewQuery; // default true. set to false when query being processed. reset when finished.
+    void init(uint mode);
   };
    
-  INFINIDB_VTABLE infinidb_vtable;					// Calpont InfiniDB custom structure
+  INFINIDB_VTABLE infinidb_vtable;           // InfiniDB session-kept structure
   
-  // ------------------------------ Calpont InfiniDB ------------------------------
+  // ------------------------------ InfiniDB ------------------------------
   
   /* scramble - random string sent to client on handshake */
   char	     scramble[SCRAMBLE_LENGTH+1];

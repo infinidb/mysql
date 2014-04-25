@@ -1282,6 +1282,11 @@ Item_field *get_best_field(Item_field *item_field, COND_EQUAL *cond_equal)
 static bool check_simple_equality(Item *left_item, Item *right_item,
                                   Item *item, COND_EQUAL *cond_equal)
 {
+  // @InfiniDB Multi_equal is currently not supported by IDB. REMOVE
+  // this optimization for IDB involved queries.
+  if (current_thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE ||
+      current_thd->infinidb_vtable.vtable_state == THD::INFINIDB_REDO_PHASE1)
+    return false;
   if (left_item->type() == Item::REF_ITEM &&
       ((Item_ref*)left_item)->ref_type() == Item_ref::VIEW_REF)
   {
@@ -1366,7 +1371,7 @@ static bool check_simple_equality(Item *left_item, Item *right_item,
       {
         right_item_equal->add((Item_field *) left_item);
       }
-      else 
+      else
       {
         /* None of the fields was found in multiple equalities */
         Item_equal *item_equal= new Item_equal((Item_field *) left_item,
@@ -8316,25 +8321,27 @@ remove_const(JOIN *join,ORDER *first_order, Item *cond,
     else
     {
       if (order_tables & (RAND_TABLE_BIT | OUTER_REF_TABLE_BIT))
-	*simple_order=0;
+      *simple_order=0;
       else
       {
-	if (cond && const_expression_in_where(cond,order->item[0]))
-	{
+        // @InfiniDB turn off group by remove const optimization for now.
+        if (current_thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE 
+           && cond && const_expression_in_where(cond,order->item[0]))
+        {
           trace_one_item.add("equals_constant_in_where", true);
-	  continue;
-	}
-	if ((ref=order_tables & (not_const_tables ^ first_table)))
-	{
-	  if (!(order_tables & first_table) &&
+          continue;
+        }
+        if ((ref=order_tables & (not_const_tables ^ first_table)))
+        {
+          if (!(order_tables & first_table) &&
               only_eq_ref_tables(join, first_order, ref,
                                  &cached_eq_ref_tables, &eq_ref_tables))
-	  {
+          {
             trace_one_item.add("eq_ref_to_preceding_items", true);
-	    continue;
-	  }
-	  *simple_order=0;			// Must do a temp table to sort
-	}
+            continue;
+          }
+          *simple_order=0;			// Must do a temp table to sort
+        }
       }
     }
     if (change_list)

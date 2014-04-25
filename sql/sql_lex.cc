@@ -2678,7 +2678,10 @@ void st_select_lex::print(THD *thd, String *str, enum_query_type query_type)
   else
     str->append(STRING_WITH_LEN("select "));
 
-  if (!thd->lex->describe && join && join->need_tmp)
+  // @InfiniDB Need to get select string for post process
+  if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE &&
+      thd->infinidb_vtable.vtable_state != THD::INFINIDB_REDO_PHASE1 &&
+      !thd->lex->describe && join && join->need_tmp)
   {
     /*
       Items have been repointed to columns of an internal temporary table, it

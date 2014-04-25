@@ -1784,13 +1784,15 @@ struct st_join_table;
 
 class Item_equal: public Item_bool_func
 {
-  List<Item_field> fields; /* list of equal field items                    */
+//  List<Item_field> fields; /* list of equal field items                    */
   Item *const_item;        /* optional constant item equal to fields items */
   cmp_item *eval_item;
   Arg_comparator cmp;
   bool cond_false;
   bool compare_as_dates;
 public:
+  // @InfiniDB
+  List<Item_field> fields; /* list of equal field items                    */
   inline Item_equal()
     : Item_bool_func(), const_item(0), eval_item(0), cond_false(0)
   { const_item_cache=0 ;}
