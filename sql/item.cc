@@ -4921,14 +4921,34 @@ Field *Item::make_string_field(TABLE *table, THD* IDB_thd)
   DBUG_ASSERT(collation.collation);
 
   //@InfiniDB @bug3720 
-  //@InfiniDB @bug3783. 
+  //@InfiniDB @bug3783 
+  //@InfiniDB @bug5956
   //pass thd here for vtable state checking. skip creating blob field for vtable creation.
   bool skipBlob = false;
-  if (IDB_thd && IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
-    skipBlob = true;
+  if (IDB_thd)
+  {
+    if (IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+    {
+      skipBlob = true;
+    }
+    else
+    {
+      TABLE_LIST* global_list = IDB_thd->lex->query_tables;
+      for (; global_list; global_list = global_list->next_global)
+      {
+        if (global_list->table && global_list->table->isInfiniDB())
+        {
+          skipBlob = true;
+          break;
+        }
+      }
+    }
+  }
   else if (!IDB_thd && type() == Item::SUM_FUNC_ITEM && ((Item_sum*)this)->thd() &&
            ((Item_sum*)this)->thd()->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+  {
     skipBlob = true;
+  }
 
   if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB && !skipBlob)
     field= new Field_blob(max_length, maybe_null, name,
