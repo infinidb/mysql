@@ -3303,7 +3303,7 @@ void Item_func_group_concat::cleanup()
 }
 
 
-Field *Item_func_group_concat::make_string_field(TABLE *table, THD *thd)
+Field *Item_func_group_concat::make_string_field(TABLE *table, THD *IDB_thd)
 {
   Field *field;
   DBUG_ASSERT(collation.collation);
@@ -3315,7 +3315,31 @@ Field *Item_func_group_concat::make_string_field(TABLE *table, THD *thd)
     max_characters * CS->mbmaxlen.
   */
   const uint32 max_characters= max_length / collation.collation->mbminlen;
-  if (max_characters > CONVERT_IF_BIGGER_TO_BLOB)
+  // @InfiniDB Avoid creating blob field to support sorting for IDB queries
+  bool skipBlob = false;
+  if (!IDB_thd && thd())
+    IDB_thd = thd();
+  if (IDB_thd)
+  {
+    if (IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+    {
+      skipBlob = true;
+    }
+    else
+    {
+      TABLE_LIST* global_list = IDB_thd->lex->query_tables;
+      for (; global_list; global_list = global_list->next_global)
+      {
+        if (global_list->table && global_list->table->isInfiniDB())
+        {
+          skipBlob = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (max_characters > CONVERT_IF_BIGGER_TO_BLOB && !skipBlob)
     field= new Field_blob(max_characters * collation.collation->mbmaxlen,
                           maybe_null, item_name.ptr(), collation.collation, TRUE);
   else

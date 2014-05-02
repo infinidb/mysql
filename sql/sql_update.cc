@@ -1033,8 +1033,8 @@ int mysql_update(THD *thd,
     // @bug4790. Only change for InfiniDB table.
     // @bug5117. Add isInfiniDBDML to make sure it's InfiniDB dml stmt.
     if (!(thd->infinidb_vtable.isInfiniDBDML))
-      my_ok(thd, (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated,
-            id, buff);
+      thd->set_row_count_func((thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated);
+    my_ok(thd, thd->get_row_count_func(), id, buff);
     DBUG_PRINT("info",("%ld records updated", (long) updated));
   }
   thd->count_cuted_fields= CHECK_FIELD_IGNORE;		/* calc cuted fields */
@@ -2488,7 +2488,7 @@ bool multi_update::send_eof()
   //@Infinidb bug2936. not set row count on thd to push row count to the front
   // @bug4790. only change for InfiniDB table
   if (!(thd->infinidb_vtable.isInfiniDBDML))
-    ::my_ok(thd, (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated,
-            id, buff);
+    thd->set_row_count_func((thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated);
+  my_ok(thd, thd->get_row_count_func(), id, buff);
   DBUG_RETURN(FALSE);
 }

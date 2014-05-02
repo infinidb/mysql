@@ -3054,6 +3054,7 @@ public:
     bool isInfiniDBDML; // default false
     bool hasInfiniDBTable; // default false
     bool isNewQuery; // default true. set to false when query being processed. reset when finished.
+    INFINIDB_VTABLE(): cal_conn_info(0) {}
     void init(uint mode);
   };
    

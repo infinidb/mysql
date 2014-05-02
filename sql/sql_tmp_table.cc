@@ -134,7 +134,7 @@ static Field *create_tmp_field_from_item(THD *thd, Item *item, TABLE *table,
     if (item->is_temporal() || item->field_type() == MYSQL_TYPE_GEOMETRY)
       new_field= item->tmp_table_field_from_field_type(table, 1);
     else
-      new_field= item->make_string_field(table);
+      new_field= item->make_string_field(table, thd);
     new_field->set_derivation(item->collation.derivation);
     break;
   case DECIMAL_RESULT:

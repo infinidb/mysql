@@ -6061,11 +6061,27 @@ Field *Item::make_string_field(TABLE *table, THD* IDB_thd)
   //@InfiniDB @bug3783. 
   //pass thd here for vtable state checking. skip creating blob field for vtable creation.
   bool skipBlob = false;
-  if (IDB_thd && IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
-    skipBlob = true;
-  else if (!IDB_thd && type() == Item::SUM_FUNC_ITEM && ((Item_sum*)this)->thd() &&
-           ((Item_sum*)this)->thd()->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
-    skipBlob = true;
+  if (!IDB_thd && type() == Item::SUM_FUNC_ITEM && ((Item_sum*)this)->thd())
+    IDB_thd = ((Item_sum*)this)->thd();
+  if (IDB_thd)
+  {
+    if (IDB_thd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE)
+    {
+      skipBlob = true;
+    }
+    else
+    {
+      TABLE_LIST* global_list = IDB_thd->lex->query_tables;
+      for (; global_list; global_list = global_list->next_global)
+      {
+        if (global_list->table && global_list->table->isInfiniDB())
+        {
+          skipBlob = true;
+          break;
+        }
+      }
+    }
+  }
 
   if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB && !skipBlob)
     field= new Field_blob(max_length, maybe_null, item_name.ptr(),
@@ -9560,7 +9576,7 @@ Field *Item_type_holder::make_field_by_type(TABLE *table, THD* IDB_thd)
       field->init(table);
     return field;
   case MYSQL_TYPE_NULL:
-    return make_string_field(table);
+    return make_string_field(table, IDB_thd);
   default:
     break;
   }

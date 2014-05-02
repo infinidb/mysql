@@ -1064,7 +1064,7 @@ void THD::INFINIDB_VTABLE::init(uint infinidb_vtable_mode)
     autoswitch = true;  
   call_sp = false;
   override_largeside_estimate = false;
-  cal_conn_info = 0;
+  //cal_conn_info = 0;
   isUnion = false;
   impossibleWhereOnUnion = false;
   isUpdateWithDerive = false;
