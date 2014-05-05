@@ -4708,3 +4708,24 @@ static Sys_var_ulong Sys_infinidb_local_query(
        CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
 
+static Sys_var_ulong Sys_infinidb_diskjoin_smallsidelimit(
+       "infinidb_diskjoin_smallsidelimit",
+       "The maximum amount of disk space in MB to use per query for storing 'small side' tables for a disk-based join. (0 = unlimited)",
+       SESSION_VAR(infinidb_diskjoin_smallsidelimit),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_infinidb_diskjoin_largesidelimit(
+       "infinidb_diskjoin_largesidelimit",
+       "The maximum amount of disk space in MB to use per join for storing 'large side' table data for a disk-based join. (0 = unlimited)",
+       SESSION_VAR(infinidb_diskjoin_largesidelimit),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_infinidb_diskjoin_bucketsize(
+       "infinidb_diskjoin_bucketsize",
+       "The maximum size in MB of each 'small side' table in memory.",
+       SESSION_VAR(infinidb_diskjoin_bucketsize),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(1, ULONG_MAX), DEFAULT(100), BLOCK_SIZE(1));
+

@@ -487,6 +487,9 @@ typedef struct system_variables
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
   ulong infinidb_local_query;
+  ulong infinidb_diskjoin_smallsidelimit;
+  ulong infinidb_diskjoin_largesidelimit;
+  ulong infinidb_diskjoin_bucketsize;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
