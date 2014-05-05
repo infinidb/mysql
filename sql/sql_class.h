@@ -343,6 +343,9 @@ struct system_variables
   ulong infinidb_string_scan_threshold;
   ulong infinidb_compression_type;
   ulong infinidb_stringtable_threshold;
+  ulong infinidb_diskjoin_smallsidelimit;
+  ulong infinidb_diskjoin_largesidelimit;
+  ulong infinidb_diskjoin_bucketsize;
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
   ulong infinidb_local_query;

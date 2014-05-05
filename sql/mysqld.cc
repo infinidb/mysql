@@ -5694,6 +5694,9 @@ enum options_mysqld
   OPT_INFINIDB_STRING_SCAN_THRESHOLD,
   OPT_INFINIDB_COMPRESSION_TYPE,
   OPT_INFINIDB_STRINGTABLE_THRESHOLD,
+  OPT_INFINIDB_DISKJOIN_SMALLSIDELIMIT,
+  OPT_INFINIDB_DISKJOIN_LARGESIDELIMIT,
+  OPT_INFINIDB_DISKJOIN_BUCKETSIZE,
   OPT_INFINIDB_VARBIN_ALWAYS_HEX,
   OPT_INFINIDB_DOUBLE_FOR_DECIMAL_MATH,
   OPT_INFINIDB_LOCAL_QUERY,
@@ -7246,6 +7249,43 @@ thread is in the relay logs.",
    GET_ULONG, REQUIRED_ARG,
 	20, /* Default value */
 	9, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_diskjoin_smallsidelimit", OPT_INFINIDB_DISKJOIN_SMALLSIDELIMIT,
+   "The maximum amount of disk space in MB to use per query for storing 'small side' tables for a disk-based join. (0 = unlimited)",
+   (uchar**) &global_system_variables.infinidb_diskjoin_smallsidelimit,
+   (uchar**) &max_system_variables.infinidb_diskjoin_smallsidelimit, 0,
+   GET_ULONG, REQUIRED_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+
+  {"infinidb_diskjoin_largesidelimit", OPT_INFINIDB_DISKJOIN_LARGESIDELIMIT,
+   "The maximum amount of disk space in MB to use per join for storing 'large side' table data for a disk-based join. (0 = unlimited)",
+   (uchar**) &global_system_variables.infinidb_diskjoin_largesidelimit,
+   (uchar**) &max_system_variables.infinidb_diskjoin_largesidelimit, 0,
+   GET_ULONG, REQUIRED_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_diskjoin_bucketsize", OPT_INFINIDB_DISKJOIN_BUCKETSIZE,
+   "The maximum size in MB of each 'small side' table in memory.",
+   (uchar**) &global_system_variables.infinidb_diskjoin_bucketsize,
+   (uchar**) &max_system_variables.infinidb_diskjoin_bucketsize, 0,
+   GET_ULONG, REQUIRED_ARG,
+	100, /* Default value */
+	1, /* Min allowed value */
 	ULONG_MAX, /* Max allowed value */
 	0, /* Subtract this overhead from given value before setting var */
 	1, /* Value should be a mult. of this */
