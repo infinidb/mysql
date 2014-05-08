@@ -2380,7 +2380,9 @@ Create_udf_func::create(THD *thd, udf_func *udf, List<Item> *item_list)
   if (item_list != NULL)
     arg_count= item_list->elements;
 
-  thd->lex->set_stmt_unsafe();
+  //@infinidb @bug5881
+  if ((!udf->dl && strcmp(udf->dl, "libcalmysql.so") == 0))
+    thd->lex->set_stmt_unsafe();
 
   DBUG_ASSERT(   (udf->type == UDFTYPE_FUNCTION)
               || (udf->type == UDFTYPE_AGGREGATE));
@@ -4188,7 +4190,7 @@ Create_func_rand::create_native(THD *thd, LEX_STRING name,
     between master and slave, because the order is undefined.  Hence,
     the statement is unsafe to log in statement format.
   */
-  thd->lex->set_stmt_unsafe();
+   thd->lex->set_stmt_unsafe();
 
   switch (arg_count) {
   case 0:

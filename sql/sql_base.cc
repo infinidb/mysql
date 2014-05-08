@@ -5295,10 +5295,23 @@ int decide_logging_format(THD *thd, TABLE_LIST *tables)
     */
     my_bool multi_access_engine= FALSE;
     void* prev_access_ht= NULL;
+
+    // @InfiniDB skip binlog non-safe error for dml
+    bool idbSkipErr = false;
+
     for (TABLE_LIST *table= tables; table; table= table->next_global)
     {
       if (table->placeholder())
         continue;
+
+      // @InfiniDB @bug5881
+      if (table->table && table->table->isInfiniDB() && 
+          table->lock_type >= TL_WRITE_ALLOW_WRITE)
+      {
+        idbSkipErr = true;
+        thd->lex->clear_stmt_unsafe();
+      }
+
       if (table->table->s->table_category == TABLE_CATEGORY_PERFORMANCE)
         thd->lex->set_stmt_unsafe();
       ulonglong const flags= table->table->file->ha_table_flags();
@@ -5337,26 +5350,30 @@ int decide_logging_format(THD *thd, TABLE_LIST *tables)
                         thd->variables.binlog_format));
 
     int error= 0;
-    if (flags_write_all_set == 0)
+    
+    if (!idbSkipErr)
     {
-      my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
+      if (flags_write_all_set == 0)
+      {
+        my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
                "Statement cannot be logged to the binary log in"
                " row-based nor statement-based format");
-    }
-    else if (thd->variables.binlog_format == BINLOG_FORMAT_STMT &&
-             (flags_write_all_set & HA_BINLOG_STMT_CAPABLE) == 0)
-    {
-      my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
+      }
+      else if (thd->variables.binlog_format == BINLOG_FORMAT_STMT &&
+              (flags_write_all_set & HA_BINLOG_STMT_CAPABLE) == 0)
+      {
+        my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
                 "Statement-based format required for this statement,"
                 " but not allowed by this combination of engines");
-    }
-    else if ((thd->variables.binlog_format == BINLOG_FORMAT_ROW ||
-              thd->lex->is_stmt_unsafe()) &&
-             (flags_write_all_set & HA_BINLOG_ROW_CAPABLE) == 0)
-    {
-      my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
+      }
+      else if ((thd->variables.binlog_format == BINLOG_FORMAT_ROW ||
+                thd->lex->is_stmt_unsafe()) &&
+               (flags_write_all_set & HA_BINLOG_ROW_CAPABLE) == 0)
+      {
+        my_error((error= ER_BINLOG_LOGGING_IMPOSSIBLE), MYF(0),
                 "Row-based format required for this statement,"
                 " but not allowed by this combination of engines");
+      }
     }
 
     /*
