@@ -1054,10 +1054,11 @@ public:
   // @Infinidb if this is InfiniDB table.
   inline bool isInfiniDB()
   {
+	//FIXME: the mysql_version test is to see if this non-zero ptr really points to a TABLE_SHARE???
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
-    if (s && s->db_plugin && (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0))
+    if (s && s->mysql_version == 50617 && s->db_plugin && (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0))
 #else
-    if (s && s->db_plugin && (strcmp(s->db_plugin->name.str, "InfiniDB") == 0))
+    if (s && s->mysql_version == 50617 && s->db_plugin && (strcmp(s->db_plugin->name.str, "InfiniDB") == 0))
 #endif
       return true;
     return false;

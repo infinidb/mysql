@@ -8341,10 +8341,12 @@ fprintf(stderr, "2: error: %d\n", thd->is_error());
 		mysql_reset_thd_for_next_command(thd);
 		if (query_cache_send_result_to_client(thd, thd->query(), thd->query_length()) <= 0)
 		{
+#if 0
 			if (thd->sp_proc_cache)
 				sp_cache_flush_obsolete(&thd->sp_proc_cache, 0);
 			if (thd->sp_func_cache)
 				sp_cache_flush_obsolete(&thd->sp_func_cache, 0);
+#endif
 			//Parser_state parser_state;
 			//parser_state.init(thd, thd->query(), thd->query_length());
 			//parse_sql(thd, &parser_state, NULL);
@@ -8452,7 +8454,9 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 						//parser_state.init(thd, thd->query(), thd->query_length());
 						//parse_sql(thd, &parser_state, NULL);
 fprintf(stderr, "ps3: error: %d\n", thd->is_error());
-						parse_sql(thd, &end_of_stmt, NULL);
+						Parser_state parser_state;
+						parser_state.init(thd, thd->query(), thd->query_length());
+						parse_sql(thd, &parser_state, NULL);
 fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 	
 						if (thd->lex->sql_command != SQLCOM_SELECT)
@@ -8570,8 +8574,10 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 						mysql_reset_thd_for_next_command(thd);
 						if (query_cache_send_result_to_client(thd, thd->query(), thd->query_length()) <= 0)
 						{
+#if 0
 							sp_cache_flush_obsolete(&thd->sp_proc_cache, 0);
 							sp_cache_flush_obsolete(&thd->sp_func_cache, 0);
+#endif
 fprintf(stderr, "ps5: error: %d\n", thd->is_error());
 							parse_sql(thd, &end_of_stmt, NULL);
 fprintf(stderr, "ps6: error: %d\n", thd->is_error());
@@ -8596,7 +8602,9 @@ fprintf(stderr, "ps6: error: %d\n", thd->is_error());
 						thd->infinidb_vtable.call_sp = false;
 					}
 fprintf(stderr, "3: error: %d\n", thd->is_error());
-					mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
+					Parser_state parser_state;
+					parser_state.init(thd, thd->query(), thd->query_length());
+					mysql_parse(thd, thd->query(), thd->query_length(), &parser_state);
 fprintf(stderr, "4: error: %d\n", thd->is_error());
 					thd->infinidb_vtable.call_sp = false;
 					if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_ERROR)

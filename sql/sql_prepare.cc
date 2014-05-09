@@ -3921,15 +3921,18 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
       hasCalpont = true;
       continue;
     }
+	//FIXME: the mysql_version test is to see if this non-zero ptr really points to a TABLE_SHARE???
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
     else if (global_list->table &&
              global_list->table->s &&
+             global_list->table->s->mysql_version == 50617 &&
 	     global_list->table->s->db_plugin &&
 	     (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
 	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
 #else
     else if (global_list->table &&
              global_list->table->s &&
+             global_list->table->s->mysql_version == 50617 &&
              global_list->table->s->db_plugin &&
              (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
 	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
