@@ -3826,7 +3826,7 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
   bool error= TRUE;
 
   TABLE_LIST* global_list = NULL;
-  bool hasCalpont = FALSE;
+  bool hasInfiniDB = FALSE;
 
   char saved_cur_db_name_buf[NAME_LEN+1];
   LEX_STRING saved_cur_db_name=
@@ -3906,7 +3906,7 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
   // check infinidb table
   // @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
   //TABLE_LIST* global_list = thd->lex->query_tables;
-  //bool hasCalpont = FALSE;
+  //bool hasInfiniDB = FALSE;
   global_list = thd->lex->query_tables;
 
   for (; global_list; global_list = global_list->next_global)
@@ -3918,31 +3918,27 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
     // @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union" 
     if (global_list->table && global_list->table->isInfiniDB())
     {
-      hasCalpont = true;
+      hasInfiniDB = true;
       continue;
     }
 	//FIXME: the mysql_version test is to see if this non-zero ptr really points to a TABLE_SHARE???
+    else if (global_list->table &&
+             global_list->table->s &&
+             global_list->table->s->mysql_version >= 50100 &&
+             global_list->table->s->mysql_version <= 50699 &&
+	     global_list->table->s->db_plugin && (
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
-    else if (global_list->table &&
-             global_list->table->s &&
-             global_list->table->s->mysql_version == 50617 &&
-	     global_list->table->s->db_plugin &&
-	     (strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
-	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+	     strcmp((*global_list->table->s->db_plugin)->name.str, "MEMORY") == 0 ||
 #else
-    else if (global_list->table &&
-             global_list->table->s &&
-             global_list->table->s->mysql_version == 50617 &&
-             global_list->table->s->db_plugin &&
-             (strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
-	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
+             strcmp(global_list->table->s->db_plugin->name.str, "MEMORY") == 0 || 
 #endif				
+	     global_list->table->s->table_category == TABLE_CATEGORY_TEMPORARY) )
     {
       continue;
     }
   }
  
-  if (hasCalpont && thd->lex->sql_command == SQLCOM_EXECUTE)
+  if (hasInfiniDB && thd->lex->sql_command == SQLCOM_EXECUTE)
   {
     // @bug5298. disable re-prepare observer for infinidb query
     //thd->m_reprepare_observer = NULL;

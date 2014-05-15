@@ -116,8 +116,8 @@ JOIN::exec()
 
 		//@todo special api to send plan
 		TABLE_LIST* tl = 0; //tables_list;
-		bool hasCalpont = false;
-		//bool hasNonCalpont = false;
+		bool hasInfiniDB = false;
+		//bool hasNonInfiniDB = false;
 		TABLE_LIST* IDBtable = NULL;
 
 		// @bug 2976. Check global tables for IDB table. If no IDB tables involved, redo this query with normal path.
@@ -132,7 +132,7 @@ JOIN::exec()
 			// @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union"
 			if (global_list->table && global_list->table->isInfiniDB())
 			{
-				hasCalpont = true;
+				hasInfiniDB = true;
 				IDBtable = global_list;
 				continue;
 			}
@@ -154,18 +154,18 @@ JOIN::exec()
 			}
 			else
 			{
-				//hasNonCalpont = true;
+				//hasNonInfiniDB = true;
 			}
 		}
 
 		// @bug 2839. only memory table in table list. redo_query.
-		if (!hasCalpont)
+		if (!hasInfiniDB)
 		{
 			thd->infinidb_vtable.vtable_state = THD::INFINIDB_REDO_QUERY;
 			DBUG_VOID_RETURN;
 		}
 		// @InfiniDB. Cross engine support
-		else if (/*hasNonCalpont && hasCalpont*/false)
+		else if (/*hasNonInfiniDB && hasInfiniDB*/false)
 		{
 			const char* emsg = "IDB-7001: Non InfiniDB table(s) on the FROM clause.";
 			thd->infinidb_vtable.vtable_state = THD::INFINIDB_ERROR;
