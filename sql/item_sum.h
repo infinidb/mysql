@@ -362,6 +362,7 @@ public:
 
   uint arg_count;
   Item **args, *tmp_args[2];
+  Item **get_orig_args() {return orig_args;}
   THD* thd() { return IDB_thd; }
 protected:  
   /* 
