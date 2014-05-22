@@ -30289,7 +30289,7 @@ if test "$with_comment" != "no"
 then
   COMPILATION_COMMENT=$with_comment
 else
-  COMPILATION_COMMENT="InfiniDB 4.5.0-1"
+  COMPILATION_COMMENT="InfiniDB 4.5.1-1"
 fi
 
 
