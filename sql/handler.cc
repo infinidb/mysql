@@ -845,7 +845,7 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
   if (plugin->name.length == 8 && strncmp(plugin->name.str, "InfiniDB", 8) == 0)
 #endif
   {
-    if (hton->state == SHOW_OPTION_YES && hton->close_connection)
+    if (thd->infinidb_vtable.cal_conn_info && hton->state == SHOW_OPTION_YES && hton->close_connection)
     {
       hton->close_connection(hton, thd);
     }
