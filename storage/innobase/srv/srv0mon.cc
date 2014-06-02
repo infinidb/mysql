@@ -1231,6 +1231,10 @@ UNIV_INTERN ulint		monitor_set_tbl[(NUM_MONITOR + NUM_BITS_ULINT
 built-in operations for atomic memory access */
 ib_mutex_t	monitor_mutex;
 
+#if defined(_MSC_VER) && !defined(WITH_PERFSCHEMA_STORAGE_ENGINE)
+typedef int mysql_pfs_key_t;
+#endif
+
 /** Key to register monitor_mutex with performance schema */
 UNIV_INTERN mysql_pfs_key_t	monitor_mutex_key;
 
