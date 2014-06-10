@@ -2766,6 +2766,11 @@ void st_select_lex::print(THD *thd, String *str, enum_query_type query_type)
     str->append(STRING_WITH_LEN(" from DUAL "));
   }
 
+  // @InfiniDB Skip WHERE clause and after. the print functions are
+  // Called just for post process vtable creation.
+  if (query_type == QT_INFINIDB_NO_QUOTE || query_type == QT_INFINIDB_DERIVED)
+    return;
+
   // Where
   Item *cur_where= where;
   if (join)

@@ -89,6 +89,7 @@
 #include "rpl_handler.h"
 
 #include "sp_head.h"
+#include "sp_instr.h"         // @InfiniDB
 #include "sp.h"
 #include "sp_cache.h"
 #include "events.h"
@@ -1354,6 +1355,8 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
     if (idb_vtable_process(thd))
     {
       thd->infinidb_vtable.vtable_state = THD::INFINIDB_DISABLE_VTABLE;
+      //Parser_state parser_state;
+     // parser_state.init(thd, thd->query(), thd->query_length());
       mysql_parse(thd, thd->query(), thd->query_length(), &parser_state);
       thd->infinidb_vtable.isInfiniDBDML = false; //@bug5117
       thd->infinidb_vtable.hasInfiniDBTable = false;
@@ -8303,7 +8306,7 @@ int idb_vtable_process(THD* thd, Statement* statement)
 	//if (thd->query())
 	//	printf("STATEMENT: %s\n", thd->query());
 	//fflush(stdout);
-	
+
 	//const char* end_of_stmt= NULL;
 	Parser_state end_of_stmt;
 	end_of_stmt.init(thd, thd->query(), thd->query_length());
@@ -8351,6 +8354,7 @@ fprintf(stderr, "2: error: %d\n", thd->is_error());
 			//parser_state.init(thd, thd->query(), thd->query_length());
 			//parse_sql(thd, &parser_state, NULL);
 fprintf(stderr, "ps1: error: %d\n", thd->is_error());
+			//parse_sql(thd, &parser_state, NULL);
 			parse_sql(thd, &end_of_stmt, NULL);
 fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 		}
@@ -8361,12 +8365,12 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 		    std::string(thd->query()).find("@@version_comment") == std::string::npos)
 		{
 			thd->infinidb_vtable.isInsertSelect = false;
-			
+
 			// SELECT vtable processing
 			if (thd->lex->sql_command == SQLCOM_SELECT ||
-				thd->lex->sql_command == SQLCOM_EXECUTE ||
-				thd->lex->sql_command == SQLCOM_CALL ||
-				thd->lex->sql_command == SQLCOM_INSERT_SELECT)
+			    thd->lex->sql_command == SQLCOM_EXECUTE ||
+			    thd->lex->sql_command == SQLCOM_CALL ||
+			    thd->lex->sql_command == SQLCOM_INSERT_SELECT)
 			{
 				// select into variable
 				std::string sel_into, lower_case_sel_into, limit;
@@ -8379,7 +8383,7 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 				bool isSqlExecute = false; //This flag is used to tell prepared statement from stored procedure
 				bool isExplain = false;
 				std::string lower_case_query;
-				
+
 				// to replace all the non-quoted tab and \n with space. For text processing use.
 				std::string query = idb_cleanQuery(thd->query());
 				alloc_query(thd, query.c_str(), query.length());
@@ -8411,13 +8415,12 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 						LEX_STRING *name= &lex->prepared_stmt_name;
 						stmt= (Prepared_statement*) thd->stmt_map.find_by_name(name);
 					}
-	
+
 					if ( stmt )
 					{
 						if ( stmt->param_count == lex->prepared_stmt_params.elements )
-						{
 							stmt->set_parameters(&expanded_query, NULL, NULL);
-						}
+
 						// replace ? with values
 						std::string tmp_query = std::string (stmt->query());
 						std::string::size_type p1 = tmp_query.find("?");
@@ -8439,17 +8442,17 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 								else
 									replaceStr = std::string(str->c_ptr());
 							}
-	
+
 							tmp_query.replace( p1, 1, replaceStr);
 							begin++;
 							p1 = tmp_query.find("?");
 						}
 						alloc_query(thd, tmp_query.c_str(), tmp_query.length());
-	
+
 						// pre parse statement to tell DML statement from select
 						lex_start(thd);
 						mysql_reset_thd_for_next_command(thd);
-	
+
 						//Parser_state parser_state;
 						//parser_state.init(thd, thd->query(), thd->query_length());
 						//parse_sql(thd, &parser_state, NULL);
@@ -8458,8 +8461,8 @@ fprintf(stderr, "ps3: error: %d\n", thd->is_error());
 						parser_state.init(thd, thd->query(), thd->query_length());
 						parse_sql(thd, &parser_state, NULL);
 fprintf(stderr, "ps4: error: %d\n", thd->is_error());
-	
-						if (thd->lex->sql_command != SQLCOM_SELECT)
+
+						if (thd->lex->sql_command != SQLCOM_SELECT &&  thd->lex->sql_command != SQLCOM_END)
 						{
 							INFINIDB_execute = false;
 							if ( thd->lex->sql_command != SQLCOM_DELETE )
@@ -8490,6 +8493,10 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 						if (thd->killed != THD::KILL_QUERY)
 							thd->killed = THD::KILL_QUERY;
 					}
+
+					// find sp and insert to cache, in case it's not there yet.
+					sp_cache_routine(thd, SP_TYPE_PROCEDURE, thd->lex->spname, FALSE, &sp);
+
 					sp= sp_find_routine(thd, SP_TYPE_PROCEDURE, thd->lex->spname,
 						                      &thd->sp_proc_cache, TRUE);
 
@@ -8508,18 +8515,18 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 						sp_instr *i;
 						i = sp->get_instr(ip);
 						(void)i;  // temp compiler fix for now
-#if 0
+#if 1
 						sp_instr_stmt *sel_query = (sp_instr_stmt*)i;
 
 						// not sure if this will catch every invalid ptr. MySQL leaves some ptrs unintiallized
-						if (sel_query->m_query.str == 0)
+						if (sel_query->query().str == 0)
 						{
 							INFINIDB_execute = false;
 							break;
 						}
 #endif
 
-						std::string tmp_query; // = std::string (sel_query->m_query.str);
+						std::string tmp_query (sel_query->query().str);
 #ifdef SAFE_MUTEX
 						printf("query: %s length: %lu\n", tmp_query.c_str(), tmp_query.length());
 #endif
@@ -8531,16 +8538,16 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 								Item *arg_item= it_args++;
 								if (!arg_item)
 									break;
-#if 0
-								sp_variable_t *spvar= sp->context()->find_variable(i);
+#if 1
+								sp_variable *spvar= sp->get_root_parsing_context()->find_variable(i);
 								if (!spvar)
 									continue;
 
-								if (spvar->mode != sp_param_in)
+								if (spvar->mode != sp_variable::MODE_IN)
 								  continue;
 
 								std::string arg_name = spvar->name.str;
-								std::string arg_val = arg_item->name;
+								std::string arg_val = arg_item->item_name.ptr();
 								uint len = spvar->name.length;
 								if (arg_item->type() ==  Item::STRING_ITEM)
 									arg_val = "'" + arg_val + "'";
@@ -8583,7 +8590,7 @@ fprintf(stderr, "ps5: error: %d\n", thd->is_error());
 fprintf(stderr, "ps6: error: %d\n", thd->is_error());
 						}
 
-						if (thd->lex->sql_command != SQLCOM_SELECT /*&&  thd->lex->sql_command != SQLCOM_END*/)
+						if (thd->lex->sql_command != SQLCOM_SELECT &&  thd->lex->sql_command != SQLCOM_END)
 						{
 							INFINIDB_execute = false;
 							// set original query back
@@ -8632,7 +8639,6 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 				}
 				else // normal INFINIDB_execute
 				{
-				
 					//@todo clean up the query and normalize space, tab, carriage return, etc.
 					if (thd->query())
 					{
@@ -8685,13 +8691,13 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 						//File file;
 						std::string fileName = sel_into.substr(p2+1, p3-p2-1);
 						std::string d_path;
-						char path[FN_REFLEN];  
+						char path[FN_REFLEN];
 						uint option= MY_UNPACK_FILENAME | MY_RELATIVE_PATH;
-						
+
 #ifdef DONT_ALLOW_FULL_LOAD_DATA_PATHS
 							option|= MY_REPLACE_DIR;			// Force use of db directory
 #endif
-						
+
 						if (!dirname_length(fileName.c_str()))
 						{
 							strxnmov(path, FN_REFLEN-1, mysql_real_data_home, thd->db ? thd->db : "",
@@ -8718,11 +8724,12 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 							thd->infinidb_vtable.hasInfiniDBTable = false;
 							return 0;
 						}
-						
+
 						// @bug 3601. check directory first. reset errno
 						errno = 0;
 #ifdef _MSC_VER
-						if (d_path.empty()) d_path = "\\";
+						if (d_path.empty())
+							d_path = "\\";
 						if (_access(d_path.c_str(), 06) == 0)
 						{
 							// check file exists
@@ -8750,20 +8757,20 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 							return 0;
 						}
 					}
-						
+
 					// vtable name
 					std::ostringstream oss;
 					oss << "infinidb_vtable.$vtable_" << thd->thread_id;
 					std::string vtable_name = oss.str();
-					
+
 					// clear state
 					thd->infinidb_vtable.has_order_by = false;
 					thd->infinidb_vtable.original_query.free();
 					thd->infinidb_vtable.original_query.append(thd->query(), thd->query_length());
-					
+
 					// phase 1. create vtable
 					std::string create;
-					
+
 					// insert with select
 					if (thd->infinidb_vtable.isInsertSelect)
 					{
@@ -8776,7 +8783,7 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 							create_query.replace(p1, create_query.length()-p1, " ");
 							printf("create_query: %s", create_query.c_str());
 						}
-						
+
 						p1 = lower_case_query.find(" select ", 0);
 						if (p1 == std::string::npos)
 						{
@@ -8798,7 +8805,7 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 					create = "create temporary table " + vtable_name + " as " + create_query;
 					thd->infinidb_vtable.create_vtable_query.free();
 					thd->infinidb_vtable.create_vtable_query.append(create.c_str(), create.length());
-					
+
 					// phase 2. alter vtable to IDB type
 					thd->infinidb_vtable.alter_vtable_query.free();
 					thd->infinidb_vtable.alter_vtable_query.append(STRING_WITH_LEN("alter table "));
@@ -8810,7 +8817,7 @@ fprintf(stderr, "6: error: %d\n", thd->is_error());
 					select = "select * " + sel_into + " from " + vtable_name;
 					thd->infinidb_vtable.select_vtable_query.free();
 					thd->infinidb_vtable.select_vtable_query.append(select.c_str(), select.length());
-					
+
 					// phase 4. drop vtable
 					thd->infinidb_vtable.drop_vtable_query.free();
 					thd->infinidb_vtable.drop_vtable_query.append(STRING_WITH_LEN("drop table if exists "));
@@ -8869,7 +8876,7 @@ fprintf(stderr, "12: error: %d\n", thd->is_error());
 								thd->infinidb_vtable.select_vtable_query.append(select.c_str(), select.length());
 							}
 							thd->set_query(thd->infinidb_vtable.create_vtable_query.c_ptr(),
-								thd->infinidb_vtable.create_vtable_query.length());
+							thd->infinidb_vtable.create_vtable_query.length());
 							thd->infinidb_vtable.isUnion = false; // make state change to create_vtable in sql_select
 #ifdef SAFE_MUTEX
 							printf("<<< V-TABLE Redo Phase 1: %s\n", thd->query());
@@ -8933,8 +8940,9 @@ fprintf(stderr, "22: error: %d\n", thd->is_error());
 						else
 						{
 							// error out -- vtable mode = 1
-							if (thd->killed != THD::KILL_QUERY)
-								thd->killed = THD::KILL_QUERY;
+							//if (thd->killed != THD::KILL_QUERY)
+							//	thd->killed = THD::KILL_QUERY;
+							return 0;
 						}
 					}
 					else if ( thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE )
@@ -8948,7 +8956,6 @@ fprintf(stderr, "22: error: %d\n", thd->is_error());
 						parser_state5.init(thd, thd->query(), thd->query_length());
 						mysql_parse(thd, thd->query(), thd->query_length(), &parser_state5);
 						close_thread_tables(thd);
-
 						// do insert vtable if INSERT_SELECT
 						if (thd->infinidb_vtable.isInsertSelect)
 						{
@@ -8957,7 +8964,7 @@ fprintf(stderr, "22: error: %d\n", thd->is_error());
 							insert = insert_query + " " + thd->infinidb_vtable.select_vtable_query.c_ptr() + " " + on_duplicate;
 							thd->infinidb_vtable.insert_vtable_query.free();
 							thd->infinidb_vtable.insert_vtable_query.append(insert.c_str(), insert.length());
-							
+
 							alloc_query(thd, thd->infinidb_vtable.insert_vtable_query.c_ptr(), thd->infinidb_vtable.insert_vtable_query.length());
 							thd->infinidb_vtable.vtable_state = THD::INFINIDB_SELECT_VTABLE;
 #ifdef SAFE_MUTEX

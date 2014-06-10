@@ -3056,6 +3056,17 @@ void Item_func_repeat::fix_length_and_dec()
     fix_char_length_ulonglong(char_length);
     return;
   }
+  else
+  {
+    // @InfiniDB. For dynamic (column) count, IDB sets length 256 for order by to go through
+    if (fThd && (fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0) )
+    {
+      max_length = 256;
+      maybe_null = 1;
+      return;
+    }
+  }
 
 end:
   max_length= MAX_BLOB_WIDTH;

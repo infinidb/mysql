@@ -439,6 +439,10 @@ public:
     m_valid= true;
     return false;
   }
+  LEX_STRING& query()          // @InfiniDB
+  {
+    return m_query;
+  }
 
 private:
   /// Complete query of the SQL-statement.

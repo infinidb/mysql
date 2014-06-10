@@ -232,13 +232,24 @@ JOIN::optimize()
     select_lex->where and conds points to the same condition, this
     function call effectively changes select_lex->where as well.
   */
-  conds= optimize_cond(thd, conds, &cond_equal,
-                       join_list, true, &select_lex->cond_value);
-  if (thd->is_error())
+  if ((thd->infinidb_vtable.vtable_state == THD::INFINIDB_DISABLE_VTABLE) && ((thd->lex)->sql_command != SQLCOM_UPDATE ) &&
+     ( (thd->lex)->sql_command != SQLCOM_UPDATE_MULTI ) && ( (thd->lex)->sql_command != SQLCOM_DELETE ) && ( (thd->lex)->sql_command != SQLCOM_DELETE_MULTI ) )
   {
-    error= 1;
-    DBUG_PRINT("error",("Error from optimize_cond"));
-    DBUG_RETURN(1);
+    conds= optimize_cond(thd, conds, &cond_equal,
+                       join_list, true, &select_lex->cond_value);
+    if (thd->is_error())
+    {
+      error= 1;
+      DBUG_PRINT("error",("Error from optimize_cond"));
+      DBUG_RETURN(1);
+    }
+  }
+  else
+  {
+    // @bug 2203. This variable was not initialized and will be set in optimize_cond.
+    // Since we skipped optimization, we need to set the variable here. Otherwise it will
+    // randomly return COND_FALSE and cause an "Impossible Where clause".
+    select_lex->cond_value = Item::COND_OK;  
   }
 
   {
@@ -2250,8 +2261,10 @@ Item* substitute_for_best_equal_field(Item *cond,
       cond_equal= cond_equal->upper_levels;
     return eliminate_item_equal(0, cond_equal, item_equal);
   }
-  else
+  else if (current_thd && current_thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
+  {
     cond->transform(&Item::replace_equal_field, 0);
+  }
   return cond;
 }
 

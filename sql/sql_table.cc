@@ -9003,7 +9003,8 @@ copy_data_between_tables(TABLE *from,TABLE *to,
   }
   to->file->extra(HA_EXTRA_NO_IGNORE_DUP_KEY);
 
-  if (mysql_trans_commit_alter_copy_data(thd))
+  if (thd->infinidb_vtable.vtable_state != THD::INFINIDB_ALTER_VTABLE &&
+      mysql_trans_commit_alter_copy_data(thd))
     error= 1;
 
  err:
