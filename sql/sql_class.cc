@@ -1071,7 +1071,6 @@ void THD::INFINIDB_VTABLE::init(uint infinidb_vtable_mode)
   isInfiniDBDML = false;
   hasInfiniDBTable = false;
   isNewQuery = true;
-  isInsertSelect = false;
 }
 
 void THD::push_internal_handler(Internal_error_handler *handler)
