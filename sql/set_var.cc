@@ -537,6 +537,11 @@ static sys_var_thd_bool sys_infinidb_double_for_decimal_math(&vars,
 static sys_var_thd_ulong sys_infinidb_local_query(&vars,
 							"infinidb_local_query",
 					       &SV::infinidb_local_query);
+static sys_var_thd_bool	sys_infinidb_use_import_for_batchinsert(&vars, "infinidb_use_import_for_batchinsert",
+					       &SV::infinidb_use_import_for_batchinsert);
+static sys_var_thd_ulong sys_infinidb_import_for_batchinsert_delimiter(&vars, "infinidb_import_for_batchinsert_delimiter",
+					       &SV::infinidb_import_for_batchinsert_delimiter);					     
+
 /* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
                                               &SV::div_precincrement);

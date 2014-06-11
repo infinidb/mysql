@@ -5700,6 +5700,8 @@ enum options_mysqld
   OPT_INFINIDB_VARBIN_ALWAYS_HEX,
   OPT_INFINIDB_DOUBLE_FOR_DECIMAL_MATH,
   OPT_INFINIDB_LOCAL_QUERY,
+  OPT_INFINIDB_USE_IMPORT_FOR_BATCHINSERT,
+  OPT_INFINIDB_IMPORT_FOR_BATCHINSERT_DELIMITER,
   /* InfiniDB */
 };
 
@@ -7329,7 +7331,30 @@ thread is in the relay logs.",
 	0, /* Subtract this overhead from given value before setting var */
 	1, /* Value should be a mult. of this */
 	0},
-
+	// InfiniDB boolean variable
+  {"infinidb_use_import_for_batchinsert", OPT_INFINIDB_USE_IMPORT_FOR_BATCHINSERT,
+   "LDI and insert with select will use cpimport to load data when autocommit is on. (false = will not use cpimport, true = will use cpimport)",
+   (uchar**) &global_system_variables.infinidb_use_import_for_batchinsert,
+   (uchar**) &max_system_variables.infinidb_use_import_for_batchinsert, 0,
+   GET_BOOL, NO_ARG,
+	1, /* Default value */
+	0, /* Min allowed value */
+	1, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+	// InfiniDB variable
+	{"infinidb_import_for_batchinsert_delimiter", OPT_INFINIDB_IMPORT_FOR_BATCHINSERT_DELIMITER,
+   "LDI and insert with select will use the input character as delimiter. (default to 7)",
+   (uchar**) &global_system_variables.infinidb_import_for_batchinsert_delimiter,
+   (uchar**) &max_system_variables.infinidb_import_for_batchinsert_delimiter, 0,
+   GET_ULONG, REQUIRED_ARG,
+	7, /* Default value */
+	0, /* Min allowed value */
+	128, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
 /* InfiniDB */
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 

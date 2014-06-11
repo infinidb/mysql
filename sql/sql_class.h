@@ -349,6 +349,8 @@ struct system_variables
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
   ulong infinidb_local_query;
+  my_bool infinidb_use_import_for_batchinsert;
+  ulong infinidb_import_for_batchinsert_delimiter;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
