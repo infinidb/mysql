@@ -4729,3 +4729,17 @@ static Sys_var_ulong Sys_infinidb_diskjoin_bucketsize(
        CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(1, ULONG_MAX), DEFAULT(100), BLOCK_SIZE(1));
 
+static Sys_var_mybool Sys_infinidb_use_import_for_batchinsert(
+       "infinidb_use_import_for_batchinsert",
+       "LDI and insert with select will use cpimport to load data when autocommit is on. (false = will not use cpimport, true = will use cpimport)",
+       SESSION_VAR(infinidb_use_import_for_batchinsert),
+       CMD_LINE(OPT_ARG),
+       DEFAULT(TRUE));
+
+static Sys_var_ulong Sys_infinidb_import_for_batchinsert_delimiter(
+       "infinidb_import_for_batchinsert_delimiter",
+       "LDI and insert with select will use the input character as delimiter. (default to tab)",
+       SESSION_VAR(infinidb_import_for_batchinsert_delimiter),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, 128), DEFAULT(7), BLOCK_SIZE(1));
+

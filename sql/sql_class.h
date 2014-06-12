@@ -490,6 +490,8 @@ typedef struct system_variables
   ulong infinidb_diskjoin_smallsidelimit;
   ulong infinidb_diskjoin_largesidelimit;
   ulong infinidb_diskjoin_bucketsize;
+  my_bool infinidb_use_import_for_batchinsert;
+  ulong infinidb_import_for_batchinsert_delimiter;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;
