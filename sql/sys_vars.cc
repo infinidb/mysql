@@ -4738,7 +4738,7 @@ static Sys_var_mybool Sys_infinidb_use_import_for_batchinsert(
 
 static Sys_var_ulong Sys_infinidb_import_for_batchinsert_delimiter(
        "infinidb_import_for_batchinsert_delimiter",
-       "LDI and insert with select will use the input character as delimiter. (default to tab)",
+       "LDI and insert with select will use the input character as delimiter. (default to 0x07)",
        SESSION_VAR(infinidb_import_for_batchinsert_delimiter),
        CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(0, 128), DEFAULT(7), BLOCK_SIZE(1));
