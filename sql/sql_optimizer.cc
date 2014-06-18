@@ -8301,7 +8301,8 @@ remove_const(JOIN *join,ORDER *first_order, Item *cond,
          join->rollup.state == ROLLUP::STATE_INITED &&
          join->outer_join))
       *simple_order=0;				// Must do a temp table to sort
-    else if (!(order_tables & not_const_tables))
+    else if (current_thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE &&
+             !(order_tables & not_const_tables))
     {
       if (order->item[0]->has_subquery() && 
           !(join->select_lex->options & SELECT_DESCRIBE))

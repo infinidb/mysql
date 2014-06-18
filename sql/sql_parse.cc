@@ -90,6 +90,7 @@
 
 #include "sp_head.h"
 #include "sp_instr.h"         // @InfiniDB
+#include "sp_rcontext.h"      // @InfiniDB
 #include "sp.h"
 #include "sp_cache.h"
 #include "events.h"
@@ -8493,6 +8494,9 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 						if (thd->killed != THD::KILL_QUERY)
 							thd->killed = THD::KILL_QUERY;
 					}
+					char *query = thd->query();
+					uint32 query_length = thd->query_length();
+					bool err_status = false;
 
 					// find sp and insert to cache, in case it's not there yet.
 					sp_cache_routine(thd, SP_TYPE_PROCEDURE, thd->lex->spname, FALSE, &sp);
@@ -8500,7 +8504,7 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 					sp= sp_find_routine(thd, SP_TYPE_PROCEDURE, thd->lex->spname,
 						                      &thd->sp_proc_cache, TRUE);
 
-					if (!sp)
+					if (!sp || sp->instructions() != 1)
 					{
 						INFINIDB_execute = false;
 					}
@@ -8508,20 +8512,26 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 					// only handle SP with one select statement
 					while (INFINIDB_execute)
 					{
-						char *query = thd->query();
-						uint32 query_length = thd->query_length();
 						uint ip = 0;
 						List<Item> *args = &thd->lex->value_list;
 						sp_instr *i;
 						i = sp->get_instr(ip);
-						(void)i;  // temp compiler fix for now
+						//(void)i;  // temp compiler fix for now
+						sp_rcontext *proc_runtime_ctx = sp_rcontext::create(thd, sp->get_root_parsing_context(), NULL);
+						if (!proc_runtime_ctx)
+						{
+							err_status = true;
+							break;
+						}
+						proc_runtime_ctx->sp= sp;
+
 #if 1
 						sp_instr_stmt *sel_query = (sp_instr_stmt*)i;
 
 						// not sure if this will catch every invalid ptr. MySQL leaves some ptrs unintiallized
 						if (sel_query->query().str == 0)
 						{
-							INFINIDB_execute = false;
+							err_status = true;
 							break;
 						}
 #endif
@@ -8546,10 +8556,31 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 								if (spvar->mode != sp_variable::MODE_IN)
 								  continue;
 
-								std::string arg_name = spvar->name.str;
-								std::string arg_val = arg_item->item_name.ptr();
+								std::string arg_name = (spvar->name.str ? spvar->name.str : "");
+								std::string arg_val;
+								if (proc_runtime_ctx->set_variable(thd, i, it_args.ref()))
+								{
+									err_status= true;
+									break;
+								}
+
+								if ((arg_item->type() == Item::FUNC_ITEM) &&
+								    (((Item_func*)arg_item)->functype() == Item_func::GUSERVAR_FUNC))
+								{
+									String val, *str = arg_item->val_str(&val);
+									if (!str)
+									{
+										err_status = true;
+										break;
+									}
+									arg_val = str->c_ptr();
+								}
+								else
+								{
+									arg_val = (arg_item->item_name.ptr() ? arg_item->item_name.ptr() : "");
+								}
 								uint len = spvar->name.length;
-								if (arg_item->type() ==  Item::STRING_ITEM)
+								if (arg_item->result_type() ==  STRING_RESULT)
 									arg_val = "'" + arg_val + "'";
 
 								// replace arg_name in the query with arg_val
@@ -8573,6 +8604,8 @@ fprintf(stderr, "ps4: error: %d\n", thd->is_error());
 								}
 #endif
 							}
+							if (err_status)
+								break; // while
 						}
 						alloc_query(thd, tmp_query.c_str(), tmp_query.length());
 
@@ -8591,13 +8624,14 @@ fprintf(stderr, "ps6: error: %d\n", thd->is_error());
 						}
 
 						if (thd->lex->sql_command != SQLCOM_SELECT &&  thd->lex->sql_command != SQLCOM_END)
-						{
-							INFINIDB_execute = false;
-							// set original query back
-							thd->set_query(query, query_length);
-							break;
-						}
-						break;
+							err_status = true;
+						break; // while
+					}
+					if (err_status)
+					{
+						INFINIDB_execute = false;
+						// set original query back
+						thd->set_query(query, query_length);
 					}
 				}
 
