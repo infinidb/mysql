@@ -5697,6 +5697,7 @@ enum options_mysqld
   OPT_INFINIDB_DISKJOIN_SMALLSIDELIMIT,
   OPT_INFINIDB_DISKJOIN_LARGESIDELIMIT,
   OPT_INFINIDB_DISKJOIN_BUCKETSIZE,
+  OPT_INFINIDB_UM_MEM_LIMIT,
   OPT_INFINIDB_VARBIN_ALWAYS_HEX,
   OPT_INFINIDB_DOUBLE_FOR_DECIMAL_MATH,
   OPT_INFINIDB_LOCAL_QUERY,
@@ -7288,6 +7289,18 @@ thread is in the relay logs.",
    GET_ULONG, REQUIRED_ARG,
 	100, /* Default value */
 	1, /* Min allowed value */
+	ULONG_MAX, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+
+  {"infinidb_um_mem_limit", OPT_INFINIDB_UM_MEM_LIMIT,
+   "A per-session memory limit (in MB) on large data structures on the UM. (0 = unlimited)",
+   (uchar**) &global_system_variables.infinidb_um_mem_limit,
+   (uchar**) &max_system_variables.infinidb_um_mem_limit, 0,
+   GET_ULONG, REQUIRED_ARG,
+	0, /* Default value */
+	0, /* Min allowed value */
 	ULONG_MAX, /* Max allowed value */
 	0, /* Subtract this overhead from given value before setting var */
 	1, /* Value should be a mult. of this */

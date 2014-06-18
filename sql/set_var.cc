@@ -527,6 +527,8 @@ static sys_var_thd_ulong	sys_diskjoin_largesidelimit(&vars, "infinidb_diskjoin_l
 					       &SV::infinidb_diskjoin_largesidelimit);
 static sys_var_thd_ulong	sys_diskjoin_bucketsize(&vars, "infinidb_diskjoin_bucketsize",
 					       &SV::infinidb_diskjoin_bucketsize);
+static sys_var_thd_ulong	sys_um_mem_limit(&vars, "infinidb_um_mem_limit",
+					       &SV::infinidb_um_mem_limit);
 static sys_var_thd_ulong	sys_stringtable_threshold(&vars, "infinidb_stringtable_threshold",
 					       &SV::infinidb_stringtable_threshold);
 static sys_var_thd_bool sys_infinidb_varbin_always_hex(&vars, "infinidb_varbin_always_hex",

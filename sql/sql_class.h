@@ -346,6 +346,7 @@ struct system_variables
   ulong infinidb_diskjoin_smallsidelimit;
   ulong infinidb_diskjoin_largesidelimit;
   ulong infinidb_diskjoin_bucketsize;
+  ulong infinidb_um_mem_limit;
   my_bool infinidb_varbin_always_hex;
   my_bool infinidb_double_for_decimal_math;
   ulong infinidb_local_query;
