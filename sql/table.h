@@ -1056,6 +1056,7 @@ public:
   {
 	//FIXME: the mysql_version test is to see if this non-zero ptr really points to a TABLE_SHARE???
     if (s && s->mysql_version >= 50100 && s->mysql_version <= 50699 && s->db_plugin &&
+	s->table_category != TABLE_CATEGORY_TEMPORARY &&
 #if (defined(_MSC_VER) && defined(_DEBUG)) || defined(SAFE_MUTEX)
 	    (strcmp((*s->db_plugin)->name.str, "InfiniDB") == 0)
 #else
