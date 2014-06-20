@@ -20,12 +20,12 @@
 echo "Finding system information for a MySQL bug report"
 
 VERSION="5.1.73"
-COMPILATION_COMMENT="InfiniDB 4.6 Alpha"
+COMPILATION_COMMENT="Calpont InfiniDB 4.5 Alpha"
 BUGmysql="mysql@lists.mysql.com"
 # This is set by configure
-COMP_CALL_INFO="CC='gcc'  CFLAGS='-g -O2'  CXX='g++'  CXXFLAGS='-DSKIP_OAM_INIT'  LDFLAGS=''  ASFLAGS=''"
-COMP_RUN_INFO="CC='gcc'  CFLAGS='-g  -DSAFE_MUTEX -g -O2   -DUNIV_LINUX -DUNIV_LINUX'  CXX='g++'  CXXFLAGS='-g  -DSAFE_MUTEX -DSKIP_OAM_INIT   -fno-implicit-templates -fno-exceptions -fno-rtti'  LDFLAGS=' -rdynamic '  ASFLAGS=''"
-CONFIGURE_LINE="./configure  '--prefix=/home/zzhu/mysql-bin' '--with-debug' '--without-libedit' '--with-readline' '--with-plugins=csv,heap,myisam,myisammrg,partition' '--with-mysqld-ldflags=-Wl,-rpath -Wl,/home/zzhu/mysql-bin/mysql/lib/mysql -Wl,-rpath -Wl,/home/zzhu/mysql-bin/lib' '--with-client-ldflags=-Wl,-rpath -Wl,/home/zzhu/mysql-bin/mysql/lib/mysql -Wl,-rpath -Wl,/home/zzhu/mysql-bin/lib' '--with-extra-charsets=all' '--with-ssl' 'CXXFLAGS=-DSKIP_OAM_INIT'"
+COMP_CALL_INFO="CC='gcc'  CFLAGS='-g -O2'  CXX='g++'  CXXFLAGS='-g -O2'  LDFLAGS=''  ASFLAGS=''"
+COMP_RUN_INFO="CC='gcc'  CFLAGS=' -g -O2   -DUNIV_LINUX -DUNIV_LINUX'  CXX='g++'  CXXFLAGS=' -g -O2   -fno-implicit-templates -fno-exceptions -fno-rtti'  LDFLAGS=' -rdynamic '  ASFLAGS=''"
+CONFIGURE_LINE="./configure '--prefix=/home/rdempsey/Calpont/mysql' '--without-libedit' '--with-readline' '--with-plugins=csv,heap,myisam,myisammrg,partition' '--with-mysqld-ldflags=-Wl,-rpath -Wl,/home/rdempsey/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/home/rdempsey/Calpont/lib' '--with-client-ldflags=-Wl,-rpath -Wl,/home/rdempsey/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/home/rdempsey/Calpont/lib' '--with-extra-charsets=all' '--with-ssl'"
 
 LIBC_INFO=""
 for pat in /lib/libc.* /lib/libc-* /usr/lib/libc.* /usr/lib/libc-*
@@ -253,8 +253,8 @@ ${ORGANIZATION- $ORGANIZATION_C}
 >Class:		$CLASS_C
 >Release:	mysql-${VERSION} ($COMPILATION_COMMENT)
 `test -n "$MYSQL_SERVER" && echo ">Server: $MYSQL_SERVER"`
->C compiler:    gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
->C++ compiler:  g++ (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+>C compiler:    gcc (GCC) 4.1.2 20080704 (Red Hat 4.1.2-54)
+>C++ compiler:  g++ (GCC) 4.1.2 20080704 (Red Hat 4.1.2-54)
 >Environment:
 	$ENVIRONMENT_C
 `test -n "$SYSTEM"  && echo "System: $SYSTEM"`
