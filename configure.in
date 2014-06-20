@@ -1837,7 +1837,7 @@ if test "$with_comment" != "no"
 then
   COMPILATION_COMMENT=$with_comment
 else
-  COMPILATION_COMMENT="InfiniDB 4.6 Alpha"
+  COMPILATION_COMMENT="InfiniDB 5.0 Alpha"
 fi
 AC_SUBST(COMPILATION_COMMENT)
 
