@@ -415,9 +415,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  unittest/mytap/t/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  unittest/mytap/t/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  unittest/mytap/t/Makefile
+	  $(AUTOMAKE) --foreign  unittest/mytap/t/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

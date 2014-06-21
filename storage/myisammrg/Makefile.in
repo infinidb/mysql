@@ -461,9 +461,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  storage/myisammrg/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  storage/myisammrg/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  storage/myisammrg/Makefile
+	  $(AUTOMAKE) --foreign  storage/myisammrg/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

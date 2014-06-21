@@ -417,9 +417,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  extra/yassl/taocrypt/test/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  extra/yassl/taocrypt/test/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  extra/yassl/taocrypt/test/Makefile
+	  $(AUTOMAKE) --foreign  extra/yassl/taocrypt/test/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
