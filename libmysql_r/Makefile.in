@@ -573,9 +573,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/libmysql/Makefile.sh
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  libmysql_r/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  libmysql_r/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  libmysql_r/Makefile
+	  $(AUTOMAKE) --foreign  libmysql_r/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

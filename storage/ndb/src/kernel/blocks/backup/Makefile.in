@@ -478,9 +478,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/storage/ndb/config/c
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  storage/ndb/src/kernel/blocks/backup/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  storage/ndb/src/kernel/blocks/backup/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  storage/ndb/src/kernel/blocks/backup/Makefile
+	  $(AUTOMAKE) --foreign  storage/ndb/src/kernel/blocks/backup/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

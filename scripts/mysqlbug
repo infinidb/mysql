@@ -20,12 +20,12 @@
 echo "Finding system information for a MySQL bug report"
 
 VERSION="5.1.73"
-COMPILATION_COMMENT="Calpont InfiniDB 4.5 Alpha"
+COMPILATION_COMMENT="InfiniDB 4.5.1-3"
 BUGmysql="mysql@lists.mysql.com"
 # This is set by configure
 COMP_CALL_INFO="CC='gcc'  CFLAGS='-g -O2'  CXX='g++'  CXXFLAGS='-g -O2'  LDFLAGS=''  ASFLAGS=''"
 COMP_RUN_INFO="CC='gcc'  CFLAGS=' -g -O2   -DUNIV_LINUX -DUNIV_LINUX'  CXX='g++'  CXXFLAGS=' -g -O2   -fno-implicit-templates -fno-exceptions -fno-rtti'  LDFLAGS=' -rdynamic '  ASFLAGS=''"
-CONFIGURE_LINE="./configure '--prefix=/home/rdempsey/Calpont/mysql' '--without-libedit' '--with-readline' '--with-plugins=csv,heap,myisam,myisammrg,partition' '--with-mysqld-ldflags=-Wl,-rpath -Wl,/home/rdempsey/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/home/rdempsey/Calpont/lib' '--with-client-ldflags=-Wl,-rpath -Wl,/home/rdempsey/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/home/rdempsey/Calpont/lib' '--with-extra-charsets=all' '--with-ssl'"
+CONFIGURE_LINE="./configure '--prefix=/usr/local/Calpont/mysql' '--without-libedit' '--with-readline' '--with-plugins=csv,heap,myisam,myisammrg,partition' '--with-mysqld-ldflags=-Wl,-rpath -Wl,/usr/local/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/usr/local/Calpont/lib' '--with-client-ldflags=-Wl,-rpath -Wl,/usr/local/Calpont/mysql/lib/mysql -Wl,-rpath -Wl,/usr/local/Calpont/lib' '--with-extra-charsets=all' '--with-ssl'"
 
 LIBC_INFO=""
 for pat in /lib/libc.* /lib/libc-* /usr/lib/libc.* /usr/lib/libc-*

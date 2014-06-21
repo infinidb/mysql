@@ -437,9 +437,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  cmd-line-utils/libedit/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  cmd-line-utils/libedit/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  cmd-line-utils/libedit/Makefile
+	  $(AUTOMAKE) --foreign  cmd-line-utils/libedit/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
