@@ -401,9 +401,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  storage/ndb/src/cw/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  storage/ndb/src/cw/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  storage/ndb/src/cw/Makefile
+	  $(AUTOMAKE) --foreign  storage/ndb/src/cw/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

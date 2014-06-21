@@ -906,9 +906,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  storage/innodb_plugin/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  storage/innodb_plugin/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  storage/innodb_plugin/Makefile
+	  $(AUTOMAKE) --foreign  storage/innodb_plugin/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

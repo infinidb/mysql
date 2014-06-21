@@ -401,9 +401,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu  server-tools/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign  server-tools/Makefile'; \
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  server-tools/Makefile
+	  $(AUTOMAKE) --foreign  server-tools/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
