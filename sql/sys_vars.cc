@@ -4743,3 +4743,10 @@ static Sys_var_ulong Sys_infinidb_import_for_batchinsert_delimiter(
        CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(0, 128), DEFAULT(7), BLOCK_SIZE(1));
 
+static Sys_var_ulong Sys_infinidb_um_mem_limit(
+       "infinidb_um_mem_limit",
+       "A per-session memory limit (in MB) on large data structures on the UM. (0 = unlimited)",
+       SESSION_VAR(infinidb_um_mem_limit),
+       CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
