@@ -96,6 +96,8 @@ public:
   bool engine_changed;
   /* subquery is transformed */
   bool changed;
+  /* @InfiniDB port this variable from 5.1; needed by InfiniDB */
+  bool is_correlated;
 
   enum trans_res {RES_OK, RES_REDUCE, RES_ERROR};
   enum subs_type {UNKNOWN_SUBS, SINGLEROW_SUBS,

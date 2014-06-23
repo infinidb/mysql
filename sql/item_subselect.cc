@@ -47,7 +47,7 @@ Item_subselect::Item_subselect():
   Item_result_field(), value_assigned(0), traced_before(false),
   substitution(NULL), in_cond_of_tab(INT_MIN), engine(NULL), old_engine(NULL),
   used_tables_cache(0), have_to_be_excluded(0), const_item_cache(1),
-  engine_changed(false), changed(false)
+  engine_changed(false), changed(false), is_correlated(false)
 {
   with_subselect= 1;
   reset();

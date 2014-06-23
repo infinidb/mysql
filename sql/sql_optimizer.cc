@@ -745,7 +745,12 @@ JOIN::optimize()
     When the WITH ROLLUP modifier is present, we cannot skip temporary table
     creation for the DISTINCT clause just because there are only const tables.
   */
-  need_tmp= ((!plan_is_const() &&
+  // @InfiniDB. We don't need tmp table for vtable create phase. Plus
+  // to build tmp table may corrupt some field table_name & db_name (for some reason)
+  if (thd->infinidb_vtable.vtable_state == THD::INFINIDB_CREATE_VTABLE)
+    need_tmp = false;
+  else
+    need_tmp= ((!plan_is_const() &&
 	     ((select_distinct || !simple_order || !simple_group) ||
 	      (group_list && order) ||
 	      MY_TEST(select_options & OPTION_BUFFER_RESULT))) ||
@@ -975,7 +980,8 @@ JOIN::optimize()
         if ((ordered_index_usage != ordered_index_group_by) &&
             (tmp_table_param.quick_group || 
 	     (tab->emb_sj_nest && 
-	      tab->position->sj_strategy == SJ_OPT_LOOSE_SCAN)))
+	      tab->position->sj_strategy == SJ_OPT_LOOSE_SCAN)) &&
+            thd->infinidb_vtable.vtable_state != THD::INFINIDB_CREATE_VTABLE)
         {
           need_tmp=1;
           simple_order= simple_group= false; // Force tmp table without sort

@@ -10773,6 +10773,10 @@ sum_expr:
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
+        /* @InfiniDB Note: mid-rule action was converted to end rule action to allow analtyic
+           function to parse. Didn't see why mid-rule action is necessary here. Will
+           watch for potential conflict.
+
         | COUNT_SYM '(' DISTINCT
           { Select->in_sum_expr++; }
           expr_list
@@ -10783,6 +10787,13 @@ sum_expr:
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
+        */
+        | COUNT_SYM '(' DISTINCT in_sum_expr_list ')'
+          {
+            $$= new (YYTHD->mem_root) Item_sum_count(* $4);
+            if ($$ == NULL)
+              MYSQL_YYABORT;
+          }          
         | MIN_SYM '(' in_sum_expr ')'
           {
             $$= new (YYTHD->mem_root) Item_sum_min($3);

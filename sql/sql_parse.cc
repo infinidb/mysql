@@ -8371,7 +8371,8 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 			if (thd->lex->sql_command == SQLCOM_SELECT ||
 			    thd->lex->sql_command == SQLCOM_EXECUTE ||
 			    thd->lex->sql_command == SQLCOM_CALL ||
-			    thd->lex->sql_command == SQLCOM_INSERT_SELECT)
+			    thd->lex->sql_command == SQLCOM_INSERT_SELECT ||
+			    thd->lex->sql_command == SQLCOM_END)
 			{
 				// select into variable
 				std::string sel_into, lower_case_sel_into, limit;
@@ -8400,7 +8401,8 @@ fprintf(stderr, "ps2: error: %d\n", thd->is_error());
 				{
 					thd->infinidb_vtable.isInsertSelect = true;
 				}
-				else if (thd->lex->sql_command == SQLCOM_EXECUTE)
+				else if (thd->lex->sql_command == SQLCOM_EXECUTE || 
+				         thd->lex->sql_command == SQLCOM_END)
 				{
 					//@Bug 2703 Added the support of prepared statement with and without variables binding
 					//Save the query in case we need set it back
@@ -8659,7 +8661,8 @@ fprintf(stderr, "4: error: %d\n", thd->is_error());
 							printf("<<< V-TABLE unsupported components encountered. Auto switch to table mode\n");
 #endif
 fprintf(stderr, "5: error: %d\n", thd->is_error());
-							mysql_parse(thd, thd->query(), thd->query_length(), &end_of_stmt);
+		                                        parser_state.init(thd, thd->query(), thd->query_length());
+							mysql_parse(thd, thd->query(), thd->query_length(), &parser_state);
 fprintf(stderr, "6: error: %d\n", thd->is_error());
 							thd->infinidb_vtable.vtable_state = THD::INFINIDB_INIT;
 						}

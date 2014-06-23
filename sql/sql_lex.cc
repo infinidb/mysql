@@ -2104,6 +2104,7 @@ void st_select_lex::mark_as_dependent(st_select_lex *last)
       }
     }
   }
+  this->master_unit()->item->is_correlated= TRUE;
 }
 
 bool st_select_lex_node::set_braces(bool value)      { return 1; }

@@ -3912,7 +3912,10 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
   for (; global_list; global_list = global_list->next_global)
   {
     //if (!global_list->table || !global_list->table->s->db_plugin)
-    if (!(global_list->table && global_list->table->s && global_list->table->s->db_plugin))
+    // @InfiniDB @bug5978. Bypass derived table, whose s structure may not be initialized yet.
+    if (!(global_list->effective_algorithm != DERIVED_ALGORITHM_TMPTABLE &&
+          global_list->table && global_list->table->s && 
+          global_list->table->s->db_plugin))
       continue;
     //Windows never has SAFE_MUTEX defined...
     // @InfiniDB watch out for FROM clause derived table. union memeory table has tablename="union" 
@@ -3938,7 +3941,7 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
     }
   }
  
-  if (hasInfiniDB && thd->lex->sql_command == SQLCOM_EXECUTE)
+  if (hasInfiniDB && (thd->lex->sql_command == SQLCOM_EXECUTE || thd->lex->sql_command == SQLCOM_SELECT))
   {
     // @bug5298. disable re-prepare observer for infinidb query
     //thd->m_reprepare_observer = NULL;
