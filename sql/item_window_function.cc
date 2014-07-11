@@ -33,7 +33,7 @@ Boundary::Boundary(BOUND b): bound(b), item(NULL)
 
 bool Boundary::fix_fields(THD* thd, Item** ref)
 {
-	if (item && item->fix_fields(thd, ref))
+	if (item && item->fix_fields(thd, &item))
 		return TRUE;
 	return FALSE;
 }
@@ -85,7 +85,7 @@ bool Ordering::fix_fields(THD* thd, Item** ref)
 		for (; orderCol; orderCol= orderCol->next)
 		{
 			Item* orderItem = *(orderCol->item);
-			if (orderItem->fix_fields(thd, ref))
+			if (orderItem->fix_fields(thd, (orderCol->item)))
 				return TRUE;
 		}
 	}
@@ -111,7 +111,7 @@ bool Window_context::fix_fields(THD* thd, Item** ref)
 	// check partition columns
 	for (uint i = 0; i < partition_count; i++)
 	{
-		if (partitions[i]->fix_fields(thd, ref))
+		if (partitions[i]->fix_fields(thd, &partitions[i]))
 			return TRUE;
 	}
 
@@ -655,7 +655,7 @@ bool Item_func_window_percentile::fix_fields(THD* thd, Item** ref)
 		for (; orderCol; orderCol= orderCol->next)
 		{
 			Item* orderItem = *(orderCol->item);
-			if (orderItem->fix_fields(thd, ref))
+			if (orderItem->fix_fields(thd, (orderCol->item)))
 				return TRUE;
 		}
 	}
