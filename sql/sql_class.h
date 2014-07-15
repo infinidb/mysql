@@ -3108,6 +3108,7 @@ public:
   int do_table_deletes(TABLE *table, bool ignore);
   bool send_eof();
   virtual void abort();
+  TABLE_LIST* get_tables() {return delete_tables;} /*@Bug 6121 to get the table to be delete from */
 };
 
 
