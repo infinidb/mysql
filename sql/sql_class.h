@@ -5145,6 +5145,7 @@ public:
     return deleted;
   }
   virtual void abort_result_set();
+  TABLE_LIST* get_tables() {return delete_tables;} /*@Bug 6121 to get the table to be delete from */
 };
 
 
