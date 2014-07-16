@@ -3077,7 +3077,6 @@ class multi_delete :public select_result_interceptor
   TABLE_LIST *delete_tables, *table_being_deleted;
   Unique **tempfiles;
   ha_rows deleted, found;
-  uint num_of_tables;
   int error;
   bool do_delete;
   /* True if at least one table we delete from is transactional */
@@ -3103,6 +3102,7 @@ public:
   bool send_eof();
   virtual void abort();
   TABLE_LIST* get_tables() {return delete_tables;} /*@Bug 6121 to get the table to be delete from */
+  uint num_of_tables;
 };
 
 
