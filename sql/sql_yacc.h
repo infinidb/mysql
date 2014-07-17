@@ -1376,7 +1376,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 1380 "/home/rdempsey/github/obj/sql/sql_yacc.h"
+#line 1380 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.h"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
