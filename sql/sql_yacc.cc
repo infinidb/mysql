@@ -1,23 +1,24 @@
-
-/* A Bison parser, made by GNU Bison 2.4.1.  */
+/* A Bison parser, made by GNU Bison 2.3.  */
 
 /* Skeleton implementation for Bison's Yacc-like parsers in C
-   
-      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+
+   Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
    Free Software Foundation, Inc.
-   
-   This program is free software: you can redistribute it and/or modify
+
+   This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-   
+   the Free Software Foundation; either version 2, or (at your option)
+   any later version.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -28,7 +29,7 @@
    special exception, which will cause the skeleton and the resulting
    Bison output files to be licensed under the GNU General Public
    License without this special exception.
-   
+
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
@@ -46,7 +47,7 @@
 #define YYBISON 1
 
 /* Bison version.  */
-#define YYBISON_VERSION "2.4.1"
+#define YYBISON_VERSION "2.3"
 
 /* Skeleton name.  */
 #define YYSKELETON_NAME "yacc.c"
@@ -54,1007 +55,17 @@
 /* Pure parsers.  */
 #define YYPURE 1
 
-/* Push parsers.  */
-#define YYPUSH 0
-
-/* Pull parsers.  */
-#define YYPULL 1
-
 /* Using locations.  */
 #define YYLSP_NEEDED 0
 
 /* Substitute the variable and function names.  */
-#define yyparse         MYSQLparse
-#define yylex           MYSQLlex
-#define yyerror         MYSQLerror
-#define yylval          MYSQLlval
-#define yychar          MYSQLchar
-#define yydebug         MYSQLdebug
-#define yynerrs         MYSQLnerrs
-
-
-/* Copy the first part of user declarations.  */
-
-/* Line 189 of yacc.c  */
-#line 32 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
-
-/* thd is passed as an argument to yyparse(), and subsequently to yylex().
-
-** The type will be void*, so it must be  cast to (THD*) when used.
-** Use the YYTHD macro for this.
-*/
-#define YYPARSE_PARAM yythd
-#define YYLEX_PARAM yythd
-#define YYTHD ((THD *)yythd)
-#define YYLIP (& YYTHD->m_parser_state->m_lip)
-#define YYPS (& YYTHD->m_parser_state->m_yacc)
-#define YYCSCL  YYTHD->variables.character_set_client
-
-#define MYSQL_YACC
-#define YYINITDEPTH 100
-#define YYMAXDEPTH 3200                        /* Because of 64K stack */
-#define Lex (YYTHD->lex)
-#define Select Lex->current_select
-#include "sql_priv.h"
-#include "unireg.h"                    // REQUIRED: for other includes
-#include "sql_parse.h"                        /* comp_*_creator */
-#include "sql_table.h"                        /* primary_key_name */
-#include "sql_partition.h"  /* mem_alloc_error, partition_info, HASH_PARTITION */
-#include "sql_acl.h"                          /* *_ACL */
-#include "password.h"       /* my_make_scrambled_password_323, my_make_scrambled_password */
-#include "sql_class.h"      /* Key_part_spec, enum_filetype, Diag_condition_item_name */
-#include "rpl_slave.h"
-#include "lex_symbol.h"
-#include "item.h"
-#include "item_create.h"
-#include "item_create_window_function.h"
-#include "item_window_function.h"
-#include "sp_head.h"
-#include "sp_instr.h"
-#include "sp_pcontext.h"
-#include "sp_rcontext.h"
-#include "sp.h"
-#include "sql_alter.h"                         // Sql_cmd_alter_table*
-#include "sql_truncate.h"                      // Sql_cmd_truncate_table
-#include "sql_admin.h"                         // Sql_cmd_analyze/Check..._table
-#include "sql_partition_admin.h"               // Sql_cmd_alter_table_*_part.
-#include "sql_handler.h"                       // Sql_cmd_handler_*
-#include "sql_signal.h"
-#include "sql_get_diagnostics.h"               // Sql_cmd_get_diagnostics
-#include "event_parse_data.h"
-#include <myisam.h>
-#include <myisammrg.h>
-#include "keycaches.h"
-#include "set_var.h"
-#include "opt_explain_traditional.h"
-#include "opt_explain_json.h"
-
-/* this is to get the bison compilation windows warnings out */
-#ifdef _MSC_VER
-/* warning C4065: switch statement contains 'default' but no 'case' labels */
-#pragma warning (disable : 4065)
-#endif
-
-using std::min;
-using std::max;
-
-int yylex(void *yylval, void *yythd);
-
-#define yyoverflow(A,B,C,D,E,F)               \
-  {                                           \
-    ulong val= *(F);                          \
-    if (my_yyoverflow((B), (D), &val))        \
-    {                                         \
-      yyerror((char*) (A));                   \
-      return 2;                               \
-    }                                         \
-    else                                      \
-    {                                         \
-      *(F)= (YYSIZE_T)val;                    \
-    }                                         \
-  }
-
-#define MYSQL_YYABORT                         \
-  do                                          \
-  {                                           \
-    LEX::cleanup_lex_after_parse_error(YYTHD);\
-    YYABORT;                                  \
-  } while (0)
-
-#define MYSQL_YYABORT_UNLESS(A)         \
-  if (!(A))                             \
-  {                                     \
-    my_parse_error(ER(ER_SYNTAX_ERROR));\
-    MYSQL_YYABORT;                      \
-  }
-
-/*
-  Work around for broken code generated by bison 1.875.
-
-  The code generated by bison 1.875a and later, bison 2.1 and bison 2.2 is ok.
-  With bison 1.875 however, the generated code contains:
-<pre>
-  yyerrlab1:
-  #if defined (__GNUC_MINOR__) && 2093 <= (__GNUC__ * 1000 + __GNUC_MINOR__)
-    __attribute__ ((__unused__))
-  #endif
-</pre>
-  This usage of __attribute__ is illegal, so we remove it.
-  See the following references for details:
-  http://lists.gnu.org/archive/html/bug-bison/2004-02/msg00014.html
-  http://gcc.gnu.org/bugzilla/show_bug.cgi?id=14273
-*/
-
-#if defined (__GNUC_MINOR__) && 2093 <= (__GNUC__ * 1000 + __GNUC_MINOR__)
-#undef __attribute__
-#define __attribute__(X)
-#endif
-
-
-#ifndef DBUG_OFF
-#define YYDEBUG 1
-#else
-#define YYDEBUG 0
-#endif
-
-/**
-  @brief Push an error message into MySQL error stack with line
-  and position information.
-
-  This function provides semantic action implementers with a way
-  to push the famous "You have a syntax error near..." error
-  message into the error stack, which is normally produced only if
-  a parse error is discovered internally by the Bison generated
-  parser.
-*/
-
-void my_parse_error(const char *s)
-{
-  THD *thd= current_thd;
-  Lex_input_stream *lip= & thd->m_parser_state->m_lip;
-
-  const char *yytext= lip->get_tok_start();
-  if (!yytext)
-    yytext= "";
-
-  /* Push an error into the error stack */
-  ErrConvString err(yytext, thd->variables.character_set_client);
-  my_printf_error(ER_PARSE_ERROR,  ER(ER_PARSE_ERROR), MYF(0), s,
-                  err.ptr(), lip->yylineno);
-}
-
-/**
-  @brief Bison callback to report a syntax/OOM error
-
-  This function is invoked by the bison-generated parser
-  when a syntax error, a parse error or an out-of-memory
-  condition occurs. This function is not invoked when the
-  parser is requested to abort by semantic action code
-  by means of YYABORT or YYACCEPT macros. This is why these
-  macros should not be used (use MYSQL_YYABORT/MYSQL_YYACCEPT
-  instead).
-
-  The parser will abort immediately after invoking this callback.
-
-  This function is not for use in semantic actions and is internal to
-  the parser, as it performs some pre-return cleanup. 
-  In semantic actions, please use my_parse_error or my_error to
-  push an error into the error stack and MYSQL_YYABORT
-  to abort from the parser.
-*/
-
-void MYSQLerror(const char *s)
-{
-  THD *thd= current_thd;
-
-  /*
-    Restore the original LEX if it was replaced when parsing
-    a stored procedure. We must ensure that a parsing error
-    does not leave any side effects in the THD.
-  */
-  LEX::cleanup_lex_after_parse_error(thd);
-
-  /* "parse error" changed into "syntax error" between bison 1.75 and 1.875 */
-  if (strcmp(s,"parse error") == 0 || strcmp(s,"syntax error") == 0)
-    s= ER(ER_SYNTAX_ERROR);
-  my_parse_error(s);
-}
-
-
-#ifndef DBUG_OFF
-void turn_parser_debug_on()
-{
-  /*
-     MYSQLdebug is in sql/sql_yacc.cc, in bison generated code.
-     Turning this option on is **VERY** verbose, and should be
-     used when investigating a syntax error problem only.
-
-     The syntax to run with bison traces is as follows :
-     - Starting a server manually :
-       mysqld --debug="d,parser_debug" ...
-     - Running a test :
-       mysql-test-run.pl --mysqld="--debug=d,parser_debug" ...
-
-     The result will be in the process stderr (var/log/master.err)
-   */
-
-  extern int yydebug;
-  yydebug= 1;
-}
-#endif
-
-static bool is_native_function(THD *thd, const LEX_STRING *name)
-{
-  if (find_native_function_builder(thd, *name))
-    return true;
-
-  if (is_lex_native_function(name))
-    return true;
-
-  return false;
-}
-
-
-/**
-  Helper action for a case statement (entering the CASE).
-  This helper is used for both 'simple' and 'searched' cases.
-  This helper, with the other case_stmt_action_..., is executed when
-  the following SQL code is parsed:
-<pre>
-CREATE PROCEDURE proc_19194_simple(i int)
-BEGIN
-  DECLARE str CHAR(10);
-
-  CASE i
-    WHEN 1 THEN SET str="1";
-    WHEN 2 THEN SET str="2";
-    WHEN 3 THEN SET str="3";
-    ELSE SET str="unknown";
-  END CASE;
-
-  SELECT str;
-END
-</pre>
-  The actions are used to generate the following code:
-<pre>
-SHOW PROCEDURE CODE proc_19194_simple;
-Pos     Instruction
-0       set str@1 NULL
-1       set_case_expr (12) 0 i@0
-2       jump_if_not 5(12) (case_expr@0 = 1)
-3       set str@1 _latin1'1'
-4       jump 12
-5       jump_if_not 8(12) (case_expr@0 = 2)
-6       set str@1 _latin1'2'
-7       jump 12
-8       jump_if_not 11(12) (case_expr@0 = 3)
-9       set str@1 _latin1'3'
-10      jump 12
-11      set str@1 _latin1'unknown'
-12      stmt 0 "SELECT str"
-</pre>
-
-  @param thd thread handler
-*/
-
-void case_stmt_action_case(THD *thd)
-{
-  LEX *lex= thd->lex;
-  sp_head *sp= lex->sphead;
-  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
-
-  sp->m_parser_data.new_cont_backpatch();
-
-  /*
-    BACKPATCH: Creating target label for the jump to
-    "case_stmt_action_end_case"
-    (Instruction 12 in the example)
-  */
-
-  pctx->push_label(thd, EMPTY_STR, sp->instructions());
-}
-
-/**
-  Helper action for a case then statements.
-  This helper is used for both 'simple' and 'searched' cases.
-  @param lex the parser lex context
-*/
-
-bool case_stmt_action_then(THD *thd, LEX *lex)
-{
-  sp_head *sp= lex->sphead;
-  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
-
-  sp_instr_jump *i =
-    new (thd->mem_root) sp_instr_jump(sp->instructions(), pctx);
-
-  if (!i || sp->add_instr(thd, i))
-    return true;
-
-  /*
-    BACKPATCH: Resolving forward jump from
-    "case_stmt_action_when" to "case_stmt_action_then"
-    (jump_if_not from instruction 2 to 5, 5 to 8 ... in the example)
-  */
-
-  sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
-
-  /*
-    BACKPATCH: Registering forward jump from
-    "case_stmt_action_then" to "case_stmt_action_end_case"
-    (jump from instruction 4 to 12, 7 to 12 ... in the example)
-  */
-
-  return sp->m_parser_data.add_backpatch_entry(i, pctx->last_label());
-}
-
-/**
-  Helper action for an end case.
-  This helper is used for both 'simple' and 'searched' cases.
-  @param lex the parser lex context
-  @param simple true for simple cases, false for searched cases
-*/
-
-void case_stmt_action_end_case(LEX *lex, bool simple)
-{
-  sp_head *sp= lex->sphead;
-  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
-
-  /*
-    BACKPATCH: Resolving forward jump from
-    "case_stmt_action_then" to "case_stmt_action_end_case"
-    (jump from instruction 4 to 12, 7 to 12 ... in the example)
-  */
-  sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
-
-  if (simple)
-    pctx->pop_case_expr_id();
-
-  sp->m_parser_data.do_cont_backpatch(sp->instructions());
-}
-
-
-static bool
-find_sys_var_null_base(THD *thd, struct sys_var_with_base *tmp)
-{
-  tmp->var= find_sys_var(thd, tmp->base_name.str, tmp->base_name.length);
-
-  if (tmp->var == NULL)
-    my_error(ER_UNKNOWN_SYSTEM_VARIABLE, MYF(0), tmp->base_name.str);
-  else
-    tmp->base_name= null_lex_str;
-
-  return thd->is_error();
-}
-
-
-/**
-  Helper action for a SET statement.
-  Used to push a system variable into the assignment list.
-
-  @param thd      the current thread
-  @param tmp      the system variable with base name
-  @param var_type the scope of the variable
-  @param val      the value being assigned to the variable
-
-  @return TRUE if error, FALSE otherwise.
-*/
-
-static bool
-set_system_variable(THD *thd, struct sys_var_with_base *tmp,
-                    enum enum_var_type var_type, Item *val)
-{
-  set_var *var;
-  LEX *lex= thd->lex;
-  sp_head *sp= lex->sphead;
-  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
-
-  /* No AUTOCOMMIT from a stored function or trigger. */
-  if (pctx && tmp->var == Sys_autocommit_ptr)
-    sp->m_flags|= sp_head::HAS_SET_AUTOCOMMIT_STMT;
-
-#ifdef HAVE_REPLICATION
-  if (lex->uses_stored_routines() &&
-      ((tmp->var == Sys_gtid_next_ptr
-#ifdef HAVE_GTID_NEXT_LIST
-       || tmp->var == Sys_gtid_next_list_ptr
-#endif
-       ) ||
-       Sys_gtid_purged_ptr == tmp->var))
-  {
-    my_error(ER_SET_STATEMENT_CANNOT_INVOKE_FUNCTION, MYF(0),
-             tmp->var->name.str);
-    return TRUE;
-  }
-#endif
-
-  if (val && val->type() == Item::FIELD_ITEM &&
-      ((Item_field*)val)->table_name)
-  {
-    my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), tmp->var->name.str);
-    return TRUE;
-  }
-
-  if (! (var= new set_var(var_type, tmp->var, &tmp->base_name, val)))
-    return TRUE;
-
-  return lex->var_list.push_back(var);
-}
-
-
-/**
-  Helper action for a SET statement.
-  Used to SET a field of NEW row.
-
-  @param thd                thread handler
-  @param trigger_field_name the NEW-row field name
-  @param expr_item          the value expression being assigned
-  @param expr_query         the value expression query
-
-  @return error status (true if error, false otherwise).
-*/
-
-static bool set_trigger_new_row(THD *thd,
-                                LEX_STRING trigger_field_name,
-                                Item *expr_item,
-                                LEX_STRING expr_query)
-{
-  LEX *lex= thd->lex;
-  sp_head *sp= lex->sphead;
-
-  DBUG_ASSERT(expr_item);
-  DBUG_ASSERT(sp->m_trg_chistics.action_time == TRG_ACTION_BEFORE &&
-              (sp->m_trg_chistics.event == TRG_EVENT_INSERT ||
-               sp->m_trg_chistics.event == TRG_EVENT_UPDATE));
-
-  Item_trigger_field *trg_fld=
-    new (thd->mem_root) Item_trigger_field(lex->current_context(),
-                                           Item_trigger_field::NEW_ROW,
-                                           trigger_field_name.str,
-                                           UPDATE_ACL, false);
-
-  if (!trg_fld)
-    return true;
-
-  sp_instr_set_trigger_field *i=
-    new (thd->mem_root)
-      sp_instr_set_trigger_field(sp->instructions(),
-                                 lex,
-                                 trigger_field_name,
-                                 trg_fld, expr_item,
-                                 expr_query);
-
-  if (!i)
-    return true;
-
-  /*
-    Let us add this item to list of all Item_trigger_field
-    objects in trigger.
-  */
-  sp->m_trg_table_fields.link_in_list(trg_fld, &trg_fld->next_trg_field);
-
-  return sp->add_instr(thd, i);
-}
-
-
-/**
-  Create an object to represent a SP variable in the Item-hierarchy.
-
-  @param thd              The current thread.
-  @param name             The SP variable name.
-  @param spv              The SP variable (optional).
-  @param query_start_ptr  Start of the SQL-statement query string (optional).
-  @param start_in_q       Start position of the SP variable name in the query.
-  @param end_in_q         End position of the SP variable name in the query.
-
-  @remark If spv is not specified, the name is used to search for the
-          variable in the parse-time context. If the variable does not
-          exist, a error is set and NULL is returned to the caller.
-
-  @return An Item_splocal object representing the SP variable, or NULL on error.
-*/
-static Item_splocal* create_item_for_sp_var(THD *thd,
-                                            LEX_STRING name,
-                                            sp_variable *spv,
-                                            const char *query_start_ptr,
-                                            const char *start_in_q,
-                                            const char *end_in_q)
-{
-  LEX *lex= thd->lex;
-  uint spv_pos_in_query= 0;
-  uint spv_len_in_query= 0;
-  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
-
-  /* If necessary, look for the variable. */
-  if (pctx && !spv)
-    spv= pctx->find_variable(name, false);
-
-  if (!spv)
-  {
-    my_error(ER_SP_UNDECLARED_VAR, MYF(0), name.str);
-    return NULL;
-  }
-
-  DBUG_ASSERT(pctx && spv);
-
-  if (query_start_ptr)
-  {
-    /* Position and length of the SP variable name in the query. */
-    spv_pos_in_query= start_in_q - query_start_ptr;
-    spv_len_in_query= end_in_q - start_in_q;
-  }
-
-  Item_splocal *item=
-    new (thd->mem_root) Item_splocal(
-      name, spv->offset, spv->type, spv_pos_in_query, spv_len_in_query);
-
-#ifndef DBUG_OFF
-  if (item)
-    item->m_sp= lex->sphead;
-#endif
-
-  return item;
-}
-
-
-/**
-  Helper to resolve the SQL:2003 Syntax exception 1) in <in predicate>.
-  See SQL:2003, Part 2, section 8.4 <in predicate>, Note 184, page 383.
-  This function returns the proper item for the SQL expression
-  <code>left [NOT] IN ( expr )</code>
-  @param thd the current thread
-  @param left the in predicand
-  @param equal true for IN predicates, false for NOT IN predicates
-  @param expr first and only expression of the in value list
-  @return an expression representing the IN predicate.
-*/
-Item* handle_sql2003_note184_exception(THD *thd, Item* left, bool equal,
-                                       Item *expr)
-{
-  /*
-    Relevant references for this issue:
-    - SQL:2003, Part 2, section 8.4 <in predicate>, page 383,
-    - SQL:2003, Part 2, section 7.2 <row value expression>, page 296,
-    - SQL:2003, Part 2, section 6.3 <value expression primary>, page 174,
-    - SQL:2003, Part 2, section 7.15 <subquery>, page 370,
-    - SQL:2003 Feature F561, "Full value expressions".
-
-    The exception in SQL:2003 Note 184 means:
-    Item_singlerow_subselect, which corresponds to a <scalar subquery>,
-    should be re-interpreted as an Item_in_subselect, which corresponds
-    to a <table subquery> when used inside an <in predicate>.
-
-    Our reading of Note 184 is reccursive, so that all:
-    - IN (( <subquery> ))
-    - IN ((( <subquery> )))
-    - IN '('^N <subquery> ')'^N
-    - etc
-    should be interpreted as a <table subquery>, no matter how deep in the
-    expression the <subquery> is.
-  */
-
-  Item *result;
-
-  DBUG_ENTER("handle_sql2003_note184_exception");
-
-  if (expr->type() == Item::SUBSELECT_ITEM)
-  {
-    Item_subselect *expr2 = (Item_subselect*) expr;
-
-    if (expr2->substype() == Item_subselect::SINGLEROW_SUBS)
-    {
-      Item_singlerow_subselect *expr3 = (Item_singlerow_subselect*) expr2;
-      st_select_lex *subselect;
-
-      /*
-        Implement the mandated change, by altering the semantic tree:
-          left IN Item_singlerow_subselect(subselect)
-        is modified to
-          left IN (subselect)
-        which is represented as
-          Item_in_subselect(left, subselect)
-      */
-      subselect= expr3->invalidate_and_restore_select_lex();
-      result= new (thd->mem_root) Item_in_subselect(left, subselect);
-
-      if (! equal)
-        result = negate_expression(thd, result);
-
-      DBUG_RETURN(result);
-    }
-  }
-
-  if (equal)
-    result= new (thd->mem_root) Item_func_eq(left, expr);
-  else
-    result= new (thd->mem_root) Item_func_ne(left, expr);
-
-  DBUG_RETURN(result);
-}
-
-/**
-   @brief Creates a new SELECT_LEX for a UNION branch.
-
-   Sets up and initializes a SELECT_LEX structure for a query once the parser
-   discovers a UNION token. The current SELECT_LEX is pushed on the stack and
-   the new SELECT_LEX becomes the current one.
-
-   @param lex The parser state.
-
-   @param is_union_distinct True if the union preceding the new select statement
-   uses UNION DISTINCT.
-
-   @param is_top_level This should be @c TRUE if the newly created SELECT_LEX
-   is a non-nested statement.
-
-   @return <code>false</code> if successful, <code>true</code> if an error was
-   reported. In the latter case parsing should stop.
- */
-bool add_select_to_union_list(LEX *lex, bool is_union_distinct, 
-                              bool is_top_level)
-{
-  /* 
-     Only the last SELECT can have INTO. Since the grammar won't allow INTO in
-     a nested SELECT, we make this check only when creating a top-level SELECT.
-  */
-  if (is_top_level && lex->result)
-  {
-    my_error(ER_WRONG_USAGE, MYF(0), "UNION", "INTO");
-    return TRUE;
-  }
-  if (lex->proc_analyse)
-  {
-    my_error(ER_WRONG_USAGE, MYF(0), "UNION", "SELECT ... PROCEDURE ANALYSE()");
-    return TRUE;
-  }
-  if (lex->current_select->linkage == GLOBAL_OPTIONS_TYPE)
-  {
-    my_parse_error(ER(ER_SYNTAX_ERROR));
-    return TRUE;
-  }
-  /* This counter shouldn't be incremented for UNION parts */
-  lex->nest_level--;
-  if (mysql_new_select(lex, 0))
-    return TRUE;
-  mysql_init_select(lex);
-  lex->current_select->linkage=UNION_TYPE;
-  if (is_union_distinct) /* UNION DISTINCT - remember position */
-    lex->current_select->master_unit()->union_distinct=
-      lex->current_select;
-  return FALSE;
-}
-
-/**
-   @brief Initializes a SELECT_LEX for a query within parentheses (aka
-   braces).
-
-   @return false if successful, true if an error was reported. In the latter
-   case parsing should stop.
- */
-bool setup_select_in_parentheses(LEX *lex) 
-{
-  SELECT_LEX * sel= lex->current_select;
-  if (sel->set_braces(1))
-  {
-    my_parse_error(ER(ER_SYNTAX_ERROR));
-    return TRUE;
-  }
-  if (sel->linkage == UNION_TYPE &&
-      !sel->master_unit()->first_select()->braces &&
-      sel->master_unit()->first_select()->linkage ==
-      UNION_TYPE)
-  {
-    my_parse_error(ER(ER_SYNTAX_ERROR));
-    return TRUE;
-  }
-  if (sel->linkage == UNION_TYPE &&
-      sel->olap != UNSPECIFIED_OLAP_TYPE &&
-      sel->master_unit()->fake_select_lex)
-  {
-    my_error(ER_WRONG_USAGE, MYF(0), "CUBE/ROLLUP", "ORDER BY");
-    return TRUE;
-  }
-  /* select in braces, can't contain global parameters */
-  if (sel->master_unit()->fake_select_lex)
-    sel->master_unit()->global_parameters=
-      sel->master_unit()->fake_select_lex;
-  return FALSE;
-}
-
-static bool add_create_index_prepare (LEX *lex, Table_ident *table)
-{
-  lex->sql_command= SQLCOM_CREATE_INDEX;
-  if (!lex->current_select->add_table_to_list(lex->thd, table, NULL,
-                                              TL_OPTION_UPDATING,
-                                              TL_READ_NO_INSERT,
-                                              MDL_SHARED_UPGRADABLE))
-    return TRUE;
-  lex->alter_info.reset();
-  lex->alter_info.flags= Alter_info::ALTER_ADD_INDEX;
-  lex->col_list.empty();
-  lex->change= NullS;
-  return FALSE;
-}
-
-static bool add_create_index (LEX *lex, Key::Keytype type,
-                              const LEX_STRING &name,
-                              KEY_CREATE_INFO *info= NULL, bool generated= 0)
-{
-  Key *key;
-  key= new Key(type, name, info ? info : &lex->key_create_info, generated, 
-               lex->col_list);
-  if (key == NULL)
-    return TRUE;
-
-  lex->alter_info.key_list.push_back(key);
-  lex->col_list.empty();
-  return FALSE;
-}
-
-/**
-  Make a new string allocated on THD's mem-root.
-
-  @param thd        thread handler.
-  @param start_ptr  start of the new string.
-  @param end_ptr    end of the new string.
-
-  @return LEX_STRING object, containing a pointer to a newly
-  constructed/allocated string, and its length. The pointer is NULL
-  in case of out-of-memory error.
-*/
-static LEX_STRING make_string(THD *thd,
-                              const char *start_ptr,
-                              const char *end_ptr)
-{
-  LEX_STRING s;
-
-  s.length= end_ptr - start_ptr;
-  s.str= (char *) thd->alloc(s.length + 1);
-
-  if (s.str)
-    strmake(s.str, start_ptr, s.length);
-
-  return s;
-}
-
-/*
-  The start is either lip->ptr, if there was no lookahead, lip->tok_start
-  otherwise.
-*/
-#define YY_TOKEN_START \
-  ((yychar == YYEMPTY) ?  YYLIP->get_ptr() : YYLIP->get_tok_start())
-
-/*
-   The end is either lip->ptr, if there was no lookahead,
-   or lip->tok_end otherwise.
-*/
-
-#define YY_TOKEN_END \
-  ((yychar == YYEMPTY) ?  YYLIP->get_ptr() : YYLIP->get_tok_end())
-
-/**
-  Create a separate LEX for each assignment if in SP.
-
-  If we are in SP we want have own LEX for each assignment.
-  This is mostly because it is hard for several sp_instr_set
-  and sp_instr_set_trigger instructions share one LEX.
-  (Well, it is theoretically possible but adds some extra
-  overhead on preparation for execution stage and IMO less
-  robust).
-
-  @see sp_create_assignment_instr
-
-  @param thd        Thread context
-  @param option_ptr Option-value-expression start pointer
-*/
-
-static void sp_create_assignment_lex(THD *thd, const char *option_ptr)
-{
-  LEX *lex= thd->lex;
-  sp_head *sp= lex->sphead;
-
-  /*
-    We can come here in the following cases:
-
-      1. it's a regular SET statement outside stored programs
-        (lex->sphead is NULL);
-
-      2. we're parsing a stored program normally (loading from mysql.proc, ...);
-
-      3. we're re-parsing SET-statement with a user variable after meta-data
-        change. It's guaranteed, that:
-        - this SET-statement deals with a user/system variable (otherwise, it
-          would be a different SP-instruction, and we would parse an expression);
-        - this SET-statement has a single user/system variable assignment
-          (that's how we generate sp_instr_stmt-instructions for SET-statements).
-        So, in this case, even if lex->sphead is set, we should not process
-        further.
-  */
-
-  if (!sp ||            // case #1
-      sp->is_invoked()) // case #3
-  {
-    return;
-  }
-
-  LEX *old_lex= lex;
-  sp->reset_lex(thd);
-  lex= thd->lex;
-
-  /* Set new LEX as if we at start of set rule. */
-  mysql_init_select(lex);
-  lex->sql_command= SQLCOM_SET_OPTION;
-  lex->var_list.empty();
-  lex->one_shot_set= 0;
-  lex->autocommit= 0;
-
-  /*
-    It's a SET statement within SP. It will be either translated
-    into one or more sp_instr_stmt instructions, or it will be
-    sp_instr_set / sp_instr_set_trigger_field instructions.
-    In any case, position of SP-variable can not be determined
-    reliably. So, we set the start pointer of the current statement
-    to NULL.
-  */
-  sp->m_parser_data.set_current_stmt_start_ptr(NULL);
-  sp->m_parser_data.set_option_start_ptr(option_ptr);
-
-  /* Inherit from outer lex. */
-  lex->option_type= old_lex->option_type;
-}
-
-
-/**
-  Create a SP instruction for a SET assignment.
-
-  @see sp_create_assignment_lex
-
-  @param thd           Thread context
-  @param expr_end_ptr  Option-value-expression end pointer
-
-  @return false if success, true otherwise.
-*/
-
-static bool sp_create_assignment_instr(THD *thd, const char *expr_end_ptr)
-{
-  LEX *lex= thd->lex;
-  sp_head *sp= lex->sphead;
-
-  /*
-    We can come here in the following cases:
-
-      1. it's a regular SET statement outside stored programs
-        (lex->sphead is NULL);
-
-      2. we're parsing a stored program normally (loading from mysql.proc, ...);
-
-      3. we're re-parsing SET-statement with a user variable after meta-data
-        change. It's guaranteed, that:
-        - this SET-statement deals with a user/system variable (otherwise, it
-          would be a different SP-instruction, and we would parse an expression);
-        - this SET-statement has a single user/system variable assignment
-          (that's how we generate sp_instr_stmt-instructions for SET-statements).
-        So, in this case, even if lex->sphead is set, we should not process
-        further.
-  */
-
-  if (!sp ||            // case #1
-      sp->is_invoked()) // case #3
-  {
-    return false;
-  }
-
-  if (!lex->var_list.is_empty())
-  {
-    /* Extract expression string. */
-
-    const char *expr_start_ptr= sp->m_parser_data.get_option_start_ptr();
-
-    LEX_STRING expr;
-    expr.str= (char *) expr_start_ptr;
-    expr.length= expr_end_ptr - expr_start_ptr;
-
-    /* Construct SET-statement query. */
-
-    LEX_STRING set_stmt_query;
-
-    set_stmt_query.length= expr.length + 3;
-    set_stmt_query.str= (char *) thd->alloc(set_stmt_query.length + 1);
-
-    if (!set_stmt_query.str)
-      return true;
-
-    strmake(strmake(set_stmt_query.str, "SET", 3),
-            expr.str, expr.length);
-
-    /*
-      We have assignment to user or system variable or option setting, so we
-      should construct sp_instr_stmt for it.
-    */
-
-    sp_instr_stmt *i=
-      new (thd->mem_root)
-        sp_instr_stmt(sp->instructions(), lex, set_stmt_query);
-
-    if (!i || sp->add_instr(thd, i))
-      return true;
-  }
-
-  /* Remember option_type of the currently parsed LEX. */
-  enum_var_type inner_option_type= lex->option_type;
-
-  if (sp->restore_lex(thd))
-    return true;
-
-  /* Copy option_type to outer lex in case it has changed. */
-  thd->lex->option_type= inner_option_type;
-
-  return false;
-}
-
-/**
-  Compare a LEX_USER against the current user as defined by the exact user and
-  host used during authentication.
-
-  @param user A pointer to a user which needs to be matched against the
-              current.
-
-  @see SET PASSWORD rules
-
-  @retval true The specified user is the authorized user
-  @retval false The user doesn't match
-*/
-
-bool match_authorized_user(Security_context *ctx, LEX_USER *user)
-{
-  if(user->user.str && my_strcasecmp(system_charset_info,
-                                     ctx->priv_user,
-                                     user->user.str) == 0)
-  {
-    /*
-      users match; let's compare hosts.
-      1. first compare with the host we actually authorized,
-      2. then see if we match the host mask of the priv_host
-    */
-    if (user->host.str && my_strcasecmp(system_charset_info,
-                                        user->host.str,
-                                        ctx->priv_host) == 0)
-    {
-      /* specified user exactly match the authorized user */
-      return true;
-    }
-  }
-  return false;
-}
-
-
-static char idb_on_clause_err_str[] = "ON clause";
-static char idb_where_clause_err_str[] = "WHERE clause";
-static char idb_having_clause_err_str[] = "HAVING clause";
-static char idb_group_by_clause_err_str[] = "GROUP BY clause";
-
-
-
-/* Line 189 of yacc.c  */
-#line 1040 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
-
-/* Enabling traces.  */
-#ifndef YYDEBUG
-# define YYDEBUG 0
-#endif
-
-/* Enabling verbose error messages.  */
-#ifdef YYERROR_VERBOSE
-# undef YYERROR_VERBOSE
-# define YYERROR_VERBOSE 1
-#else
-# define YYERROR_VERBOSE 0
-#endif
-
-/* Enabling the token table.  */
-#ifndef YYTOKEN_TABLE
-# define YYTOKEN_TABLE 0
-#endif
+#define yyparse MYSQLparse
+#define yylex   MYSQLlex
+#define yyerror MYSQLerror
+#define yylval  MYSQLlval
+#define yychar  MYSQLchar
+#define yydebug MYSQLdebug
+#define yynerrs MYSQLnerrs
 
 
 /* Tokens.  */
@@ -2328,13 +1339,988 @@ static char idb_group_by_clause_err_str[] = "GROUP BY clause";
 
 
 
+/* Copy the first part of user declarations.  */
+#line 32 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
+
+/* thd is passed as an argument to yyparse(), and subsequently to yylex().
+
+** The type will be void*, so it must be  cast to (THD*) when used.
+** Use the YYTHD macro for this.
+*/
+#define YYPARSE_PARAM yythd
+#define YYLEX_PARAM yythd
+#define YYTHD ((THD *)yythd)
+#define YYLIP (& YYTHD->m_parser_state->m_lip)
+#define YYPS (& YYTHD->m_parser_state->m_yacc)
+#define YYCSCL  YYTHD->variables.character_set_client
+
+#define MYSQL_YACC
+#define YYINITDEPTH 100
+#define YYMAXDEPTH 3200                        /* Because of 64K stack */
+#define Lex (YYTHD->lex)
+#define Select Lex->current_select
+#include "sql_priv.h"
+#include "unireg.h"                    // REQUIRED: for other includes
+#include "sql_parse.h"                        /* comp_*_creator */
+#include "sql_table.h"                        /* primary_key_name */
+#include "sql_partition.h"  /* mem_alloc_error, partition_info, HASH_PARTITION */
+#include "sql_acl.h"                          /* *_ACL */
+#include "password.h"       /* my_make_scrambled_password_323, my_make_scrambled_password */
+#include "sql_class.h"      /* Key_part_spec, enum_filetype, Diag_condition_item_name */
+#include "rpl_slave.h"
+#include "lex_symbol.h"
+#include "item.h"
+#include "item_create.h"
+#include "item_create_window_function.h"
+#include "item_window_function.h"
+#include "sp_head.h"
+#include "sp_instr.h"
+#include "sp_pcontext.h"
+#include "sp_rcontext.h"
+#include "sp.h"
+#include "sql_alter.h"                         // Sql_cmd_alter_table*
+#include "sql_truncate.h"                      // Sql_cmd_truncate_table
+#include "sql_admin.h"                         // Sql_cmd_analyze/Check..._table
+#include "sql_partition_admin.h"               // Sql_cmd_alter_table_*_part.
+#include "sql_handler.h"                       // Sql_cmd_handler_*
+#include "sql_signal.h"
+#include "sql_get_diagnostics.h"               // Sql_cmd_get_diagnostics
+#include "event_parse_data.h"
+#include <myisam.h>
+#include <myisammrg.h>
+#include "keycaches.h"
+#include "set_var.h"
+#include "opt_explain_traditional.h"
+#include "opt_explain_json.h"
+
+/* this is to get the bison compilation windows warnings out */
+#ifdef _MSC_VER
+/* warning C4065: switch statement contains 'default' but no 'case' labels */
+#pragma warning (disable : 4065)
+#endif
+
+using std::min;
+using std::max;
+
+int yylex(void *yylval, void *yythd);
+
+#define yyoverflow(A,B,C,D,E,F)               \
+  {                                           \
+    ulong val= *(F);                          \
+    if (my_yyoverflow((B), (D), &val))        \
+    {                                         \
+      yyerror((char*) (A));                   \
+      return 2;                               \
+    }                                         \
+    else                                      \
+    {                                         \
+      *(F)= (YYSIZE_T)val;                    \
+    }                                         \
+  }
+
+#define MYSQL_YYABORT                         \
+  do                                          \
+  {                                           \
+    LEX::cleanup_lex_after_parse_error(YYTHD);\
+    YYABORT;                                  \
+  } while (0)
+
+#define MYSQL_YYABORT_UNLESS(A)         \
+  if (!(A))                             \
+  {                                     \
+    my_parse_error(ER(ER_SYNTAX_ERROR));\
+    MYSQL_YYABORT;                      \
+  }
+
+/*
+  Work around for broken code generated by bison 1.875.
+
+  The code generated by bison 1.875a and later, bison 2.1 and bison 2.2 is ok.
+  With bison 1.875 however, the generated code contains:
+<pre>
+  yyerrlab1:
+  #if defined (__GNUC_MINOR__) && 2093 <= (__GNUC__ * 1000 + __GNUC_MINOR__)
+    __attribute__ ((__unused__))
+  #endif
+</pre>
+  This usage of __attribute__ is illegal, so we remove it.
+  See the following references for details:
+  http://lists.gnu.org/archive/html/bug-bison/2004-02/msg00014.html
+  http://gcc.gnu.org/bugzilla/show_bug.cgi?id=14273
+*/
+
+#if defined (__GNUC_MINOR__) && 2093 <= (__GNUC__ * 1000 + __GNUC_MINOR__)
+#undef __attribute__
+#define __attribute__(X)
+#endif
+
+
+#ifndef DBUG_OFF
+#define YYDEBUG 1
+#else
+#define YYDEBUG 0
+#endif
+
+/**
+  @brief Push an error message into MySQL error stack with line
+  and position information.
+
+  This function provides semantic action implementers with a way
+  to push the famous "You have a syntax error near..." error
+  message into the error stack, which is normally produced only if
+  a parse error is discovered internally by the Bison generated
+  parser.
+*/
+
+void my_parse_error(const char *s)
+{
+  THD *thd= current_thd;
+  Lex_input_stream *lip= & thd->m_parser_state->m_lip;
+
+  const char *yytext= lip->get_tok_start();
+  if (!yytext)
+    yytext= "";
+
+  /* Push an error into the error stack */
+  ErrConvString err(yytext, thd->variables.character_set_client);
+  my_printf_error(ER_PARSE_ERROR,  ER(ER_PARSE_ERROR), MYF(0), s,
+                  err.ptr(), lip->yylineno);
+}
+
+/**
+  @brief Bison callback to report a syntax/OOM error
+
+  This function is invoked by the bison-generated parser
+  when a syntax error, a parse error or an out-of-memory
+  condition occurs. This function is not invoked when the
+  parser is requested to abort by semantic action code
+  by means of YYABORT or YYACCEPT macros. This is why these
+  macros should not be used (use MYSQL_YYABORT/MYSQL_YYACCEPT
+  instead).
+
+  The parser will abort immediately after invoking this callback.
+
+  This function is not for use in semantic actions and is internal to
+  the parser, as it performs some pre-return cleanup. 
+  In semantic actions, please use my_parse_error or my_error to
+  push an error into the error stack and MYSQL_YYABORT
+  to abort from the parser.
+*/
+
+void MYSQLerror(const char *s)
+{
+  THD *thd= current_thd;
+
+  /*
+    Restore the original LEX if it was replaced when parsing
+    a stored procedure. We must ensure that a parsing error
+    does not leave any side effects in the THD.
+  */
+  LEX::cleanup_lex_after_parse_error(thd);
+
+  /* "parse error" changed into "syntax error" between bison 1.75 and 1.875 */
+  if (strcmp(s,"parse error") == 0 || strcmp(s,"syntax error") == 0)
+    s= ER(ER_SYNTAX_ERROR);
+  my_parse_error(s);
+}
+
+
+#ifndef DBUG_OFF
+void turn_parser_debug_on()
+{
+  /*
+     MYSQLdebug is in sql/sql_yacc.cc, in bison generated code.
+     Turning this option on is **VERY** verbose, and should be
+     used when investigating a syntax error problem only.
+
+     The syntax to run with bison traces is as follows :
+     - Starting a server manually :
+       mysqld --debug="d,parser_debug" ...
+     - Running a test :
+       mysql-test-run.pl --mysqld="--debug=d,parser_debug" ...
+
+     The result will be in the process stderr (var/log/master.err)
+   */
+
+  extern int yydebug;
+  yydebug= 1;
+}
+#endif
+
+static bool is_native_function(THD *thd, const LEX_STRING *name)
+{
+  if (find_native_function_builder(thd, *name))
+    return true;
+
+  if (is_lex_native_function(name))
+    return true;
+
+  return false;
+}
+
+
+/**
+  Helper action for a case statement (entering the CASE).
+  This helper is used for both 'simple' and 'searched' cases.
+  This helper, with the other case_stmt_action_..., is executed when
+  the following SQL code is parsed:
+<pre>
+CREATE PROCEDURE proc_19194_simple(i int)
+BEGIN
+  DECLARE str CHAR(10);
+
+  CASE i
+    WHEN 1 THEN SET str="1";
+    WHEN 2 THEN SET str="2";
+    WHEN 3 THEN SET str="3";
+    ELSE SET str="unknown";
+  END CASE;
+
+  SELECT str;
+END
+</pre>
+  The actions are used to generate the following code:
+<pre>
+SHOW PROCEDURE CODE proc_19194_simple;
+Pos     Instruction
+0       set str@1 NULL
+1       set_case_expr (12) 0 i@0
+2       jump_if_not 5(12) (case_expr@0 = 1)
+3       set str@1 _latin1'1'
+4       jump 12
+5       jump_if_not 8(12) (case_expr@0 = 2)
+6       set str@1 _latin1'2'
+7       jump 12
+8       jump_if_not 11(12) (case_expr@0 = 3)
+9       set str@1 _latin1'3'
+10      jump 12
+11      set str@1 _latin1'unknown'
+12      stmt 0 "SELECT str"
+</pre>
+
+  @param thd thread handler
+*/
+
+void case_stmt_action_case(THD *thd)
+{
+  LEX *lex= thd->lex;
+  sp_head *sp= lex->sphead;
+  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
+
+  sp->m_parser_data.new_cont_backpatch();
+
+  /*
+    BACKPATCH: Creating target label for the jump to
+    "case_stmt_action_end_case"
+    (Instruction 12 in the example)
+  */
+
+  pctx->push_label(thd, EMPTY_STR, sp->instructions());
+}
+
+/**
+  Helper action for a case then statements.
+  This helper is used for both 'simple' and 'searched' cases.
+  @param lex the parser lex context
+*/
+
+bool case_stmt_action_then(THD *thd, LEX *lex)
+{
+  sp_head *sp= lex->sphead;
+  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
+
+  sp_instr_jump *i =
+    new (thd->mem_root) sp_instr_jump(sp->instructions(), pctx);
+
+  if (!i || sp->add_instr(thd, i))
+    return true;
+
+  /*
+    BACKPATCH: Resolving forward jump from
+    "case_stmt_action_when" to "case_stmt_action_then"
+    (jump_if_not from instruction 2 to 5, 5 to 8 ... in the example)
+  */
+
+  sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
+
+  /*
+    BACKPATCH: Registering forward jump from
+    "case_stmt_action_then" to "case_stmt_action_end_case"
+    (jump from instruction 4 to 12, 7 to 12 ... in the example)
+  */
+
+  return sp->m_parser_data.add_backpatch_entry(i, pctx->last_label());
+}
+
+/**
+  Helper action for an end case.
+  This helper is used for both 'simple' and 'searched' cases.
+  @param lex the parser lex context
+  @param simple true for simple cases, false for searched cases
+*/
+
+void case_stmt_action_end_case(LEX *lex, bool simple)
+{
+  sp_head *sp= lex->sphead;
+  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
+
+  /*
+    BACKPATCH: Resolving forward jump from
+    "case_stmt_action_then" to "case_stmt_action_end_case"
+    (jump from instruction 4 to 12, 7 to 12 ... in the example)
+  */
+  sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
+
+  if (simple)
+    pctx->pop_case_expr_id();
+
+  sp->m_parser_data.do_cont_backpatch(sp->instructions());
+}
+
+
+static bool
+find_sys_var_null_base(THD *thd, struct sys_var_with_base *tmp)
+{
+  tmp->var= find_sys_var(thd, tmp->base_name.str, tmp->base_name.length);
+
+  if (tmp->var == NULL)
+    my_error(ER_UNKNOWN_SYSTEM_VARIABLE, MYF(0), tmp->base_name.str);
+  else
+    tmp->base_name= null_lex_str;
+
+  return thd->is_error();
+}
+
+
+/**
+  Helper action for a SET statement.
+  Used to push a system variable into the assignment list.
+
+  @param thd      the current thread
+  @param tmp      the system variable with base name
+  @param var_type the scope of the variable
+  @param val      the value being assigned to the variable
+
+  @return TRUE if error, FALSE otherwise.
+*/
+
+static bool
+set_system_variable(THD *thd, struct sys_var_with_base *tmp,
+                    enum enum_var_type var_type, Item *val)
+{
+  set_var *var;
+  LEX *lex= thd->lex;
+  sp_head *sp= lex->sphead;
+  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
+
+  /* No AUTOCOMMIT from a stored function or trigger. */
+  if (pctx && tmp->var == Sys_autocommit_ptr)
+    sp->m_flags|= sp_head::HAS_SET_AUTOCOMMIT_STMT;
+
+#ifdef HAVE_REPLICATION
+  if (lex->uses_stored_routines() &&
+      ((tmp->var == Sys_gtid_next_ptr
+#ifdef HAVE_GTID_NEXT_LIST
+       || tmp->var == Sys_gtid_next_list_ptr
+#endif
+       ) ||
+       Sys_gtid_purged_ptr == tmp->var))
+  {
+    my_error(ER_SET_STATEMENT_CANNOT_INVOKE_FUNCTION, MYF(0),
+             tmp->var->name.str);
+    return TRUE;
+  }
+#endif
+
+  if (val && val->type() == Item::FIELD_ITEM &&
+      ((Item_field*)val)->table_name)
+  {
+    my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), tmp->var->name.str);
+    return TRUE;
+  }
+
+  if (! (var= new set_var(var_type, tmp->var, &tmp->base_name, val)))
+    return TRUE;
+
+  return lex->var_list.push_back(var);
+}
+
+
+/**
+  Helper action for a SET statement.
+  Used to SET a field of NEW row.
+
+  @param thd                thread handler
+  @param trigger_field_name the NEW-row field name
+  @param expr_item          the value expression being assigned
+  @param expr_query         the value expression query
+
+  @return error status (true if error, false otherwise).
+*/
+
+static bool set_trigger_new_row(THD *thd,
+                                LEX_STRING trigger_field_name,
+                                Item *expr_item,
+                                LEX_STRING expr_query)
+{
+  LEX *lex= thd->lex;
+  sp_head *sp= lex->sphead;
+
+  DBUG_ASSERT(expr_item);
+  DBUG_ASSERT(sp->m_trg_chistics.action_time == TRG_ACTION_BEFORE &&
+              (sp->m_trg_chistics.event == TRG_EVENT_INSERT ||
+               sp->m_trg_chistics.event == TRG_EVENT_UPDATE));
+
+  Item_trigger_field *trg_fld=
+    new (thd->mem_root) Item_trigger_field(lex->current_context(),
+                                           Item_trigger_field::NEW_ROW,
+                                           trigger_field_name.str,
+                                           UPDATE_ACL, false);
+
+  if (!trg_fld)
+    return true;
+
+  sp_instr_set_trigger_field *i=
+    new (thd->mem_root)
+      sp_instr_set_trigger_field(sp->instructions(),
+                                 lex,
+                                 trigger_field_name,
+                                 trg_fld, expr_item,
+                                 expr_query);
+
+  if (!i)
+    return true;
+
+  /*
+    Let us add this item to list of all Item_trigger_field
+    objects in trigger.
+  */
+  sp->m_trg_table_fields.link_in_list(trg_fld, &trg_fld->next_trg_field);
+
+  return sp->add_instr(thd, i);
+}
+
+
+/**
+  Create an object to represent a SP variable in the Item-hierarchy.
+
+  @param thd              The current thread.
+  @param name             The SP variable name.
+  @param spv              The SP variable (optional).
+  @param query_start_ptr  Start of the SQL-statement query string (optional).
+  @param start_in_q       Start position of the SP variable name in the query.
+  @param end_in_q         End position of the SP variable name in the query.
+
+  @remark If spv is not specified, the name is used to search for the
+          variable in the parse-time context. If the variable does not
+          exist, a error is set and NULL is returned to the caller.
+
+  @return An Item_splocal object representing the SP variable, or NULL on error.
+*/
+static Item_splocal* create_item_for_sp_var(THD *thd,
+                                            LEX_STRING name,
+                                            sp_variable *spv,
+                                            const char *query_start_ptr,
+                                            const char *start_in_q,
+                                            const char *end_in_q)
+{
+  LEX *lex= thd->lex;
+  uint spv_pos_in_query= 0;
+  uint spv_len_in_query= 0;
+  sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
+
+  /* If necessary, look for the variable. */
+  if (pctx && !spv)
+    spv= pctx->find_variable(name, false);
+
+  if (!spv)
+  {
+    my_error(ER_SP_UNDECLARED_VAR, MYF(0), name.str);
+    return NULL;
+  }
+
+  DBUG_ASSERT(pctx && spv);
+
+  if (query_start_ptr)
+  {
+    /* Position and length of the SP variable name in the query. */
+    spv_pos_in_query= start_in_q - query_start_ptr;
+    spv_len_in_query= end_in_q - start_in_q;
+  }
+
+  Item_splocal *item=
+    new (thd->mem_root) Item_splocal(
+      name, spv->offset, spv->type, spv_pos_in_query, spv_len_in_query);
+
+#ifndef DBUG_OFF
+  if (item)
+    item->m_sp= lex->sphead;
+#endif
+
+  return item;
+}
+
+
+/**
+  Helper to resolve the SQL:2003 Syntax exception 1) in <in predicate>.
+  See SQL:2003, Part 2, section 8.4 <in predicate>, Note 184, page 383.
+  This function returns the proper item for the SQL expression
+  <code>left [NOT] IN ( expr )</code>
+  @param thd the current thread
+  @param left the in predicand
+  @param equal true for IN predicates, false for NOT IN predicates
+  @param expr first and only expression of the in value list
+  @return an expression representing the IN predicate.
+*/
+Item* handle_sql2003_note184_exception(THD *thd, Item* left, bool equal,
+                                       Item *expr)
+{
+  /*
+    Relevant references for this issue:
+    - SQL:2003, Part 2, section 8.4 <in predicate>, page 383,
+    - SQL:2003, Part 2, section 7.2 <row value expression>, page 296,
+    - SQL:2003, Part 2, section 6.3 <value expression primary>, page 174,
+    - SQL:2003, Part 2, section 7.15 <subquery>, page 370,
+    - SQL:2003 Feature F561, "Full value expressions".
+
+    The exception in SQL:2003 Note 184 means:
+    Item_singlerow_subselect, which corresponds to a <scalar subquery>,
+    should be re-interpreted as an Item_in_subselect, which corresponds
+    to a <table subquery> when used inside an <in predicate>.
+
+    Our reading of Note 184 is reccursive, so that all:
+    - IN (( <subquery> ))
+    - IN ((( <subquery> )))
+    - IN '('^N <subquery> ')'^N
+    - etc
+    should be interpreted as a <table subquery>, no matter how deep in the
+    expression the <subquery> is.
+  */
+
+  Item *result;
+
+  DBUG_ENTER("handle_sql2003_note184_exception");
+
+  if (expr->type() == Item::SUBSELECT_ITEM)
+  {
+    Item_subselect *expr2 = (Item_subselect*) expr;
+
+    if (expr2->substype() == Item_subselect::SINGLEROW_SUBS)
+    {
+      Item_singlerow_subselect *expr3 = (Item_singlerow_subselect*) expr2;
+      st_select_lex *subselect;
+
+      /*
+        Implement the mandated change, by altering the semantic tree:
+          left IN Item_singlerow_subselect(subselect)
+        is modified to
+          left IN (subselect)
+        which is represented as
+          Item_in_subselect(left, subselect)
+      */
+      subselect= expr3->invalidate_and_restore_select_lex();
+      result= new (thd->mem_root) Item_in_subselect(left, subselect);
+
+      if (! equal)
+        result = negate_expression(thd, result);
+
+      DBUG_RETURN(result);
+    }
+  }
+
+  if (equal)
+    result= new (thd->mem_root) Item_func_eq(left, expr);
+  else
+    result= new (thd->mem_root) Item_func_ne(left, expr);
+
+  DBUG_RETURN(result);
+}
+
+/**
+   @brief Creates a new SELECT_LEX for a UNION branch.
+
+   Sets up and initializes a SELECT_LEX structure for a query once the parser
+   discovers a UNION token. The current SELECT_LEX is pushed on the stack and
+   the new SELECT_LEX becomes the current one.
+
+   @param lex The parser state.
+
+   @param is_union_distinct True if the union preceding the new select statement
+   uses UNION DISTINCT.
+
+   @param is_top_level This should be @c TRUE if the newly created SELECT_LEX
+   is a non-nested statement.
+
+   @return <code>false</code> if successful, <code>true</code> if an error was
+   reported. In the latter case parsing should stop.
+ */
+bool add_select_to_union_list(LEX *lex, bool is_union_distinct, 
+                              bool is_top_level)
+{
+  /* 
+     Only the last SELECT can have INTO. Since the grammar won't allow INTO in
+     a nested SELECT, we make this check only when creating a top-level SELECT.
+  */
+  if (is_top_level && lex->result)
+  {
+    my_error(ER_WRONG_USAGE, MYF(0), "UNION", "INTO");
+    return TRUE;
+  }
+  if (lex->proc_analyse)
+  {
+    my_error(ER_WRONG_USAGE, MYF(0), "UNION", "SELECT ... PROCEDURE ANALYSE()");
+    return TRUE;
+  }
+  if (lex->current_select->linkage == GLOBAL_OPTIONS_TYPE)
+  {
+    my_parse_error(ER(ER_SYNTAX_ERROR));
+    return TRUE;
+  }
+  /* This counter shouldn't be incremented for UNION parts */
+  lex->nest_level--;
+  if (mysql_new_select(lex, 0))
+    return TRUE;
+  mysql_init_select(lex);
+  lex->current_select->linkage=UNION_TYPE;
+  if (is_union_distinct) /* UNION DISTINCT - remember position */
+    lex->current_select->master_unit()->union_distinct=
+      lex->current_select;
+  return FALSE;
+}
+
+/**
+   @brief Initializes a SELECT_LEX for a query within parentheses (aka
+   braces).
+
+   @return false if successful, true if an error was reported. In the latter
+   case parsing should stop.
+ */
+bool setup_select_in_parentheses(LEX *lex) 
+{
+  SELECT_LEX * sel= lex->current_select;
+  if (sel->set_braces(1))
+  {
+    my_parse_error(ER(ER_SYNTAX_ERROR));
+    return TRUE;
+  }
+  if (sel->linkage == UNION_TYPE &&
+      !sel->master_unit()->first_select()->braces &&
+      sel->master_unit()->first_select()->linkage ==
+      UNION_TYPE)
+  {
+    my_parse_error(ER(ER_SYNTAX_ERROR));
+    return TRUE;
+  }
+  if (sel->linkage == UNION_TYPE &&
+      sel->olap != UNSPECIFIED_OLAP_TYPE &&
+      sel->master_unit()->fake_select_lex)
+  {
+    my_error(ER_WRONG_USAGE, MYF(0), "CUBE/ROLLUP", "ORDER BY");
+    return TRUE;
+  }
+  /* select in braces, can't contain global parameters */
+  if (sel->master_unit()->fake_select_lex)
+    sel->master_unit()->global_parameters=
+      sel->master_unit()->fake_select_lex;
+  return FALSE;
+}
+
+static bool add_create_index_prepare (LEX *lex, Table_ident *table)
+{
+  lex->sql_command= SQLCOM_CREATE_INDEX;
+  if (!lex->current_select->add_table_to_list(lex->thd, table, NULL,
+                                              TL_OPTION_UPDATING,
+                                              TL_READ_NO_INSERT,
+                                              MDL_SHARED_UPGRADABLE))
+    return TRUE;
+  lex->alter_info.reset();
+  lex->alter_info.flags= Alter_info::ALTER_ADD_INDEX;
+  lex->col_list.empty();
+  lex->change= NullS;
+  return FALSE;
+}
+
+static bool add_create_index (LEX *lex, Key::Keytype type,
+                              const LEX_STRING &name,
+                              KEY_CREATE_INFO *info= NULL, bool generated= 0)
+{
+  Key *key;
+  key= new Key(type, name, info ? info : &lex->key_create_info, generated, 
+               lex->col_list);
+  if (key == NULL)
+    return TRUE;
+
+  lex->alter_info.key_list.push_back(key);
+  lex->col_list.empty();
+  return FALSE;
+}
+
+/**
+  Make a new string allocated on THD's mem-root.
+
+  @param thd        thread handler.
+  @param start_ptr  start of the new string.
+  @param end_ptr    end of the new string.
+
+  @return LEX_STRING object, containing a pointer to a newly
+  constructed/allocated string, and its length. The pointer is NULL
+  in case of out-of-memory error.
+*/
+static LEX_STRING make_string(THD *thd,
+                              const char *start_ptr,
+                              const char *end_ptr)
+{
+  LEX_STRING s;
+
+  s.length= end_ptr - start_ptr;
+  s.str= (char *) thd->alloc(s.length + 1);
+
+  if (s.str)
+    strmake(s.str, start_ptr, s.length);
+
+  return s;
+}
+
+/*
+  The start is either lip->ptr, if there was no lookahead, lip->tok_start
+  otherwise.
+*/
+#define YY_TOKEN_START \
+  ((yychar == YYEMPTY) ?  YYLIP->get_ptr() : YYLIP->get_tok_start())
+
+/*
+   The end is either lip->ptr, if there was no lookahead,
+   or lip->tok_end otherwise.
+*/
+
+#define YY_TOKEN_END \
+  ((yychar == YYEMPTY) ?  YYLIP->get_ptr() : YYLIP->get_tok_end())
+
+/**
+  Create a separate LEX for each assignment if in SP.
+
+  If we are in SP we want have own LEX for each assignment.
+  This is mostly because it is hard for several sp_instr_set
+  and sp_instr_set_trigger instructions share one LEX.
+  (Well, it is theoretically possible but adds some extra
+  overhead on preparation for execution stage and IMO less
+  robust).
+
+  @see sp_create_assignment_instr
+
+  @param thd        Thread context
+  @param option_ptr Option-value-expression start pointer
+*/
+
+static void sp_create_assignment_lex(THD *thd, const char *option_ptr)
+{
+  LEX *lex= thd->lex;
+  sp_head *sp= lex->sphead;
+
+  /*
+    We can come here in the following cases:
+
+      1. it's a regular SET statement outside stored programs
+        (lex->sphead is NULL);
+
+      2. we're parsing a stored program normally (loading from mysql.proc, ...);
+
+      3. we're re-parsing SET-statement with a user variable after meta-data
+        change. It's guaranteed, that:
+        - this SET-statement deals with a user/system variable (otherwise, it
+          would be a different SP-instruction, and we would parse an expression);
+        - this SET-statement has a single user/system variable assignment
+          (that's how we generate sp_instr_stmt-instructions for SET-statements).
+        So, in this case, even if lex->sphead is set, we should not process
+        further.
+  */
+
+  if (!sp ||            // case #1
+      sp->is_invoked()) // case #3
+  {
+    return;
+  }
+
+  LEX *old_lex= lex;
+  sp->reset_lex(thd);
+  lex= thd->lex;
+
+  /* Set new LEX as if we at start of set rule. */
+  mysql_init_select(lex);
+  lex->sql_command= SQLCOM_SET_OPTION;
+  lex->var_list.empty();
+  lex->one_shot_set= 0;
+  lex->autocommit= 0;
+
+  /*
+    It's a SET statement within SP. It will be either translated
+    into one or more sp_instr_stmt instructions, or it will be
+    sp_instr_set / sp_instr_set_trigger_field instructions.
+    In any case, position of SP-variable can not be determined
+    reliably. So, we set the start pointer of the current statement
+    to NULL.
+  */
+  sp->m_parser_data.set_current_stmt_start_ptr(NULL);
+  sp->m_parser_data.set_option_start_ptr(option_ptr);
+
+  /* Inherit from outer lex. */
+  lex->option_type= old_lex->option_type;
+}
+
+
+/**
+  Create a SP instruction for a SET assignment.
+
+  @see sp_create_assignment_lex
+
+  @param thd           Thread context
+  @param expr_end_ptr  Option-value-expression end pointer
+
+  @return false if success, true otherwise.
+*/
+
+static bool sp_create_assignment_instr(THD *thd, const char *expr_end_ptr)
+{
+  LEX *lex= thd->lex;
+  sp_head *sp= lex->sphead;
+
+  /*
+    We can come here in the following cases:
+
+      1. it's a regular SET statement outside stored programs
+        (lex->sphead is NULL);
+
+      2. we're parsing a stored program normally (loading from mysql.proc, ...);
+
+      3. we're re-parsing SET-statement with a user variable after meta-data
+        change. It's guaranteed, that:
+        - this SET-statement deals with a user/system variable (otherwise, it
+          would be a different SP-instruction, and we would parse an expression);
+        - this SET-statement has a single user/system variable assignment
+          (that's how we generate sp_instr_stmt-instructions for SET-statements).
+        So, in this case, even if lex->sphead is set, we should not process
+        further.
+  */
+
+  if (!sp ||            // case #1
+      sp->is_invoked()) // case #3
+  {
+    return false;
+  }
+
+  if (!lex->var_list.is_empty())
+  {
+    /* Extract expression string. */
+
+    const char *expr_start_ptr= sp->m_parser_data.get_option_start_ptr();
+
+    LEX_STRING expr;
+    expr.str= (char *) expr_start_ptr;
+    expr.length= expr_end_ptr - expr_start_ptr;
+
+    /* Construct SET-statement query. */
+
+    LEX_STRING set_stmt_query;
+
+    set_stmt_query.length= expr.length + 3;
+    set_stmt_query.str= (char *) thd->alloc(set_stmt_query.length + 1);
+
+    if (!set_stmt_query.str)
+      return true;
+
+    strmake(strmake(set_stmt_query.str, "SET", 3),
+            expr.str, expr.length);
+
+    /*
+      We have assignment to user or system variable or option setting, so we
+      should construct sp_instr_stmt for it.
+    */
+
+    sp_instr_stmt *i=
+      new (thd->mem_root)
+        sp_instr_stmt(sp->instructions(), lex, set_stmt_query);
+
+    if (!i || sp->add_instr(thd, i))
+      return true;
+  }
+
+  /* Remember option_type of the currently parsed LEX. */
+  enum_var_type inner_option_type= lex->option_type;
+
+  if (sp->restore_lex(thd))
+    return true;
+
+  /* Copy option_type to outer lex in case it has changed. */
+  thd->lex->option_type= inner_option_type;
+
+  return false;
+}
+
+/**
+  Compare a LEX_USER against the current user as defined by the exact user and
+  host used during authentication.
+
+  @param user A pointer to a user which needs to be matched against the
+              current.
+
+  @see SET PASSWORD rules
+
+  @retval true The specified user is the authorized user
+  @retval false The user doesn't match
+*/
+
+bool match_authorized_user(Security_context *ctx, LEX_USER *user)
+{
+  if(user->user.str && my_strcasecmp(system_charset_info,
+                                     ctx->priv_user,
+                                     user->user.str) == 0)
+  {
+    /*
+      users match; let's compare hosts.
+      1. first compare with the host we actually authorized,
+      2. then see if we match the host mask of the priv_host
+    */
+    if (user->host.str && my_strcasecmp(system_charset_info,
+                                        user->host.str,
+                                        ctx->priv_host) == 0)
+    {
+      /* specified user exactly match the authorized user */
+      return true;
+    }
+  }
+  return false;
+}
+
+
+static char idb_on_clause_err_str[] = "ON clause";
+static char idb_where_clause_err_str[] = "WHERE clause";
+static char idb_having_clause_err_str[] = "HAVING clause";
+static char idb_group_by_clause_err_str[] = "GROUP BY clause";
+
+
+
+/* Enabling traces.  */
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
+
+/* Enabling verbose error messages.  */
+#ifdef YYERROR_VERBOSE
+# undef YYERROR_VERBOSE
+# define YYERROR_VERBOSE 1
+#else
+# define YYERROR_VERBOSE 0
+#endif
+
+/* Enabling the token table.  */
+#ifndef YYTOKEN_TABLE
+# define YYTOKEN_TABLE 0
+#endif
+
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-{
-
-/* Line 214 of yacc.c  */
 #line 989 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
-
+{
   int  num;
   ulong ulong_num;
   ulonglong ulonglong_number;
@@ -2396,28 +2382,25 @@ typedef union YYSTYPE
   Condition_information_item::Name cond_info_item_name;
   List<Condition_information_item> *cond_info_list;
   bool is_not_empty;
-
-
-
-/* Line 214 of yacc.c  */
-#line 2404 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
-} YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
+}
+/* Line 193 of yacc.c.  */
+#line 2388 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
+	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
+# define YYSTYPE_IS_TRIVIAL 1
 #endif
 
 
-/* Copy the second part of user declarations.  */
 
-/* Line 264 of yacc.c  */
+/* Copy the second part of user declarations.  */
 #line 1053 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
 
 bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 
 
-/* Line 264 of yacc.c  */
-#line 2421 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
+/* Line 216 of yacc.c.  */
+#line 2404 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
 
 #ifdef short
 # undef short
@@ -2492,14 +2475,14 @@ typedef short int yytype_int16;
 #if (defined __STDC__ || defined __C99__FUNC__ \
      || defined __cplusplus || defined _MSC_VER)
 static int
-YYID (int yyi)
+YYID (int i)
 #else
 static int
-YYID (yyi)
-    int yyi;
+YYID (i)
+    int i;
 #endif
 {
-  return yyi;
+  return i;
 }
 #endif
 
@@ -2580,9 +2563,9 @@ void free (void *); /* INFRINGES ON USER NAME SPACE */
 /* A type that is properly aligned for any stack member.  */
 union yyalloc
 {
-  yytype_int16 yyss_alloc;
-  YYSTYPE yyvs_alloc;
-};
+  yytype_int16 yyss;
+  YYSTYPE yyvs;
+  };
 
 /* The size of the maximum gap between one aligned stack and the next.  */
 # define YYSTACK_GAP_MAXIMUM (sizeof (union yyalloc) - 1)
@@ -2616,12 +2599,12 @@ union yyalloc
    elements in the stack, and YYPTR gives the new location of the
    stack.  Advance YYPTR to a properly aligned location for the next
    stack.  */
-# define YYSTACK_RELOCATE(Stack_alloc, Stack)				\
+# define YYSTACK_RELOCATE(Stack)					\
     do									\
       {									\
 	YYSIZE_T yynewbytes;						\
-	YYCOPY (&yyptr->Stack_alloc, Stack, yysize);			\
-	Stack = &yyptr->Stack_alloc;					\
+	YYCOPY (&yyptr->Stack, Stack, yysize);				\
+	Stack = &yyptr->Stack;						\
 	yynewbytes = yystacksize * sizeof (*Stack) + YYSTACK_GAP_MAXIMUM; \
 	yyptr += yynewbytes / sizeof (*yyptr);				\
       }									\
@@ -4249,50 +4232,49 @@ static const char *const yytname[] =
   "WORK_SYM", "WRAPPER_SYM", "WRITE_SYM", "X509_SYM", "XA_SYM", "XML_SYM",
   "XOR", "YEAR_MONTH_SYM", "YEAR_SYM", "ZEROFILL", "'|'", "'&'", "'-'",
   "'+'", "'*'", "'/'", "'%'", "'^'", "'~'", "'('", "')'", "','", "'!'",
-  "'{'", "'}'", "';'", "'@'", "'.'", "':'", "$accept", "query", "$@1",
+  "'{'", "'}'", "';'", "'@'", "'.'", "':'", "$accept", "query", "@1",
   "opt_end_of_input", "verb_clause", "statement", "deallocate",
-  "deallocate_or_drop", "prepare", "prepare_src", "execute", "$@2",
-  "execute_using", "execute_var_list", "execute_var_ident", "help", "$@3",
-  "change", "$@4", "master_defs", "master_def", "ignore_server_id_list",
-  "ignore_server_id", "master_file_def", "create", "$@5", "$@6", "$@7",
-  "$@8", "$@9", "$@10", "$@11", "$@12", "$@13", "server_def",
-  "server_options_list", "server_option", "event_tail", "$@14",
-  "ev_schedule_time", "$@15", "opt_ev_status", "ev_starts", "ev_ends",
-  "opt_ev_on_completion", "ev_on_completion", "opt_ev_comment",
-  "ev_sql_stmt", "$@16", "ev_sql_stmt_inner", "clear_privileges",
-  "sp_name", "sp_a_chistics", "sp_c_chistics", "sp_chistic",
-  "sp_c_chistic", "sp_suid", "call", "$@17", "opt_sp_cparam_list",
-  "opt_sp_cparams", "sp_cparams", "sp_fdparam_list", "sp_fdparams",
-  "sp_init_param", "sp_fdparam", "sp_pdparam_list", "sp_pdparams",
-  "sp_pdparam", "sp_opt_inout", "sp_proc_stmts", "sp_proc_stmts1",
-  "sp_decls", "sp_decl", "$@18", "$@19", "$@20", "sp_handler_type",
-  "sp_hcond_list", "sp_hcond_element", "sp_cond", "sqlstate", "opt_value",
-  "sp_hcond", "signal_stmt", "signal_value", "opt_signal_value",
-  "opt_set_signal_information", "signal_information_item_list",
-  "signal_allowed_expr", "signal_condition_information_item_name",
-  "resignal_stmt", "get_diagnostics", "which_area",
-  "diagnostics_information", "statement_information",
-  "statement_information_item", "simple_target_specification",
-  "statement_information_item_name", "condition_number",
-  "condition_information", "condition_information_item",
-  "condition_information_item_name", "sp_decl_idents", "sp_opt_default",
-  "$@21", "sp_proc_stmt", "sp_proc_stmt_if", "$@22",
-  "sp_proc_stmt_statement", "$@23", "sp_proc_stmt_return", "$@24",
-  "sp_proc_stmt_unlabeled", "$@25", "sp_proc_stmt_leave",
-  "sp_proc_stmt_iterate", "sp_proc_stmt_open", "sp_proc_stmt_fetch",
-  "$@26", "sp_proc_stmt_close", "sp_opt_fetch_noise", "sp_fetch_list",
-  "sp_if", "$@27", "$@28", "$@29", "sp_elseifs", "case_stmt_specification",
-  "simple_case_stmt", "$@30", "$@31", "searched_case_stmt", "$@32",
-  "simple_when_clause_list", "searched_when_clause_list",
-  "simple_when_clause", "$@33", "$@34", "searched_when_clause", "$@35",
-  "$@36", "else_clause_opt", "sp_labeled_control", "$@37", "sp_opt_label",
-  "sp_labeled_block", "$@38", "sp_unlabeled_block", "$@39",
-  "sp_block_content", "$@40", "sp_unlabeled_control", "$@41", "$@42",
-  "$@43", "$@44", "trg_action_time", "trg_event",
-  "change_tablespace_access", "change_tablespace_info", "tablespace_info",
-  "opt_logfile_group_name", "alter_tablespace_info", "logfile_group_info",
-  "alter_logfile_group_info", "add_log_file", "change_ts_option_list",
-  "$@45", "change_ts_options", "change_ts_option",
+  "deallocate_or_drop", "prepare", "prepare_src", "execute", "@2",
+  "execute_using", "execute_var_list", "execute_var_ident", "help", "@3",
+  "change", "@4", "master_defs", "master_def", "ignore_server_id_list",
+  "ignore_server_id", "master_file_def", "create", "@5", "@6", "@7", "@8",
+  "@9", "@10", "@11", "@12", "@13", "server_def", "server_options_list",
+  "server_option", "event_tail", "@14", "ev_schedule_time", "@15",
+  "opt_ev_status", "ev_starts", "ev_ends", "opt_ev_on_completion",
+  "ev_on_completion", "opt_ev_comment", "ev_sql_stmt", "@16",
+  "ev_sql_stmt_inner", "clear_privileges", "sp_name", "sp_a_chistics",
+  "sp_c_chistics", "sp_chistic", "sp_c_chistic", "sp_suid", "call", "@17",
+  "opt_sp_cparam_list", "opt_sp_cparams", "sp_cparams", "sp_fdparam_list",
+  "sp_fdparams", "sp_init_param", "sp_fdparam", "sp_pdparam_list",
+  "sp_pdparams", "sp_pdparam", "sp_opt_inout", "sp_proc_stmts",
+  "sp_proc_stmts1", "sp_decls", "sp_decl", "@18", "@19", "@20",
+  "sp_handler_type", "sp_hcond_list", "sp_hcond_element", "sp_cond",
+  "sqlstate", "opt_value", "sp_hcond", "signal_stmt", "signal_value",
+  "opt_signal_value", "opt_set_signal_information",
+  "signal_information_item_list", "signal_allowed_expr",
+  "signal_condition_information_item_name", "resignal_stmt",
+  "get_diagnostics", "which_area", "diagnostics_information",
+  "statement_information", "statement_information_item",
+  "simple_target_specification", "statement_information_item_name",
+  "condition_number", "condition_information",
+  "condition_information_item", "condition_information_item_name",
+  "sp_decl_idents", "sp_opt_default", "@21", "sp_proc_stmt",
+  "sp_proc_stmt_if", "@22", "sp_proc_stmt_statement", "@23",
+  "sp_proc_stmt_return", "@24", "sp_proc_stmt_unlabeled", "@25",
+  "sp_proc_stmt_leave", "sp_proc_stmt_iterate", "sp_proc_stmt_open",
+  "sp_proc_stmt_fetch", "@26", "sp_proc_stmt_close", "sp_opt_fetch_noise",
+  "sp_fetch_list", "sp_if", "@27", "@28", "@29", "sp_elseifs",
+  "case_stmt_specification", "simple_case_stmt", "@30", "@31",
+  "searched_case_stmt", "@32", "simple_when_clause_list",
+  "searched_when_clause_list", "simple_when_clause", "@33", "@34",
+  "searched_when_clause", "@35", "@36", "else_clause_opt",
+  "sp_labeled_control", "@37", "sp_opt_label", "sp_labeled_block", "@38",
+  "sp_unlabeled_block", "@39", "sp_block_content", "@40",
+  "sp_unlabeled_control", "@41", "@42", "@43", "@44", "trg_action_time",
+  "trg_event", "change_tablespace_access", "change_tablespace_info",
+  "tablespace_info", "opt_logfile_group_name", "alter_tablespace_info",
+  "logfile_group_info", "alter_logfile_group_info", "add_log_file",
+  "change_ts_option_list", "@45", "change_ts_options", "change_ts_option",
   "tablespace_option_list", "tablespace_options", "tablespace_option",
   "alter_tablespace_option_list", "alter_tablespace_options",
   "alter_tablespace_option", "logfile_group_option_list",
@@ -4303,32 +4285,32 @@ static const char *const yytname[] =
   "opt_ts_initial_size", "opt_ts_autoextend_size", "opt_ts_max_size",
   "opt_ts_extent_size", "opt_ts_undo_buffer_size",
   "opt_ts_redo_buffer_size", "opt_ts_nodegroup", "opt_ts_comment",
-  "opt_ts_engine", "ts_wait", "size_number", "create2", "create2a", "$@46",
-  "create3", "$@47", "$@48", "opt_create_partitioning", "opt_partitioning",
-  "partitioning", "$@49", "have_partitioning", "partition_entry", "$@50",
-  "partition", "part_type_def", "$@51", "opt_linear", "opt_key_algo",
+  "opt_ts_engine", "ts_wait", "size_number", "create2", "create2a", "@46",
+  "create3", "@47", "@48", "opt_create_partitioning", "opt_partitioning",
+  "partitioning", "@49", "have_partitioning", "partition_entry", "@50",
+  "partition", "part_type_def", "@51", "opt_linear", "opt_key_algo",
   "part_field_list", "part_field_item_list", "part_field_item",
   "part_column_list", "part_func", "sub_part_func", "opt_num_parts",
-  "opt_sub_part", "$@52", "$@53", "sub_part_field_list",
+  "opt_sub_part", "@52", "@53", "sub_part_field_list",
   "sub_part_field_item", "part_func_expr", "opt_num_subparts", "part_defs",
-  "part_def_list", "part_definition", "$@54", "part_name",
-  "opt_part_values", "$@55", "$@56", "part_func_max", "part_values_in",
-  "part_value_list", "part_value_item", "$@57", "$@58",
+  "part_def_list", "part_definition", "@54", "part_name",
+  "opt_part_values", "@55", "@56", "part_func_max", "part_values_in",
+  "part_value_list", "part_value_item", "@57", "@58",
   "part_value_item_list", "part_value_expr_item", "opt_sub_partition",
-  "sub_part_list", "sub_part_definition", "$@59", "sub_name",
+  "sub_part_list", "sub_part_definition", "@59", "sub_name",
   "opt_part_options", "opt_part_option_list", "opt_part_option",
-  "create_select", "$@60", "$@61", "opt_as", "opt_create_database_options",
+  "create_select", "@60", "@61", "opt_as", "opt_create_database_options",
   "create_database_options", "create_database_option", "opt_table_options",
   "table_options", "table_option", "opt_if_not_exists",
   "opt_create_table_options", "create_table_options_space_separated",
-  "create_table_options", "create_table_option", "$@62", "default_charset",
+  "create_table_options", "create_table_option", "@62", "default_charset",
   "default_collation", "storage_engines", "known_storage_engines",
   "row_types", "merge_insert_types", "opt_select_from", "udf_type",
   "create_field_list", "field_list", "field_list_item", "column_def",
   "key_def", "opt_check_constraint", "check_constraint", "opt_constraint",
-  "constraint", "field_spec", "$@63", "type", "$@64", "$@65",
-  "spatial_type", "char", "nchar", "varchar", "nvarchar", "int_type",
-  "real_type", "float_options", "precision", "type_datetime_precision",
+  "constraint", "field_spec", "@63", "type", "@64", "@65", "spatial_type",
+  "char", "nchar", "varchar", "nvarchar", "int_type", "real_type",
+  "float_options", "precision", "type_datetime_precision",
   "func_datetime_precision", "field_options", "field_opt_list",
   "field_option", "field_length", "opt_field_length", "opt_precision",
   "opt_attribute", "opt_attribute_list", "attribute",
@@ -4337,7 +4319,7 @@ static const char *const yytname[] =
   "old_or_new_charset_name", "old_or_new_charset_name_or_default",
   "collation_name", "opt_collate", "collation_name_or_default",
   "opt_default", "ascii", "unicode", "opt_binary", "opt_bin_mod",
-  "ws_nweights", "$@66", "ws_level_flag_desc", "ws_level_flag_reverse",
+  "ws_nweights", "@66", "ws_level_flag_desc", "ws_level_flag_reverse",
   "ws_level_flags", "ws_level_number", "ws_level_list_item",
   "ws_level_list", "ws_level_range", "ws_level_list_or_range",
   "opt_ws_levels", "opt_primary", "references", "opt_ref_list", "ref_list",
@@ -4349,35 +4331,35 @@ static const char *const yytname[] =
   "spatial_key_opts", "fulltext_key_opts", "key_using_alg", "all_key_opt",
   "normal_key_opt", "spatial_key_opt", "fulltext_key_opt",
   "btree_or_rtree", "key_list", "key_part", "opt_ident", "opt_component",
-  "string_list", "alter", "$@67", "$@68", "$@69", "$@70", "$@71", "$@72",
-  "$@73", "alter_user_list", "ev_alter_on_schedule_completion",
-  "opt_ev_rename_to", "opt_ev_sql_stmt", "ident_or_empty",
-  "alter_commands", "$@74", "$@75", "$@76", "remove_partitioning",
-  "all_or_alt_part_name_list", "add_partition_rule", "$@77",
-  "add_part_extra", "reorg_partition_rule", "$@78", "reorg_parts_rule",
-  "$@79", "alt_part_name_list", "alt_part_name_item", "alter_list",
-  "add_column", "alter_list_item", "$@80", "$@81", "$@82",
-  "opt_index_lock_algorithm", "alter_algorithm_option",
-  "alter_lock_option", "opt_column", "opt_ignore", "opt_restrict",
-  "opt_place", "opt_to", "slave", "$@83", "start",
-  "opt_start_transaction_option_list", "start_transaction_option_list",
-  "start_transaction_option", "slave_connection_opts",
-  "slave_user_name_opt", "slave_user_pass_opt", "slave_plugin_auth_opt",
-  "slave_plugin_dir_opt", "opt_slave_thread_option_list",
-  "slave_thread_option_list", "slave_thread_option", "slave_until",
-  "slave_until_opts", "checksum", "$@84", "opt_checksum_type", "repair",
-  "$@85", "opt_mi_repair_type", "mi_repair_types", "mi_repair_type",
-  "analyze", "$@86", "binlog_base64_event", "check", "$@87",
-  "opt_mi_check_type", "mi_check_types", "mi_check_type", "optimize",
-  "$@88", "opt_no_write_to_binlog", "rename", "$@89", "rename_list",
-  "table_to_table_list", "table_to_table", "keycache", "$@90",
+  "string_list", "alter", "@67", "@68", "@69", "@70", "@71", "@72", "@73",
+  "alter_user_list", "ev_alter_on_schedule_completion", "opt_ev_rename_to",
+  "opt_ev_sql_stmt", "ident_or_empty", "alter_commands", "@74", "@75",
+  "@76", "remove_partitioning", "all_or_alt_part_name_list",
+  "add_partition_rule", "@77", "add_part_extra", "reorg_partition_rule",
+  "@78", "reorg_parts_rule", "@79", "alt_part_name_list",
+  "alt_part_name_item", "alter_list", "add_column", "alter_list_item",
+  "@80", "@81", "@82", "opt_index_lock_algorithm",
+  "alter_algorithm_option", "alter_lock_option", "opt_column",
+  "opt_ignore", "opt_restrict", "opt_place", "opt_to", "slave", "@83",
+  "start", "opt_start_transaction_option_list",
+  "start_transaction_option_list", "start_transaction_option",
+  "slave_connection_opts", "slave_user_name_opt", "slave_user_pass_opt",
+  "slave_plugin_auth_opt", "slave_plugin_dir_opt",
+  "opt_slave_thread_option_list", "slave_thread_option_list",
+  "slave_thread_option", "slave_until", "slave_until_opts", "checksum",
+  "@84", "opt_checksum_type", "repair", "@85", "opt_mi_repair_type",
+  "mi_repair_types", "mi_repair_type", "analyze", "@86",
+  "binlog_base64_event", "check", "@87", "opt_mi_check_type",
+  "mi_check_types", "mi_check_type", "optimize", "@88",
+  "opt_no_write_to_binlog", "rename", "@89", "rename_list",
+  "table_to_table_list", "table_to_table", "keycache", "@90",
   "keycache_list_or_parts", "keycache_list", "assign_to_keycache",
-  "assign_to_keycache_parts", "key_cache_name", "preload", "$@91",
+  "assign_to_keycache_parts", "key_cache_name", "preload", "@91",
   "preload_list_or_parts", "preload_list", "preload_keys",
-  "preload_keys_parts", "adm_partition", "$@92", "cache_keys_spec", "$@93",
+  "preload_keys_parts", "adm_partition", "@92", "cache_keys_spec", "@93",
   "cache_key_list_or_empty", "opt_ignore_leaves", "select", "select_init",
-  "select_paren", "select_paren_derived", "select_init2", "$@94",
-  "select_part2", "$@95", "$@96", "select_into", "select_from",
+  "select_paren", "select_paren_derived", "select_init2", "@94",
+  "select_part2", "@95", "@96", "select_into", "select_from",
   "select_options", "select_option_list", "select_option",
   "select_lock_type", "select_item_list", "select_item", "remember_name",
   "remember_end", "select_alias", "optional_braces", "expr", "bool_pri",
@@ -4390,107 +4372,105 @@ static const char *const yytname[] =
   "opt_frame", "frame", "boundary_unit", "bounding", "preceding_following",
   "function_call_generic", "fulltext_options", "opt_natural_language_mode",
   "opt_query_expansion", "opt_udf_expr_list", "udf_expr_list", "udf_expr",
-  "sum_expr", "$@97", "variable", "$@98", "variable_aux", "opt_distinct",
-  "opt_gconcat_separator", "opt_gorder_clause", "$@99", "gorder_list",
-  "in_sum_expr", "$@100", "cast_type", "opt_expr_list", "expr_list",
-  "in_sum_expr_list", "$@101", "ident_list_arg", "ident_list", "opt_expr",
+  "sum_expr", "@97", "variable", "@98", "variable_aux", "opt_distinct",
+  "opt_gconcat_separator", "opt_gorder_clause", "@99", "gorder_list",
+  "in_sum_expr", "@100", "cast_type", "opt_expr_list", "expr_list",
+  "in_sum_expr_list", "@101", "ident_list_arg", "ident_list", "opt_expr",
   "opt_else", "when_list", "table_ref", "join_table_list", "esc_table_ref",
-  "derived_table_list", "join_table", "$@102", "$@103", "$@104", "$@105",
-  "$@106", "$@107", "$@108", "normal_join", "opt_use_partition",
-  "use_partition", "table_factor", "$@109", "select_derived_union",
-  "$@110", "$@111", "select_init2_derived", "select_part2_derived",
-  "$@112", "$@113", "select_derived", "$@114", "select_derived2", "$@115",
-  "$@116", "get_select_lex", "select_derived_init", "opt_outer",
-  "index_hint_clause", "index_hint_type", "index_hint_definition", "$@117",
-  "$@118", "index_hints_list", "opt_index_hints_list", "$@119",
-  "opt_key_definition", "$@120", "opt_key_usage_list", "key_usage_element",
+  "derived_table_list", "join_table", "@102", "@103", "@104", "@105",
+  "@106", "@107", "@108", "normal_join", "opt_use_partition",
+  "use_partition", "table_factor", "@109", "select_derived_union", "@110",
+  "@111", "select_init2_derived", "select_part2_derived", "@112", "@113",
+  "select_derived", "@114", "select_derived2", "@115", "@116",
+  "get_select_lex", "select_derived_init", "opt_outer",
+  "index_hint_clause", "index_hint_type", "index_hint_definition", "@117",
+  "@118", "index_hints_list", "opt_index_hints_list", "@119",
+  "opt_key_definition", "@120", "opt_key_usage_list", "key_usage_element",
   "key_usage_list", "using_list", "interval", "interval_time_stamp",
   "date_time_type", "table_alias", "opt_table_alias", "opt_all",
-  "where_clause", "$@121", "having_clause", "$@122", "opt_escape",
-  "group_clause", "$@123", "group_list", "olap_opt", "alter_order_clause",
+  "where_clause", "@121", "having_clause", "@122", "opt_escape",
+  "group_clause", "@123", "group_list", "olap_opt", "alter_order_clause",
   "alter_order_list", "alter_order_item", "opt_order_clause",
-  "order_clause", "$@124", "order_list", "order_dir",
+  "order_clause", "@124", "order_list", "order_dir",
   "opt_limit_clause_init", "opt_limit_clause", "limit_clause",
   "limit_options", "limit_option", "delete_limit_clause", "ulong_num",
   "real_ulong_num", "ulonglong_num", "real_ulonglong_num", "dec_num_error",
-  "dec_num", "procedure_analyse_clause", "$@125",
+  "dec_num", "procedure_analyse_clause", "@125",
   "opt_procedure_analyse_params", "procedure_analyse_param",
-  "select_var_list_init", "$@126", "select_var_list", "select_var_ident",
-  "into", "$@127", "into_destination", "$@128", "$@129", "do", "$@130",
-  "drop", "$@131", "$@132", "$@133", "$@134", "table_list", "table_name",
+  "select_var_list_init", "@126", "select_var_list", "select_var_ident",
+  "into", "@127", "into_destination", "@128", "@129", "do", "@130", "drop",
+  "@131", "@132", "@133", "@134", "table_list", "table_name",
   "table_name_with_opt_use_partition", "table_alias_ref_list",
   "table_alias_ref", "if_exists", "opt_temporary", "drop_ts_options_list",
-  "drop_ts_options", "drop_ts_option", "insert", "$@135", "$@136",
-  "replace", "$@137", "$@138", "insert_lock_option", "replace_lock_option",
-  "insert2", "insert_table", "insert_field_spec", "$@139", "fields",
-  "insert_values", "$@140", "$@141", "values_list", "ident_eq_list",
-  "ident_eq_value", "equal", "opt_equal", "no_braces", "$@142",
-  "opt_values", "values", "expr_or_default", "opt_insert_update", "$@143",
-  "update", "$@144", "$@145", "update_list", "update_elem",
-  "insert_update_list", "insert_update_elem", "opt_low_priority", "delete",
-  "$@146", "single_multi", "$@147", "$@148", "$@149", "table_wild_list",
-  "table_wild_one", "opt_wild", "opt_delete_options", "opt_delete_option",
-  "truncate", "$@150", "opt_table_sym", "opt_profile_defs", "profile_defs",
-  "profile_def", "opt_profile_args", "show", "$@151", "show_param",
-  "$@152", "$@153", "show_engine_param", "master_or_binary", "opt_storage",
-  "opt_db", "opt_full", "from_or_in", "binlog_in", "binlog_from",
-  "wild_and_where", "describe", "$@154", "$@155", "explanable_command",
-  "describe_command", "opt_extended_describe", "opt_describe_column",
-  "flush", "$@156", "flush_options", "$@157", "$@158", "opt_flush_lock",
-  "$@159", "flush_options_list", "flush_option", "opt_table_list", "reset",
-  "$@160", "reset_options", "reset_option", "$@161", "slave_reset_options",
-  "purge", "$@162", "purge_options", "purge_option", "kill", "kill_option",
-  "use", "load", "$@163", "$@164", "$@165", "$@166", "data_or_xml",
-  "opt_local", "load_data_lock", "opt_duplicate", "opt_field_term",
-  "field_term_list", "field_term", "opt_line_term", "line_term_list",
-  "line_term", "opt_xml_rows_identified_by", "opt_ignore_lines",
-  "lines_or_rows", "opt_field_or_var_spec", "fields_or_vars",
-  "field_or_var", "opt_load_data_set_spec", "load_data_set_list",
-  "load_data_set_elem", "text_literal", "text_string", "param_marker",
-  "signed_literal", "literal", "NUM_literal", "temporal_literal",
-  "insert_ident", "table_wild", "order_ident", "simple_ident",
-  "simple_ident_nospvar", "simple_ident_q", "field_ident", "table_ident",
-  "table_ident_opt_wild", "table_ident_nodb", "IDENT_sys",
-  "TEXT_STRING_sys_nonewline", "TEXT_STRING_sys", "TEXT_STRING_literal",
-  "TEXT_STRING_filesystem", "ident", "label_ident", "ident_or_text",
-  "user", "keyword", "keyword_sp", "set", "$@167",
-  "start_option_value_list", "$@168", "$@169", "$@170",
-  "start_option_value_list_following_option_type", "$@171",
-  "option_value_list_continued", "option_value_list", "$@172", "$@173",
-  "option_value", "$@174", "option_type", "opt_var_type",
+  "drop_ts_options", "drop_ts_option", "insert", "@135", "@136", "replace",
+  "@137", "@138", "insert_lock_option", "replace_lock_option", "insert2",
+  "insert_table", "insert_field_spec", "@139", "fields", "insert_values",
+  "@140", "@141", "values_list", "ident_eq_list", "ident_eq_value",
+  "equal", "opt_equal", "no_braces", "@142", "opt_values", "values",
+  "expr_or_default", "opt_insert_update", "@143", "update", "@144", "@145",
+  "update_list", "update_elem", "insert_update_list", "insert_update_elem",
+  "opt_low_priority", "delete", "@146", "single_multi", "@147", "@148",
+  "@149", "table_wild_list", "table_wild_one", "opt_wild",
+  "opt_delete_options", "opt_delete_option", "truncate", "@150",
+  "opt_table_sym", "opt_profile_defs", "profile_defs", "profile_def",
+  "opt_profile_args", "show", "@151", "show_param", "@152", "@153",
+  "show_engine_param", "master_or_binary", "opt_storage", "opt_db",
+  "opt_full", "from_or_in", "binlog_in", "binlog_from", "wild_and_where",
+  "describe", "@154", "@155", "explanable_command", "describe_command",
+  "opt_extended_describe", "opt_describe_column", "flush", "@156",
+  "flush_options", "@157", "@158", "opt_flush_lock", "@159",
+  "flush_options_list", "flush_option", "opt_table_list", "reset", "@160",
+  "reset_options", "reset_option", "@161", "slave_reset_options", "purge",
+  "@162", "purge_options", "purge_option", "kill", "kill_option", "use",
+  "load", "@163", "@164", "@165", "@166", "data_or_xml", "opt_local",
+  "load_data_lock", "opt_duplicate", "opt_field_term", "field_term_list",
+  "field_term", "opt_line_term", "line_term_list", "line_term",
+  "opt_xml_rows_identified_by", "opt_ignore_lines", "lines_or_rows",
+  "opt_field_or_var_spec", "fields_or_vars", "field_or_var",
+  "opt_load_data_set_spec", "load_data_set_list", "load_data_set_elem",
+  "text_literal", "text_string", "param_marker", "signed_literal",
+  "literal", "NUM_literal", "temporal_literal", "insert_ident",
+  "table_wild", "order_ident", "simple_ident", "simple_ident_nospvar",
+  "simple_ident_q", "field_ident", "table_ident", "table_ident_opt_wild",
+  "table_ident_nodb", "IDENT_sys", "TEXT_STRING_sys_nonewline",
+  "TEXT_STRING_sys", "TEXT_STRING_literal", "TEXT_STRING_filesystem",
+  "ident", "label_ident", "ident_or_text", "user", "keyword", "keyword_sp",
+  "set", "@167", "start_option_value_list", "@168", "@169", "@170",
+  "start_option_value_list_following_option_type", "@171",
+  "option_value_list_continued", "option_value_list", "@172", "@173",
+  "option_value", "@174", "option_type", "opt_var_type",
   "opt_var_ident_type", "option_value_following_option_type",
-  "option_value_no_option_type", "$@175", "internal_variable_name",
+  "option_value_no_option_type", "@175", "internal_variable_name",
   "transaction_characteristics", "transaction_access_mode",
   "isolation_level", "transaction_access_mode_types", "isolation_types",
-  "text_or_password", "set_expr_or_default", "lock", "$@176",
+  "text_or_password", "set_expr_or_default", "lock", "@176",
   "table_or_tables", "table_lock_list", "table_lock", "lock_option",
-  "unlock", "$@177", "handler", "$@178", "handler_read_or_scan",
-  "handler_scan_function", "handler_rkey_function", "$@179",
-  "handler_rkey_mode", "revoke", "$@180", "revoke_command", "grant",
-  "$@181", "grant_command", "opt_table", "grant_privileges",
-  "opt_privileges", "object_privilege_list", "object_privilege", "$@182",
-  "$@183", "$@184", "$@185", "opt_and", "require_list",
-  "require_list_element", "grant_ident", "user_list", "grant_list",
-  "grant_user", "opt_column_list", "column_list", "column_list_id",
-  "require_clause", "grant_options", "opt_grant_option",
-  "grant_option_list", "grant_option", "begin", "$@186", "opt_work",
-  "opt_chain", "opt_release", "opt_savepoint", "commit", "rollback",
-  "savepoint", "release", "union_clause", "union_list", "$@187",
-  "union_opt", "opt_union_order_or_limit", "union_order_or_limit", "$@188",
+  "unlock", "@177", "handler", "@178", "handler_read_or_scan",
+  "handler_scan_function", "handler_rkey_function", "@179",
+  "handler_rkey_mode", "revoke", "@180", "revoke_command", "grant", "@181",
+  "grant_command", "opt_table", "grant_privileges", "opt_privileges",
+  "object_privilege_list", "object_privilege", "@182", "@183", "@184",
+  "@185", "opt_and", "require_list", "require_list_element", "grant_ident",
+  "user_list", "grant_list", "grant_user", "opt_column_list",
+  "column_list", "column_list_id", "require_clause", "grant_options",
+  "opt_grant_option", "grant_option_list", "grant_option", "begin", "@186",
+  "opt_work", "opt_chain", "opt_release", "opt_savepoint", "commit",
+  "rollback", "savepoint", "release", "union_clause", "union_list", "@187",
+  "union_opt", "opt_union_order_or_limit", "union_order_or_limit", "@188",
   "order_or_limit", "union_option", "query_specification",
-  "query_expression_body", "$@189", "subselect", "subselect_start",
+  "query_expression_body", "@189", "subselect", "subselect_start",
   "subselect_end", "opt_query_expression_options",
   "query_expression_option_list", "query_expression_option",
   "view_or_trigger_or_sp_or_event", "definer_tail", "no_definer_tail",
   "definer_opt", "no_definer", "definer", "view_replace_or_algorithm",
-  "view_replace", "view_algorithm", "view_suid", "view_tail", "$@190",
-  "view_list_opt", "view_list", "view_select", "$@191", "view_select_aux",
-  "$@192", "create_view_select_paren", "create_view_select", "$@193",
-  "view_check_option", "trigger_tail", "$@194", "$@195", "$@196",
-  "udf_tail", "sf_tail", "$@197", "$@198", "$@199", "$@200", "$@201",
-  "sp_tail", "$@202", "$@203", "$@204", "$@205", "xa", "xid",
-  "begin_or_start", "opt_join_or_resume", "opt_one_phase", "opt_suspend",
-  "$@206", "opt_migrate", "install", "uninstall", 0
+  "view_replace", "view_algorithm", "view_suid", "view_tail", "@190",
+  "view_list_opt", "view_list", "view_select", "@191", "view_select_aux",
+  "@192", "create_view_select_paren", "create_view_select", "@193",
+  "view_check_option", "trigger_tail", "@194", "@195", "@196", "udf_tail",
+  "sf_tail", "@197", "@198", "@199", "@200", "@201", "sp_tail", "@202",
+  "@203", "@204", "@205", "xa", "xid", "begin_or_start",
+  "opt_join_or_resume", "opt_one_phase", "opt_suspend", "@206",
+  "opt_migrate", "install", "uninstall", 0
 };
 #endif
 
@@ -18307,20 +18287,17 @@ yy_symbol_print (yyoutput, yytype, yyvaluep)
 #if (defined __STDC__ || defined __C99__FUNC__ \
      || defined __cplusplus || defined _MSC_VER)
 static void
-yy_stack_print (yytype_int16 *yybottom, yytype_int16 *yytop)
+yy_stack_print (yytype_int16 *bottom, yytype_int16 *top)
 #else
 static void
-yy_stack_print (yybottom, yytop)
-    yytype_int16 *yybottom;
-    yytype_int16 *yytop;
+yy_stack_print (bottom, top)
+    yytype_int16 *bottom;
+    yytype_int16 *top;
 #endif
 {
   YYFPRINTF (stderr, "Stack now");
-  for (; yybottom <= yytop; yybottom++)
-    {
-      int yybot = *yybottom;
-      YYFPRINTF (stderr, " %d", yybot);
-    }
+  for (; bottom <= top; ++bottom)
+    YYFPRINTF (stderr, " %d", *bottom);
   YYFPRINTF (stderr, "\n");
 }
 
@@ -18354,11 +18331,11 @@ yy_reduce_print (yyvsp, yyrule)
   /* The symbols being reduced.  */
   for (yyi = 0; yyi < yynrhs; yyi++)
     {
-      YYFPRINTF (stderr, "   $%d = ", yyi + 1);
+      fprintf (stderr, "   $%d = ", yyi + 1);
       yy_symbol_print (stderr, yyrhs[yyprhs[yyrule] + yyi],
 		       &(yyvsp[(yyi + 1) - (yynrhs)])
 		       		       );
-      YYFPRINTF (stderr, "\n");
+      fprintf (stderr, "\n");
     }
 }
 
@@ -18638,8 +18615,10 @@ yydestruct (yymsg, yytype, yyvaluep)
 	break;
     }
 }
+
 
 /* Prevent warnings from -Wmissing-prototypes.  */
+
 #ifdef YYPARSE_PARAM
 #if defined __STDC__ || defined __cplusplus
 int yyparse (void *YYPARSE_PARAM);
@@ -18658,9 +18637,10 @@ int yyparse ();
 
 
 
-/*-------------------------.
-| yyparse or yypush_parse.  |
-`-------------------------*/
+
+/*----------.
+| yyparse.  |
+`----------*/
 
 #ifdef YYPARSE_PARAM
 #if (defined __STDC__ || defined __C99__FUNC__ \
@@ -18684,46 +18664,22 @@ yyparse ()
 #endif
 #endif
 {
-/* The lookahead symbol.  */
+  /* The look-ahead symbol.  */
 int yychar;
 
-/* The semantic value of the lookahead symbol.  */
+/* The semantic value of the look-ahead symbol.  */
 YYSTYPE yylval;
 
-    /* Number of syntax errors so far.  */
-    int yynerrs;
+/* Number of syntax errors so far.  */
+int yynerrs;
 
-    int yystate;
-    /* Number of tokens to shift before error messages enabled.  */
-    int yyerrstatus;
-
-    /* The stacks and their tools:
-       `yyss': related to states.
-       `yyvs': related to semantic values.
-
-       Refer to the stacks thru separate pointers, to allow yyoverflow
-       to reallocate them elsewhere.  */
-
-    /* The state stack.  */
-    yytype_int16 yyssa[YYINITDEPTH];
-    yytype_int16 *yyss;
-    yytype_int16 *yyssp;
-
-    /* The semantic value stack.  */
-    YYSTYPE yyvsa[YYINITDEPTH];
-    YYSTYPE *yyvs;
-    YYSTYPE *yyvsp;
-
-    YYSIZE_T yystacksize;
-
+  int yystate;
   int yyn;
   int yyresult;
-  /* Lookahead token as an internal (translated) token number.  */
-  int yytoken;
-  /* The variables used to return semantic value and location from the
-     action routines.  */
-  YYSTYPE yyval;
-
+  /* Number of tokens to shift before error messages enabled.  */
+  int yyerrstatus;
+  /* Look-ahead token as an internal (translated) token number.  */
+  int yytoken = 0;
 #if YYERROR_VERBOSE
   /* Buffer for error messages, and its allocated size.  */
   char yymsgbuf[128];
@@ -18731,28 +18687,51 @@ YYSTYPE yylval;
   YYSIZE_T yymsg_alloc = sizeof yymsgbuf;
 #endif
 
+  /* Three stacks and their tools:
+     `yyss': related to states,
+     `yyvs': related to semantic values,
+     `yyls': related to locations.
+
+     Refer to the stacks thru separate pointers, to allow yyoverflow
+     to reallocate them elsewhere.  */
+
+  /* The state stack.  */
+  yytype_int16 yyssa[YYINITDEPTH];
+  yytype_int16 *yyss = yyssa;
+  yytype_int16 *yyssp;
+
+  /* The semantic value stack.  */
+  YYSTYPE yyvsa[YYINITDEPTH];
+  YYSTYPE *yyvs = yyvsa;
+  YYSTYPE *yyvsp;
+
+
+
 #define YYPOPSTACK(N)   (yyvsp -= (N), yyssp -= (N))
+
+  YYSIZE_T yystacksize = YYINITDEPTH;
+
+  /* The variables used to return semantic value and location from the
+     action routines.  */
+  YYSTYPE yyval;
+
 
   /* The number of symbols on the RHS of the reduced rule.
      Keep to zero when no symbol should be popped.  */
   int yylen = 0;
-
-  yytoken = 0;
-  yyss = yyssa;
-  yyvs = yyvsa;
-  yystacksize = YYINITDEPTH;
 
   YYDPRINTF ((stderr, "Starting parse\n"));
 
   yystate = 0;
   yyerrstatus = 0;
   yynerrs = 0;
-  yychar = YYEMPTY; /* Cause a token to be read.  */
+  yychar = YYEMPTY;		/* Cause a token to be read.  */
 
   /* Initialize stack pointers.
      Waste one element of value and location stack
      so that they stay on the same level as the state stack.
      The wasted elements are never initialized.  */
+
   yyssp = yyss;
   yyvsp = yyvs;
 
@@ -18782,6 +18761,7 @@ YYSTYPE yylval;
 	YYSTYPE *yyvs1 = yyvs;
 	yytype_int16 *yyss1 = yyss;
 
+
 	/* Each stack pointer address is followed by the size of the
 	   data in use in that stack, in bytes.  This used to be a
 	   conditional around just the two extra args, but that might
@@ -18789,6 +18769,7 @@ YYSTYPE yylval;
 	yyoverflow (YY_("memory exhausted"),
 		    &yyss1, yysize * sizeof (*yyssp),
 		    &yyvs1, yysize * sizeof (*yyvsp),
+
 		    &yystacksize);
 
 	yyss = yyss1;
@@ -18811,8 +18792,9 @@ YYSTYPE yylval;
 	  (union yyalloc *) YYSTACK_ALLOC (YYSTACK_BYTES (yystacksize));
 	if (! yyptr)
 	  goto yyexhaustedlab;
-	YYSTACK_RELOCATE (yyss_alloc, yyss);
-	YYSTACK_RELOCATE (yyvs_alloc, yyvs);
+	YYSTACK_RELOCATE (yyss);
+	YYSTACK_RELOCATE (yyvs);
+
 #  undef YYSTACK_RELOCATE
 	if (yyss1 != yyssa)
 	  YYSTACK_FREE (yyss1);
@@ -18823,6 +18805,7 @@ YYSTYPE yylval;
       yyssp = yyss + yysize - 1;
       yyvsp = yyvs + yysize - 1;
 
+
       YYDPRINTF ((stderr, "Stack size increased to %lu\n",
 		  (unsigned long int) yystacksize));
 
@@ -18832,9 +18815,6 @@ YYSTYPE yylval;
 
   YYDPRINTF ((stderr, "Entering state %d\n", yystate));
 
-  if (yystate == YYFINAL)
-    YYACCEPT;
-
   goto yybackup;
 
 /*-----------.
@@ -18843,16 +18823,16 @@ YYSTYPE yylval;
 yybackup:
 
   /* Do appropriate processing given the current state.  Read a
-     lookahead token if we need one and don't already have one.  */
+     look-ahead token if we need one and don't already have one.  */
 
-  /* First try to decide what to do without reference to lookahead token.  */
+  /* First try to decide what to do without reference to look-ahead token.  */
   yyn = yypact[yystate];
   if (yyn == YYPACT_NINF)
     goto yydefault;
 
-  /* Not known => get a lookahead token if don't already have one.  */
+  /* Not known => get a look-ahead token if don't already have one.  */
 
-  /* YYCHAR is either YYEMPTY or YYEOF or a valid lookahead symbol.  */
+  /* YYCHAR is either YYEMPTY or YYEOF or a valid look-ahead symbol.  */
   if (yychar == YYEMPTY)
     {
       YYDPRINTF ((stderr, "Reading a token: "));
@@ -18884,16 +18864,20 @@ yybackup:
       goto yyreduce;
     }
 
+  if (yyn == YYFINAL)
+    YYACCEPT;
+
   /* Count tokens shifted since error; after three, turn off error
      status.  */
   if (yyerrstatus)
     yyerrstatus--;
 
-  /* Shift the lookahead token.  */
+  /* Shift the look-ahead token.  */
   YY_SYMBOL_PRINT ("Shifting", yytoken, &yylval, &yylloc);
 
-  /* Discard the shifted token.  */
-  yychar = YYEMPTY;
+  /* Discard the shifted token unless it is eof.  */
+  if (yychar != YYEOF)
+    yychar = YYEMPTY;
 
   yystate = yyn;
   *++yyvsp = yylval;
@@ -18933,8 +18917,6 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-
-/* Line 1455 of yacc.c  */
 #line 2013 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -18950,8 +18932,6 @@ yyreduce:
     break;
 
   case 3:
-
-/* Line 1455 of yacc.c  */
 #line 2025 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex_input_stream *lip = YYLIP;
@@ -18978,8 +18958,6 @@ yyreduce:
     break;
 
   case 5:
-
-/* Line 1455 of yacc.c  */
 #line 2050 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* Single query, not terminated. */
@@ -18988,8 +18966,6 @@ yyreduce:
     break;
 
   case 62:
-
-/* Line 1455 of yacc.c  */
 #line 2124 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19000,8 +18976,6 @@ yyreduce:
     break;
 
   case 65:
-
-/* Line 1455 of yacc.c  */
 #line 2139 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19022,8 +18996,6 @@ yyreduce:
     break;
 
   case 66:
-
-/* Line 1455 of yacc.c  */
 #line 2159 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19034,8 +19006,6 @@ yyreduce:
     break;
 
   case 67:
-
-/* Line 1455 of yacc.c  */
 #line 2166 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19046,8 +19016,6 @@ yyreduce:
     break;
 
   case 68:
-
-/* Line 1455 of yacc.c  */
 #line 2176 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19058,15 +19026,11 @@ yyreduce:
     break;
 
   case 69:
-
-/* Line 1455 of yacc.c  */
 #line 2183 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 74:
-
-/* Line 1455 of yacc.c  */
 #line 2198 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -19077,8 +19041,6 @@ yyreduce:
     break;
 
   case 75:
-
-/* Line 1455 of yacc.c  */
 #line 2210 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->sphead)
@@ -19090,8 +19052,6 @@ yyreduce:
     break;
 
   case 76:
-
-/* Line 1455 of yacc.c  */
 #line 2218 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -19101,8 +19061,6 @@ yyreduce:
     break;
 
   case 77:
-
-/* Line 1455 of yacc.c  */
 #line 2229 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex = Lex;
@@ -19119,15 +19077,11 @@ yyreduce:
     break;
 
   case 78:
-
-/* Line 1455 of yacc.c  */
 #line 2242 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 81:
-
-/* Line 1455 of yacc.c  */
 #line 2252 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.host = (yyvsp[(3) - (3)].lex_str).str;
@@ -19135,8 +19089,6 @@ yyreduce:
     break;
 
   case 82:
-
-/* Line 1455 of yacc.c  */
 #line 2256 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.bind_addr = (yyvsp[(3) - (3)].lex_str).str;
@@ -19144,8 +19096,6 @@ yyreduce:
     break;
 
   case 83:
-
-/* Line 1455 of yacc.c  */
 #line 2260 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.user = (yyvsp[(3) - (3)].lex_str).str;
@@ -19153,8 +19103,6 @@ yyreduce:
     break;
 
   case 84:
-
-/* Line 1455 of yacc.c  */
 #line 2264 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.password = (yyvsp[(3) - (3)].lex_str).str;
@@ -19163,8 +19111,6 @@ yyreduce:
     break;
 
   case 85:
-
-/* Line 1455 of yacc.c  */
 #line 2269 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.port = (yyvsp[(3) - (3)].ulong_num);
@@ -19172,8 +19118,6 @@ yyreduce:
     break;
 
   case 86:
-
-/* Line 1455 of yacc.c  */
 #line 2273 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.connect_retry = (yyvsp[(3) - (3)].ulong_num);
@@ -19181,8 +19125,6 @@ yyreduce:
     break;
 
   case 87:
-
-/* Line 1455 of yacc.c  */
 #line 2277 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.retry_count= (yyvsp[(3) - (3)].ulong_num);
@@ -19191,8 +19133,6 @@ yyreduce:
     break;
 
   case 88:
-
-/* Line 1455 of yacc.c  */
 #line 2282 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(3) - (3)].ulong_num) > MASTER_DELAY_MAX)
@@ -19209,8 +19149,6 @@ yyreduce:
     break;
 
   case 89:
-
-/* Line 1455 of yacc.c  */
 #line 2295 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl= (yyvsp[(3) - (3)].ulong_num) ? 
@@ -19219,8 +19157,6 @@ yyreduce:
     break;
 
   case 90:
-
-/* Line 1455 of yacc.c  */
 #line 2300 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_ca= (yyvsp[(3) - (3)].lex_str).str;
@@ -19228,8 +19164,6 @@ yyreduce:
     break;
 
   case 91:
-
-/* Line 1455 of yacc.c  */
 #line 2304 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_capath= (yyvsp[(3) - (3)].lex_str).str;
@@ -19237,8 +19171,6 @@ yyreduce:
     break;
 
   case 92:
-
-/* Line 1455 of yacc.c  */
 #line 2308 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_cert= (yyvsp[(3) - (3)].lex_str).str;
@@ -19246,8 +19178,6 @@ yyreduce:
     break;
 
   case 93:
-
-/* Line 1455 of yacc.c  */
 #line 2312 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_cipher= (yyvsp[(3) - (3)].lex_str).str;
@@ -19255,8 +19185,6 @@ yyreduce:
     break;
 
   case 94:
-
-/* Line 1455 of yacc.c  */
 #line 2316 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_key= (yyvsp[(3) - (3)].lex_str).str;
@@ -19264,8 +19192,6 @@ yyreduce:
     break;
 
   case 95:
-
-/* Line 1455 of yacc.c  */
 #line 2320 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_verify_server_cert= (yyvsp[(3) - (3)].ulong_num) ?
@@ -19274,8 +19200,6 @@ yyreduce:
     break;
 
   case 96:
-
-/* Line 1455 of yacc.c  */
 #line 2325 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_crl= (yyvsp[(3) - (3)].lex_str).str;
@@ -19283,8 +19207,6 @@ yyreduce:
     break;
 
   case 97:
-
-/* Line 1455 of yacc.c  */
 #line 2329 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.ssl_crlpath= (yyvsp[(3) - (3)].lex_str).str;
@@ -19292,8 +19214,6 @@ yyreduce:
     break;
 
   case 98:
-
-/* Line 1455 of yacc.c  */
 #line 2334 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.heartbeat_period= (float) (yyvsp[(3) - (3)].item_num)->val_real();
@@ -19328,8 +19248,6 @@ yyreduce:
     break;
 
   case 99:
-
-/* Line 1455 of yacc.c  */
 #line 2365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.repl_ignore_server_ids_opt= LEX_MASTER_INFO::LEX_MI_ENABLE;
@@ -19337,8 +19255,6 @@ yyreduce:
     break;
 
   case 100:
-
-/* Line 1455 of yacc.c  */
 #line 2370 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.auto_position= (yyvsp[(3) - (3)].ulong_num) ?
@@ -19348,8 +19264,6 @@ yyreduce:
     break;
 
   case 105:
-
-/* Line 1455 of yacc.c  */
 #line 2387 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->mi.repl_ignore_server_ids.elements == 0)
@@ -19365,8 +19279,6 @@ yyreduce:
     break;
 
   case 106:
-
-/* Line 1455 of yacc.c  */
 #line 2401 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.log_file_name = (yyvsp[(3) - (3)].lex_str).str;
@@ -19374,8 +19286,6 @@ yyreduce:
     break;
 
   case 107:
-
-/* Line 1455 of yacc.c  */
 #line 2405 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.pos = (yyvsp[(3) - (3)].ulonglong_number);
@@ -19395,8 +19305,6 @@ yyreduce:
     break;
 
   case 108:
-
-/* Line 1455 of yacc.c  */
 #line 2421 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.relay_log_name = (yyvsp[(3) - (3)].lex_str).str;
@@ -19404,8 +19312,6 @@ yyreduce:
     break;
 
   case 109:
-
-/* Line 1455 of yacc.c  */
 #line 2425 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.relay_log_pos = (yyvsp[(3) - (3)].ulong_num);
@@ -19416,8 +19322,6 @@ yyreduce:
     break;
 
   case 110:
-
-/* Line 1455 of yacc.c  */
 #line 2437 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19447,8 +19351,6 @@ yyreduce:
     break;
 
   case 111:
-
-/* Line 1455 of yacc.c  */
 #line 2463 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19471,8 +19373,6 @@ yyreduce:
     break;
 
   case 112:
-
-/* Line 1455 of yacc.c  */
 #line 2482 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index_prepare(Lex, (yyvsp[(7) - (7)].table)))
@@ -19481,8 +19381,6 @@ yyreduce:
     break;
 
   case 113:
-
-/* Line 1455 of yacc.c  */
 #line 2487 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index(Lex, (yyvsp[(2) - (12)].key_type), (yyvsp[(4) - (12)].lex_str)))
@@ -19491,15 +19389,11 @@ yyreduce:
     break;
 
   case 114:
-
-/* Line 1455 of yacc.c  */
 #line 2491 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 115:
-
-/* Line 1455 of yacc.c  */
 #line 2494 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index_prepare(Lex, (yyvsp[(7) - (7)].table)))
@@ -19508,8 +19402,6 @@ yyreduce:
     break;
 
   case 116:
-
-/* Line 1455 of yacc.c  */
 #line 2499 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index(Lex, (yyvsp[(2) - (12)].key_type), (yyvsp[(4) - (12)].lex_str)))
@@ -19518,15 +19410,11 @@ yyreduce:
     break;
 
   case 117:
-
-/* Line 1455 of yacc.c  */
 #line 2503 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 118:
-
-/* Line 1455 of yacc.c  */
 #line 2506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index_prepare(Lex, (yyvsp[(7) - (7)].table)))
@@ -19535,8 +19423,6 @@ yyreduce:
     break;
 
   case 119:
-
-/* Line 1455 of yacc.c  */
 #line 2511 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index(Lex, (yyvsp[(2) - (12)].key_type), (yyvsp[(4) - (12)].lex_str)))
@@ -19545,15 +19431,11 @@ yyreduce:
     break;
 
   case 120:
-
-/* Line 1455 of yacc.c  */
 #line 2515 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 121:
-
-/* Line 1455 of yacc.c  */
 #line 2517 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.default_table_charset= NULL;
@@ -19562,8 +19444,6 @@ yyreduce:
     break;
 
   case 122:
-
-/* Line 1455 of yacc.c  */
 #line 2522 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -19574,8 +19454,6 @@ yyreduce:
     break;
 
   case 123:
-
-/* Line 1455 of yacc.c  */
 #line 2529 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_view_mode= VIEW_CREATE_NEW;
@@ -19585,15 +19463,11 @@ yyreduce:
     break;
 
   case 124:
-
-/* Line 1455 of yacc.c  */
 #line 2535 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 125:
-
-/* Line 1455 of yacc.c  */
 #line 2537 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_CREATE_USER;
@@ -19601,8 +19475,6 @@ yyreduce:
     break;
 
   case 126:
-
-/* Line 1455 of yacc.c  */
 #line 2541 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_tablespace_info->ts_cmd_type= CREATE_LOGFILE_GROUP;
@@ -19610,8 +19482,6 @@ yyreduce:
     break;
 
   case 127:
-
-/* Line 1455 of yacc.c  */
 #line 2545 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_tablespace_info->ts_cmd_type= CREATE_TABLESPACE;
@@ -19619,8 +19489,6 @@ yyreduce:
     break;
 
   case 128:
-
-/* Line 1455 of yacc.c  */
 #line 2549 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command= SQLCOM_CREATE_SERVER;
@@ -19628,8 +19496,6 @@ yyreduce:
     break;
 
   case 129:
-
-/* Line 1455 of yacc.c  */
 #line 2560 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.server_name= (yyvsp[(2) - (10)].lex_str).str;
@@ -19639,8 +19505,6 @@ yyreduce:
     break;
 
   case 132:
-
-/* Line 1455 of yacc.c  */
 #line 2574 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.username= (yyvsp[(2) - (2)].lex_str).str;
@@ -19648,8 +19512,6 @@ yyreduce:
     break;
 
   case 133:
-
-/* Line 1455 of yacc.c  */
 #line 2578 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.host= (yyvsp[(2) - (2)].lex_str).str;
@@ -19657,8 +19519,6 @@ yyreduce:
     break;
 
   case 134:
-
-/* Line 1455 of yacc.c  */
 #line 2582 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.db= (yyvsp[(2) - (2)].lex_str).str;
@@ -19666,8 +19526,6 @@ yyreduce:
     break;
 
   case 135:
-
-/* Line 1455 of yacc.c  */
 #line 2586 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.owner= (yyvsp[(2) - (2)].lex_str).str;
@@ -19675,8 +19533,6 @@ yyreduce:
     break;
 
   case 136:
-
-/* Line 1455 of yacc.c  */
 #line 2590 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.password= (yyvsp[(2) - (2)].lex_str).str;
@@ -19685,8 +19541,6 @@ yyreduce:
     break;
 
   case 137:
-
-/* Line 1455 of yacc.c  */
 #line 2595 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.socket= (yyvsp[(2) - (2)].lex_str).str;
@@ -19694,8 +19548,6 @@ yyreduce:
     break;
 
   case 138:
-
-/* Line 1455 of yacc.c  */
 #line 2599 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->server_options.port= (yyvsp[(2) - (2)].ulong_num);
@@ -19703,8 +19555,6 @@ yyreduce:
     break;
 
   case 139:
-
-/* Line 1455 of yacc.c  */
 #line 2606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19724,8 +19574,6 @@ yyreduce:
     break;
 
   case 140:
-
-/* Line 1455 of yacc.c  */
 #line 2626 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -19737,8 +19585,6 @@ yyreduce:
     break;
 
   case 141:
-
-/* Line 1455 of yacc.c  */
 #line 2637 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->item_expression= (yyvsp[(2) - (3)].item);
@@ -19747,8 +19593,6 @@ yyreduce:
     break;
 
   case 143:
-
-/* Line 1455 of yacc.c  */
 #line 2644 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->item_execute_at= (yyvsp[(2) - (2)].item);
@@ -19756,15 +19600,11 @@ yyreduce:
     break;
 
   case 144:
-
-/* Line 1455 of yacc.c  */
 #line 2650 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 145:
-
-/* Line 1455 of yacc.c  */
 #line 2652 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->status= Event_parse_data::ENABLED;
@@ -19774,8 +19614,6 @@ yyreduce:
     break;
 
   case 146:
-
-/* Line 1455 of yacc.c  */
 #line 2658 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->status= Event_parse_data::SLAVESIDE_DISABLED;
@@ -19785,8 +19623,6 @@ yyreduce:
     break;
 
   case 147:
-
-/* Line 1455 of yacc.c  */
 #line 2664 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->status= Event_parse_data::DISABLED;
@@ -19796,8 +19632,6 @@ yyreduce:
     break;
 
   case 148:
-
-/* Line 1455 of yacc.c  */
 #line 2673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item= new (YYTHD->mem_root) Item_func_now_local(0);
@@ -19808,8 +19642,6 @@ yyreduce:
     break;
 
   case 149:
-
-/* Line 1455 of yacc.c  */
 #line 2680 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->item_starts= (yyvsp[(2) - (2)].item);
@@ -19817,8 +19649,6 @@ yyreduce:
     break;
 
   case 151:
-
-/* Line 1455 of yacc.c  */
 #line 2688 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->item_ends= (yyvsp[(2) - (2)].item);
@@ -19826,15 +19656,11 @@ yyreduce:
     break;
 
   case 152:
-
-/* Line 1455 of yacc.c  */
 #line 2694 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 154:
-
-/* Line 1455 of yacc.c  */
 #line 2700 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->on_completion=
@@ -19844,8 +19670,6 @@ yyreduce:
     break;
 
   case 155:
-
-/* Line 1455 of yacc.c  */
 #line 2706 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->event_parse_data->on_completion=
@@ -19855,15 +19679,11 @@ yyreduce:
     break;
 
   case 156:
-
-/* Line 1455 of yacc.c  */
 #line 2714 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 157:
-
-/* Line 1455 of yacc.c  */
 #line 2716 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->comment= Lex->event_parse_data->comment= (yyvsp[(2) - (2)].lex_str);
@@ -19872,8 +19692,6 @@ yyreduce:
     break;
 
   case 158:
-
-/* Line 1455 of yacc.c  */
 #line 2723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19920,8 +19738,6 @@ yyreduce:
     break;
 
   case 159:
-
-/* Line 1455 of yacc.c  */
 #line 2766 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19935,8 +19751,6 @@ yyreduce:
     break;
 
   case 173:
-
-/* Line 1455 of yacc.c  */
 #line 2795 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
            LEX *lex=Lex;
@@ -19952,8 +19766,6 @@ yyreduce:
     break;
 
   case 174:
-
-/* Line 1455 of yacc.c  */
 #line 2810 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!(yyvsp[(1) - (3)].lex_str).str ||
@@ -19971,8 +19783,6 @@ yyreduce:
     break;
 
   case 175:
-
-/* Line 1455 of yacc.c  */
 #line 2824 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -19992,106 +19802,76 @@ yyreduce:
     break;
 
   case 176:
-
-/* Line 1455 of yacc.c  */
 #line 2842 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 177:
-
-/* Line 1455 of yacc.c  */
 #line 2843 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 178:
-
-/* Line 1455 of yacc.c  */
 #line 2847 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 179:
-
-/* Line 1455 of yacc.c  */
 #line 2848 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 180:
-
-/* Line 1455 of yacc.c  */
 #line 2854 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.comment= (yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 181:
-
-/* Line 1455 of yacc.c  */
 #line 2856 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* Just parse it, we only have one language for now. */ }
     break;
 
   case 182:
-
-/* Line 1455 of yacc.c  */
 #line 2858 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.daccess= SP_NO_SQL; }
     break;
 
   case 183:
-
-/* Line 1455 of yacc.c  */
 #line 2860 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.daccess= SP_CONTAINS_SQL; }
     break;
 
   case 184:
-
-/* Line 1455 of yacc.c  */
 #line 2862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.daccess= SP_READS_SQL_DATA; }
     break;
 
   case 185:
-
-/* Line 1455 of yacc.c  */
 #line 2864 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.daccess= SP_MODIFIES_SQL_DATA; }
     break;
 
   case 186:
-
-/* Line 1455 of yacc.c  */
 #line 2866 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 187:
-
-/* Line 1455 of yacc.c  */
 #line 2871 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 188:
-
-/* Line 1455 of yacc.c  */
 #line 2872 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.detistic= TRUE; }
     break;
 
   case 189:
-
-/* Line 1455 of yacc.c  */
 #line 2873 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sp_chistics.detistic= FALSE; }
     break;
 
   case 190:
-
-/* Line 1455 of yacc.c  */
 #line 2878 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sp_chistics.suid= SP_IS_SUID;
@@ -20099,8 +19879,6 @@ yyreduce:
     break;
 
   case 191:
-
-/* Line 1455 of yacc.c  */
 #line 2882 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sp_chistics.suid= SP_IS_NOT_SUID;
@@ -20108,8 +19886,6 @@ yyreduce:
     break;
 
   case 192:
-
-/* Line 1455 of yacc.c  */
 #line 2889 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex = Lex;
@@ -20122,15 +19898,11 @@ yyreduce:
     break;
 
   case 193:
-
-/* Line 1455 of yacc.c  */
 #line 2897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 198:
-
-/* Line 1455 of yacc.c  */
 #line 2913 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
            Lex->value_list.push_back((yyvsp[(3) - (3)].item));
@@ -20138,8 +19910,6 @@ yyreduce:
     break;
 
   case 199:
-
-/* Line 1455 of yacc.c  */
 #line 2917 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->value_list.push_back((yyvsp[(1) - (1)].item));
@@ -20147,8 +19917,6 @@ yyreduce:
     break;
 
   case 204:
-
-/* Line 1455 of yacc.c  */
 #line 2935 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -20169,8 +19937,6 @@ yyreduce:
     break;
 
   case 205:
-
-/* Line 1455 of yacc.c  */
 #line 2955 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20201,8 +19967,6 @@ yyreduce:
     break;
 
   case 210:
-
-/* Line 1455 of yacc.c  */
 #line 2996 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20232,50 +19996,36 @@ yyreduce:
     break;
 
   case 211:
-
-/* Line 1455 of yacc.c  */
 #line 3024 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_variable::MODE_IN; }
     break;
 
   case 212:
-
-/* Line 1455 of yacc.c  */
 #line 3025 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_variable::MODE_IN; }
     break;
 
   case 213:
-
-/* Line 1455 of yacc.c  */
 #line 3026 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_variable::MODE_OUT; }
     break;
 
   case 214:
-
-/* Line 1455 of yacc.c  */
 #line 3027 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_variable::MODE_INOUT; }
     break;
 
   case 215:
-
-/* Line 1455 of yacc.c  */
 #line 3031 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 217:
-
-/* Line 1455 of yacc.c  */
 #line 3036 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 219:
-
-/* Line 1455 of yacc.c  */
 #line 3042 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.spblock).vars= (yyval.spblock).conds= (yyval.spblock).hndlrs= (yyval.spblock).curs= 0;
@@ -20283,8 +20033,6 @@ yyreduce:
     break;
 
   case 220:
-
-/* Line 1455 of yacc.c  */
 #line 3046 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* We check for declarations out of (standard) order this way
@@ -20311,8 +20059,6 @@ yyreduce:
     break;
 
   case 221:
-
-/* Line 1455 of yacc.c  */
 #line 3072 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20326,8 +20072,6 @@ yyreduce:
     break;
 
   case 222:
-
-/* Line 1455 of yacc.c  */
 #line 3083 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20404,8 +20148,6 @@ yyreduce:
     break;
 
   case 223:
-
-/* Line 1455 of yacc.c  */
 #line 3156 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20425,8 +20167,6 @@ yyreduce:
     break;
 
   case 224:
-
-/* Line 1455 of yacc.c  */
 #line 3172 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20470,8 +20210,6 @@ yyreduce:
     break;
 
   case 225:
-
-/* Line 1455 of yacc.c  */
 #line 3212 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20509,8 +20247,6 @@ yyreduce:
     break;
 
   case 226:
-
-/* Line 1455 of yacc.c  */
 #line 3246 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20523,8 +20259,6 @@ yyreduce:
     break;
 
   case 227:
-
-/* Line 1455 of yacc.c  */
 #line 3255 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20589,36 +20323,26 @@ yyreduce:
     break;
 
   case 228:
-
-/* Line 1455 of yacc.c  */
 #line 3318 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_handler::EXIT; }
     break;
 
   case 229:
-
-/* Line 1455 of yacc.c  */
 #line 3319 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= sp_handler::CONTINUE; }
     break;
 
   case 230:
-
-/* Line 1455 of yacc.c  */
 #line 3325 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 231:
-
-/* Line 1455 of yacc.c  */
 #line 3327 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)+= 1; }
     break;
 
   case 232:
-
-/* Line 1455 of yacc.c  */
 #line 3332 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -20642,8 +20366,6 @@ yyreduce:
     break;
 
   case 233:
-
-/* Line 1455 of yacc.c  */
 #line 3355 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* mysql errno */
             if ((yyvsp[(1) - (1)].ulong_num) == 0)
@@ -20658,8 +20380,6 @@ yyreduce:
     break;
 
   case 235:
-
-/* Line 1455 of yacc.c  */
 #line 3370 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* SQLSTATE */
 
@@ -20682,22 +20402,16 @@ yyreduce:
     break;
 
   case 236:
-
-/* Line 1455 of yacc.c  */
 #line 3391 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 237:
-
-/* Line 1455 of yacc.c  */
 #line 3392 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 238:
-
-/* Line 1455 of yacc.c  */
 #line 3397 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.spcondvalue)= (yyvsp[(1) - (1)].spcondvalue);
@@ -20705,8 +20419,6 @@ yyreduce:
     break;
 
   case 239:
-
-/* Line 1455 of yacc.c  */
 #line 3401 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -20723,8 +20435,6 @@ yyreduce:
     break;
 
   case 240:
-
-/* Line 1455 of yacc.c  */
 #line 3414 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.spcondvalue)= new (YYTHD->mem_root) sp_condition_value(sp_condition_value::WARNING);
@@ -20734,8 +20444,6 @@ yyreduce:
     break;
 
   case 241:
-
-/* Line 1455 of yacc.c  */
 #line 3420 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.spcondvalue)= new (YYTHD->mem_root) sp_condition_value(sp_condition_value::NOT_FOUND);
@@ -20745,8 +20453,6 @@ yyreduce:
     break;
 
   case 242:
-
-/* Line 1455 of yacc.c  */
 #line 3426 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.spcondvalue)= new (YYTHD->mem_root) sp_condition_value(sp_condition_value::EXCEPTION);
@@ -20756,8 +20462,6 @@ yyreduce:
     break;
 
   case 243:
-
-/* Line 1455 of yacc.c  */
 #line 3435 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -20773,8 +20477,6 @@ yyreduce:
     break;
 
   case 244:
-
-/* Line 1455 of yacc.c  */
 #line 3450 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -20804,29 +20506,21 @@ yyreduce:
     break;
 
   case 245:
-
-/* Line 1455 of yacc.c  */
 #line 3476 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.spcondvalue)= (yyvsp[(1) - (1)].spcondvalue); }
     break;
 
   case 246:
-
-/* Line 1455 of yacc.c  */
 #line 3481 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.spcondvalue)= NULL; }
     break;
 
   case 247:
-
-/* Line 1455 of yacc.c  */
 #line 3483 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.spcondvalue)= (yyvsp[(1) - (1)].spcondvalue); }
     break;
 
   case 248:
-
-/* Line 1455 of yacc.c  */
 #line 3488 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             YYTHD->m_parser_state->m_yacc.m_set_signal_info.clear();
@@ -20834,8 +20528,6 @@ yyreduce:
     break;
 
   case 250:
-
-/* Line 1455 of yacc.c  */
 #line 3496 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Set_signal_information *info;
@@ -20847,8 +20539,6 @@ yyreduce:
     break;
 
   case 251:
-
-/* Line 1455 of yacc.c  */
 #line 3505 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Set_signal_information *info;
@@ -20865,15 +20555,11 @@ yyreduce:
     break;
 
   case 252:
-
-/* Line 1455 of yacc.c  */
 #line 3524 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 253:
-
-/* Line 1455 of yacc.c  */
 #line 3526 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(1) - (1)].item)->type() == Item::FUNC_ITEM)
@@ -20895,99 +20581,71 @@ yyreduce:
     break;
 
   case 254:
-
-/* Line 1455 of yacc.c  */
 #line 3544 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 255:
-
-/* Line 1455 of yacc.c  */
 #line 3550 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CLASS_ORIGIN; }
     break;
 
   case 256:
-
-/* Line 1455 of yacc.c  */
 #line 3552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_SUBCLASS_ORIGIN; }
     break;
 
   case 257:
-
-/* Line 1455 of yacc.c  */
 #line 3554 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CONSTRAINT_CATALOG; }
     break;
 
   case 258:
-
-/* Line 1455 of yacc.c  */
 #line 3556 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CONSTRAINT_SCHEMA; }
     break;
 
   case 259:
-
-/* Line 1455 of yacc.c  */
 #line 3558 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CONSTRAINT_NAME; }
     break;
 
   case 260:
-
-/* Line 1455 of yacc.c  */
 #line 3560 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CATALOG_NAME; }
     break;
 
   case 261:
-
-/* Line 1455 of yacc.c  */
 #line 3562 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_SCHEMA_NAME; }
     break;
 
   case 262:
-
-/* Line 1455 of yacc.c  */
 #line 3564 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_TABLE_NAME; }
     break;
 
   case 263:
-
-/* Line 1455 of yacc.c  */
 #line 3566 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_COLUMN_NAME; }
     break;
 
   case 264:
-
-/* Line 1455 of yacc.c  */
 #line 3568 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_CURSOR_NAME; }
     break;
 
   case 265:
-
-/* Line 1455 of yacc.c  */
 #line 3570 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_MESSAGE_TEXT; }
     break;
 
   case 266:
-
-/* Line 1455 of yacc.c  */
 #line 3572 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_condition_item_name)= DIAG_MYSQL_ERRNO; }
     break;
 
   case 267:
-
-/* Line 1455 of yacc.c  */
 #line 3577 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21004,8 +20662,6 @@ yyreduce:
     break;
 
   case 268:
-
-/* Line 1455 of yacc.c  */
 #line 3593 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Diagnostics_information *info= (yyvsp[(4) - (4)].diag_info);
@@ -21021,22 +20677,16 @@ yyreduce:
     break;
 
   case 269:
-
-/* Line 1455 of yacc.c  */
 #line 3608 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_area)= Diagnostics_information::CURRENT_AREA; }
     break;
 
   case 270:
-
-/* Line 1455 of yacc.c  */
 #line 3610 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.diag_area)= Diagnostics_information::CURRENT_AREA; }
     break;
 
   case 271:
-
-/* Line 1455 of yacc.c  */
 #line 3615 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.diag_info)= new (YYTHD->mem_root) Statement_information((yyvsp[(1) - (1)].stmt_info_list));
@@ -21046,8 +20696,6 @@ yyreduce:
     break;
 
   case 272:
-
-/* Line 1455 of yacc.c  */
 #line 3621 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.diag_info)= new (YYTHD->mem_root) Condition_information((yyvsp[(2) - (3)].item), (yyvsp[(3) - (3)].cond_info_list));
@@ -21057,8 +20705,6 @@ yyreduce:
     break;
 
   case 273:
-
-/* Line 1455 of yacc.c  */
 #line 3630 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.stmt_info_list)= new (YYTHD->mem_root) List<Statement_information_item>;
@@ -21068,8 +20714,6 @@ yyreduce:
     break;
 
   case 274:
-
-/* Line 1455 of yacc.c  */
 #line 3636 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(1) - (3)].stmt_info_list)->push_back((yyvsp[(3) - (3)].stmt_info_item)))
@@ -21079,8 +20723,6 @@ yyreduce:
     break;
 
   case 275:
-
-/* Line 1455 of yacc.c  */
 #line 3645 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.stmt_info_item)= new (YYTHD->mem_root) Statement_information_item((yyvsp[(3) - (3)].stmt_info_item_name), (yyvsp[(1) - (3)].item));
@@ -21090,8 +20732,6 @@ yyreduce:
     break;
 
   case 276:
-
-/* Line 1455 of yacc.c  */
 #line 3653 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21124,8 +20764,6 @@ yyreduce:
     break;
 
   case 277:
-
-/* Line 1455 of yacc.c  */
 #line 3682 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_get_user_var((yyvsp[(2) - (2)].lex_str));
@@ -21135,29 +20773,21 @@ yyreduce:
     break;
 
   case 278:
-
-/* Line 1455 of yacc.c  */
 #line 3691 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.stmt_info_item_name)= Statement_information_item::NUMBER; }
     break;
 
   case 279:
-
-/* Line 1455 of yacc.c  */
 #line 3693 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.stmt_info_item_name)= Statement_information_item::ROW_COUNT; }
     break;
 
   case 280:
-
-/* Line 1455 of yacc.c  */
 #line 3702 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 281:
-
-/* Line 1455 of yacc.c  */
 #line 3707 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.cond_info_list)= new (YYTHD->mem_root) List<Condition_information_item>;
@@ -21167,8 +20797,6 @@ yyreduce:
     break;
 
   case 282:
-
-/* Line 1455 of yacc.c  */
 #line 3713 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(1) - (3)].cond_info_list)->push_back((yyvsp[(3) - (3)].cond_info_item)))
@@ -21178,8 +20806,6 @@ yyreduce:
     break;
 
   case 283:
-
-/* Line 1455 of yacc.c  */
 #line 3722 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.cond_info_item)= new (YYTHD->mem_root) Condition_information_item((yyvsp[(3) - (3)].cond_info_item_name), (yyvsp[(1) - (3)].item));
@@ -21189,99 +20815,71 @@ yyreduce:
     break;
 
   case 284:
-
-/* Line 1455 of yacc.c  */
 #line 3730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CLASS_ORIGIN; }
     break;
 
   case 285:
-
-/* Line 1455 of yacc.c  */
 #line 3732 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::SUBCLASS_ORIGIN; }
     break;
 
   case 286:
-
-/* Line 1455 of yacc.c  */
 #line 3734 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CONSTRAINT_CATALOG; }
     break;
 
   case 287:
-
-/* Line 1455 of yacc.c  */
 #line 3736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CONSTRAINT_SCHEMA; }
     break;
 
   case 288:
-
-/* Line 1455 of yacc.c  */
 #line 3738 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CONSTRAINT_NAME; }
     break;
 
   case 289:
-
-/* Line 1455 of yacc.c  */
 #line 3740 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CATALOG_NAME; }
     break;
 
   case 290:
-
-/* Line 1455 of yacc.c  */
 #line 3742 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::SCHEMA_NAME; }
     break;
 
   case 291:
-
-/* Line 1455 of yacc.c  */
 #line 3744 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::TABLE_NAME; }
     break;
 
   case 292:
-
-/* Line 1455 of yacc.c  */
 #line 3746 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::COLUMN_NAME; }
     break;
 
   case 293:
-
-/* Line 1455 of yacc.c  */
 #line 3748 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::CURSOR_NAME; }
     break;
 
   case 294:
-
-/* Line 1455 of yacc.c  */
 #line 3750 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::MESSAGE_TEXT; }
     break;
 
   case 295:
-
-/* Line 1455 of yacc.c  */
 #line 3752 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::MYSQL_ERRNO; }
     break;
 
   case 296:
-
-/* Line 1455 of yacc.c  */
 #line 3754 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cond_info_item_name)= Condition_information_item::RETURNED_SQLSTATE; }
     break;
 
   case 297:
-
-/* Line 1455 of yacc.c  */
 #line 3759 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* NOTE: field definition is filled in sp_decl section. */
@@ -21305,8 +20903,6 @@ yyreduce:
     break;
 
   case 298:
-
-/* Line 1455 of yacc.c  */
 #line 3779 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* NOTE: field definition is filled in sp_decl section. */
@@ -21330,36 +20926,26 @@ yyreduce:
     break;
 
   case 299:
-
-/* Line 1455 of yacc.c  */
 #line 3802 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = NULL; }
     break;
 
   case 300:
-
-/* Line 1455 of yacc.c  */
 #line 3804 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sphead->m_parser_data.push_expr_start_ptr(YY_TOKEN_END); }
     break;
 
   case 301:
-
-/* Line 1455 of yacc.c  */
 #line 3806 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = (yyvsp[(3) - (3)].item); }
     break;
 
   case 315:
-
-/* Line 1455 of yacc.c  */
 #line 3827 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sphead->m_parser_data.new_cont_backpatch(); }
     break;
 
   case 316:
-
-/* Line 1455 of yacc.c  */
 #line 3829 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             sp_head *sp= Lex->sphead;
@@ -21369,8 +20955,6 @@ yyreduce:
     break;
 
   case 317:
-
-/* Line 1455 of yacc.c  */
 #line 3837 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21384,8 +20968,6 @@ yyreduce:
     break;
 
   case 318:
-
-/* Line 1455 of yacc.c  */
 #line 3847 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21433,8 +21015,6 @@ yyreduce:
     break;
 
   case 319:
-
-/* Line 1455 of yacc.c  */
 #line 3894 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21448,8 +21028,6 @@ yyreduce:
     break;
 
   case 320:
-
-/* Line 1455 of yacc.c  */
 #line 3904 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21497,8 +21075,6 @@ yyreduce:
     break;
 
   case 321:
-
-/* Line 1455 of yacc.c  */
 #line 3950 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* Unlabeled controls get a secret label. */
             THD *thd= YYTHD;
@@ -21513,8 +21089,6 @@ yyreduce:
     break;
 
   case 322:
-
-/* Line 1455 of yacc.c  */
 #line 3961 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -21527,8 +21101,6 @@ yyreduce:
     break;
 
   case 323:
-
-/* Line 1455 of yacc.c  */
 #line 3973 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21588,8 +21160,6 @@ yyreduce:
     break;
 
   case 324:
-
-/* Line 1455 of yacc.c  */
 #line 4032 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21640,8 +21210,6 @@ yyreduce:
     break;
 
   case 325:
-
-/* Line 1455 of yacc.c  */
 #line 4082 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21666,8 +21234,6 @@ yyreduce:
     break;
 
   case 326:
-
-/* Line 1455 of yacc.c  */
 #line 4106 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21692,15 +21258,11 @@ yyreduce:
     break;
 
   case 327:
-
-/* Line 1455 of yacc.c  */
 #line 4127 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 328:
-
-/* Line 1455 of yacc.c  */
 #line 4132 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21725,8 +21287,6 @@ yyreduce:
     break;
 
   case 332:
-
-/* Line 1455 of yacc.c  */
 #line 4162 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -21748,8 +21308,6 @@ yyreduce:
     break;
 
   case 333:
-
-/* Line 1455 of yacc.c  */
 #line 4180 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -21771,8 +21329,6 @@ yyreduce:
     break;
 
   case 334:
-
-/* Line 1455 of yacc.c  */
 #line 4200 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21785,8 +21341,6 @@ yyreduce:
     break;
 
   case 335:
-
-/* Line 1455 of yacc.c  */
 #line 4209 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21826,8 +21380,6 @@ yyreduce:
     break;
 
   case 336:
-
-/* Line 1455 of yacc.c  */
 #line 4245 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21850,8 +21402,6 @@ yyreduce:
     break;
 
   case 337:
-
-/* Line 1455 of yacc.c  */
 #line 4264 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -21864,8 +21414,6 @@ yyreduce:
     break;
 
   case 343:
-
-/* Line 1455 of yacc.c  */
 #line 4287 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21880,8 +21428,6 @@ yyreduce:
     break;
 
   case 344:
-
-/* Line 1455 of yacc.c  */
 #line 4298 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21926,8 +21472,6 @@ yyreduce:
     break;
 
   case 345:
-
-/* Line 1455 of yacc.c  */
 #line 4342 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             case_stmt_action_end_case(Lex, true);
@@ -21935,8 +21479,6 @@ yyreduce:
     break;
 
   case 346:
-
-/* Line 1455 of yacc.c  */
 #line 4349 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             case_stmt_action_case(YYTHD);
@@ -21944,8 +21486,6 @@ yyreduce:
     break;
 
   case 347:
-
-/* Line 1455 of yacc.c  */
 #line 4356 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             case_stmt_action_end_case(Lex, false);
@@ -21953,8 +21493,6 @@ yyreduce:
     break;
 
   case 352:
-
-/* Line 1455 of yacc.c  */
 #line 4373 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -21967,8 +21505,6 @@ yyreduce:
     break;
 
   case 353:
-
-/* Line 1455 of yacc.c  */
 #line 4382 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* Simple case: <caseval> = <whenval> */
@@ -22012,8 +21548,6 @@ yyreduce:
     break;
 
   case 354:
-
-/* Line 1455 of yacc.c  */
 #line 4423 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (case_stmt_action_then(YYTHD, Lex))
@@ -22022,8 +21556,6 @@ yyreduce:
     break;
 
   case 355:
-
-/* Line 1455 of yacc.c  */
 #line 4431 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22036,8 +21568,6 @@ yyreduce:
     break;
 
   case 356:
-
-/* Line 1455 of yacc.c  */
 #line 4440 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22076,8 +21606,6 @@ yyreduce:
     break;
 
   case 357:
-
-/* Line 1455 of yacc.c  */
 #line 4476 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (case_stmt_action_then(YYTHD, Lex))
@@ -22086,8 +21614,6 @@ yyreduce:
     break;
 
   case 358:
-
-/* Line 1455 of yacc.c  */
 #line 4484 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22105,8 +21631,6 @@ yyreduce:
     break;
 
   case 360:
-
-/* Line 1455 of yacc.c  */
 #line 4502 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22128,8 +21652,6 @@ yyreduce:
     break;
 
   case 361:
-
-/* Line 1455 of yacc.c  */
 #line 4520 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22150,22 +21672,16 @@ yyreduce:
     break;
 
   case 362:
-
-/* Line 1455 of yacc.c  */
 #line 4539 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= null_lex_str; }
     break;
 
   case 363:
-
-/* Line 1455 of yacc.c  */
 #line 4540 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 364:
-
-/* Line 1455 of yacc.c  */
 #line 4545 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22185,8 +21701,6 @@ yyreduce:
     break;
 
   case 365:
-
-/* Line 1455 of yacc.c  */
 #line 4561 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22205,8 +21719,6 @@ yyreduce:
     break;
 
   case 366:
-
-/* Line 1455 of yacc.c  */
 #line 4578 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* Unlabeled blocks get a secret label. */
             LEX *lex= Lex;
@@ -22221,8 +21733,6 @@ yyreduce:
     break;
 
   case 367:
-
-/* Line 1455 of yacc.c  */
 #line 4589 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22231,8 +21741,6 @@ yyreduce:
     break;
 
   case 368:
-
-/* Line 1455 of yacc.c  */
 #line 4597 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* QQ This is just a dummy for grouping declarations and statements
               together. No [[NOT] ATOMIC] yet, and we need to figure out how
@@ -22249,8 +21757,6 @@ yyreduce:
     break;
 
   case 369:
-
-/* Line 1455 of yacc.c  */
 #line 4612 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22286,8 +21792,6 @@ yyreduce:
     break;
 
   case 370:
-
-/* Line 1455 of yacc.c  */
 #line 4648 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22306,8 +21810,6 @@ yyreduce:
     break;
 
   case 371:
-
-/* Line 1455 of yacc.c  */
 #line 4663 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22320,8 +21822,6 @@ yyreduce:
     break;
 
   case 372:
-
-/* Line 1455 of yacc.c  */
 #line 4672 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22361,8 +21861,6 @@ yyreduce:
     break;
 
   case 373:
-
-/* Line 1455 of yacc.c  */
 #line 4710 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22382,8 +21880,6 @@ yyreduce:
     break;
 
   case 374:
-
-/* Line 1455 of yacc.c  */
 #line 4726 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22396,8 +21892,6 @@ yyreduce:
     break;
 
   case 375:
-
-/* Line 1455 of yacc.c  */
 #line 4735 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22438,50 +21932,36 @@ yyreduce:
     break;
 
   case 377:
-
-/* Line 1455 of yacc.c  */
 #line 4776 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TRG_ACTION_BEFORE; }
     break;
 
   case 378:
-
-/* Line 1455 of yacc.c  */
 #line 4778 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TRG_ACTION_AFTER; }
     break;
 
   case 379:
-
-/* Line 1455 of yacc.c  */
 #line 4783 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TRG_EVENT_INSERT; }
     break;
 
   case 380:
-
-/* Line 1455 of yacc.c  */
 #line 4785 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TRG_EVENT_UPDATE; }
     break;
 
   case 381:
-
-/* Line 1455 of yacc.c  */
 #line 4787 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TRG_EVENT_DELETE; }
     break;
 
   case 385:
-
-/* Line 1455 of yacc.c  */
 #line 4821 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 386:
-
-/* Line 1455 of yacc.c  */
 #line 4823 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22490,8 +21970,6 @@ yyreduce:
     break;
 
   case 387:
-
-/* Line 1455 of yacc.c  */
 #line 4833 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_ADD_FILE; 
@@ -22499,8 +21977,6 @@ yyreduce:
     break;
 
   case 388:
-
-/* Line 1455 of yacc.c  */
 #line 4839 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             Lex->alter_tablespace_info->ts_alter_tablespace_type= ALTER_TABLESPACE_DROP_FILE; 
@@ -22508,15 +21984,11 @@ yyreduce:
     break;
 
   case 393:
-
-/* Line 1455 of yacc.c  */
 #line 4862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 444:
-
-/* Line 1455 of yacc.c  */
 #line 4960 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22525,8 +21997,6 @@ yyreduce:
     break;
 
   case 445:
-
-/* Line 1455 of yacc.c  */
 #line 4968 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22535,8 +22005,6 @@ yyreduce:
     break;
 
   case 446:
-
-/* Line 1455 of yacc.c  */
 #line 4976 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22545,8 +22013,6 @@ yyreduce:
     break;
 
   case 447:
-
-/* Line 1455 of yacc.c  */
 #line 4984 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22559,8 +22025,6 @@ yyreduce:
     break;
 
   case 448:
-
-/* Line 1455 of yacc.c  */
 #line 4996 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22573,8 +22037,6 @@ yyreduce:
     break;
 
   case 449:
-
-/* Line 1455 of yacc.c  */
 #line 5008 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22583,8 +22045,6 @@ yyreduce:
     break;
 
   case 450:
-
-/* Line 1455 of yacc.c  */
 #line 5013 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22593,8 +22053,6 @@ yyreduce:
     break;
 
   case 451:
-
-/* Line 1455 of yacc.c  */
 #line 5018 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22603,8 +22061,6 @@ yyreduce:
     break;
 
   case 452:
-
-/* Line 1455 of yacc.c  */
 #line 5026 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22613,8 +22069,6 @@ yyreduce:
     break;
 
   case 453:
-
-/* Line 1455 of yacc.c  */
 #line 5034 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22623,8 +22077,6 @@ yyreduce:
     break;
 
   case 454:
-
-/* Line 1455 of yacc.c  */
 #line 5042 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22633,8 +22085,6 @@ yyreduce:
     break;
 
   case 455:
-
-/* Line 1455 of yacc.c  */
 #line 5050 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22643,8 +22093,6 @@ yyreduce:
     break;
 
   case 456:
-
-/* Line 1455 of yacc.c  */
 #line 5058 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22653,8 +22101,6 @@ yyreduce:
     break;
 
   case 457:
-
-/* Line 1455 of yacc.c  */
 #line 5066 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22663,8 +22109,6 @@ yyreduce:
     break;
 
   case 458:
-
-/* Line 1455 of yacc.c  */
 #line 5074 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22678,8 +22122,6 @@ yyreduce:
     break;
 
   case 459:
-
-/* Line 1455 of yacc.c  */
 #line 5087 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22693,8 +22135,6 @@ yyreduce:
     break;
 
   case 460:
-
-/* Line 1455 of yacc.c  */
 #line 5100 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22709,8 +22149,6 @@ yyreduce:
     break;
 
   case 461:
-
-/* Line 1455 of yacc.c  */
 #line 5114 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22719,8 +22157,6 @@ yyreduce:
     break;
 
   case 462:
-
-/* Line 1455 of yacc.c  */
 #line 5119 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22734,15 +22170,11 @@ yyreduce:
     break;
 
   case 463:
-
-/* Line 1455 of yacc.c  */
 #line 5131 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulonglong_number)= (yyvsp[(1) - (1)].ulonglong_number);}
     break;
 
   case 464:
-
-/* Line 1455 of yacc.c  */
 #line 5133 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             ulonglong number;
@@ -22790,22 +22222,16 @@ yyreduce:
     break;
 
   case 465:
-
-/* Line 1455 of yacc.c  */
 #line 5183 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 466:
-
-/* Line 1455 of yacc.c  */
 #line 5186 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 467:
-
-/* Line 1455 of yacc.c  */
 #line 5188 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22824,8 +22250,6 @@ yyreduce:
     break;
 
   case 468:
-
-/* Line 1455 of yacc.c  */
 #line 5203 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -22844,64 +22268,46 @@ yyreduce:
     break;
 
   case 469:
-
-/* Line 1455 of yacc.c  */
 #line 5222 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 470:
-
-/* Line 1455 of yacc.c  */
 #line 5225 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->set_braces(1);}
     break;
 
   case 471:
-
-/* Line 1455 of yacc.c  */
 #line 5226 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 472:
-
-/* Line 1455 of yacc.c  */
 #line 5230 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 473:
-
-/* Line 1455 of yacc.c  */
 #line 5232 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->set_braces(0);}
     break;
 
   case 474:
-
-/* Line 1455 of yacc.c  */
 #line 5233 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 475:
-
-/* Line 1455 of yacc.c  */
 #line 5235 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->set_braces(1);}
     break;
 
   case 476:
-
-/* Line 1455 of yacc.c  */
 #line 5236 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 477:
-
-/* Line 1455 of yacc.c  */
 #line 5241 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -22915,15 +22321,11 @@ yyreduce:
     break;
 
   case 478:
-
-/* Line 1455 of yacc.c  */
 #line 5277 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 480:
-
-/* Line 1455 of yacc.c  */
 #line 5283 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22941,8 +22343,6 @@ yyreduce:
     break;
 
   case 482:
-
-/* Line 1455 of yacc.c  */
 #line 5301 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef WITH_PARTITION_STORAGE_ENGINE
@@ -22962,8 +22362,6 @@ yyreduce:
     break;
 
   case 483:
-
-/* Line 1455 of yacc.c  */
 #line 5320 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -22980,15 +22378,11 @@ yyreduce:
     break;
 
   case 484:
-
-/* Line 1455 of yacc.c  */
 #line 5332 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 486:
-
-/* Line 1455 of yacc.c  */
 #line 5341 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -22999,71 +22393,51 @@ yyreduce:
     break;
 
   case 487:
-
-/* Line 1455 of yacc.c  */
 #line 5348 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->part_type= HASH_PARTITION; }
     break;
 
   case 488:
-
-/* Line 1455 of yacc.c  */
 #line 5349 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 489:
-
-/* Line 1455 of yacc.c  */
 #line 5351 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->part_type= RANGE_PARTITION; }
     break;
 
   case 490:
-
-/* Line 1455 of yacc.c  */
 #line 5353 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->part_type= RANGE_PARTITION; }
     break;
 
   case 491:
-
-/* Line 1455 of yacc.c  */
 #line 5355 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->part_type= LIST_PARTITION; }
     break;
 
   case 492:
-
-/* Line 1455 of yacc.c  */
 #line 5357 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->part_type= LIST_PARTITION; }
     break;
 
   case 493:
-
-/* Line 1455 of yacc.c  */
 #line 5361 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 494:
-
-/* Line 1455 of yacc.c  */
 #line 5363 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->linear_hash_ind= TRUE;}
     break;
 
   case 495:
-
-/* Line 1455 of yacc.c  */
 #line 5368 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->key_algorithm= partition_info::KEY_ALGORITHM_NONE;}
     break;
 
   case 496:
-
-/* Line 1455 of yacc.c  */
 #line 5370 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             switch ((yyvsp[(3) - (3)].ulong_num)) {
@@ -23081,36 +22455,26 @@ yyreduce:
     break;
 
   case 497:
-
-/* Line 1455 of yacc.c  */
 #line 5386 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 498:
-
-/* Line 1455 of yacc.c  */
 #line 5387 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 499:
-
-/* Line 1455 of yacc.c  */
 #line 5391 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 500:
-
-/* Line 1455 of yacc.c  */
 #line 5392 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 501:
-
-/* Line 1455 of yacc.c  */
 #line 5397 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23130,8 +22494,6 @@ yyreduce:
     break;
 
   case 502:
-
-/* Line 1455 of yacc.c  */
 #line 5416 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23141,8 +22503,6 @@ yyreduce:
     break;
 
   case 503:
-
-/* Line 1455 of yacc.c  */
 #line 5426 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23154,8 +22514,6 @@ yyreduce:
     break;
 
   case 504:
-
-/* Line 1455 of yacc.c  */
 #line 5437 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->part_info->set_part_expr((yyvsp[(2) - (5)].simple_string)+1, (yyvsp[(3) - (5)].item), (yyvsp[(4) - (5)].simple_string), TRUE))
@@ -23164,15 +22522,11 @@ yyreduce:
     break;
 
   case 505:
-
-/* Line 1455 of yacc.c  */
 #line 5445 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 506:
-
-/* Line 1455 of yacc.c  */
 #line 5447 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             uint num_parts= (yyvsp[(2) - (2)].ulong_num);
@@ -23189,29 +22543,21 @@ yyreduce:
     break;
 
   case 507:
-
-/* Line 1455 of yacc.c  */
 #line 5462 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 508:
-
-/* Line 1455 of yacc.c  */
 #line 5464 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->subpart_type= HASH_PARTITION; }
     break;
 
   case 509:
-
-/* Line 1455 of yacc.c  */
 #line 5465 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 510:
-
-/* Line 1455 of yacc.c  */
 #line 5468 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23221,29 +22567,21 @@ yyreduce:
     break;
 
   case 511:
-
-/* Line 1455 of yacc.c  */
 #line 5473 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 512:
-
-/* Line 1455 of yacc.c  */
 #line 5477 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 513:
-
-/* Line 1455 of yacc.c  */
 #line 5478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 514:
-
-/* Line 1455 of yacc.c  */
 #line 5483 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23262,8 +22600,6 @@ yyreduce:
     break;
 
   case 515:
-
-/* Line 1455 of yacc.c  */
 #line 5501 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23280,15 +22616,11 @@ yyreduce:
     break;
 
   case 516:
-
-/* Line 1455 of yacc.c  */
 #line 5516 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 517:
-
-/* Line 1455 of yacc.c  */
 #line 5518 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             uint num_parts= (yyvsp[(2) - (2)].ulong_num);
@@ -23304,8 +22636,6 @@ yyreduce:
     break;
 
   case 518:
-
-/* Line 1455 of yacc.c  */
 #line 5533 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23325,8 +22655,6 @@ yyreduce:
     break;
 
   case 519:
-
-/* Line 1455 of yacc.c  */
 #line 5549 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23349,22 +22677,16 @@ yyreduce:
     break;
 
   case 520:
-
-/* Line 1455 of yacc.c  */
 #line 5570 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 521:
-
-/* Line 1455 of yacc.c  */
 #line 5571 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 522:
-
-/* Line 1455 of yacc.c  */
 #line 5576 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23384,15 +22706,11 @@ yyreduce:
     break;
 
   case 523:
-
-/* Line 1455 of yacc.c  */
 #line 5595 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 524:
-
-/* Line 1455 of yacc.c  */
 #line 5600 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23402,8 +22720,6 @@ yyreduce:
     break;
 
   case 525:
-
-/* Line 1455 of yacc.c  */
 #line 5609 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23429,8 +22745,6 @@ yyreduce:
     break;
 
   case 526:
-
-/* Line 1455 of yacc.c  */
 #line 5631 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23450,15 +22764,11 @@ yyreduce:
     break;
 
   case 527:
-
-/* Line 1455 of yacc.c  */
 #line 5646 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 528:
-
-/* Line 1455 of yacc.c  */
 #line 5648 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23478,15 +22788,11 @@ yyreduce:
     break;
 
   case 529:
-
-/* Line 1455 of yacc.c  */
 #line 5663 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 530:
-
-/* Line 1455 of yacc.c  */
 #line 5668 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23512,15 +22818,11 @@ yyreduce:
     break;
 
   case 531:
-
-/* Line 1455 of yacc.c  */
 #line 5689 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 532:
-
-/* Line 1455 of yacc.c  */
 #line 5694 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23553,8 +22855,6 @@ yyreduce:
     break;
 
   case 533:
-
-/* Line 1455 of yacc.c  */
 #line 5723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23567,22 +22867,16 @@ yyreduce:
     break;
 
   case 534:
-
-/* Line 1455 of yacc.c  */
 #line 5734 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 535:
-
-/* Line 1455 of yacc.c  */
 #line 5735 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 536:
-
-/* Line 1455 of yacc.c  */
 #line 5740 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23598,15 +22892,11 @@ yyreduce:
     break;
 
   case 537:
-
-/* Line 1455 of yacc.c  */
 #line 5751 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 538:
-
-/* Line 1455 of yacc.c  */
 #line 5753 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23631,22 +22921,16 @@ yyreduce:
     break;
 
   case 539:
-
-/* Line 1455 of yacc.c  */
 #line 5776 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 540:
-
-/* Line 1455 of yacc.c  */
 #line 5777 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 541:
-
-/* Line 1455 of yacc.c  */
 #line 5782 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23663,8 +22947,6 @@ yyreduce:
     break;
 
   case 542:
-
-/* Line 1455 of yacc.c  */
 #line 5795 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -23684,8 +22966,6 @@ yyreduce:
     break;
 
   case 543:
-
-/* Line 1455 of yacc.c  */
 #line 5815 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23703,8 +22983,6 @@ yyreduce:
     break;
 
   case 544:
-
-/* Line 1455 of yacc.c  */
 #line 5829 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23731,22 +23009,16 @@ yyreduce:
     break;
 
   case 545:
-
-/* Line 1455 of yacc.c  */
 #line 5854 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 546:
-
-/* Line 1455 of yacc.c  */
 #line 5855 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 547:
-
-/* Line 1455 of yacc.c  */
 #line 5860 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23783,57 +23055,41 @@ yyreduce:
     break;
 
   case 548:
-
-/* Line 1455 of yacc.c  */
 #line 5892 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 549:
-
-/* Line 1455 of yacc.c  */
 #line 5897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->partition_name= (yyvsp[(1) - (1)].lex_str).str; }
     break;
 
   case 550:
-
-/* Line 1455 of yacc.c  */
 #line 5901 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 551:
-
-/* Line 1455 of yacc.c  */
 #line 5902 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 552:
-
-/* Line 1455 of yacc.c  */
 #line 5906 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 553:
-
-/* Line 1455 of yacc.c  */
 #line 5907 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 554:
-
-/* Line 1455 of yacc.c  */
 #line 5912 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->tablespace_name= (yyvsp[(3) - (3)].lex_str).str; }
     break;
 
   case 555:
-
-/* Line 1455 of yacc.c  */
 #line 5914 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -23843,50 +23099,36 @@ yyreduce:
     break;
 
   case 556:
-
-/* Line 1455 of yacc.c  */
 #line 5920 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->nodegroup_id= (uint16) (yyvsp[(3) - (3)].ulong_num); }
     break;
 
   case 557:
-
-/* Line 1455 of yacc.c  */
 #line 5922 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->part_max_rows= (ha_rows) (yyvsp[(3) - (3)].ulonglong_number); }
     break;
 
   case 558:
-
-/* Line 1455 of yacc.c  */
 #line 5924 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->part_min_rows= (ha_rows) (yyvsp[(3) - (3)].ulonglong_number); }
     break;
 
   case 559:
-
-/* Line 1455 of yacc.c  */
 #line 5926 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->data_file_name= (yyvsp[(4) - (4)].lex_str).str; }
     break;
 
   case 560:
-
-/* Line 1455 of yacc.c  */
 #line 5928 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->index_file_name= (yyvsp[(4) - (4)].lex_str).str; }
     break;
 
   case 561:
-
-/* Line 1455 of yacc.c  */
 #line 5930 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->part_info->curr_part_elem->part_comment= (yyvsp[(3) - (3)].lex_str).str; }
     break;
 
   case 562:
-
-/* Line 1455 of yacc.c  */
 #line 5939 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -23905,8 +23147,6 @@ yyreduce:
     break;
 
   case 563:
-
-/* Line 1455 of yacc.c  */
 #line 5954 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -23914,8 +23154,6 @@ yyreduce:
     break;
 
   case 564:
-
-/* Line 1455 of yacc.c  */
 #line 5958 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -23927,113 +23165,81 @@ yyreduce:
     break;
 
   case 565:
-
-/* Line 1455 of yacc.c  */
 #line 5968 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 566:
-
-/* Line 1455 of yacc.c  */
 #line 5969 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 567:
-
-/* Line 1455 of yacc.c  */
 #line 5973 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 568:
-
-/* Line 1455 of yacc.c  */
 #line 5974 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 569:
-
-/* Line 1455 of yacc.c  */
 #line 5978 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 570:
-
-/* Line 1455 of yacc.c  */
 #line 5979 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 571:
-
-/* Line 1455 of yacc.c  */
 #line 5983 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 572:
-
-/* Line 1455 of yacc.c  */
 #line 5984 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 573:
-
-/* Line 1455 of yacc.c  */
 #line 5988 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 574:
-
-/* Line 1455 of yacc.c  */
 #line 5989 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= (yyvsp[(1) - (1)].num);}
     break;
 
   case 575:
-
-/* Line 1455 of yacc.c  */
 #line 5993 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=(yyvsp[(1) - (1)].num); }
     break;
 
   case 576:
-
-/* Line 1455 of yacc.c  */
 #line 5994 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= (yyvsp[(1) - (2)].num) | (yyvsp[(2) - (2)].num); }
     break;
 
   case 577:
-
-/* Line 1455 of yacc.c  */
 #line 5998 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=HA_LEX_CREATE_TMP_TABLE; }
     break;
 
   case 578:
-
-/* Line 1455 of yacc.c  */
 #line 6002 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 579:
-
-/* Line 1455 of yacc.c  */
 #line 6003 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=HA_LEX_CREATE_IF_NOT_EXISTS; }
     break;
 
   case 587:
-
-/* Line 1455 of yacc.c  */
 #line 6024 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.db_type= (yyvsp[(3) - (3)].db_type);
@@ -24042,8 +23248,6 @@ yyreduce:
     break;
 
   case 588:
-
-/* Line 1455 of yacc.c  */
 #line 6029 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.max_rows= (yyvsp[(3) - (3)].ulonglong_number);
@@ -24052,8 +23256,6 @@ yyreduce:
     break;
 
   case 589:
-
-/* Line 1455 of yacc.c  */
 #line 6034 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.min_rows= (yyvsp[(3) - (3)].ulonglong_number);
@@ -24062,8 +23264,6 @@ yyreduce:
     break;
 
   case 590:
-
-/* Line 1455 of yacc.c  */
 #line 6039 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.avg_row_length=(yyvsp[(3) - (3)].ulong_num);
@@ -24072,8 +23272,6 @@ yyreduce:
     break;
 
   case 591:
-
-/* Line 1455 of yacc.c  */
 #line 6044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.password=(yyvsp[(3) - (3)].lex_str).str;
@@ -24082,8 +23280,6 @@ yyreduce:
     break;
 
   case 592:
-
-/* Line 1455 of yacc.c  */
 #line 6049 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.comment=(yyvsp[(3) - (3)].lex_str);
@@ -24092,8 +23288,6 @@ yyreduce:
     break;
 
   case 593:
-
-/* Line 1455 of yacc.c  */
 #line 6054 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.auto_increment_value=(yyvsp[(3) - (3)].ulonglong_number);
@@ -24102,8 +23296,6 @@ yyreduce:
     break;
 
   case 594:
-
-/* Line 1455 of yacc.c  */
 #line 6059 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             switch((yyvsp[(3) - (3)].ulong_num)) {
@@ -24122,8 +23314,6 @@ yyreduce:
     break;
 
   case 595:
-
-/* Line 1455 of yacc.c  */
 #line 6074 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.table_options&=
@@ -24133,8 +23323,6 @@ yyreduce:
     break;
 
   case 596:
-
-/* Line 1455 of yacc.c  */
 #line 6080 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             switch((yyvsp[(3) - (3)].ulong_num)) {
@@ -24153,8 +23341,6 @@ yyreduce:
     break;
 
   case 597:
-
-/* Line 1455 of yacc.c  */
 #line 6095 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.stats_auto_recalc= HA_STATS_AUTO_RECALC_DEFAULT;
@@ -24163,8 +23349,6 @@ yyreduce:
     break;
 
   case 598:
-
-/* Line 1455 of yacc.c  */
 #line 6100 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             switch((yyvsp[(3) - (3)].ulong_num)) {
@@ -24183,8 +23367,6 @@ yyreduce:
     break;
 
   case 599:
-
-/* Line 1455 of yacc.c  */
 #line 6115 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.table_options&=
@@ -24194,8 +23376,6 @@ yyreduce:
     break;
 
   case 600:
-
-/* Line 1455 of yacc.c  */
 #line 6121 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* From user point of view STATS_SAMPLE_PAGES can be specified as
@@ -24217,8 +23397,6 @@ yyreduce:
     break;
 
   case 601:
-
-/* Line 1455 of yacc.c  */
 #line 6139 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.stats_sample_pages=0;
@@ -24227,8 +23405,6 @@ yyreduce:
     break;
 
   case 602:
-
-/* Line 1455 of yacc.c  */
 #line 6144 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.table_options|= (yyvsp[(3) - (3)].ulong_num) ? HA_OPTION_CHECKSUM : HA_OPTION_NO_CHECKSUM;
@@ -24237,8 +23413,6 @@ yyreduce:
     break;
 
   case 603:
-
-/* Line 1455 of yacc.c  */
 #line 6149 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              Lex->create_info.table_options|= (yyvsp[(3) - (3)].ulong_num) ? HA_OPTION_CHECKSUM : HA_OPTION_NO_CHECKSUM;
@@ -24247,8 +23421,6 @@ yyreduce:
     break;
 
   case 604:
-
-/* Line 1455 of yacc.c  */
 #line 6154 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.table_options|= (yyvsp[(3) - (3)].ulong_num) ? HA_OPTION_DELAY_KEY_WRITE : HA_OPTION_NO_DELAY_KEY_WRITE;
@@ -24257,8 +23429,6 @@ yyreduce:
     break;
 
   case 605:
-
-/* Line 1455 of yacc.c  */
 #line 6159 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.row_type= (yyvsp[(3) - (3)].row_type);
@@ -24267,8 +23437,6 @@ yyreduce:
     break;
 
   case 606:
-
-/* Line 1455 of yacc.c  */
 #line 6164 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->select_lex.table_list.save_and_clear(&Lex->save_list);
@@ -24276,8 +23444,6 @@ yyreduce:
     break;
 
   case 607:
-
-/* Line 1455 of yacc.c  */
 #line 6168 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -24303,8 +23469,6 @@ yyreduce:
     break;
 
   case 610:
-
-/* Line 1455 of yacc.c  */
 #line 6192 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.merge_insert_method= (yyvsp[(3) - (3)].ulong_num);
@@ -24313,8 +23477,6 @@ yyreduce:
     break;
 
   case 611:
-
-/* Line 1455 of yacc.c  */
 #line 6197 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.data_file_name= (yyvsp[(4) - (4)].lex_str).str;
@@ -24323,8 +23485,6 @@ yyreduce:
     break;
 
   case 612:
-
-/* Line 1455 of yacc.c  */
 #line 6202 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.index_file_name= (yyvsp[(4) - (4)].lex_str).str;
@@ -24333,29 +23493,21 @@ yyreduce:
     break;
 
   case 613:
-
-/* Line 1455 of yacc.c  */
 #line 6207 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {Lex->create_info.tablespace= (yyvsp[(2) - (2)].lex_str).str;}
     break;
 
   case 614:
-
-/* Line 1455 of yacc.c  */
 #line 6209 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {Lex->create_info.storage_media= HA_SM_DISK;}
     break;
 
   case 615:
-
-/* Line 1455 of yacc.c  */
 #line 6211 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {Lex->create_info.storage_media= HA_SM_MEMORY;}
     break;
 
   case 616:
-
-/* Line 1455 of yacc.c  */
 #line 6213 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.connect_string.str= (yyvsp[(3) - (3)].lex_str).str;
@@ -24365,8 +23517,6 @@ yyreduce:
     break;
 
   case 617:
-
-/* Line 1455 of yacc.c  */
 #line 6219 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.used_fields|= HA_CREATE_USED_KEY_BLOCK_SIZE;
@@ -24375,8 +23525,6 @@ yyreduce:
     break;
 
   case 618:
-
-/* Line 1455 of yacc.c  */
 #line 6227 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             HA_CREATE_INFO *cinfo= &Lex->create_info;
@@ -24395,8 +23543,6 @@ yyreduce:
     break;
 
   case 619:
-
-/* Line 1455 of yacc.c  */
 #line 6245 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             HA_CREATE_INFO *cinfo= &Lex->create_info;
@@ -24414,8 +23560,6 @@ yyreduce:
     break;
 
   case 620:
-
-/* Line 1455 of yacc.c  */
 #line 6262 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -24442,8 +23586,6 @@ yyreduce:
     break;
 
   case 621:
-
-/* Line 1455 of yacc.c  */
 #line 6288 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -24462,106 +23604,76 @@ yyreduce:
     break;
 
   case 622:
-
-/* Line 1455 of yacc.c  */
 #line 6305 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_DEFAULT; }
     break;
 
   case 623:
-
-/* Line 1455 of yacc.c  */
 #line 6306 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_FIXED; }
     break;
 
   case 624:
-
-/* Line 1455 of yacc.c  */
 #line 6307 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_DYNAMIC; }
     break;
 
   case 625:
-
-/* Line 1455 of yacc.c  */
 #line 6308 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_COMPRESSED; }
     break;
 
   case 626:
-
-/* Line 1455 of yacc.c  */
 #line 6309 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_REDUNDANT; }
     break;
 
   case 627:
-
-/* Line 1455 of yacc.c  */
 #line 6310 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.row_type)= ROW_TYPE_COMPACT; }
     break;
 
   case 628:
-
-/* Line 1455 of yacc.c  */
 #line 6314 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= MERGE_INSERT_DISABLED; }
     break;
 
   case 629:
-
-/* Line 1455 of yacc.c  */
 #line 6315 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= MERGE_INSERT_TO_FIRST; }
     break;
 
   case 630:
-
-/* Line 1455 of yacc.c  */
 #line 6316 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= MERGE_INSERT_TO_LAST; }
     break;
 
   case 631:
-
-/* Line 1455 of yacc.c  */
 #line 6320 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 633:
-
-/* Line 1455 of yacc.c  */
 #line 6325 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.num) = (int) STRING_RESULT; }
     break;
 
   case 634:
-
-/* Line 1455 of yacc.c  */
 #line 6326 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.num) = (int) REAL_RESULT; }
     break;
 
   case 635:
-
-/* Line 1455 of yacc.c  */
 #line 6327 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.num) = (int) DECIMAL_RESULT; }
     break;
 
   case 636:
-
-/* Line 1455 of yacc.c  */
 #line 6328 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.num) = (int) INT_RESULT; }
     break;
 
   case 637:
-
-/* Line 1455 of yacc.c  */
 #line 6334 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           Lex->create_last_non_select_table= Lex->last_table();
@@ -24569,8 +23681,6 @@ yyreduce:
     break;
 
   case 643:
-
-/* Line 1455 of yacc.c  */
 #line 6352 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->col_list.empty(); /* Alloced by sql_alloc */
@@ -24578,8 +23688,6 @@ yyreduce:
     break;
 
   case 644:
-
-/* Line 1455 of yacc.c  */
 #line 6359 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index (Lex, (yyvsp[(1) - (7)].key_type), (yyvsp[(2) - (7)].lex_str)))
@@ -24588,8 +23696,6 @@ yyreduce:
     break;
 
   case 645:
-
-/* Line 1455 of yacc.c  */
 #line 6365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index (Lex, (yyvsp[(1) - (8)].key_type), (yyvsp[(3) - (8)].lex_str)))
@@ -24598,8 +23704,6 @@ yyreduce:
     break;
 
   case 646:
-
-/* Line 1455 of yacc.c  */
 #line 6371 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index (Lex, (yyvsp[(1) - (8)].key_type), (yyvsp[(3) - (8)].lex_str)))
@@ -24608,8 +23712,6 @@ yyreduce:
     break;
 
   case 647:
-
-/* Line 1455 of yacc.c  */
 #line 6377 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_create_index (Lex, (yyvsp[(2) - (8)].key_type), (yyvsp[(3) - (8)].lex_str).str ? (yyvsp[(3) - (8)].lex_str) : (yyvsp[(1) - (8)].lex_str)))
@@ -24618,8 +23720,6 @@ yyreduce:
     break;
 
   case 648:
-
-/* Line 1455 of yacc.c  */
 #line 6382 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -24642,8 +23742,6 @@ yyreduce:
     break;
 
   case 649:
-
-/* Line 1455 of yacc.c  */
 #line 6401 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->col_list.empty(); /* Alloced by sql_alloc */
@@ -24651,29 +23749,21 @@ yyreduce:
     break;
 
   case 653:
-
-/* Line 1455 of yacc.c  */
 #line 6416 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= null_lex_str; }
     break;
 
   case 654:
-
-/* Line 1455 of yacc.c  */
 #line 6417 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 655:
-
-/* Line 1455 of yacc.c  */
 #line 6421 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 656:
-
-/* Line 1455 of yacc.c  */
 #line 6426 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -24686,8 +23776,6 @@ yyreduce:
     break;
 
   case 657:
-
-/* Line 1455 of yacc.c  */
 #line 6435 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -24702,29 +23790,21 @@ yyreduce:
     break;
 
   case 658:
-
-/* Line 1455 of yacc.c  */
 #line 6448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=(yyvsp[(1) - (3)].num); }
     break;
 
   case 659:
-
-/* Line 1455 of yacc.c  */
 #line 6449 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=(yyvsp[(1) - (3)].num); }
     break;
 
   case 660:
-
-/* Line 1455 of yacc.c  */
 #line 6450 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_FLOAT; }
     break;
 
   case 661:
-
-/* Line 1455 of yacc.c  */
 #line 6452 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24733,8 +23813,6 @@ yyreduce:
     break;
 
   case 662:
-
-/* Line 1455 of yacc.c  */
 #line 6457 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)=MYSQL_TYPE_BIT;
@@ -24742,8 +23820,6 @@ yyreduce:
     break;
 
   case 663:
-
-/* Line 1455 of yacc.c  */
 #line 6461 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24752,8 +23828,6 @@ yyreduce:
     break;
 
   case 664:
-
-/* Line 1455 of yacc.c  */
 #line 6466 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24762,8 +23836,6 @@ yyreduce:
     break;
 
   case 665:
-
-/* Line 1455 of yacc.c  */
 #line 6471 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)=MYSQL_TYPE_STRING;
@@ -24771,8 +23843,6 @@ yyreduce:
     break;
 
   case 666:
-
-/* Line 1455 of yacc.c  */
 #line 6475 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24781,8 +23851,6 @@ yyreduce:
     break;
 
   case 667:
-
-/* Line 1455 of yacc.c  */
 #line 6480 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)=MYSQL_TYPE_STRING;
@@ -24791,8 +23859,6 @@ yyreduce:
     break;
 
   case 668:
-
-/* Line 1455 of yacc.c  */
 #line 6485 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24802,8 +23868,6 @@ yyreduce:
     break;
 
   case 669:
-
-/* Line 1455 of yacc.c  */
 #line 6491 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24812,8 +23876,6 @@ yyreduce:
     break;
 
   case 670:
-
-/* Line 1455 of yacc.c  */
 #line 6496 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*) "1";
@@ -24823,8 +23885,6 @@ yyreduce:
     break;
 
   case 671:
-
-/* Line 1455 of yacc.c  */
 #line 6502 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= MYSQL_TYPE_VARCHAR;
@@ -24832,8 +23892,6 @@ yyreduce:
     break;
 
   case 672:
-
-/* Line 1455 of yacc.c  */
 #line 6506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= MYSQL_TYPE_VARCHAR;
@@ -24842,8 +23900,6 @@ yyreduce:
     break;
 
   case 673:
-
-/* Line 1455 of yacc.c  */
 #line 6511 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24852,8 +23908,6 @@ yyreduce:
     break;
 
   case 674:
-
-/* Line 1455 of yacc.c  */
 #line 6516 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->length)
@@ -24875,22 +23929,16 @@ yyreduce:
     break;
 
   case 675:
-
-/* Line 1455 of yacc.c  */
 #line 6534 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_DATE; }
     break;
 
   case 676:
-
-/* Line 1455 of yacc.c  */
 #line 6536 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= MYSQL_TYPE_TIME2; }
     break;
 
   case 677:
-
-/* Line 1455 of yacc.c  */
 #line 6538 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (YYTHD->variables.sql_mode & MODE_MAXDB)
@@ -24910,15 +23958,11 @@ yyreduce:
     break;
 
   case 678:
-
-/* Line 1455 of yacc.c  */
 #line 6554 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= MYSQL_TYPE_DATETIME2; }
     break;
 
   case 679:
-
-/* Line 1455 of yacc.c  */
 #line 6556 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24927,8 +23971,6 @@ yyreduce:
     break;
 
   case 680:
-
-/* Line 1455 of yacc.c  */
 #line 6561 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24937,8 +23979,6 @@ yyreduce:
     break;
 
   case 681:
-
-/* Line 1455 of yacc.c  */
 #line 6566 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_SPATIAL
@@ -24954,8 +23994,6 @@ yyreduce:
     break;
 
   case 682:
-
-/* Line 1455 of yacc.c  */
 #line 6578 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24964,8 +24002,6 @@ yyreduce:
     break;
 
   case 683:
-
-/* Line 1455 of yacc.c  */
 #line 6583 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24974,8 +24010,6 @@ yyreduce:
     break;
 
   case 684:
-
-/* Line 1455 of yacc.c  */
 #line 6588 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset=&my_charset_bin;
@@ -24984,99 +24018,71 @@ yyreduce:
     break;
 
   case 685:
-
-/* Line 1455 of yacc.c  */
 #line 6593 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_MEDIUM_BLOB; }
     break;
 
   case 686:
-
-/* Line 1455 of yacc.c  */
 #line 6595 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_TINY_BLOB; }
     break;
 
   case 687:
-
-/* Line 1455 of yacc.c  */
 #line 6597 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_BLOB; }
     break;
 
   case 688:
-
-/* Line 1455 of yacc.c  */
 #line 6599 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_MEDIUM_BLOB; }
     break;
 
   case 689:
-
-/* Line 1455 of yacc.c  */
 #line 6601 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_LONG_BLOB; }
     break;
 
   case 690:
-
-/* Line 1455 of yacc.c  */
 #line 6603 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_NEWDECIMAL;}
     break;
 
   case 691:
-
-/* Line 1455 of yacc.c  */
 #line 6605 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_NEWDECIMAL;}
     break;
 
   case 692:
-
-/* Line 1455 of yacc.c  */
 #line 6607 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_NEWDECIMAL;}
     break;
 
   case 693:
-
-/* Line 1455 of yacc.c  */
 #line 6609 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {Lex->interval_list.empty();}
     break;
 
   case 694:
-
-/* Line 1455 of yacc.c  */
 #line 6611 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_ENUM; }
     break;
 
   case 695:
-
-/* Line 1455 of yacc.c  */
 #line 6613 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->interval_list.empty();}
     break;
 
   case 696:
-
-/* Line 1455 of yacc.c  */
 #line 6615 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_SET; }
     break;
 
   case 697:
-
-/* Line 1455 of yacc.c  */
 #line 6617 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_MEDIUM_BLOB; }
     break;
 
   case 698:
-
-/* Line 1455 of yacc.c  */
 #line 6619 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)=MYSQL_TYPE_LONGLONG;
@@ -25086,22 +24092,16 @@ yyreduce:
     break;
 
   case 699:
-
-/* Line 1455 of yacc.c  */
 #line 6627 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_GEOMETRY; }
     break;
 
   case 700:
-
-/* Line 1455 of yacc.c  */
 #line 6628 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_GEOMETRYCOLLECTION; }
     break;
 
   case 701:
-
-/* Line 1455 of yacc.c  */
 #line 6630 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->length= (char*)"25";
@@ -25110,148 +24110,106 @@ yyreduce:
     break;
 
   case 702:
-
-/* Line 1455 of yacc.c  */
 #line 6634 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_MULTIPOINT; }
     break;
 
   case 703:
-
-/* Line 1455 of yacc.c  */
 #line 6635 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_LINESTRING; }
     break;
 
   case 704:
-
-/* Line 1455 of yacc.c  */
 #line 6636 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_MULTILINESTRING; }
     break;
 
   case 705:
-
-/* Line 1455 of yacc.c  */
 #line 6637 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_POLYGON; }
     break;
 
   case 706:
-
-/* Line 1455 of yacc.c  */
 #line 6638 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= Field::GEOM_MULTIPOLYGON; }
     break;
 
   case 707:
-
-/* Line 1455 of yacc.c  */
 #line 6642 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 708:
-
-/* Line 1455 of yacc.c  */
 #line 6646 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 709:
-
-/* Line 1455 of yacc.c  */
 #line 6647 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 710:
-
-/* Line 1455 of yacc.c  */
 #line 6651 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 711:
-
-/* Line 1455 of yacc.c  */
 #line 6652 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 712:
-
-/* Line 1455 of yacc.c  */
 #line 6656 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 713:
-
-/* Line 1455 of yacc.c  */
 #line 6657 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 714:
-
-/* Line 1455 of yacc.c  */
 #line 6658 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 715:
-
-/* Line 1455 of yacc.c  */
 #line 6659 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 716:
-
-/* Line 1455 of yacc.c  */
 #line 6660 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 717:
-
-/* Line 1455 of yacc.c  */
 #line 6664 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_LONG; }
     break;
 
   case 718:
-
-/* Line 1455 of yacc.c  */
 #line 6665 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_TINY; }
     break;
 
   case 719:
-
-/* Line 1455 of yacc.c  */
 #line 6666 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_SHORT; }
     break;
 
   case 720:
-
-/* Line 1455 of yacc.c  */
 #line 6667 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_INT24; }
     break;
 
   case 721:
-
-/* Line 1455 of yacc.c  */
 #line 6668 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_LONGLONG; }
     break;
 
   case 722:
-
-/* Line 1455 of yacc.c  */
 #line 6673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= YYTHD->variables.sql_mode & MODE_REAL_AS_FLOAT ?
@@ -25260,43 +24218,31 @@ yyreduce:
     break;
 
   case 723:
-
-/* Line 1455 of yacc.c  */
 #line 6678 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_DOUBLE; }
     break;
 
   case 724:
-
-/* Line 1455 of yacc.c  */
 #line 6680 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=MYSQL_TYPE_DOUBLE; }
     break;
 
   case 725:
-
-/* Line 1455 of yacc.c  */
 #line 6685 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->dec=Lex->length= (char*)0; }
     break;
 
   case 726:
-
-/* Line 1455 of yacc.c  */
 #line 6687 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->dec= (char*)0; }
     break;
 
   case 727:
-
-/* Line 1455 of yacc.c  */
 #line 6689 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 728:
-
-/* Line 1455 of yacc.c  */
 #line 6694 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -25306,36 +24252,26 @@ yyreduce:
     break;
 
   case 729:
-
-/* Line 1455 of yacc.c  */
 #line 6703 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->dec= (char *) 0; }
     break;
 
   case 730:
-
-/* Line 1455 of yacc.c  */
 #line 6704 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->dec= (yyvsp[(2) - (3)].lex_str).str; }
     break;
 
   case 731:
-
-/* Line 1455 of yacc.c  */
 #line 6708 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 0; }
     break;
 
   case 732:
-
-/* Line 1455 of yacc.c  */
 #line 6709 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 0; }
     break;
 
   case 733:
-
-/* Line 1455 of yacc.c  */
 #line 6711 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              int error;
@@ -25344,169 +24280,121 @@ yyreduce:
     break;
 
   case 734:
-
-/* Line 1455 of yacc.c  */
 #line 6718 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 735:
-
-/* Line 1455 of yacc.c  */
 #line 6719 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 736:
-
-/* Line 1455 of yacc.c  */
 #line 6723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 737:
-
-/* Line 1455 of yacc.c  */
 #line 6724 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 738:
-
-/* Line 1455 of yacc.c  */
 #line 6728 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 739:
-
-/* Line 1455 of yacc.c  */
 #line 6729 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= UNSIGNED_FLAG;}
     break;
 
   case 740:
-
-/* Line 1455 of yacc.c  */
 #line 6730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= UNSIGNED_FLAG | ZEROFILL_FLAG; }
     break;
 
   case 741:
-
-/* Line 1455 of yacc.c  */
 #line 6734 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->length= (yyvsp[(2) - (3)].lex_str).str; }
     break;
 
   case 742:
-
-/* Line 1455 of yacc.c  */
 #line 6735 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->length= (yyvsp[(2) - (3)].lex_str).str; }
     break;
 
   case 743:
-
-/* Line 1455 of yacc.c  */
 #line 6736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->length= (yyvsp[(2) - (3)].lex_str).str; }
     break;
 
   case 744:
-
-/* Line 1455 of yacc.c  */
 #line 6737 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->length= (yyvsp[(2) - (3)].lex_str).str; }
     break;
 
   case 745:
-
-/* Line 1455 of yacc.c  */
 #line 6740 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->length=(char*) 0; /* use default length */ }
     break;
 
   case 746:
-
-/* Line 1455 of yacc.c  */
 #line 6741 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 747:
-
-/* Line 1455 of yacc.c  */
 #line 6745 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 748:
-
-/* Line 1455 of yacc.c  */
 #line 6746 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 749:
-
-/* Line 1455 of yacc.c  */
 #line 6750 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 750:
-
-/* Line 1455 of yacc.c  */
 #line 6751 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 751:
-
-/* Line 1455 of yacc.c  */
 #line 6755 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 753:
-
-/* Line 1455 of yacc.c  */
 #line 6760 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type&= ~ NOT_NULL_FLAG; }
     break;
 
   case 754:
-
-/* Line 1455 of yacc.c  */
 #line 6761 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= NOT_NULL_FLAG; }
     break;
 
   case 755:
-
-/* Line 1455 of yacc.c  */
 #line 6762 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->default_value=(yyvsp[(2) - (2)].item); }
     break;
 
   case 756:
-
-/* Line 1455 of yacc.c  */
 #line 6763 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->on_update_value= (yyvsp[(3) - (3)].item); }
     break;
 
   case 757:
-
-/* Line 1455 of yacc.c  */
 #line 6764 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= AUTO_INCREMENT_FLAG | NOT_NULL_FLAG; }
     break;
 
   case 758:
-
-/* Line 1455 of yacc.c  */
 #line 6766 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             LEX *lex=Lex;
@@ -25516,8 +24404,6 @@ yyreduce:
     break;
 
   case 759:
-
-/* Line 1455 of yacc.c  */
 #line 6772 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -25527,8 +24413,6 @@ yyreduce:
     break;
 
   case 760:
-
-/* Line 1455 of yacc.c  */
 #line 6778 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -25538,8 +24422,6 @@ yyreduce:
     break;
 
   case 761:
-
-/* Line 1455 of yacc.c  */
 #line 6784 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -25549,15 +24431,11 @@ yyreduce:
     break;
 
   case 762:
-
-/* Line 1455 of yacc.c  */
 #line 6789 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->comment= (yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 763:
-
-/* Line 1455 of yacc.c  */
 #line 6791 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->charset && !my_charset_same(Lex->charset,(yyvsp[(2) - (2)].charset)))
@@ -25574,8 +24452,6 @@ yyreduce:
     break;
 
   case 764:
-
-/* Line 1455 of yacc.c  */
 #line 6804 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
@@ -25585,8 +24461,6 @@ yyreduce:
     break;
 
   case 765:
-
-/* Line 1455 of yacc.c  */
 #line 6810 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
@@ -25596,8 +24470,6 @@ yyreduce:
     break;
 
   case 766:
-
-/* Line 1455 of yacc.c  */
 #line 6816 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
@@ -25607,8 +24479,6 @@ yyreduce:
     break;
 
   case 767:
-
-/* Line 1455 of yacc.c  */
 #line 6822 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_STORAGE_MEDIA_MASK);
@@ -25617,8 +24487,6 @@ yyreduce:
     break;
 
   case 768:
-
-/* Line 1455 of yacc.c  */
 #line 6827 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_STORAGE_MEDIA_MASK);
@@ -25627,8 +24495,6 @@ yyreduce:
     break;
 
   case 769:
-
-/* Line 1455 of yacc.c  */
 #line 6832 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type&= ~(FIELD_FLAGS_STORAGE_MEDIA_MASK);
@@ -25637,8 +24503,6 @@ yyreduce:
     break;
 
   case 770:
-
-/* Line 1455 of yacc.c  */
 #line 6841 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           (yyval.num)= (yyvsp[(1) - (2)].num);
@@ -25659,8 +24523,6 @@ yyreduce:
     break;
 
   case 771:
-
-/* Line 1455 of yacc.c  */
 #line 6862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_now_local((yyvsp[(2) - (2)].ulong_num));
@@ -25670,29 +24532,21 @@ yyreduce:
     break;
 
   case 773:
-
-/* Line 1455 of yacc.c  */
 #line 6871 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=(yyvsp[(1) - (1)].item); }
     break;
 
   case 774:
-
-/* Line 1455 of yacc.c  */
 #line 6875 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 775:
-
-/* Line 1455 of yacc.c  */
 #line 6876 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 776:
-
-/* Line 1455 of yacc.c  */
 #line 6881 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.charset)=get_charset_by_csname((yyvsp[(1) - (1)].lex_str).str,MY_CS_PRIMARY,MYF(0))))
@@ -25704,43 +24558,31 @@ yyreduce:
     break;
 
   case 777:
-
-/* Line 1455 of yacc.c  */
 #line 6888 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)= &my_charset_bin; }
     break;
 
   case 778:
-
-/* Line 1455 of yacc.c  */
 #line 6892 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=(yyvsp[(1) - (1)].charset);   }
     break;
 
   case 779:
-
-/* Line 1455 of yacc.c  */
 #line 6893 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=NULL; }
     break;
 
   case 780:
-
-/* Line 1455 of yacc.c  */
 #line 6897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)= NULL; }
     break;
 
   case 781:
-
-/* Line 1455 of yacc.c  */
 #line 6898 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)= (yyvsp[(2) - (2)].charset); }
     break;
 
   case 782:
-
-/* Line 1455 of yacc.c  */
 #line 6903 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.charset)=get_charset_by_csname((yyvsp[(1) - (1)].lex_str).str,MY_CS_PRIMARY,MYF(0))) &&
@@ -25753,29 +24595,21 @@ yyreduce:
     break;
 
   case 783:
-
-/* Line 1455 of yacc.c  */
 #line 6911 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)= &my_charset_bin; }
     break;
 
   case 784:
-
-/* Line 1455 of yacc.c  */
 #line 6915 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=(yyvsp[(1) - (1)].charset);   }
     break;
 
   case 785:
-
-/* Line 1455 of yacc.c  */
 #line 6916 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=NULL; }
     break;
 
   case 786:
-
-/* Line 1455 of yacc.c  */
 #line 6921 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.charset)= mysqld_collation_get_by_name((yyvsp[(1) - (1)].lex_str).str)))
@@ -25784,57 +24618,41 @@ yyreduce:
     break;
 
   case 787:
-
-/* Line 1455 of yacc.c  */
 #line 6928 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=NULL; }
     break;
 
   case 788:
-
-/* Line 1455 of yacc.c  */
 #line 6929 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=(yyvsp[(2) - (2)].charset); }
     break;
 
   case 789:
-
-/* Line 1455 of yacc.c  */
 #line 6933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=(yyvsp[(1) - (1)].charset); }
     break;
 
   case 790:
-
-/* Line 1455 of yacc.c  */
 #line 6934 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.charset)=NULL; }
     break;
 
   case 791:
-
-/* Line 1455 of yacc.c  */
 #line 6938 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 792:
-
-/* Line 1455 of yacc.c  */
 #line 6939 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 793:
-
-/* Line 1455 of yacc.c  */
 #line 6944 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->charset= &my_charset_latin1; }
     break;
 
   case 794:
-
-/* Line 1455 of yacc.c  */
 #line 6946 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset= &my_charset_latin1_bin;
@@ -25842,8 +24660,6 @@ yyreduce:
     break;
 
   case 795:
-
-/* Line 1455 of yacc.c  */
 #line 6950 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset= &my_charset_latin1_bin;
@@ -25851,8 +24667,6 @@ yyreduce:
     break;
 
   case 796:
-
-/* Line 1455 of yacc.c  */
 #line 6957 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!(Lex->charset=get_charset_by_csname("ucs2",
@@ -25865,8 +24679,6 @@ yyreduce:
     break;
 
   case 797:
-
-/* Line 1455 of yacc.c  */
 #line 6966 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!(Lex->charset= mysqld_collation_get_by_name("ucs2_bin")))
@@ -25875,8 +24687,6 @@ yyreduce:
     break;
 
   case 798:
-
-/* Line 1455 of yacc.c  */
 #line 6971 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!(Lex->charset= mysqld_collation_get_by_name("ucs2_bin")))
@@ -25885,29 +24695,21 @@ yyreduce:
     break;
 
   case 799:
-
-/* Line 1455 of yacc.c  */
 #line 6978 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->charset=NULL; }
     break;
 
   case 802:
-
-/* Line 1455 of yacc.c  */
 #line 6981 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->charset=&my_charset_bin; }
     break;
 
   case 803:
-
-/* Line 1455 of yacc.c  */
 #line 6982 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->charset=(yyvsp[(2) - (3)].charset); }
     break;
 
   case 804:
-
-/* Line 1455 of yacc.c  */
 #line 6984 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset= NULL;
@@ -25916,8 +24718,6 @@ yyreduce:
     break;
 
   case 805:
-
-/* Line 1455 of yacc.c  */
 #line 6989 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->charset= (yyvsp[(3) - (3)].charset);
@@ -25926,22 +24726,16 @@ yyreduce:
     break;
 
   case 806:
-
-/* Line 1455 of yacc.c  */
 #line 6996 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 807:
-
-/* Line 1455 of yacc.c  */
 #line 6997 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= BINCMP_FLAG; }
     break;
 
   case 808:
-
-/* Line 1455 of yacc.c  */
 #line 7002 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           if ((yyvsp[(2) - (2)].ulong_num) == 0)
@@ -25953,64 +24747,46 @@ yyreduce:
     break;
 
   case 809:
-
-/* Line 1455 of yacc.c  */
 #line 7010 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(2) - (4)].ulong_num); }
     break;
 
   case 810:
-
-/* Line 1455 of yacc.c  */
 #line 7014 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 0; }
     break;
 
   case 811:
-
-/* Line 1455 of yacc.c  */
 #line 7015 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 1 << MY_STRXFRM_DESC_SHIFT; }
     break;
 
   case 812:
-
-/* Line 1455 of yacc.c  */
 #line 7019 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 1 << MY_STRXFRM_REVERSE_SHIFT; }
     break;
 
   case 813:
-
-/* Line 1455 of yacc.c  */
 #line 7022 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 0; }
     break;
 
   case 814:
-
-/* Line 1455 of yacc.c  */
 #line 7023 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num); }
     break;
 
   case 815:
-
-/* Line 1455 of yacc.c  */
 #line 7024 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (2)].ulong_num) | (yyvsp[(2) - (2)].ulong_num); }
     break;
 
   case 816:
-
-/* Line 1455 of yacc.c  */
 #line 7025 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num) ; }
     break;
 
   case 817:
-
-/* Line 1455 of yacc.c  */
 #line 7030 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num) < 1 ? 1 : ((yyvsp[(1) - (1)].ulong_num) > MY_STRXFRM_NLEVELS ? MY_STRXFRM_NLEVELS : (yyvsp[(1) - (1)].ulong_num));
@@ -26019,8 +24795,6 @@ yyreduce:
     break;
 
   case 818:
-
-/* Line 1455 of yacc.c  */
 #line 7038 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           (yyval.ulong_num)= (1 | (yyvsp[(2) - (2)].ulong_num)) << (yyvsp[(1) - (2)].ulong_num);
@@ -26028,22 +24802,16 @@ yyreduce:
     break;
 
   case 819:
-
-/* Line 1455 of yacc.c  */
 #line 7044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num); }
     break;
 
   case 820:
-
-/* Line 1455 of yacc.c  */
 #line 7045 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)|= (yyvsp[(3) - (3)].ulong_num); }
     break;
 
   case 821:
-
-/* Line 1455 of yacc.c  */
 #line 7050 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           uint start= (yyvsp[(1) - (3)].ulong_num);
@@ -26054,36 +24822,26 @@ yyreduce:
     break;
 
   case 822:
-
-/* Line 1455 of yacc.c  */
 #line 7059 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num); }
     break;
 
   case 823:
-
-/* Line 1455 of yacc.c  */
 #line 7060 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(1) - (1)].ulong_num); }
     break;
 
   case 824:
-
-/* Line 1455 of yacc.c  */
 #line 7064 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= 0; }
     break;
 
   case 825:
-
-/* Line 1455 of yacc.c  */
 #line 7065 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (yyvsp[(2) - (2)].ulong_num); }
     break;
 
   case 828:
-
-/* Line 1455 of yacc.c  */
 #line 7079 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.table)=(yyvsp[(2) - (5)].table);
@@ -26091,15 +24849,11 @@ yyreduce:
     break;
 
   case 829:
-
-/* Line 1455 of yacc.c  */
 #line 7086 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ref_list.empty(); }
     break;
 
   case 831:
-
-/* Line 1455 of yacc.c  */
 #line 7092 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Key_part_spec *key= new Key_part_spec((yyvsp[(3) - (3)].lex_str), 0);
@@ -26110,8 +24864,6 @@ yyreduce:
     break;
 
   case 832:
-
-/* Line 1455 of yacc.c  */
 #line 7099 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Key_part_spec *key= new Key_part_spec((yyvsp[(1) - (1)].lex_str), 0);
@@ -26124,36 +24876,26 @@ yyreduce:
     break;
 
   case 833:
-
-/* Line 1455 of yacc.c  */
 #line 7111 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->fk_match_option= Foreign_key::FK_MATCH_UNDEF; }
     break;
 
   case 834:
-
-/* Line 1455 of yacc.c  */
 #line 7113 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->fk_match_option= Foreign_key::FK_MATCH_FULL; }
     break;
 
   case 835:
-
-/* Line 1455 of yacc.c  */
 #line 7115 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->fk_match_option= Foreign_key::FK_MATCH_PARTIAL; }
     break;
 
   case 836:
-
-/* Line 1455 of yacc.c  */
 #line 7117 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->fk_match_option= Foreign_key::FK_MATCH_SIMPLE; }
     break;
 
   case 837:
-
-/* Line 1455 of yacc.c  */
 #line 7122 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26163,8 +24905,6 @@ yyreduce:
     break;
 
   case 838:
-
-/* Line 1455 of yacc.c  */
 #line 7128 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26174,8 +24914,6 @@ yyreduce:
     break;
 
   case 839:
-
-/* Line 1455 of yacc.c  */
 #line 7134 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26185,8 +24923,6 @@ yyreduce:
     break;
 
   case 840:
-
-/* Line 1455 of yacc.c  */
 #line 7141 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26196,8 +24932,6 @@ yyreduce:
     break;
 
   case 841:
-
-/* Line 1455 of yacc.c  */
 #line 7148 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26207,127 +24941,91 @@ yyreduce:
     break;
 
   case 842:
-
-/* Line 1455 of yacc.c  */
 #line 7156 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_fk_option)= Foreign_key::FK_OPTION_RESTRICT; }
     break;
 
   case 843:
-
-/* Line 1455 of yacc.c  */
 #line 7157 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_fk_option)= Foreign_key::FK_OPTION_CASCADE; }
     break;
 
   case 844:
-
-/* Line 1455 of yacc.c  */
 #line 7158 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_fk_option)= Foreign_key::FK_OPTION_SET_NULL; }
     break;
 
   case 845:
-
-/* Line 1455 of yacc.c  */
 #line 7159 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_fk_option)= Foreign_key::FK_OPTION_NO_ACTION; }
     break;
 
   case 846:
-
-/* Line 1455 of yacc.c  */
 #line 7160 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_fk_option)= Foreign_key::FK_OPTION_DEFAULT;  }
     break;
 
   case 847:
-
-/* Line 1455 of yacc.c  */
 #line 7164 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::MULTIPLE; }
     break;
 
   case 848:
-
-/* Line 1455 of yacc.c  */
 #line 7168 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::PRIMARY; }
     break;
 
   case 849:
-
-/* Line 1455 of yacc.c  */
 #line 7169 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::UNIQUE; }
     break;
 
   case 850:
-
-/* Line 1455 of yacc.c  */
 #line 7173 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 851:
-
-/* Line 1455 of yacc.c  */
 #line 7174 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 852:
-
-/* Line 1455 of yacc.c  */
 #line 7178 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 854:
-
-/* Line 1455 of yacc.c  */
 #line 7183 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 855:
-
-/* Line 1455 of yacc.c  */
 #line 7184 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 856:
-
-/* Line 1455 of yacc.c  */
 #line 7185 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 857:
-
-/* Line 1455 of yacc.c  */
 #line 7189 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::MULTIPLE; }
     break;
 
   case 858:
-
-/* Line 1455 of yacc.c  */
 #line 7190 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::UNIQUE; }
     break;
 
   case 859:
-
-/* Line 1455 of yacc.c  */
 #line 7194 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_type)= Key::FULLTEXT;}
     break;
 
   case 860:
-
-/* Line 1455 of yacc.c  */
 #line 7199 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_SPATIAL
@@ -26341,8 +25039,6 @@ yyreduce:
     break;
 
   case 861:
-
-/* Line 1455 of yacc.c  */
 #line 7211 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->key_create_info= default_key_create_info;
@@ -26350,57 +25046,41 @@ yyreduce:
     break;
 
   case 864:
-
-/* Line 1455 of yacc.c  */
 #line 7228 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 866:
-
-/* Line 1455 of yacc.c  */
 #line 7233 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 868:
-
-/* Line 1455 of yacc.c  */
 #line 7238 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 876:
-
-/* Line 1455 of yacc.c  */
 #line 7258 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->key_create_info.algorithm= (yyvsp[(2) - (2)].key_alg); }
     break;
 
   case 877:
-
-/* Line 1455 of yacc.c  */
 #line 7259 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->key_create_info.algorithm= (yyvsp[(2) - (2)].key_alg); }
     break;
 
   case 878:
-
-/* Line 1455 of yacc.c  */
 #line 7264 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->key_create_info.block_size= (yyvsp[(3) - (3)].ulong_num); }
     break;
 
   case 879:
-
-/* Line 1455 of yacc.c  */
 #line 7265 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->key_create_info.comment= (yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 884:
-
-/* Line 1455 of yacc.c  */
 #line 7280 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (plugin_is_ready(&(yyvsp[(3) - (3)].lex_str), MYSQL_FTPARSER_PLUGIN))
@@ -26414,43 +25094,31 @@ yyreduce:
     break;
 
   case 885:
-
-/* Line 1455 of yacc.c  */
 #line 7292 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_alg)= HA_KEY_ALG_BTREE; }
     break;
 
   case 886:
-
-/* Line 1455 of yacc.c  */
 #line 7293 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_alg)= HA_KEY_ALG_RTREE; }
     break;
 
   case 887:
-
-/* Line 1455 of yacc.c  */
 #line 7294 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.key_alg)= HA_KEY_ALG_HASH; }
     break;
 
   case 888:
-
-/* Line 1455 of yacc.c  */
 #line 7298 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->col_list.push_back((yyvsp[(3) - (4)].key_part)); }
     break;
 
   case 889:
-
-/* Line 1455 of yacc.c  */
 #line 7299 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->col_list.push_back((yyvsp[(1) - (2)].key_part)); }
     break;
 
   case 890:
-
-/* Line 1455 of yacc.c  */
 #line 7304 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.key_part)= new Key_part_spec((yyvsp[(1) - (1)].lex_str), 0);
@@ -26460,8 +25128,6 @@ yyreduce:
     break;
 
   case 891:
-
-/* Line 1455 of yacc.c  */
 #line 7310 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             int key_part_len= atoi((yyvsp[(3) - (4)].lex_str).str);
@@ -26476,50 +25142,36 @@ yyreduce:
     break;
 
   case 892:
-
-/* Line 1455 of yacc.c  */
 #line 7323 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= null_lex_str; }
     break;
 
   case 893:
-
-/* Line 1455 of yacc.c  */
 #line 7324 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 894:
-
-/* Line 1455 of yacc.c  */
 #line 7328 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= null_lex_str; }
     break;
 
   case 895:
-
-/* Line 1455 of yacc.c  */
 #line 7329 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 896:
-
-/* Line 1455 of yacc.c  */
 #line 7333 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->interval_list.push_back((yyvsp[(1) - (1)].string)); }
     break;
 
   case 897:
-
-/* Line 1455 of yacc.c  */
 #line 7334 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->interval_list.push_back((yyvsp[(3) - (3)].string)); }
     break;
 
   case 898:
-
-/* Line 1455 of yacc.c  */
 #line 7342 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -26556,8 +25208,6 @@ yyreduce:
     break;
 
   case 899:
-
-/* Line 1455 of yacc.c  */
 #line 7375 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -26573,8 +25223,6 @@ yyreduce:
     break;
 
   case 900:
-
-/* Line 1455 of yacc.c  */
 #line 7387 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_info.default_table_charset= NULL;
@@ -26583,8 +25231,6 @@ yyreduce:
     break;
 
   case 901:
-
-/* Line 1455 of yacc.c  */
 #line 7392 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -26597,8 +25243,6 @@ yyreduce:
     break;
 
   case 902:
-
-/* Line 1455 of yacc.c  */
 #line 7401 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26613,8 +25257,6 @@ yyreduce:
     break;
 
   case 903:
-
-/* Line 1455 of yacc.c  */
 #line 7412 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26629,8 +25271,6 @@ yyreduce:
     break;
 
   case 904:
-
-/* Line 1455 of yacc.c  */
 #line 7423 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -26641,8 +25281,6 @@ yyreduce:
     break;
 
   case 905:
-
-/* Line 1455 of yacc.c  */
 #line 7430 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26657,8 +25295,6 @@ yyreduce:
     break;
 
   case 906:
-
-/* Line 1455 of yacc.c  */
 #line 7441 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -26669,8 +25305,6 @@ yyreduce:
     break;
 
   case 907:
-
-/* Line 1455 of yacc.c  */
 #line 7448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26685,15 +25319,11 @@ yyreduce:
     break;
 
   case 908:
-
-/* Line 1455 of yacc.c  */
 #line 7459 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 909:
-
-/* Line 1455 of yacc.c  */
 #line 7466 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26709,15 +25339,11 @@ yyreduce:
     break;
 
   case 910:
-
-/* Line 1455 of yacc.c  */
 #line 7478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 911:
-
-/* Line 1455 of yacc.c  */
 #line 7480 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* 
@@ -26737,8 +25363,6 @@ yyreduce:
     break;
 
   case 912:
-
-/* Line 1455 of yacc.c  */
 #line 7500 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyvsp[(6) - (10)].num) || (yyvsp[(7) - (10)].num) || (yyvsp[(8) - (10)].num) || (yyvsp[(9) - (10)].num) || (yyvsp[(10) - (10)].num)))
@@ -26755,8 +25379,6 @@ yyreduce:
     break;
 
   case 913:
-
-/* Line 1455 of yacc.c  */
 #line 7513 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26765,8 +25387,6 @@ yyreduce:
     break;
 
   case 914:
-
-/* Line 1455 of yacc.c  */
 #line 7518 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26775,8 +25395,6 @@ yyreduce:
     break;
 
   case 915:
-
-/* Line 1455 of yacc.c  */
 #line 7523 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26785,8 +25403,6 @@ yyreduce:
     break;
 
   case 916:
-
-/* Line 1455 of yacc.c  */
 #line 7528 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26795,8 +25411,6 @@ yyreduce:
     break;
 
   case 917:
-
-/* Line 1455 of yacc.c  */
 #line 7533 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26807,8 +25421,6 @@ yyreduce:
     break;
 
   case 918:
-
-/* Line 1455 of yacc.c  */
 #line 7540 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command= SQLCOM_ALTER_USER;
@@ -26816,8 +25428,6 @@ yyreduce:
     break;
 
   case 919:
-
-/* Line 1455 of yacc.c  */
 #line 7547 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(1) - (3)].lex_user)))
@@ -26826,8 +25436,6 @@ yyreduce:
     break;
 
   case 920:
-
-/* Line 1455 of yacc.c  */
 #line 7552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(3) - (5)].lex_user)))
@@ -26836,43 +25444,31 @@ yyreduce:
     break;
 
   case 921:
-
-/* Line 1455 of yacc.c  */
 #line 7559 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0;}
     break;
 
   case 922:
-
-/* Line 1455 of yacc.c  */
 #line 7560 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 923:
-
-/* Line 1455 of yacc.c  */
 #line 7561 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 924:
-
-/* Line 1455 of yacc.c  */
 #line 7562 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 925:
-
-/* Line 1455 of yacc.c  */
 #line 7566 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0;}
     break;
 
   case 926:
-
-/* Line 1455 of yacc.c  */
 #line 7568 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -26885,36 +25481,26 @@ yyreduce:
     break;
 
   case 927:
-
-/* Line 1455 of yacc.c  */
 #line 7579 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0;}
     break;
 
   case 928:
-
-/* Line 1455 of yacc.c  */
 #line 7580 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 929:
-
-/* Line 1455 of yacc.c  */
 #line 7584 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str).str= 0; (yyval.lex_str).length= 0; }
     break;
 
   case 930:
-
-/* Line 1455 of yacc.c  */
 #line 7585 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 932:
-
-/* Line 1455 of yacc.c  */
 #line 7591 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->m_sql_cmd= new (YYTHD->mem_root)
@@ -26926,8 +25512,6 @@ yyreduce:
     break;
 
   case 933:
-
-/* Line 1455 of yacc.c  */
 #line 7599 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->m_sql_cmd= new (YYTHD->mem_root)
@@ -26939,8 +25523,6 @@ yyreduce:
     break;
 
   case 939:
-
-/* Line 1455 of yacc.c  */
 #line 7621 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_DROP_PARTITION;
@@ -26948,8 +25530,6 @@ yyreduce:
     break;
 
   case 940:
-
-/* Line 1455 of yacc.c  */
 #line 7626 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -26959,8 +25539,6 @@ yyreduce:
     break;
 
   case 941:
-
-/* Line 1455 of yacc.c  */
 #line 7633 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -26976,8 +25554,6 @@ yyreduce:
     break;
 
   case 943:
-
-/* Line 1455 of yacc.c  */
 #line 7647 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -26993,8 +25569,6 @@ yyreduce:
     break;
 
   case 944:
-
-/* Line 1455 of yacc.c  */
 #line 7659 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -27009,8 +25583,6 @@ yyreduce:
     break;
 
   case 946:
-
-/* Line 1455 of yacc.c  */
 #line 7672 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -27026,8 +25598,6 @@ yyreduce:
     break;
 
   case 948:
-
-/* Line 1455 of yacc.c  */
 #line 7685 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -27038,8 +25608,6 @@ yyreduce:
     break;
 
   case 949:
-
-/* Line 1455 of yacc.c  */
 #line 7692 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -27054,8 +25622,6 @@ yyreduce:
     break;
 
   case 951:
-
-/* Line 1455 of yacc.c  */
 #line 7705 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -27083,8 +25649,6 @@ yyreduce:
     break;
 
   case 952:
-
-/* Line 1455 of yacc.c  */
 #line 7732 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_REMOVE_PARTITIONING;
@@ -27092,8 +25656,6 @@ yyreduce:
     break;
 
   case 953:
-
-/* Line 1455 of yacc.c  */
 #line 7739 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_ALL_PARTITION;
@@ -27101,8 +25663,6 @@ yyreduce:
     break;
 
   case 955:
-
-/* Line 1455 of yacc.c  */
 #line 7747 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -27118,15 +25678,11 @@ yyreduce:
     break;
 
   case 956:
-
-/* Line 1455 of yacc.c  */
 #line 7759 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 958:
-
-/* Line 1455 of yacc.c  */
 #line 7765 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -27135,8 +25691,6 @@ yyreduce:
     break;
 
   case 959:
-
-/* Line 1455 of yacc.c  */
 #line 7770 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->part_info->num_parts= (yyvsp[(2) - (2)].ulong_num);
@@ -27144,8 +25698,6 @@ yyreduce:
     break;
 
   case 960:
-
-/* Line 1455 of yacc.c  */
 #line 7777 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -27160,8 +25712,6 @@ yyreduce:
     break;
 
   case 962:
-
-/* Line 1455 of yacc.c  */
 #line 7792 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_TABLE_REORG;
@@ -27169,8 +25719,6 @@ yyreduce:
     break;
 
   case 963:
-
-/* Line 1455 of yacc.c  */
 #line 7796 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_REORGANIZE_PARTITION;
@@ -27178,8 +25726,6 @@ yyreduce:
     break;
 
   case 964:
-
-/* Line 1455 of yacc.c  */
 #line 7800 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             partition_info *part_info= Lex->part_info;
@@ -27188,22 +25734,16 @@ yyreduce:
     break;
 
   case 965:
-
-/* Line 1455 of yacc.c  */
 #line 7807 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 966:
-
-/* Line 1455 of yacc.c  */
 #line 7808 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 967:
-
-/* Line 1455 of yacc.c  */
 #line 7813 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->alter_info.partition_names.push_back((yyvsp[(1) - (1)].lex_str).str))
@@ -27215,8 +25755,6 @@ yyreduce:
     break;
 
   case 970:
-
-/* Line 1455 of yacc.c  */
 #line 7833 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27226,8 +25764,6 @@ yyreduce:
     break;
 
   case 971:
-
-/* Line 1455 of yacc.c  */
 #line 7842 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_last_non_select_table= Lex->last_table();
@@ -27235,8 +25771,6 @@ yyreduce:
     break;
 
   case 972:
-
-/* Line 1455 of yacc.c  */
 #line 7846 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_last_non_select_table= Lex->last_table();
@@ -27245,8 +25779,6 @@ yyreduce:
     break;
 
   case 973:
-
-/* Line 1455 of yacc.c  */
 #line 7851 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_ADD_COLUMN |
@@ -27255,8 +25787,6 @@ yyreduce:
     break;
 
   case 974:
-
-/* Line 1455 of yacc.c  */
 #line 7856 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27266,8 +25796,6 @@ yyreduce:
     break;
 
   case 975:
-
-/* Line 1455 of yacc.c  */
 #line 7862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_last_non_select_table= Lex->last_table();
@@ -27275,8 +25803,6 @@ yyreduce:
     break;
 
   case 976:
-
-/* Line 1455 of yacc.c  */
 #line 7866 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27289,8 +25815,6 @@ yyreduce:
     break;
 
   case 977:
-
-/* Line 1455 of yacc.c  */
 #line 7875 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27306,8 +25830,6 @@ yyreduce:
     break;
 
   case 978:
-
-/* Line 1455 of yacc.c  */
 #line 7887 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->create_last_non_select_table= Lex->last_table();
@@ -27315,8 +25837,6 @@ yyreduce:
     break;
 
   case 979:
-
-/* Line 1455 of yacc.c  */
 #line 7891 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27329,8 +25849,6 @@ yyreduce:
     break;
 
   case 980:
-
-/* Line 1455 of yacc.c  */
 #line 7900 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27343,8 +25861,6 @@ yyreduce:
     break;
 
   case 981:
-
-/* Line 1455 of yacc.c  */
 #line 7909 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27357,8 +25873,6 @@ yyreduce:
     break;
 
   case 982:
-
-/* Line 1455 of yacc.c  */
 #line 7918 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27371,8 +25885,6 @@ yyreduce:
     break;
 
   case 983:
-
-/* Line 1455 of yacc.c  */
 #line 7927 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27382,8 +25894,6 @@ yyreduce:
     break;
 
   case 984:
-
-/* Line 1455 of yacc.c  */
 #line 7933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27393,8 +25903,6 @@ yyreduce:
     break;
 
   case 985:
-
-/* Line 1455 of yacc.c  */
 #line 7939 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27407,8 +25915,6 @@ yyreduce:
     break;
 
   case 986:
-
-/* Line 1455 of yacc.c  */
 #line 7948 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27421,8 +25927,6 @@ yyreduce:
     break;
 
   case 987:
-
-/* Line 1455 of yacc.c  */
 #line 7957 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27454,8 +25958,6 @@ yyreduce:
     break;
 
   case 988:
-
-/* Line 1455 of yacc.c  */
 #line 7985 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!(yyvsp[(4) - (5)].charset))
@@ -27480,8 +25982,6 @@ yyreduce:
     break;
 
   case 989:
-
-/* Line 1455 of yacc.c  */
 #line 8006 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27495,8 +25995,6 @@ yyreduce:
     break;
 
   case 990:
-
-/* Line 1455 of yacc.c  */
 #line 8016 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_RECREATE;
@@ -27504,8 +26002,6 @@ yyreduce:
     break;
 
   case 991:
-
-/* Line 1455 of yacc.c  */
 #line 8020 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27514,8 +26010,6 @@ yyreduce:
     break;
 
   case 999:
-
-/* Line 1455 of yacc.c  */
 #line 8037 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.requested_algorithm=
@@ -27524,8 +26018,6 @@ yyreduce:
     break;
 
   case 1000:
-
-/* Line 1455 of yacc.c  */
 #line 8042 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->alter_info.set_requested_algorithm(&(yyvsp[(3) - (3)].lex_str)))
@@ -27537,8 +26029,6 @@ yyreduce:
     break;
 
   case 1001:
-
-/* Line 1455 of yacc.c  */
 #line 8053 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.requested_lock=
@@ -27547,8 +26037,6 @@ yyreduce:
     break;
 
   case 1002:
-
-/* Line 1455 of yacc.c  */
 #line 8058 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->alter_info.set_requested_lock(&(yyvsp[(3) - (3)].lex_str)))
@@ -27560,64 +26048,46 @@ yyreduce:
     break;
 
   case 1003:
-
-/* Line 1455 of yacc.c  */
 #line 8068 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1004:
-
-/* Line 1455 of yacc.c  */
 #line 8069 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1005:
-
-/* Line 1455 of yacc.c  */
 #line 8073 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ignore= 0;}
     break;
 
   case 1006:
-
-/* Line 1455 of yacc.c  */
 #line 8074 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ignore= 1;}
     break;
 
   case 1007:
-
-/* Line 1455 of yacc.c  */
 #line 8078 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->drop_mode= DROP_DEFAULT; }
     break;
 
   case 1008:
-
-/* Line 1455 of yacc.c  */
 #line 8079 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->drop_mode= DROP_RESTRICT; }
     break;
 
   case 1009:
-
-/* Line 1455 of yacc.c  */
 #line 8080 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->drop_mode= DROP_CASCADE; }
     break;
 
   case 1010:
-
-/* Line 1455 of yacc.c  */
 #line 8084 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1011:
-
-/* Line 1455 of yacc.c  */
 #line 8086 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             store_position_for_column((yyvsp[(2) - (2)].lex_str).str);
@@ -27626,8 +26096,6 @@ yyreduce:
     break;
 
   case 1012:
-
-/* Line 1455 of yacc.c  */
 #line 8091 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             store_position_for_column(first_keyword);
@@ -27636,36 +26104,26 @@ yyreduce:
     break;
 
   case 1013:
-
-/* Line 1455 of yacc.c  */
 #line 8098 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1014:
-
-/* Line 1455 of yacc.c  */
 #line 8099 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1015:
-
-/* Line 1455 of yacc.c  */
 #line 8100 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1016:
-
-/* Line 1455 of yacc.c  */
 #line 8101 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1017:
-
-/* Line 1455 of yacc.c  */
 #line 8106 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27680,8 +26138,6 @@ yyreduce:
     break;
 
   case 1018:
-
-/* Line 1455 of yacc.c  */
 #line 8118 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -27702,8 +26158,6 @@ yyreduce:
     break;
 
   case 1019:
-
-/* Line 1455 of yacc.c  */
 #line 8135 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27714,8 +26168,6 @@ yyreduce:
     break;
 
   case 1020:
-
-/* Line 1455 of yacc.c  */
 #line 8145 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -27732,8 +26184,6 @@ yyreduce:
     break;
 
   case 1021:
-
-/* Line 1455 of yacc.c  */
 #line 8161 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= 0;
@@ -27741,8 +26191,6 @@ yyreduce:
     break;
 
   case 1022:
-
-/* Line 1455 of yacc.c  */
 #line 8165 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (1)].num);
@@ -27750,8 +26198,6 @@ yyreduce:
     break;
 
   case 1023:
-
-/* Line 1455 of yacc.c  */
 #line 8172 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (1)].num);
@@ -27759,8 +26205,6 @@ yyreduce:
     break;
 
   case 1024:
-
-/* Line 1455 of yacc.c  */
 #line 8176 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (3)].num) | (yyvsp[(3) - (3)].num);
@@ -27768,8 +26212,6 @@ yyreduce:
     break;
 
   case 1025:
-
-/* Line 1455 of yacc.c  */
 #line 8183 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= MYSQL_START_TRANS_OPT_WITH_CONS_SNAPSHOT;
@@ -27777,8 +26219,6 @@ yyreduce:
     break;
 
   case 1026:
-
-/* Line 1455 of yacc.c  */
 #line 8187 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= MYSQL_START_TRANS_OPT_READ_ONLY;
@@ -27786,8 +26226,6 @@ yyreduce:
     break;
 
   case 1027:
-
-/* Line 1455 of yacc.c  */
 #line 8191 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= MYSQL_START_TRANS_OPT_READ_WRITE;
@@ -27795,8 +26233,6 @@ yyreduce:
     break;
 
   case 1029:
-
-/* Line 1455 of yacc.c  */
 #line 8202 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* empty */
@@ -27804,8 +26240,6 @@ yyreduce:
     break;
 
   case 1030:
-
-/* Line 1455 of yacc.c  */
 #line 8206 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->slave_connection.user= (yyvsp[(3) - (3)].lex_str).str;
@@ -27813,8 +26247,6 @@ yyreduce:
     break;
 
   case 1031:
-
-/* Line 1455 of yacc.c  */
 #line 8212 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* empty */
@@ -27822,8 +26254,6 @@ yyreduce:
     break;
 
   case 1032:
-
-/* Line 1455 of yacc.c  */
 #line 8216 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->slave_connection.password= (yyvsp[(3) - (3)].lex_str).str;
@@ -27832,8 +26262,6 @@ yyreduce:
     break;
 
   case 1033:
-
-/* Line 1455 of yacc.c  */
 #line 8222 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* empty */
@@ -27841,8 +26269,6 @@ yyreduce:
     break;
 
   case 1034:
-
-/* Line 1455 of yacc.c  */
 #line 8226 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->slave_connection.plugin_auth= (yyvsp[(3) - (3)].lex_str).str;
@@ -27850,8 +26276,6 @@ yyreduce:
     break;
 
   case 1035:
-
-/* Line 1455 of yacc.c  */
 #line 8232 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* empty */
@@ -27859,8 +26283,6 @@ yyreduce:
     break;
 
   case 1036:
-
-/* Line 1455 of yacc.c  */
 #line 8236 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->slave_connection.plugin_dir= (yyvsp[(3) - (3)].lex_str).str;
@@ -27868,8 +26290,6 @@ yyreduce:
     break;
 
   case 1037:
-
-/* Line 1455 of yacc.c  */
 #line 8243 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= 0;
@@ -27877,8 +26297,6 @@ yyreduce:
     break;
 
   case 1038:
-
-/* Line 1455 of yacc.c  */
 #line 8247 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (1)].num);
@@ -27886,8 +26304,6 @@ yyreduce:
     break;
 
   case 1039:
-
-/* Line 1455 of yacc.c  */
 #line 8254 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (1)].num);
@@ -27895,8 +26311,6 @@ yyreduce:
     break;
 
   case 1040:
-
-/* Line 1455 of yacc.c  */
 #line 8258 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= (yyvsp[(1) - (3)].num) | (yyvsp[(3) - (3)].num);
@@ -27904,8 +26318,6 @@ yyreduce:
     break;
 
   case 1041:
-
-/* Line 1455 of yacc.c  */
 #line 8265 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= SLAVE_SQL;
@@ -27913,8 +26325,6 @@ yyreduce:
     break;
 
   case 1042:
-
-/* Line 1455 of yacc.c  */
 #line 8269 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= SLAVE_IO;
@@ -27922,15 +26332,11 @@ yyreduce:
     break;
 
   case 1043:
-
-/* Line 1455 of yacc.c  */
 #line 8275 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1044:
-
-/* Line 1455 of yacc.c  */
 #line 8277 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27956,8 +26362,6 @@ yyreduce:
     break;
 
   case 1047:
-
-/* Line 1455 of yacc.c  */
 #line 8304 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.gtid= (yyvsp[(3) - (3)].lex_str).str;
@@ -27966,8 +26370,6 @@ yyreduce:
     break;
 
   case 1048:
-
-/* Line 1455 of yacc.c  */
 #line 8309 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.gtid= (yyvsp[(3) - (3)].lex_str).str;
@@ -27976,8 +26378,6 @@ yyreduce:
     break;
 
   case 1049:
-
-/* Line 1455 of yacc.c  */
 #line 8314 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->mi.until_after_gaps= true;
@@ -27985,8 +26385,6 @@ yyreduce:
     break;
 
   case 1050:
-
-/* Line 1455 of yacc.c  */
 #line 8321 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -27997,36 +26395,26 @@ yyreduce:
     break;
 
   case 1051:
-
-/* Line 1455 of yacc.c  */
 #line 8328 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1052:
-
-/* Line 1455 of yacc.c  */
 #line 8332 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags= 0; }
     break;
 
   case 1053:
-
-/* Line 1455 of yacc.c  */
 #line 8333 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags= T_QUICK; }
     break;
 
   case 1054:
-
-/* Line 1455 of yacc.c  */
 #line 8334 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags= T_EXTEND; }
     break;
 
   case 1055:
-
-/* Line 1455 of yacc.c  */
 #line 8339 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28040,8 +26428,6 @@ yyreduce:
     break;
 
   case 1056:
-
-/* Line 1455 of yacc.c  */
 #line 8349 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28054,57 +26440,41 @@ yyreduce:
     break;
 
   case 1057:
-
-/* Line 1455 of yacc.c  */
 #line 8360 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags = T_MEDIUM; }
     break;
 
   case 1058:
-
-/* Line 1455 of yacc.c  */
 #line 8361 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1059:
-
-/* Line 1455 of yacc.c  */
 #line 8365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1060:
-
-/* Line 1455 of yacc.c  */
 #line 8366 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1061:
-
-/* Line 1455 of yacc.c  */
 #line 8370 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_QUICK; }
     break;
 
   case 1062:
-
-/* Line 1455 of yacc.c  */
 #line 8371 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_EXTEND; }
     break;
 
   case 1063:
-
-/* Line 1455 of yacc.c  */
 #line 8372 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.sql_flags|= TT_USEFRM; }
     break;
 
   case 1064:
-
-/* Line 1455 of yacc.c  */
 #line 8377 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28118,8 +26488,6 @@ yyreduce:
     break;
 
   case 1065:
-
-/* Line 1455 of yacc.c  */
 #line 8387 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28132,8 +26500,6 @@ yyreduce:
     break;
 
   case 1066:
-
-/* Line 1455 of yacc.c  */
 #line 8399 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_BINLOG_BASE64_EVENT;
@@ -28142,8 +26508,6 @@ yyreduce:
     break;
 
   case 1067:
-
-/* Line 1455 of yacc.c  */
 #line 8407 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28162,8 +26526,6 @@ yyreduce:
     break;
 
   case 1068:
-
-/* Line 1455 of yacc.c  */
 #line 8422 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28176,78 +26538,56 @@ yyreduce:
     break;
 
   case 1069:
-
-/* Line 1455 of yacc.c  */
 #line 8433 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags = T_MEDIUM; }
     break;
 
   case 1070:
-
-/* Line 1455 of yacc.c  */
 #line 8434 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1071:
-
-/* Line 1455 of yacc.c  */
 #line 8438 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1072:
-
-/* Line 1455 of yacc.c  */
 #line 8439 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1073:
-
-/* Line 1455 of yacc.c  */
 #line 8443 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_QUICK; }
     break;
 
   case 1074:
-
-/* Line 1455 of yacc.c  */
 #line 8444 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_FAST; }
     break;
 
   case 1075:
-
-/* Line 1455 of yacc.c  */
 #line 8445 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_MEDIUM; }
     break;
 
   case 1076:
-
-/* Line 1455 of yacc.c  */
 #line 8446 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_EXTEND; }
     break;
 
   case 1077:
-
-/* Line 1455 of yacc.c  */
 #line 8447 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.flags|= T_CHECK_ONLY_CHANGED; }
     break;
 
   case 1078:
-
-/* Line 1455 of yacc.c  */
 #line 8448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->check_opt.sql_flags|= TT_FOR_UPGRADE; }
     break;
 
   case 1079:
-
-/* Line 1455 of yacc.c  */
 #line 8453 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28261,8 +26601,6 @@ yyreduce:
     break;
 
   case 1080:
-
-/* Line 1455 of yacc.c  */
 #line 8463 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28275,29 +26613,21 @@ yyreduce:
     break;
 
   case 1081:
-
-/* Line 1455 of yacc.c  */
 #line 8474 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1082:
-
-/* Line 1455 of yacc.c  */
 #line 8475 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1083:
-
-/* Line 1455 of yacc.c  */
 #line 8476 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1084:
-
-/* Line 1455 of yacc.c  */
 #line 8481 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command= SQLCOM_RENAME_TABLE;
@@ -28305,15 +26635,11 @@ yyreduce:
     break;
 
   case 1085:
-
-/* Line 1455 of yacc.c  */
 #line 8485 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1086:
-
-/* Line 1455 of yacc.c  */
 #line 8487 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_RENAME_USER;
@@ -28321,8 +26647,6 @@ yyreduce:
     break;
 
   case 1087:
-
-/* Line 1455 of yacc.c  */
 #line 8494 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(1) - (3)].lex_user)) || Lex->users_list.push_back((yyvsp[(3) - (3)].lex_user)))
@@ -28331,8 +26655,6 @@ yyreduce:
     break;
 
   case 1088:
-
-/* Line 1455 of yacc.c  */
 #line 8499 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(3) - (5)].lex_user)) || Lex->users_list.push_back((yyvsp[(5) - (5)].lex_user)))
@@ -28341,8 +26663,6 @@ yyreduce:
     break;
 
   case 1091:
-
-/* Line 1455 of yacc.c  */
 #line 8512 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28356,8 +26676,6 @@ yyreduce:
     break;
 
   case 1092:
-
-/* Line 1455 of yacc.c  */
 #line 8525 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.reset();
@@ -28365,8 +26683,6 @@ yyreduce:
     break;
 
   case 1093:
-
-/* Line 1455 of yacc.c  */
 #line 8529 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28376,8 +26692,6 @@ yyreduce:
     break;
 
   case 1098:
-
-/* Line 1455 of yacc.c  */
 #line 8548 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (2)].table), NULL, 0, TL_READ,
@@ -28388,8 +26702,6 @@ yyreduce:
     break;
 
   case 1099:
-
-/* Line 1455 of yacc.c  */
 #line 8558 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (3)].table), NULL, 0, TL_READ, 
@@ -28400,22 +26712,16 @@ yyreduce:
     break;
 
   case 1100:
-
-/* Line 1455 of yacc.c  */
 #line 8567 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 1101:
-
-/* Line 1455 of yacc.c  */
 #line 8568 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str) = default_key_cache_base; }
     break;
 
   case 1102:
-
-/* Line 1455 of yacc.c  */
 #line 8573 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28425,15 +26731,11 @@ yyreduce:
     break;
 
   case 1103:
-
-/* Line 1455 of yacc.c  */
 #line 8579 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1108:
-
-/* Line 1455 of yacc.c  */
 #line 8594 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (3)].table), NULL, (yyvsp[(3) - (3)].num), TL_READ,
@@ -28444,8 +26746,6 @@ yyreduce:
     break;
 
   case 1109:
-
-/* Line 1455 of yacc.c  */
 #line 8604 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (4)].table), NULL, (yyvsp[(4) - (4)].num), TL_READ,
@@ -28456,8 +26756,6 @@ yyreduce:
     break;
 
   case 1110:
-
-/* Line 1455 of yacc.c  */
 #line 8614 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->alter_info.flags|= Alter_info::ALTER_ADMIN_PARTITION;
@@ -28465,8 +26763,6 @@ yyreduce:
     break;
 
   case 1112:
-
-/* Line 1455 of yacc.c  */
 #line 8621 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->select_lex.alloc_index_hints(YYTHD);
@@ -28478,29 +26774,21 @@ yyreduce:
     break;
 
   case 1114:
-
-/* Line 1455 of yacc.c  */
 #line 8632 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 1116:
-
-/* Line 1455 of yacc.c  */
 #line 8638 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1117:
-
-/* Line 1455 of yacc.c  */
 #line 8639 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TL_OPTION_IGNORE_LEAVES; }
     break;
 
   case 1118:
-
-/* Line 1455 of yacc.c  */
 #line 8649 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -28509,8 +26797,6 @@ yyreduce:
     break;
 
   case 1121:
-
-/* Line 1455 of yacc.c  */
 #line 8663 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (setup_select_in_parentheses(Lex))
@@ -28519,8 +26805,6 @@ yyreduce:
     break;
 
   case 1123:
-
-/* Line 1455 of yacc.c  */
 #line 8673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (setup_select_in_parentheses(Lex))
@@ -28529,8 +26813,6 @@ yyreduce:
     break;
 
   case 1125:
-
-/* Line 1455 of yacc.c  */
 #line 8682 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -28550,8 +26832,6 @@ yyreduce:
     break;
 
   case 1127:
-
-/* Line 1455 of yacc.c  */
 #line 8701 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -28563,8 +26843,6 @@ yyreduce:
     break;
 
   case 1128:
-
-/* Line 1455 of yacc.c  */
 #line 8709 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -28572,15 +26850,11 @@ yyreduce:
     break;
 
   case 1130:
-
-/* Line 1455 of yacc.c  */
 #line 8716 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1135:
-
-/* Line 1455 of yacc.c  */
 #line 8726 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->context.table_list=
@@ -28590,8 +26864,6 @@ yyreduce:
     break;
 
   case 1138:
-
-/* Line 1455 of yacc.c  */
 #line 8741 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Select->options & SELECT_DISTINCT && Select->options & SELECT_ALL)
@@ -28603,8 +26875,6 @@ yyreduce:
     break;
 
   case 1142:
-
-/* Line 1455 of yacc.c  */
 #line 8758 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* 
@@ -28636,8 +26906,6 @@ yyreduce:
     break;
 
   case 1143:
-
-/* Line 1455 of yacc.c  */
 #line 8786 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->thd->infinidb_vtable.override_largeside_estimate=1;
@@ -28645,8 +26913,6 @@ yyreduce:
     break;
 
   case 1144:
-
-/* Line 1455 of yacc.c  */
 #line 8790 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* 
@@ -28678,8 +26944,6 @@ yyreduce:
     break;
 
   case 1146:
-
-/* Line 1455 of yacc.c  */
 #line 8822 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28689,8 +26953,6 @@ yyreduce:
     break;
 
   case 1147:
-
-/* Line 1455 of yacc.c  */
 #line 8828 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -28701,8 +26963,6 @@ yyreduce:
     break;
 
   case 1150:
-
-/* Line 1455 of yacc.c  */
 #line 8840 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28718,8 +26978,6 @@ yyreduce:
     break;
 
   case 1151:
-
-/* Line 1455 of yacc.c  */
 #line 8855 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28730,8 +26988,6 @@ yyreduce:
     break;
 
   case 1152:
-
-/* Line 1455 of yacc.c  */
 #line 8862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -28757,8 +27013,6 @@ yyreduce:
     break;
 
   case 1153:
-
-/* Line 1455 of yacc.c  */
 #line 8886 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.simple_string)= (char*) YYLIP->get_cpp_tok_start();
@@ -28766,8 +27020,6 @@ yyreduce:
     break;
 
   case 1154:
-
-/* Line 1455 of yacc.c  */
 #line 8892 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.simple_string)= (char*) YYLIP->get_cpp_tok_end();
@@ -28775,57 +27027,41 @@ yyreduce:
     break;
 
   case 1155:
-
-/* Line 1455 of yacc.c  */
 #line 8898 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=null_lex_str;}
     break;
 
   case 1156:
-
-/* Line 1455 of yacc.c  */
 #line 8899 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 1157:
-
-/* Line 1455 of yacc.c  */
 #line 8900 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(2) - (2)].lex_str); }
     break;
 
   case 1158:
-
-/* Line 1455 of yacc.c  */
 #line 8901 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 1159:
-
-/* Line 1455 of yacc.c  */
 #line 8902 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 1160:
-
-/* Line 1455 of yacc.c  */
 #line 8906 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1161:
-
-/* Line 1455 of yacc.c  */
 #line 8907 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1162:
-
-/* Line 1455 of yacc.c  */
 #line 8913 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -28880,8 +27116,6 @@ yyreduce:
     break;
 
   case 1163:
-
-/* Line 1455 of yacc.c  */
 #line 8964 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* XOR is a proprietary extension */
@@ -28892,8 +27126,6 @@ yyreduce:
     break;
 
   case 1164:
-
-/* Line 1455 of yacc.c  */
 #line 8971 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* See comments in rule expr: expr or expr */
@@ -28940,8 +27172,6 @@ yyreduce:
     break;
 
   case 1165:
-
-/* Line 1455 of yacc.c  */
 #line 9014 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= negate_expression(YYTHD, (yyvsp[(2) - (2)].item));
@@ -28951,8 +27181,6 @@ yyreduce:
     break;
 
   case 1166:
-
-/* Line 1455 of yacc.c  */
 #line 9020 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_istrue((yyvsp[(1) - (3)].item));
@@ -28962,8 +27190,6 @@ yyreduce:
     break;
 
   case 1167:
-
-/* Line 1455 of yacc.c  */
 #line 9026 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnottrue((yyvsp[(1) - (4)].item));
@@ -28973,8 +27199,6 @@ yyreduce:
     break;
 
   case 1168:
-
-/* Line 1455 of yacc.c  */
 #line 9032 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isfalse((yyvsp[(1) - (3)].item));
@@ -28984,8 +27208,6 @@ yyreduce:
     break;
 
   case 1169:
-
-/* Line 1455 of yacc.c  */
 #line 9038 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnotfalse((yyvsp[(1) - (4)].item));
@@ -28995,8 +27217,6 @@ yyreduce:
     break;
 
   case 1170:
-
-/* Line 1455 of yacc.c  */
 #line 9044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnull((yyvsp[(1) - (3)].item));
@@ -29006,8 +27226,6 @@ yyreduce:
     break;
 
   case 1171:
-
-/* Line 1455 of yacc.c  */
 #line 9050 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnotnull((yyvsp[(1) - (4)].item));
@@ -29017,8 +27235,6 @@ yyreduce:
     break;
 
   case 1173:
-
-/* Line 1455 of yacc.c  */
 #line 9060 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnull((yyvsp[(1) - (3)].item));
@@ -29028,8 +27244,6 @@ yyreduce:
     break;
 
   case 1174:
-
-/* Line 1455 of yacc.c  */
 #line 9066 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_isnotnull((yyvsp[(1) - (4)].item));
@@ -29039,8 +27253,6 @@ yyreduce:
     break;
 
   case 1175:
-
-/* Line 1455 of yacc.c  */
 #line 9072 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_equal((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29050,8 +27262,6 @@ yyreduce:
     break;
 
   case 1176:
-
-/* Line 1455 of yacc.c  */
 #line 9078 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= (*(yyvsp[(2) - (3)].boolfunc2creator))(0)->create((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29061,8 +27271,6 @@ yyreduce:
     break;
 
   case 1177:
-
-/* Line 1455 of yacc.c  */
 #line 9084 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= all_any_subquery_creator((yyvsp[(1) - (6)].item), (yyvsp[(2) - (6)].boolfunc2creator), (yyvsp[(3) - (6)].num), (yyvsp[(5) - (6)].select_lex));
@@ -29072,8 +27280,6 @@ yyreduce:
     break;
 
   case 1179:
-
-/* Line 1455 of yacc.c  */
 #line 9094 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_in_subselect((yyvsp[(1) - (5)].item), (yyvsp[(4) - (5)].select_lex));
@@ -29083,8 +27289,6 @@ yyreduce:
     break;
 
   case 1180:
-
-/* Line 1455 of yacc.c  */
 #line 9100 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -29098,8 +27302,6 @@ yyreduce:
     break;
 
   case 1181:
-
-/* Line 1455 of yacc.c  */
 #line 9110 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= handle_sql2003_note184_exception(YYTHD, (yyvsp[(1) - (5)].item), true, (yyvsp[(4) - (5)].item));
@@ -29109,8 +27311,6 @@ yyreduce:
     break;
 
   case 1182:
-
-/* Line 1455 of yacc.c  */
 #line 9116 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             (yyvsp[(6) - (7)].item_list)->push_front((yyvsp[(4) - (7)].item));
@@ -29122,8 +27322,6 @@ yyreduce:
     break;
 
   case 1183:
-
-/* Line 1455 of yacc.c  */
 #line 9124 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= handle_sql2003_note184_exception(YYTHD, (yyvsp[(1) - (6)].item), false, (yyvsp[(5) - (6)].item));
@@ -29133,8 +27331,6 @@ yyreduce:
     break;
 
   case 1184:
-
-/* Line 1455 of yacc.c  */
 #line 9130 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(7) - (8)].item_list)->push_front((yyvsp[(5) - (8)].item));
@@ -29148,8 +27344,6 @@ yyreduce:
     break;
 
   case 1185:
-
-/* Line 1455 of yacc.c  */
 #line 9140 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_between((yyvsp[(1) - (5)].item),(yyvsp[(3) - (5)].item),(yyvsp[(5) - (5)].item));
@@ -29159,8 +27353,6 @@ yyreduce:
     break;
 
   case 1186:
-
-/* Line 1455 of yacc.c  */
 #line 9146 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_func_between *item;
@@ -29173,8 +27365,6 @@ yyreduce:
     break;
 
   case 1187:
-
-/* Line 1455 of yacc.c  */
 #line 9155 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item1= new (YYTHD->mem_root) Item_func_soundex((yyvsp[(1) - (4)].item));
@@ -29188,8 +27378,6 @@ yyreduce:
     break;
 
   case 1188:
-
-/* Line 1455 of yacc.c  */
 #line 9165 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_like((yyvsp[(1) - (4)].item),(yyvsp[(3) - (4)].item),(yyvsp[(4) - (4)].item),Lex->escape_used);
@@ -29199,8 +27387,6 @@ yyreduce:
     break;
 
   case 1189:
-
-/* Line 1455 of yacc.c  */
 #line 9171 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item= new (YYTHD->mem_root) Item_func_like((yyvsp[(1) - (5)].item),(yyvsp[(4) - (5)].item),(yyvsp[(5) - (5)].item),
@@ -29214,8 +27400,6 @@ yyreduce:
     break;
 
   case 1190:
-
-/* Line 1455 of yacc.c  */
 #line 9181 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_regex((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29225,8 +27409,6 @@ yyreduce:
     break;
 
   case 1191:
-
-/* Line 1455 of yacc.c  */
 #line 9187 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item= new (YYTHD->mem_root) Item_func_regex((yyvsp[(1) - (4)].item),(yyvsp[(4) - (4)].item));
@@ -29239,8 +27421,6 @@ yyreduce:
     break;
 
   case 1193:
-
-/* Line 1455 of yacc.c  */
 #line 9200 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_bit_or((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29250,8 +27430,6 @@ yyreduce:
     break;
 
   case 1194:
-
-/* Line 1455 of yacc.c  */
 #line 9206 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_bit_and((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29261,8 +27439,6 @@ yyreduce:
     break;
 
   case 1195:
-
-/* Line 1455 of yacc.c  */
 #line 9212 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_shift_left((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29272,8 +27448,6 @@ yyreduce:
     break;
 
   case 1196:
-
-/* Line 1455 of yacc.c  */
 #line 9218 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_shift_right((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29283,8 +27457,6 @@ yyreduce:
     break;
 
   case 1197:
-
-/* Line 1455 of yacc.c  */
 #line 9224 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_plus((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29294,8 +27466,6 @@ yyreduce:
     break;
 
   case 1198:
-
-/* Line 1455 of yacc.c  */
 #line 9230 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_minus((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29305,8 +27475,6 @@ yyreduce:
     break;
 
   case 1199:
-
-/* Line 1455 of yacc.c  */
 #line 9236 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(1) - (5)].item),(yyvsp[(4) - (5)].item),(yyvsp[(5) - (5)].interval),0);
@@ -29316,8 +27484,6 @@ yyreduce:
     break;
 
   case 1200:
-
-/* Line 1455 of yacc.c  */
 #line 9242 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(1) - (5)].item),(yyvsp[(4) - (5)].item),(yyvsp[(5) - (5)].interval),1);
@@ -29327,8 +27493,6 @@ yyreduce:
     break;
 
   case 1201:
-
-/* Line 1455 of yacc.c  */
 #line 9248 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_mul((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29338,8 +27502,6 @@ yyreduce:
     break;
 
   case 1202:
-
-/* Line 1455 of yacc.c  */
 #line 9254 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_div((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29349,8 +27511,6 @@ yyreduce:
     break;
 
   case 1203:
-
-/* Line 1455 of yacc.c  */
 #line 9260 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_mod((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29360,8 +27520,6 @@ yyreduce:
     break;
 
   case 1204:
-
-/* Line 1455 of yacc.c  */
 #line 9266 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_int_div((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29371,8 +27529,6 @@ yyreduce:
     break;
 
   case 1205:
-
-/* Line 1455 of yacc.c  */
 #line 9272 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_mod((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29382,8 +27538,6 @@ yyreduce:
     break;
 
   case 1206:
-
-/* Line 1455 of yacc.c  */
 #line 9278 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_bit_xor((yyvsp[(1) - (3)].item),(yyvsp[(3) - (3)].item));
@@ -29393,64 +27547,46 @@ yyreduce:
     break;
 
   case 1216:
-
-/* Line 1455 of yacc.c  */
 #line 9307 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_eq_creator; }
     break;
 
   case 1217:
-
-/* Line 1455 of yacc.c  */
 #line 9308 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_ge_creator; }
     break;
 
   case 1218:
-
-/* Line 1455 of yacc.c  */
 #line 9309 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_gt_creator; }
     break;
 
   case 1219:
-
-/* Line 1455 of yacc.c  */
 #line 9310 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_le_creator; }
     break;
 
   case 1220:
-
-/* Line 1455 of yacc.c  */
 #line 9311 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_lt_creator; }
     break;
 
   case 1221:
-
-/* Line 1455 of yacc.c  */
 #line 9312 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.boolfunc2creator) = &comp_ne_creator; }
     break;
 
   case 1222:
-
-/* Line 1455 of yacc.c  */
 #line 9316 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1223:
-
-/* Line 1455 of yacc.c  */
 #line 9317 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 0; }
     break;
 
   case 1230:
-
-/* Line 1455 of yacc.c  */
 #line 9328 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -29466,8 +27602,6 @@ yyreduce:
     break;
 
   case 1235:
-
-/* Line 1455 of yacc.c  */
 #line 9344 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_concat((yyvsp[(1) - (3)].item), (yyvsp[(3) - (3)].item));
@@ -29477,8 +27611,6 @@ yyreduce:
     break;
 
   case 1236:
-
-/* Line 1455 of yacc.c  */
 #line 9350 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= (yyvsp[(2) - (2)].item);
@@ -29486,8 +27618,6 @@ yyreduce:
     break;
 
   case 1237:
-
-/* Line 1455 of yacc.c  */
 #line 9354 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_neg((yyvsp[(2) - (2)].item));
@@ -29497,8 +27627,6 @@ yyreduce:
     break;
 
   case 1238:
-
-/* Line 1455 of yacc.c  */
 #line 9360 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_bit_neg((yyvsp[(2) - (2)].item));
@@ -29508,8 +27636,6 @@ yyreduce:
     break;
 
   case 1239:
-
-/* Line 1455 of yacc.c  */
 #line 9366 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= negate_expression(YYTHD, (yyvsp[(2) - (2)].item));
@@ -29519,8 +27645,6 @@ yyreduce:
     break;
 
   case 1240:
-
-/* Line 1455 of yacc.c  */
 #line 9372 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             (yyval.item)= new (YYTHD->mem_root) Item_singlerow_subselect((yyvsp[(2) - (3)].select_lex));
@@ -29530,15 +27654,11 @@ yyreduce:
     break;
 
   case 1241:
-
-/* Line 1455 of yacc.c  */
 #line 9378 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(2) - (3)].item); }
     break;
 
   case 1242:
-
-/* Line 1455 of yacc.c  */
 #line 9380 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(4) - (5)].item_list)->push_front((yyvsp[(2) - (5)].item));
@@ -29549,8 +27669,6 @@ yyreduce:
     break;
 
   case 1243:
-
-/* Line 1455 of yacc.c  */
 #line 9387 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(5) - (6)].item_list)->push_front((yyvsp[(3) - (6)].item));
@@ -29561,8 +27679,6 @@ yyreduce:
     break;
 
   case 1244:
-
-/* Line 1455 of yacc.c  */
 #line 9394 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_exists_subselect((yyvsp[(3) - (4)].select_lex));
@@ -29572,8 +27688,6 @@ yyreduce:
     break;
 
   case 1245:
-
-/* Line 1455 of yacc.c  */
 #line 9400 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_string *item;
@@ -29618,8 +27732,6 @@ yyreduce:
     break;
 
   case 1246:
-
-/* Line 1455 of yacc.c  */
 #line 9441 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(2) - (7)].item_list)->push_front((yyvsp[(5) - (7)].item));
@@ -29632,8 +27744,6 @@ yyreduce:
     break;
 
   case 1247:
-
-/* Line 1455 of yacc.c  */
 #line 9450 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= create_func_cast(YYTHD, (yyvsp[(2) - (2)].item), ITEM_CAST_CHAR, NULL, NULL,
@@ -29644,8 +27754,6 @@ yyreduce:
     break;
 
   case 1248:
-
-/* Line 1455 of yacc.c  */
 #line 9457 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -29657,8 +27765,6 @@ yyreduce:
     break;
 
   case 1249:
-
-/* Line 1455 of yacc.c  */
 #line 9465 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_case(* (yyvsp[(3) - (5)].item_list), (yyvsp[(2) - (5)].item), (yyvsp[(4) - (5)].item) );
@@ -29668,8 +27774,6 @@ yyreduce:
     break;
 
   case 1250:
-
-/* Line 1455 of yacc.c  */
 #line 9471 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= create_func_cast(YYTHD, (yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].cast_type), Lex->length, Lex->dec,
@@ -29680,8 +27784,6 @@ yyreduce:
     break;
 
   case 1251:
-
-/* Line 1455 of yacc.c  */
 #line 9478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_conv_charset((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].charset));
@@ -29691,8 +27793,6 @@ yyreduce:
     break;
 
   case 1252:
-
-/* Line 1455 of yacc.c  */
 #line 9484 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(3) - (4)].item)->is_splocal())
@@ -29710,8 +27810,6 @@ yyreduce:
     break;
 
   case 1253:
-
-/* Line 1455 of yacc.c  */
 #line 9498 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_insert_value(Lex->current_context(),
@@ -29722,8 +27820,6 @@ yyreduce:
     break;
 
   case 1254:
-
-/* Line 1455 of yacc.c  */
 #line 9506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(5) - (5)].item),(yyvsp[(2) - (5)].item),(yyvsp[(3) - (5)].interval),0);
@@ -29733,8 +27829,6 @@ yyreduce:
     break;
 
   case 1255:
-
-/* Line 1455 of yacc.c  */
 #line 9521 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_char(*(yyvsp[(3) - (4)].item_list));
@@ -29744,8 +27838,6 @@ yyreduce:
     break;
 
   case 1256:
-
-/* Line 1455 of yacc.c  */
 #line 9527 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_char(*(yyvsp[(3) - (6)].item_list), (yyvsp[(5) - (6)].charset));
@@ -29755,8 +27847,6 @@ yyreduce:
     break;
 
   case 1257:
-
-/* Line 1455 of yacc.c  */
 #line 9533 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_current_user(Lex->current_context());
@@ -29768,8 +27858,6 @@ yyreduce:
     break;
 
   case 1258:
-
-/* Line 1455 of yacc.c  */
 #line 9541 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_typecast((yyvsp[(3) - (4)].item));
@@ -29779,8 +27867,6 @@ yyreduce:
     break;
 
   case 1259:
-
-/* Line 1455 of yacc.c  */
 #line 9547 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_dayofmonth((yyvsp[(3) - (4)].item));
@@ -29790,8 +27876,6 @@ yyreduce:
     break;
 
   case 1260:
-
-/* Line 1455 of yacc.c  */
 #line 9553 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_hour((yyvsp[(3) - (4)].item));
@@ -29801,8 +27885,6 @@ yyreduce:
     break;
 
   case 1261:
-
-/* Line 1455 of yacc.c  */
 #line 9559 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_insert((yyvsp[(3) - (10)].item),(yyvsp[(5) - (10)].item),(yyvsp[(7) - (10)].item),(yyvsp[(9) - (10)].item));
@@ -29812,8 +27894,6 @@ yyreduce:
     break;
 
   case 1262:
-
-/* Line 1455 of yacc.c  */
 #line 9565 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -29832,8 +27912,6 @@ yyreduce:
     break;
 
   case 1263:
-
-/* Line 1455 of yacc.c  */
 #line 9580 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -29849,8 +27927,6 @@ yyreduce:
     break;
 
   case 1264:
-
-/* Line 1455 of yacc.c  */
 #line 9592 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_left((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -29860,8 +27936,6 @@ yyreduce:
     break;
 
   case 1265:
-
-/* Line 1455 of yacc.c  */
 #line 9598 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_minute((yyvsp[(3) - (4)].item));
@@ -29871,8 +27945,6 @@ yyreduce:
     break;
 
   case 1266:
-
-/* Line 1455 of yacc.c  */
 #line 9604 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_month((yyvsp[(3) - (4)].item));
@@ -29882,8 +27954,6 @@ yyreduce:
     break;
 
   case 1267:
-
-/* Line 1455 of yacc.c  */
 #line 9610 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_right((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -29893,8 +27963,6 @@ yyreduce:
     break;
 
   case 1268:
-
-/* Line 1455 of yacc.c  */
 #line 9616 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_second((yyvsp[(3) - (4)].item));
@@ -29904,8 +27972,6 @@ yyreduce:
     break;
 
   case 1269:
-
-/* Line 1455 of yacc.c  */
 #line 9622 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_time_typecast((yyvsp[(3) - (4)].item));
@@ -29915,8 +27981,6 @@ yyreduce:
     break;
 
   case 1270:
-
-/* Line 1455 of yacc.c  */
 #line 9628 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_datetime_typecast((yyvsp[(3) - (4)].item));
@@ -29926,8 +27990,6 @@ yyreduce:
     break;
 
   case 1271:
-
-/* Line 1455 of yacc.c  */
 #line 9634 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_add_time((yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].item), 1, 0);
@@ -29937,8 +27999,6 @@ yyreduce:
     break;
 
   case 1272:
-
-/* Line 1455 of yacc.c  */
 #line 9640 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_trim((yyvsp[(3) - (4)].item));
@@ -29948,8 +28008,6 @@ yyreduce:
     break;
 
   case 1273:
-
-/* Line 1455 of yacc.c  */
 #line 9646 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_ltrim((yyvsp[(6) - (7)].item),(yyvsp[(4) - (7)].item));
@@ -29959,8 +28017,6 @@ yyreduce:
     break;
 
   case 1274:
-
-/* Line 1455 of yacc.c  */
 #line 9652 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_rtrim((yyvsp[(6) - (7)].item),(yyvsp[(4) - (7)].item));
@@ -29970,8 +28026,6 @@ yyreduce:
     break;
 
   case 1275:
-
-/* Line 1455 of yacc.c  */
 #line 9658 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_trim((yyvsp[(6) - (7)].item),(yyvsp[(4) - (7)].item));
@@ -29981,8 +28035,6 @@ yyreduce:
     break;
 
   case 1276:
-
-/* Line 1455 of yacc.c  */
 #line 9664 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_ltrim((yyvsp[(5) - (6)].item));
@@ -29992,8 +28044,6 @@ yyreduce:
     break;
 
   case 1277:
-
-/* Line 1455 of yacc.c  */
 #line 9670 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_rtrim((yyvsp[(5) - (6)].item));
@@ -30003,8 +28053,6 @@ yyreduce:
     break;
 
   case 1278:
-
-/* Line 1455 of yacc.c  */
 #line 9676 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_trim((yyvsp[(5) - (6)].item));
@@ -30014,8 +28062,6 @@ yyreduce:
     break;
 
   case 1279:
-
-/* Line 1455 of yacc.c  */
 #line 9682 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_trim((yyvsp[(5) - (6)].item),(yyvsp[(3) - (6)].item));
@@ -30025,8 +28071,6 @@ yyreduce:
     break;
 
   case 1280:
-
-/* Line 1455 of yacc.c  */
 #line 9688 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_user();
@@ -30038,8 +28082,6 @@ yyreduce:
     break;
 
   case 1281:
-
-/* Line 1455 of yacc.c  */
 #line 9696 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_year((yyvsp[(3) - (4)].item));
@@ -30049,8 +28091,6 @@ yyreduce:
     break;
 
   case 1282:
-
-/* Line 1455 of yacc.c  */
 #line 9717 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].item),
@@ -30061,8 +28101,6 @@ yyreduce:
     break;
 
   case 1283:
-
-/* Line 1455 of yacc.c  */
 #line 9724 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (8)].item), (yyvsp[(6) - (8)].item), (yyvsp[(7) - (8)].interval), 0);
@@ -30072,8 +28110,6 @@ yyreduce:
     break;
 
   case 1284:
-
-/* Line 1455 of yacc.c  */
 #line 9730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_curdate_local();
@@ -30084,8 +28120,6 @@ yyreduce:
     break;
 
   case 1285:
-
-/* Line 1455 of yacc.c  */
 #line 9737 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_curtime_local((yyvsp[(2) - (2)].ulong_num));
@@ -30096,8 +28130,6 @@ yyreduce:
     break;
 
   case 1286:
-
-/* Line 1455 of yacc.c  */
 #line 9745 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (8)].item),(yyvsp[(6) - (8)].item),(yyvsp[(7) - (8)].interval),0);
@@ -30107,8 +28139,6 @@ yyreduce:
     break;
 
   case 1287:
-
-/* Line 1455 of yacc.c  */
 #line 9752 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (8)].item),(yyvsp[(6) - (8)].item),(yyvsp[(7) - (8)].interval),1);
@@ -30118,8 +28148,6 @@ yyreduce:
     break;
 
   case 1288:
-
-/* Line 1455 of yacc.c  */
 #line 9758 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)=new (YYTHD->mem_root) Item_extract( (yyvsp[(3) - (6)].interval), (yyvsp[(5) - (6)].item));
@@ -30129,8 +28157,6 @@ yyreduce:
     break;
 
   case 1289:
-
-/* Line 1455 of yacc.c  */
 #line 9764 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_get_format((yyvsp[(3) - (6)].date_time_type), (yyvsp[(5) - (6)].item));
@@ -30140,8 +28166,6 @@ yyreduce:
     break;
 
   case 1290:
-
-/* Line 1455 of yacc.c  */
 #line 9770 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= (yyvsp[(1) - (1)].item);
@@ -30150,8 +28174,6 @@ yyreduce:
     break;
 
   case 1291:
-
-/* Line 1455 of yacc.c  */
 #line 9775 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item) = new (YYTHD->mem_root) Item_func_locate((yyvsp[(5) - (6)].item),(yyvsp[(3) - (6)].item));
@@ -30161,8 +28183,6 @@ yyreduce:
     break;
 
   case 1292:
-
-/* Line 1455 of yacc.c  */
 #line 9781 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].item),
@@ -30173,8 +28193,6 @@ yyreduce:
     break;
 
   case 1293:
-
-/* Line 1455 of yacc.c  */
 #line 9788 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(3) - (8)].item), (yyvsp[(6) - (8)].item), (yyvsp[(7) - (8)].interval), 1);
@@ -30184,8 +28202,6 @@ yyreduce:
     break;
 
   case 1294:
-
-/* Line 1455 of yacc.c  */
 #line 9794 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item));
@@ -30195,8 +28211,6 @@ yyreduce:
     break;
 
   case 1295:
-
-/* Line 1455 of yacc.c  */
 #line 9800 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -30206,8 +28220,6 @@ yyreduce:
     break;
 
   case 1296:
-
-/* Line 1455 of yacc.c  */
 #line 9806 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item));
@@ -30217,8 +28229,6 @@ yyreduce:
     break;
 
   case 1297:
-
-/* Line 1455 of yacc.c  */
 #line 9812 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_substr((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -30228,8 +28238,6 @@ yyreduce:
     break;
 
   case 1298:
-
-/* Line 1455 of yacc.c  */
 #line 9818 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -30251,8 +28259,6 @@ yyreduce:
     break;
 
   case 1299:
-
-/* Line 1455 of yacc.c  */
 #line 9836 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_date_add_interval((yyvsp[(7) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(3) - (8)].interval_time_st),0);
@@ -30262,8 +28268,6 @@ yyreduce:
     break;
 
   case 1300:
-
-/* Line 1455 of yacc.c  */
 #line 9842 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_timestamp_diff((yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item),(yyvsp[(3) - (8)].interval_time_st));
@@ -30273,8 +28277,6 @@ yyreduce:
     break;
 
   case 1301:
-
-/* Line 1455 of yacc.c  */
 #line 9848 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_curdate_utc();
@@ -30285,8 +28287,6 @@ yyreduce:
     break;
 
   case 1302:
-
-/* Line 1455 of yacc.c  */
 #line 9855 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_curtime_utc((yyvsp[(2) - (2)].ulong_num));
@@ -30297,8 +28297,6 @@ yyreduce:
     break;
 
   case 1303:
-
-/* Line 1455 of yacc.c  */
 #line 9862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_now_utc((yyvsp[(2) - (2)].ulong_num));
@@ -30309,8 +28307,6 @@ yyreduce:
     break;
 
   case 1304:
-
-/* Line 1455 of yacc.c  */
 #line 9877 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_ascii((yyvsp[(3) - (4)].item));
@@ -30320,8 +28316,6 @@ yyreduce:
     break;
 
   case 1305:
-
-/* Line 1455 of yacc.c  */
 #line 9883 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_charset((yyvsp[(3) - (4)].item));
@@ -30331,8 +28325,6 @@ yyreduce:
     break;
 
   case 1306:
-
-/* Line 1455 of yacc.c  */
 #line 9889 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_coalesce(* (yyvsp[(3) - (4)].item_list));
@@ -30342,8 +28334,6 @@ yyreduce:
     break;
 
   case 1307:
-
-/* Line 1455 of yacc.c  */
 #line 9895 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_collation((yyvsp[(3) - (4)].item));
@@ -30353,8 +28343,6 @@ yyreduce:
     break;
 
   case 1308:
-
-/* Line 1455 of yacc.c  */
 #line 9901 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_database();
@@ -30365,8 +28353,6 @@ yyreduce:
     break;
 
   case 1309:
-
-/* Line 1455 of yacc.c  */
 #line 9908 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_if((yyvsp[(3) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item));
@@ -30376,8 +28362,6 @@ yyreduce:
     break;
 
   case 1310:
-
-/* Line 1455 of yacc.c  */
 #line 9914 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_format((yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].item));
@@ -30387,8 +28371,6 @@ yyreduce:
     break;
 
   case 1311:
-
-/* Line 1455 of yacc.c  */
 #line 9920 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_format((yyvsp[(3) - (8)].item), (yyvsp[(5) - (8)].item), (yyvsp[(7) - (8)].item));
@@ -30398,8 +28380,6 @@ yyreduce:
     break;
 
   case 1312:
-
-/* Line 1455 of yacc.c  */
 #line 9926 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_microsecond((yyvsp[(3) - (4)].item));
@@ -30409,8 +28389,6 @@ yyreduce:
     break;
 
   case 1313:
-
-/* Line 1455 of yacc.c  */
 #line 9932 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item) = new (YYTHD->mem_root) Item_func_mod((yyvsp[(3) - (6)].item), (yyvsp[(5) - (6)].item));
@@ -30420,8 +28398,6 @@ yyreduce:
     break;
 
   case 1314:
-
-/* Line 1455 of yacc.c  */
 #line 9938 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)=  new (YYTHD->mem_root) Item_func_old_password((yyvsp[(3) - (4)].item));
@@ -30432,8 +28408,6 @@ yyreduce:
     break;
 
   case 1315:
-
-/* Line 1455 of yacc.c  */
 #line 9945 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -30450,8 +28424,6 @@ yyreduce:
     break;
 
   case 1316:
-
-/* Line 1455 of yacc.c  */
 #line 9958 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item) = new (YYTHD->mem_root) Item_func_quarter((yyvsp[(3) - (4)].item));
@@ -30461,8 +28433,6 @@ yyreduce:
     break;
 
   case 1317:
-
-/* Line 1455 of yacc.c  */
 #line 9964 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_repeat((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -30472,8 +28442,6 @@ yyreduce:
     break;
 
   case 1318:
-
-/* Line 1455 of yacc.c  */
 #line 9970 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_replace((yyvsp[(3) - (8)].item),(yyvsp[(5) - (8)].item),(yyvsp[(7) - (8)].item));
@@ -30483,8 +28451,6 @@ yyreduce:
     break;
 
   case 1319:
-
-/* Line 1455 of yacc.c  */
 #line 9976 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_reverse((yyvsp[(3) - (4)].item));
@@ -30494,8 +28460,6 @@ yyreduce:
     break;
 
   case 1320:
-
-/* Line 1455 of yacc.c  */
 #line 9982 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_row_count();
@@ -30507,8 +28471,6 @@ yyreduce:
     break;
 
   case 1321:
-
-/* Line 1455 of yacc.c  */
 #line 9990 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_round((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item),1);
@@ -30518,8 +28480,6 @@ yyreduce:
     break;
 
   case 1322:
-
-/* Line 1455 of yacc.c  */
 #line 9996 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -30535,8 +28495,6 @@ yyreduce:
     break;
 
   case 1323:
-
-/* Line 1455 of yacc.c  */
 #line 10008 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_week((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item));
@@ -30546,8 +28504,6 @@ yyreduce:
     break;
 
   case 1324:
-
-/* Line 1455 of yacc.c  */
 #line 10014 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_weight_string((yyvsp[(3) - (5)].item), 0, 0, (yyvsp[(4) - (5)].ulong_num));
@@ -30557,8 +28513,6 @@ yyreduce:
     break;
 
   case 1325:
-
-/* Line 1455 of yacc.c  */
 #line 10020 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root)
@@ -30570,8 +28524,6 @@ yyreduce:
     break;
 
   case 1326:
-
-/* Line 1455 of yacc.c  */
 #line 10028 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item= new (YYTHD->mem_root) Item_char_typecast((yyvsp[(3) - (7)].item), (yyvsp[(6) - (7)].ulong_num), &my_charset_bin);
@@ -30585,8 +28537,6 @@ yyreduce:
     break;
 
   case 1327:
-
-/* Line 1455 of yacc.c  */
 #line 10038 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_weight_string((yyvsp[(3) - (10)].item), (yyvsp[(5) - (10)].ulong_num), (yyvsp[(7) - (10)].ulong_num), (yyvsp[(9) - (10)].ulong_num));
@@ -30596,8 +28546,6 @@ yyreduce:
     break;
 
   case 1328:
-
-/* Line 1455 of yacc.c  */
 #line 10044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_SPATIAL
@@ -30614,8 +28562,6 @@ yyreduce:
     break;
 
   case 1329:
-
-/* Line 1455 of yacc.c  */
 #line 10060 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30625,8 +28571,6 @@ yyreduce:
     break;
 
   case 1330:
-
-/* Line 1455 of yacc.c  */
 #line 10066 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30637,8 +28581,6 @@ yyreduce:
     break;
 
   case 1331:
-
-/* Line 1455 of yacc.c  */
 #line 10073 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30649,8 +28591,6 @@ yyreduce:
     break;
 
   case 1332:
-
-/* Line 1455 of yacc.c  */
 #line 10080 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30661,8 +28601,6 @@ yyreduce:
     break;
 
   case 1333:
-
-/* Line 1455 of yacc.c  */
 #line 10087 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30673,8 +28611,6 @@ yyreduce:
     break;
 
   case 1334:
-
-/* Line 1455 of yacc.c  */
 #line 10094 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30685,8 +28621,6 @@ yyreduce:
     break;
 
   case 1335:
-
-/* Line 1455 of yacc.c  */
 #line 10101 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD, Item_func_point((yyvsp[(3) - (6)].item),(yyvsp[(5) - (6)].item)));
@@ -30694,8 +28628,6 @@ yyreduce:
     break;
 
   case 1336:
-
-/* Line 1455 of yacc.c  */
 #line 10105 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= GEOM_NEW(YYTHD,
@@ -30706,8 +28638,6 @@ yyreduce:
     break;
 
   case 1337:
-
-/* Line 1455 of yacc.c  */
 #line 10118 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -30735,8 +28665,6 @@ yyreduce:
     break;
 
   case 1338:
-
-/* Line 1455 of yacc.c  */
 #line 10143 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -30773,8 +28701,6 @@ yyreduce:
     break;
 
   case 1339:
-
-/* Line 1455 of yacc.c  */
 #line 10179 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               LEX_STRING funcname= { C_STRING_WITH_LEN("SUM") };
@@ -30786,8 +28712,6 @@ yyreduce:
     break;
 
   case 1340:
-
-/* Line 1455 of yacc.c  */
 #line 10187 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               // order by clause is not allowed for distinct
@@ -30805,8 +28729,6 @@ yyreduce:
     break;
 
   case 1341:
-
-/* Line 1455 of yacc.c  */
 #line 10201 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               LEX_STRING funcname= { C_STRING_WITH_LEN("AVG") };
@@ -30818,8 +28740,6 @@ yyreduce:
     break;
 
   case 1342:
-
-/* Line 1455 of yacc.c  */
 #line 10209 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               // order by clause is not allowed for distinct
@@ -30837,8 +28757,6 @@ yyreduce:
     break;
 
   case 1343:
-
-/* Line 1455 of yacc.c  */
 #line 10223 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("COUNT(*)") };
@@ -30850,8 +28768,6 @@ yyreduce:
     break;
 
   case 1344:
-
-/* Line 1455 of yacc.c  */
 #line 10231 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("COUNT") };
@@ -30863,8 +28779,6 @@ yyreduce:
     break;
 
   case 1345:
-
-/* Line 1455 of yacc.c  */
 #line 10239 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item* item = NULL;
@@ -30896,8 +28810,6 @@ yyreduce:
     break;
 
   case 1346:
-
-/* Line 1455 of yacc.c  */
 #line 10267 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MIN") };
@@ -30909,8 +28821,6 @@ yyreduce:
     break;
 
   case 1347:
-
-/* Line 1455 of yacc.c  */
 #line 10275 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             // order by clause is not allowed for distinct
@@ -30928,8 +28838,6 @@ yyreduce:
     break;
 
   case 1348:
-
-/* Line 1455 of yacc.c  */
 #line 10289 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("MAX") };
@@ -30941,8 +28849,6 @@ yyreduce:
     break;
 
   case 1349:
-
-/* Line 1455 of yacc.c  */
 #line 10297 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             // order by clause is not allowed for distinct
@@ -30960,8 +28866,6 @@ yyreduce:
     break;
 
   case 1350:
-
-/* Line 1455 of yacc.c  */
 #line 10311 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("VAR_POP") };
@@ -30973,8 +28877,6 @@ yyreduce:
     break;
 
   case 1351:
-
-/* Line 1455 of yacc.c  */
 #line 10319 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("VAR_SAMP") };
@@ -30986,8 +28888,6 @@ yyreduce:
     break;
 
   case 1352:
-
-/* Line 1455 of yacc.c  */
 #line 10327 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("STDDEV_POP") };
@@ -30999,8 +28899,6 @@ yyreduce:
     break;
 
   case 1353:
-
-/* Line 1455 of yacc.c  */
 #line 10335 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("STDDEV_SAMP") };
@@ -31012,8 +28910,6 @@ yyreduce:
     break;
 
   case 1354:
-
-/* Line 1455 of yacc.c  */
 #line 10344 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("NTH_VALUE") };
@@ -31029,8 +28925,6 @@ yyreduce:
     break;
 
   case 1355:
-
-/* Line 1455 of yacc.c  */
 #line 10357 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("PERCENTILE_CONT") };
@@ -31041,8 +28935,6 @@ yyreduce:
     break;
 
   case 1356:
-
-/* Line 1455 of yacc.c  */
 #line 10365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING funcname= { C_STRING_WITH_LEN("PERCENTILE_DISC") };
@@ -31053,57 +28945,41 @@ yyreduce:
     break;
 
   case 1357:
-
-/* Line 1455 of yacc.c  */
 #line 10374 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1358:
-
-/* Line 1455 of yacc.c  */
 #line 10375 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1359:
-
-/* Line 1455 of yacc.c  */
 #line 10376 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 0; }
     break;
 
   case 1360:
-
-/* Line 1455 of yacc.c  */
 #line 10379 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1361:
-
-/* Line 1455 of yacc.c  */
 #line 10380 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = (yyvsp[(1) - (1)].num); }
     break;
 
   case 1362:
-
-/* Line 1455 of yacc.c  */
 #line 10383 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1363:
-
-/* Line 1455 of yacc.c  */
 #line 10384 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 0; }
     break;
 
   case 1364:
-
-/* Line 1455 of yacc.c  */
 #line 10388 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Select->parsing_place == IN_ON)
@@ -31133,29 +29009,21 @@ yyreduce:
     break;
 
   case 1365:
-
-/* Line 1455 of yacc.c  */
 #line 10415 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list) = 0; }
     break;
 
   case 1366:
-
-/* Line 1455 of yacc.c  */
 #line 10416 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list) = (yyvsp[(3) - (3)].item_list); }
     break;
 
   case 1367:
-
-/* Line 1455 of yacc.c  */
 #line 10420 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ordering) = 0; }
     break;
 
   case 1368:
-
-/* Line 1455 of yacc.c  */
 #line 10422 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             IDB_set_error(YYTHD, logging::ERR_WF_WINDOW_WITHOUT_ORDER, NULL, 0);
@@ -31164,8 +29032,6 @@ yyreduce:
     break;
 
   case 1369:
-
-/* Line 1455 of yacc.c  */
 #line 10427 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -31187,8 +29053,6 @@ yyreduce:
     break;
 
   case 1370:
-
-/* Line 1455 of yacc.c  */
 #line 10448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_to_list(YYTHD, *(yyvsp[(1) - (5)].list), (yyvsp[(3) - (5)].item),(bool) (yyvsp[(4) - (5)].num), (uint)(yyvsp[(5) - (5)].num)))
@@ -31198,8 +29062,6 @@ yyreduce:
     break;
 
   case 1371:
-
-/* Line 1455 of yacc.c  */
 #line 10454 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.list) = new SQL_I_List<ORDER>();
@@ -31214,43 +29076,31 @@ yyreduce:
     break;
 
   case 1372:
-
-/* Line 1455 of yacc.c  */
 #line 10467 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 2; }
     break;
 
   case 1373:
-
-/* Line 1455 of yacc.c  */
 #line 10468 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1374:
-
-/* Line 1455 of yacc.c  */
 #line 10469 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1375:
-
-/* Line 1455 of yacc.c  */
 #line 10473 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.frame)= 0; }
     break;
 
   case 1376:
-
-/* Line 1455 of yacc.c  */
 #line 10474 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.frame)= (yyvsp[(1) - (1)].frame); }
     break;
 
   case 1377:
-
-/* Line 1455 of yacc.c  */
 #line 10479 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(3) - (5)].boundary)->bound == UNBOUNDED_FOLLOWING || (yyvsp[(5) - (5)].boundary)->bound == UNBOUNDED_PRECEDING ||
@@ -31269,8 +29119,6 @@ yyreduce:
     break;
 
   case 1378:
-
-/* Line 1455 of yacc.c  */
 #line 10494 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(2) - (2)].boundary)->bound == FOLLOWING || (yyvsp[(2) - (2)].boundary)->bound == UNBOUNDED_FOLLOWING)
@@ -31285,22 +29133,16 @@ yyreduce:
     break;
 
   case 1379:
-
-/* Line 1455 of yacc.c  */
 #line 10506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1380:
-
-/* Line 1455 of yacc.c  */
 #line 10507 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1381:
-
-/* Line 1455 of yacc.c  */
 #line 10512 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.boundary) = new Boundary();
@@ -31309,8 +29151,6 @@ yyreduce:
     break;
 
   case 1382:
-
-/* Line 1455 of yacc.c  */
 #line 10517 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.boundary) = new Boundary();
@@ -31319,8 +29159,6 @@ yyreduce:
     break;
 
   case 1383:
-
-/* Line 1455 of yacc.c  */
 #line 10522 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.boundary) = new Boundary();
@@ -31330,8 +29168,6 @@ yyreduce:
     break;
 
   case 1384:
-
-/* Line 1455 of yacc.c  */
 #line 10528 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             // @todo interval range support
@@ -31342,22 +29178,16 @@ yyreduce:
     break;
 
   case 1385:
-
-/* Line 1455 of yacc.c  */
 #line 10537 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.bound)= PRECEDING; }
     break;
 
   case 1386:
-
-/* Line 1455 of yacc.c  */
 #line 10538 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.bound)= FOLLOWING; }
     break;
 
   case 1387:
-
-/* Line 1455 of yacc.c  */
 #line 10556 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_DLOPEN
@@ -31434,8 +29264,6 @@ yyreduce:
     break;
 
   case 1388:
-
-/* Line 1455 of yacc.c  */
 #line 10629 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -31476,64 +29304,46 @@ yyreduce:
     break;
 
   case 1389:
-
-/* Line 1455 of yacc.c  */
 #line 10669 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= (yyvsp[(1) - (2)].num) | (yyvsp[(2) - (2)].num); }
     break;
 
   case 1390:
-
-/* Line 1455 of yacc.c  */
 #line 10671 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= FT_BOOL; }
     break;
 
   case 1391:
-
-/* Line 1455 of yacc.c  */
 #line 10675 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= FT_NL; }
     break;
 
   case 1392:
-
-/* Line 1455 of yacc.c  */
 #line 10676 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= FT_NL; }
     break;
 
   case 1393:
-
-/* Line 1455 of yacc.c  */
 #line 10680 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0;         }
     break;
 
   case 1394:
-
-/* Line 1455 of yacc.c  */
 #line 10681 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= FT_EXPAND; }
     break;
 
   case 1395:
-
-/* Line 1455 of yacc.c  */
 #line 10685 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= NULL; }
     break;
 
   case 1396:
-
-/* Line 1455 of yacc.c  */
 #line 10686 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= (yyvsp[(1) - (1)].item_list); }
     break;
 
   case 1397:
-
-/* Line 1455 of yacc.c  */
 #line 10691 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_list)= new (YYTHD->mem_root) List<Item>;
@@ -31544,8 +29354,6 @@ yyreduce:
     break;
 
   case 1398:
-
-/* Line 1455 of yacc.c  */
 #line 10698 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(1) - (3)].item_list)->push_back((yyvsp[(3) - (3)].item));
@@ -31554,8 +29362,6 @@ yyreduce:
     break;
 
   case 1399:
-
-/* Line 1455 of yacc.c  */
 #line 10706 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -31582,8 +29388,6 @@ yyreduce:
     break;
 
   case 1400:
-
-/* Line 1455 of yacc.c  */
 #line 10732 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_avg((yyvsp[(3) - (4)].item), FALSE);
@@ -31593,8 +29397,6 @@ yyreduce:
     break;
 
   case 1401:
-
-/* Line 1455 of yacc.c  */
 #line 10738 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_avg((yyvsp[(4) - (5)].item), TRUE);
@@ -31604,8 +29406,6 @@ yyreduce:
     break;
 
   case 1402:
-
-/* Line 1455 of yacc.c  */
 #line 10744 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_and((yyvsp[(3) - (4)].item));
@@ -31615,8 +29415,6 @@ yyreduce:
     break;
 
   case 1403:
-
-/* Line 1455 of yacc.c  */
 #line 10750 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_or((yyvsp[(3) - (4)].item));
@@ -31626,8 +29424,6 @@ yyreduce:
     break;
 
   case 1404:
-
-/* Line 1455 of yacc.c  */
 #line 10756 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_xor((yyvsp[(3) - (4)].item));
@@ -31637,8 +29433,6 @@ yyreduce:
     break;
 
   case 1405:
-
-/* Line 1455 of yacc.c  */
 #line 10762 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *item= new (YYTHD->mem_root) Item_int((int32) 0L,1);
@@ -31651,8 +29445,6 @@ yyreduce:
     break;
 
   case 1406:
-
-/* Line 1455 of yacc.c  */
 #line 10771 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_count((yyvsp[(3) - (4)].item));
@@ -31662,8 +29454,6 @@ yyreduce:
     break;
 
   case 1407:
-
-/* Line 1455 of yacc.c  */
 #line 10792 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_count(* (yyvsp[(4) - (5)].item_list));
@@ -31673,8 +29463,6 @@ yyreduce:
     break;
 
   case 1408:
-
-/* Line 1455 of yacc.c  */
 #line 10798 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_min((yyvsp[(3) - (4)].item));
@@ -31684,8 +29472,6 @@ yyreduce:
     break;
 
   case 1409:
-
-/* Line 1455 of yacc.c  */
 #line 10809 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_min((yyvsp[(4) - (5)].item));
@@ -31695,8 +29481,6 @@ yyreduce:
     break;
 
   case 1410:
-
-/* Line 1455 of yacc.c  */
 #line 10815 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_max((yyvsp[(3) - (4)].item));
@@ -31706,8 +29490,6 @@ yyreduce:
     break;
 
   case 1411:
-
-/* Line 1455 of yacc.c  */
 #line 10821 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_max((yyvsp[(4) - (5)].item));
@@ -31717,8 +29499,6 @@ yyreduce:
     break;
 
   case 1412:
-
-/* Line 1455 of yacc.c  */
 #line 10827 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_std((yyvsp[(3) - (4)].item), 0);
@@ -31728,8 +29508,6 @@ yyreduce:
     break;
 
   case 1413:
-
-/* Line 1455 of yacc.c  */
 #line 10833 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_variance((yyvsp[(3) - (4)].item), 0);
@@ -31739,8 +29517,6 @@ yyreduce:
     break;
 
   case 1414:
-
-/* Line 1455 of yacc.c  */
 #line 10839 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_std((yyvsp[(3) - (4)].item), 1);
@@ -31750,8 +29526,6 @@ yyreduce:
     break;
 
   case 1415:
-
-/* Line 1455 of yacc.c  */
 #line 10845 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_variance((yyvsp[(3) - (4)].item), 1);
@@ -31761,8 +29535,6 @@ yyreduce:
     break;
 
   case 1416:
-
-/* Line 1455 of yacc.c  */
 #line 10851 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_sum((yyvsp[(3) - (4)].item), FALSE);
@@ -31772,8 +29544,6 @@ yyreduce:
     break;
 
   case 1417:
-
-/* Line 1455 of yacc.c  */
 #line 10857 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_sum_sum((yyvsp[(4) - (5)].item), TRUE);
@@ -31783,15 +29553,11 @@ yyreduce:
     break;
 
   case 1418:
-
-/* Line 1455 of yacc.c  */
 #line 10863 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->in_sum_expr++; }
     break;
 
   case 1419:
-
-/* Line 1455 of yacc.c  */
 #line 10867 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -31807,8 +29573,6 @@ yyreduce:
     break;
 
   case 1420:
-
-/* Line 1455 of yacc.c  */
 #line 10883 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (! Lex->parsing_options.allows_variable)
@@ -31820,8 +29584,6 @@ yyreduce:
     break;
 
   case 1421:
-
-/* Line 1455 of yacc.c  */
 #line 10891 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= (yyvsp[(3) - (3)].item);
@@ -31829,8 +29591,6 @@ yyreduce:
     break;
 
   case 1422:
-
-/* Line 1455 of yacc.c  */
 #line 10898 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_func_set_user_var *item;
@@ -31845,8 +29605,6 @@ yyreduce:
     break;
 
   case 1423:
-
-/* Line 1455 of yacc.c  */
 #line 10909 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_func_get_user_var((yyvsp[(1) - (1)].lex_str));
@@ -31858,8 +29616,6 @@ yyreduce:
     break;
 
   case 1424:
-
-/* Line 1455 of yacc.c  */
 #line 10917 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* disallow "SELECT @@global.global.variable" */
@@ -31876,22 +29632,16 @@ yyreduce:
     break;
 
   case 1425:
-
-/* Line 1455 of yacc.c  */
 #line 10932 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 0; }
     break;
 
   case 1426:
-
-/* Line 1455 of yacc.c  */
 #line 10933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) = 1; }
     break;
 
   case 1427:
-
-/* Line 1455 of yacc.c  */
 #line 10938 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.string)= new (YYTHD->mem_root) String(",", 1, &my_charset_latin1);
@@ -31901,15 +29651,11 @@ yyreduce:
     break;
 
   case 1428:
-
-/* Line 1455 of yacc.c  */
 #line 10943 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.string) = (yyvsp[(2) - (2)].string); }
     break;
 
   case 1430:
-
-/* Line 1455 of yacc.c  */
 #line 10949 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -31926,22 +29672,16 @@ yyreduce:
     break;
 
   case 1432:
-
-/* Line 1455 of yacc.c  */
 #line 10966 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_gorder_to_list(YYTHD, (yyvsp[(3) - (4)].item),(bool) (yyvsp[(4) - (4)].num))) MYSQL_YYABORT; }
     break;
 
   case 1433:
-
-/* Line 1455 of yacc.c  */
 #line 10968 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_gorder_to_list(YYTHD, (yyvsp[(1) - (2)].item),(bool) (yyvsp[(2) - (2)].num))) MYSQL_YYABORT; }
     break;
 
   case 1434:
-
-/* Line 1455 of yacc.c  */
 #line 10973 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -31954,8 +29694,6 @@ yyreduce:
     break;
 
   case 1435:
-
-/* Line 1455 of yacc.c  */
 #line 10982 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->in_sum_expr--;
@@ -31964,99 +29702,71 @@ yyreduce:
     break;
 
   case 1436:
-
-/* Line 1455 of yacc.c  */
 #line 10990 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_CHAR; Lex->charset= &my_charset_bin; Lex->dec= 0; }
     break;
 
   case 1437:
-
-/* Line 1455 of yacc.c  */
 #line 10992 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_CHAR; Lex->dec= 0; }
     break;
 
   case 1438:
-
-/* Line 1455 of yacc.c  */
 #line 10994 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_CHAR; Lex->charset= national_charset_info; Lex->dec=0; }
     break;
 
   case 1439:
-
-/* Line 1455 of yacc.c  */
 #line 10996 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_SIGNED_INT; Lex->charset= NULL; Lex->dec=Lex->length= (char*)0; }
     break;
 
   case 1440:
-
-/* Line 1455 of yacc.c  */
 #line 10998 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_SIGNED_INT; Lex->charset= NULL; Lex->dec=Lex->length= (char*)0; }
     break;
 
   case 1441:
-
-/* Line 1455 of yacc.c  */
 #line 11000 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_UNSIGNED_INT; Lex->charset= NULL; Lex->dec=Lex->length= (char*)0; }
     break;
 
   case 1442:
-
-/* Line 1455 of yacc.c  */
 #line 11002 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_UNSIGNED_INT; Lex->charset= NULL; Lex->dec=Lex->length= (char*)0; }
     break;
 
   case 1443:
-
-/* Line 1455 of yacc.c  */
 #line 11004 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)= ITEM_CAST_DATE; Lex->charset= NULL; Lex->dec= Lex->length= (char *) 0; }
     break;
 
   case 1444:
-
-/* Line 1455 of yacc.c  */
 #line 11006 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)= ITEM_CAST_TIME; Lex->charset= NULL; Lex->length= (char *) 0; }
     break;
 
   case 1445:
-
-/* Line 1455 of yacc.c  */
 #line 11008 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)= ITEM_CAST_DATETIME; Lex->charset= NULL; Lex->length= (char *) 0; }
     break;
 
   case 1446:
-
-/* Line 1455 of yacc.c  */
 #line 11010 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.cast_type)=ITEM_CAST_DECIMAL; Lex->charset= NULL; }
     break;
 
   case 1447:
-
-/* Line 1455 of yacc.c  */
 #line 11014 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= NULL; }
     break;
 
   case 1448:
-
-/* Line 1455 of yacc.c  */
 #line 11015 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= (yyvsp[(1) - (1)].item_list);}
     break;
 
   case 1449:
-
-/* Line 1455 of yacc.c  */
 #line 11020 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_list)= new (YYTHD->mem_root) List<Item>;
@@ -32067,8 +29777,6 @@ yyreduce:
     break;
 
   case 1450:
-
-/* Line 1455 of yacc.c  */
 #line 11027 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(1) - (3)].item_list)->push_back((yyvsp[(3) - (3)].item));
@@ -32077,8 +29785,6 @@ yyreduce:
     break;
 
   case 1451:
-
-/* Line 1455 of yacc.c  */
 #line 11035 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32091,8 +29797,6 @@ yyreduce:
     break;
 
   case 1452:
-
-/* Line 1455 of yacc.c  */
 #line 11044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->in_sum_expr--;
@@ -32101,22 +29805,16 @@ yyreduce:
     break;
 
   case 1453:
-
-/* Line 1455 of yacc.c  */
 #line 11051 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= (yyvsp[(1) - (1)].item_list); }
     break;
 
   case 1454:
-
-/* Line 1455 of yacc.c  */
 #line 11052 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item_list)= (yyvsp[(2) - (3)].item_list); }
     break;
 
   case 1455:
-
-/* Line 1455 of yacc.c  */
 #line 11057 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_list)= new (YYTHD->mem_root) List<Item>;
@@ -32127,8 +29825,6 @@ yyreduce:
     break;
 
   case 1456:
-
-/* Line 1455 of yacc.c  */
 #line 11064 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(1) - (3)].item_list)->push_back((yyvsp[(3) - (3)].item));
@@ -32137,36 +29833,26 @@ yyreduce:
     break;
 
   case 1457:
-
-/* Line 1455 of yacc.c  */
 #line 11071 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= NULL; }
     break;
 
   case 1458:
-
-/* Line 1455 of yacc.c  */
 #line 11072 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 1459:
-
-/* Line 1455 of yacc.c  */
 #line 11076 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= NULL; }
     break;
 
   case 1460:
-
-/* Line 1455 of yacc.c  */
 #line 11077 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(2) - (2)].item); }
     break;
 
   case 1461:
-
-/* Line 1455 of yacc.c  */
 #line 11082 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_list)= new List<Item>;
@@ -32178,8 +29864,6 @@ yyreduce:
     break;
 
   case 1462:
-
-/* Line 1455 of yacc.c  */
 #line 11090 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(1) - (5)].item_list)->push_back((yyvsp[(3) - (5)].item));
@@ -32189,15 +29873,11 @@ yyreduce:
     break;
 
   case 1463:
-
-/* Line 1455 of yacc.c  */
 #line 11100 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.table_list)=(yyvsp[(1) - (1)].table_list); }
     break;
 
   case 1464:
-
-/* Line 1455 of yacc.c  */
 #line 11102 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32207,36 +29887,26 @@ yyreduce:
     break;
 
   case 1465:
-
-/* Line 1455 of yacc.c  */
 #line 11110 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { MYSQL_YYABORT_UNLESS((yyval.table_list)=(yyvsp[(1) - (1)].table_list)); }
     break;
 
   case 1466:
-
-/* Line 1455 of yacc.c  */
 #line 11121 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.table_list)=(yyvsp[(1) - (1)].table_list); }
     break;
 
   case 1467:
-
-/* Line 1455 of yacc.c  */
 #line 11122 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.table_list)=(yyvsp[(3) - (4)].table_list); }
     break;
 
   case 1468:
-
-/* Line 1455 of yacc.c  */
 #line 11128 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.table_list)=(yyvsp[(1) - (1)].table_list); }
     break;
 
   case 1469:
-
-/* Line 1455 of yacc.c  */
 #line 11130 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (3)].table_list) && ((yyval.table_list)=(yyvsp[(3) - (3)].table_list)));
@@ -32244,22 +29914,16 @@ yyreduce:
     break;
 
   case 1470:
-
-/* Line 1455 of yacc.c  */
 #line 11150 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { MYSQL_YYABORT_UNLESS((yyvsp[(1) - (3)].table_list) && ((yyval.table_list)=(yyvsp[(3) - (3)].table_list))); }
     break;
 
   case 1471:
-
-/* Line 1455 of yacc.c  */
 #line 11152 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { MYSQL_YYABORT_UNLESS((yyvsp[(1) - (3)].table_list) && ((yyval.table_list)=(yyvsp[(3) - (3)].table_list))); (yyvsp[(3) - (3)].table_list)->straight=1; }
     break;
 
   case 1472:
-
-/* Line 1455 of yacc.c  */
 #line 11155 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (4)].table_list) && (yyvsp[(3) - (4)].table_list));
@@ -32271,8 +29935,6 @@ yyreduce:
     break;
 
   case 1473:
-
-/* Line 1455 of yacc.c  */
 #line 11163 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             add_join_on((yyvsp[(3) - (6)].table_list),(yyvsp[(6) - (6)].item));
@@ -32282,8 +29944,6 @@ yyreduce:
     break;
 
   case 1474:
-
-/* Line 1455 of yacc.c  */
 #line 11170 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (4)].table_list) && (yyvsp[(3) - (4)].table_list));
@@ -32295,8 +29955,6 @@ yyreduce:
     break;
 
   case 1475:
-
-/* Line 1455 of yacc.c  */
 #line 11178 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(3) - (6)].table_list)->straight=1;
@@ -32307,8 +29965,6 @@ yyreduce:
     break;
 
   case 1476:
-
-/* Line 1455 of yacc.c  */
 #line 11186 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (4)].table_list) && (yyvsp[(3) - (4)].table_list));
@@ -32316,15 +29972,11 @@ yyreduce:
     break;
 
   case 1477:
-
-/* Line 1455 of yacc.c  */
 #line 11190 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { add_join_natural((yyvsp[(1) - (8)].table_list),(yyvsp[(3) - (8)].table_list),(yyvsp[(7) - (8)].string_list),Select); (yyval.table_list)=(yyvsp[(3) - (8)].table_list); }
     break;
 
   case 1478:
-
-/* Line 1455 of yacc.c  */
 #line 11192 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (4)].table_list) && ((yyval.table_list)=(yyvsp[(4) - (4)].table_list)));
@@ -32333,8 +29985,6 @@ yyreduce:
     break;
 
   case 1479:
-
-/* Line 1455 of yacc.c  */
 #line 11200 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (6)].table_list) && (yyvsp[(5) - (6)].table_list));
@@ -32346,8 +29996,6 @@ yyreduce:
     break;
 
   case 1480:
-
-/* Line 1455 of yacc.c  */
 #line 11208 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             add_join_on((yyvsp[(5) - (8)].table_list),(yyvsp[(8) - (8)].item));
@@ -32359,8 +30007,6 @@ yyreduce:
     break;
 
   case 1481:
-
-/* Line 1455 of yacc.c  */
 #line 11216 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (5)].table_list) && (yyvsp[(5) - (5)].table_list));
@@ -32368,8 +30014,6 @@ yyreduce:
     break;
 
   case 1482:
-
-/* Line 1455 of yacc.c  */
 #line 11220 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             add_join_natural((yyvsp[(1) - (10)].table_list),(yyvsp[(5) - (10)].table_list),(yyvsp[(9) - (10)].string_list),Select); 
@@ -32379,8 +30023,6 @@ yyreduce:
     break;
 
   case 1483:
-
-/* Line 1455 of yacc.c  */
 #line 11226 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (6)].table_list) && (yyvsp[(6) - (6)].table_list));
@@ -32391,8 +30033,6 @@ yyreduce:
     break;
 
   case 1484:
-
-/* Line 1455 of yacc.c  */
 #line 11236 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (6)].table_list) && (yyvsp[(5) - (6)].table_list));
@@ -32404,8 +30044,6 @@ yyreduce:
     break;
 
   case 1485:
-
-/* Line 1455 of yacc.c  */
 #line 11244 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32418,8 +30056,6 @@ yyreduce:
     break;
 
   case 1486:
-
-/* Line 1455 of yacc.c  */
 #line 11253 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (5)].table_list) && (yyvsp[(5) - (5)].table_list));
@@ -32427,8 +30063,6 @@ yyreduce:
     break;
 
   case 1487:
-
-/* Line 1455 of yacc.c  */
 #line 11257 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32439,8 +30073,6 @@ yyreduce:
     break;
 
   case 1488:
-
-/* Line 1455 of yacc.c  */
 #line 11264 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (6)].table_list) && (yyvsp[(6) - (6)].table_list));
@@ -32452,36 +30084,26 @@ yyreduce:
     break;
 
   case 1489:
-
-/* Line 1455 of yacc.c  */
 #line 11274 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1490:
-
-/* Line 1455 of yacc.c  */
 #line 11275 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1491:
-
-/* Line 1455 of yacc.c  */
 #line 11276 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1492:
-
-/* Line 1455 of yacc.c  */
 #line 11284 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.string_list)= 0;}
     break;
 
   case 1494:
-
-/* Line 1455 of yacc.c  */
 #line 11290 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.string_list)= (yyvsp[(3) - (5)].string_list);
@@ -32489,8 +30111,6 @@ yyreduce:
     break;
 
   case 1495:
-
-/* Line 1455 of yacc.c  */
 #line 11304 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -32499,8 +30119,6 @@ yyreduce:
     break;
 
   case 1496:
-
-/* Line 1455 of yacc.c  */
 #line 11309 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.table_list)= Select->add_table_to_list(YYTHD, (yyvsp[(2) - (5)].table), (yyvsp[(4) - (5)].lex_str_ptr),
@@ -32515,8 +30133,6 @@ yyreduce:
     break;
 
   case 1497:
-
-/* Line 1455 of yacc.c  */
 #line 11320 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32542,8 +30158,6 @@ yyreduce:
     break;
 
   case 1498:
-
-/* Line 1455 of yacc.c  */
 #line 11360 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* Use $2 instead of Lex->current_select as derived table will
@@ -32597,8 +30211,6 @@ yyreduce:
     break;
 
   case 1499:
-
-/* Line 1455 of yacc.c  */
 #line 11433 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(1) - (2)].table_list) && (yyvsp[(2) - (2)].is_not_empty))
@@ -32610,8 +30222,6 @@ yyreduce:
     break;
 
   case 1500:
-
-/* Line 1455 of yacc.c  */
 #line 11443 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_select_to_union_list(Lex, (bool)(yyvsp[(3) - (3)].num), FALSE))
@@ -32620,8 +30230,6 @@ yyreduce:
     break;
 
   case 1501:
-
-/* Line 1455 of yacc.c  */
 #line 11448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -32633,8 +30241,6 @@ yyreduce:
     break;
 
   case 1502:
-
-/* Line 1455 of yacc.c  */
 #line 11456 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(1) - (7)].table_list) != NULL)
@@ -32646,8 +30252,6 @@ yyreduce:
     break;
 
   case 1503:
-
-/* Line 1455 of yacc.c  */
 #line 11468 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32667,8 +30271,6 @@ yyreduce:
     break;
 
   case 1504:
-
-/* Line 1455 of yacc.c  */
 #line 11487 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32680,8 +30282,6 @@ yyreduce:
     break;
 
   case 1505:
-
-/* Line 1455 of yacc.c  */
 #line 11495 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -32689,8 +30289,6 @@ yyreduce:
     break;
 
   case 1507:
-
-/* Line 1455 of yacc.c  */
 #line 11504 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32700,8 +30298,6 @@ yyreduce:
     break;
 
   case 1508:
-
-/* Line 1455 of yacc.c  */
 #line 11510 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32719,8 +30315,6 @@ yyreduce:
     break;
 
   case 1509:
-
-/* Line 1455 of yacc.c  */
 #line 11526 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32741,8 +30335,6 @@ yyreduce:
     break;
 
   case 1510:
-
-/* Line 1455 of yacc.c  */
 #line 11543 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -32750,15 +30342,11 @@ yyreduce:
     break;
 
   case 1512:
-
-/* Line 1455 of yacc.c  */
 #line 11550 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.select_lex)= Select; }
     break;
 
   case 1513:
-
-/* Line 1455 of yacc.c  */
 #line 11555 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -32785,22 +30373,16 @@ yyreduce:
     break;
 
   case 1514:
-
-/* Line 1455 of yacc.c  */
 #line 11580 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1515:
-
-/* Line 1455 of yacc.c  */
 #line 11581 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1516:
-
-/* Line 1455 of yacc.c  */
 #line 11586 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.num)= old_mode ?  INDEX_HINT_MASK_JOIN : INDEX_HINT_MASK_ALL; 
@@ -32808,43 +30390,31 @@ yyreduce:
     break;
 
   case 1517:
-
-/* Line 1455 of yacc.c  */
 #line 11589 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= INDEX_HINT_MASK_JOIN;  }
     break;
 
   case 1518:
-
-/* Line 1455 of yacc.c  */
 #line 11590 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= INDEX_HINT_MASK_ORDER; }
     break;
 
   case 1519:
-
-/* Line 1455 of yacc.c  */
 #line 11591 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= INDEX_HINT_MASK_GROUP; }
     break;
 
   case 1520:
-
-/* Line 1455 of yacc.c  */
 #line 11595 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.index_hint)= INDEX_HINT_FORCE; }
     break;
 
   case 1521:
-
-/* Line 1455 of yacc.c  */
 #line 11596 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.index_hint)= INDEX_HINT_IGNORE; }
     break;
 
   case 1522:
-
-/* Line 1455 of yacc.c  */
 #line 11601 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->set_index_hint_type((yyvsp[(1) - (3)].index_hint), (yyvsp[(3) - (3)].num));
@@ -32852,8 +30422,6 @@ yyreduce:
     break;
 
   case 1524:
-
-/* Line 1455 of yacc.c  */
 #line 11606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->set_index_hint_type(INDEX_HINT_USE, (yyvsp[(3) - (3)].num));
@@ -32861,50 +30429,36 @@ yyreduce:
     break;
 
   case 1529:
-
-/* Line 1455 of yacc.c  */
 #line 11619 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->alloc_index_hints(YYTHD); }
     break;
 
   case 1531:
-
-/* Line 1455 of yacc.c  */
 #line 11623 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {  Select->clear_index_hints(); }
     break;
 
   case 1533:
-
-/* Line 1455 of yacc.c  */
 #line 11628 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->add_index_hint(YYTHD, NULL, 0); }
     break;
 
   case 1534:
-
-/* Line 1455 of yacc.c  */
 #line 11629 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1535:
-
-/* Line 1455 of yacc.c  */
 #line 11634 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->add_index_hint(YYTHD, (yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length); }
     break;
 
   case 1536:
-
-/* Line 1455 of yacc.c  */
 #line 11636 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->add_index_hint(YYTHD, (char *)"PRIMARY", 7); }
     break;
 
   case 1539:
-
-/* Line 1455 of yacc.c  */
 #line 11646 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.string_list)= new List<String>))
@@ -32919,8 +30473,6 @@ yyreduce:
     break;
 
   case 1540:
-
-/* Line 1455 of yacc.c  */
 #line 11657 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             String *s= new (YYTHD->mem_root) String((const char *) (yyvsp[(3) - (3)].lex_str).str,
@@ -32934,190 +30486,136 @@ yyreduce:
     break;
 
   case 1541:
-
-/* Line 1455 of yacc.c  */
 #line 11669 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1542:
-
-/* Line 1455 of yacc.c  */
 #line 11670 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_DAY_HOUR; }
     break;
 
   case 1543:
-
-/* Line 1455 of yacc.c  */
 #line 11671 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_DAY_MICROSECOND; }
     break;
 
   case 1544:
-
-/* Line 1455 of yacc.c  */
 #line 11672 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_DAY_MINUTE; }
     break;
 
   case 1545:
-
-/* Line 1455 of yacc.c  */
 #line 11673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_DAY_SECOND; }
     break;
 
   case 1546:
-
-/* Line 1455 of yacc.c  */
 #line 11674 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_HOUR_MICROSECOND; }
     break;
 
   case 1547:
-
-/* Line 1455 of yacc.c  */
 #line 11675 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_HOUR_MINUTE; }
     break;
 
   case 1548:
-
-/* Line 1455 of yacc.c  */
 #line 11676 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_HOUR_SECOND; }
     break;
 
   case 1549:
-
-/* Line 1455 of yacc.c  */
 #line 11677 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_MINUTE_MICROSECOND; }
     break;
 
   case 1550:
-
-/* Line 1455 of yacc.c  */
 #line 11678 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_MINUTE_SECOND; }
     break;
 
   case 1551:
-
-/* Line 1455 of yacc.c  */
 #line 11679 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_SECOND_MICROSECOND; }
     break;
 
   case 1552:
-
-/* Line 1455 of yacc.c  */
 #line 11680 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval)=INTERVAL_YEAR_MONTH; }
     break;
 
   case 1553:
-
-/* Line 1455 of yacc.c  */
 #line 11684 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_DAY; }
     break;
 
   case 1554:
-
-/* Line 1455 of yacc.c  */
 #line 11685 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_WEEK; }
     break;
 
   case 1555:
-
-/* Line 1455 of yacc.c  */
 #line 11686 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_HOUR; }
     break;
 
   case 1556:
-
-/* Line 1455 of yacc.c  */
 #line 11687 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_MINUTE; }
     break;
 
   case 1557:
-
-/* Line 1455 of yacc.c  */
 #line 11688 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_MONTH; }
     break;
 
   case 1558:
-
-/* Line 1455 of yacc.c  */
 #line 11689 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_QUARTER; }
     break;
 
   case 1559:
-
-/* Line 1455 of yacc.c  */
 #line 11690 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_SECOND; }
     break;
 
   case 1560:
-
-/* Line 1455 of yacc.c  */
 #line 11691 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_MICROSECOND; }
     break;
 
   case 1561:
-
-/* Line 1455 of yacc.c  */
 #line 11692 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.interval_time_st)=INTERVAL_YEAR; }
     break;
 
   case 1562:
-
-/* Line 1455 of yacc.c  */
 #line 11696 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.date_time_type)= MYSQL_TIMESTAMP_DATE; }
     break;
 
   case 1563:
-
-/* Line 1455 of yacc.c  */
 #line 11697 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.date_time_type)= MYSQL_TIMESTAMP_TIME; }
     break;
 
   case 1564:
-
-/* Line 1455 of yacc.c  */
 #line 11698 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.date_time_type)= MYSQL_TIMESTAMP_DATETIME; }
     break;
 
   case 1565:
-
-/* Line 1455 of yacc.c  */
 #line 11699 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.date_time_type)= MYSQL_TIMESTAMP_DATETIME; }
     break;
 
   case 1569:
-
-/* Line 1455 of yacc.c  */
 #line 11709 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str_ptr)=0; }
     break;
 
   case 1570:
-
-/* Line 1455 of yacc.c  */
 #line 11711 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.lex_str_ptr)= (LEX_STRING*) sql_memdup(&(yyvsp[(2) - (2)].lex_str),sizeof(LEX_STRING));
@@ -33127,15 +30625,11 @@ yyreduce:
     break;
 
   case 1573:
-
-/* Line 1455 of yacc.c  */
 #line 11724 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->where= 0; }
     break;
 
   case 1574:
-
-/* Line 1455 of yacc.c  */
 #line 11726 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= IN_WHERE;
@@ -33143,8 +30637,6 @@ yyreduce:
     break;
 
   case 1575:
-
-/* Line 1455 of yacc.c  */
 #line 11730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *select= Select;
@@ -33156,8 +30648,6 @@ yyreduce:
     break;
 
   case 1577:
-
-/* Line 1455 of yacc.c  */
 #line 11742 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= IN_HAVING;
@@ -33165,8 +30655,6 @@ yyreduce:
     break;
 
   case 1578:
-
-/* Line 1455 of yacc.c  */
 #line 11746 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -33178,8 +30666,6 @@ yyreduce:
     break;
 
   case 1579:
-
-/* Line 1455 of yacc.c  */
 #line 11757 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->escape_used= TRUE;
@@ -33188,8 +30674,6 @@ yyreduce:
     break;
 
   case 1580:
-
-/* Line 1455 of yacc.c  */
 #line 11762 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -33203,8 +30687,6 @@ yyreduce:
     break;
 
   case 1582:
-
-/* Line 1455 of yacc.c  */
 #line 11780 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= IN_GROUP_BY;
@@ -33212,29 +30694,21 @@ yyreduce:
     break;
 
   case 1584:
-
-/* Line 1455 of yacc.c  */
 #line 11788 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_group_to_list(YYTHD, (yyvsp[(3) - (4)].item),(bool) (yyvsp[(4) - (4)].num))) MYSQL_YYABORT; }
     break;
 
   case 1585:
-
-/* Line 1455 of yacc.c  */
 #line 11790 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_group_to_list(YYTHD, (yyvsp[(1) - (2)].item),(bool) (yyvsp[(2) - (2)].num))) MYSQL_YYABORT; }
     break;
 
   case 1586:
-
-/* Line 1455 of yacc.c  */
 #line 11794 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1587:
-
-/* Line 1455 of yacc.c  */
 #line 11796 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -33258,8 +30732,6 @@ yyreduce:
     break;
 
   case 1588:
-
-/* Line 1455 of yacc.c  */
 #line 11816 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -33287,8 +30759,6 @@ yyreduce:
     break;
 
   case 1592:
-
-/* Line 1455 of yacc.c  */
 #line 11856 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -33299,8 +30769,6 @@ yyreduce:
     break;
 
   case 1595:
-
-/* Line 1455 of yacc.c  */
 #line 11875 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33335,43 +30803,31 @@ yyreduce:
     break;
 
   case 1597:
-
-/* Line 1455 of yacc.c  */
 #line 11910 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_order_to_list(YYTHD, (yyvsp[(3) - (4)].item),(bool) (yyvsp[(4) - (4)].num))) MYSQL_YYABORT; }
     break;
 
   case 1598:
-
-/* Line 1455 of yacc.c  */
 #line 11912 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { if (add_order_to_list(YYTHD, (yyvsp[(1) - (2)].item),(bool) (yyvsp[(2) - (2)].num))) MYSQL_YYABORT; }
     break;
 
   case 1599:
-
-/* Line 1455 of yacc.c  */
 #line 11916 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) =  1; }
     break;
 
   case 1600:
-
-/* Line 1455 of yacc.c  */
 #line 11917 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) =1; }
     break;
 
   case 1601:
-
-/* Line 1455 of yacc.c  */
 #line 11918 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num) =0; }
     break;
 
   case 1602:
-
-/* Line 1455 of yacc.c  */
 #line 11923 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -33382,29 +30838,21 @@ yyreduce:
     break;
 
   case 1603:
-
-/* Line 1455 of yacc.c  */
 #line 11929 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1604:
-
-/* Line 1455 of yacc.c  */
 #line 11933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1605:
-
-/* Line 1455 of yacc.c  */
 #line 11934 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1606:
-
-/* Line 1455 of yacc.c  */
 #line 11939 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_LIMIT);
@@ -33412,8 +30860,6 @@ yyreduce:
     break;
 
   case 1607:
-
-/* Line 1455 of yacc.c  */
 #line 11946 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -33424,8 +30870,6 @@ yyreduce:
     break;
 
   case 1608:
-
-/* Line 1455 of yacc.c  */
 #line 11953 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -33436,8 +30880,6 @@ yyreduce:
     break;
 
   case 1609:
-
-/* Line 1455 of yacc.c  */
 #line 11960 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -33448,8 +30890,6 @@ yyreduce:
     break;
 
   case 1610:
-
-/* Line 1455 of yacc.c  */
 #line 11970 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           THD *thd= YYTHD;
@@ -33480,8 +30920,6 @@ yyreduce:
     break;
 
   case 1611:
-
-/* Line 1455 of yacc.c  */
 #line 11997 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           ((Item_param *) (yyvsp[(1) - (1)].item))->limit_clause_param= TRUE;
@@ -33489,8 +30927,6 @@ yyreduce:
     break;
 
   case 1612:
-
-/* Line 1455 of yacc.c  */
 #line 12001 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_uint((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -33500,8 +30936,6 @@ yyreduce:
     break;
 
   case 1613:
-
-/* Line 1455 of yacc.c  */
 #line 12007 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_uint((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -33511,8 +30945,6 @@ yyreduce:
     break;
 
   case 1614:
-
-/* Line 1455 of yacc.c  */
 #line 12013 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_uint((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -33522,8 +30954,6 @@ yyreduce:
     break;
 
   case 1615:
-
-/* Line 1455 of yacc.c  */
 #line 12022 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33532,8 +30962,6 @@ yyreduce:
     break;
 
   case 1616:
-
-/* Line 1455 of yacc.c  */
 #line 12027 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -33544,155 +30972,111 @@ yyreduce:
     break;
 
   case 1617:
-
-/* Line 1455 of yacc.c  */
 #line 12036 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1618:
-
-/* Line 1455 of yacc.c  */
 #line 12037 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (ulong) strtol((yyvsp[(1) - (1)].lex_str).str, (char**) 0, 16); }
     break;
 
   case 1619:
-
-/* Line 1455 of yacc.c  */
 #line 12038 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1620:
-
-/* Line 1455 of yacc.c  */
 #line 12039 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1621:
-
-/* Line 1455 of yacc.c  */
 #line 12040 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1622:
-
-/* Line 1455 of yacc.c  */
 #line 12041 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1623:
-
-/* Line 1455 of yacc.c  */
 #line 12045 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1624:
-
-/* Line 1455 of yacc.c  */
 #line 12046 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ulong_num)= (ulong) strtol((yyvsp[(1) - (1)].lex_str).str, (char**) 0, 16); }
     break;
 
   case 1625:
-
-/* Line 1455 of yacc.c  */
 #line 12047 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1626:
-
-/* Line 1455 of yacc.c  */
 #line 12048 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulong_num)= (ulong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1627:
-
-/* Line 1455 of yacc.c  */
 #line 12049 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { MYSQL_YYABORT; }
     break;
 
   case 1628:
-
-/* Line 1455 of yacc.c  */
 #line 12053 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1629:
-
-/* Line 1455 of yacc.c  */
 #line 12054 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1630:
-
-/* Line 1455 of yacc.c  */
 #line 12055 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1631:
-
-/* Line 1455 of yacc.c  */
 #line 12056 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1632:
-
-/* Line 1455 of yacc.c  */
 #line 12057 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1633:
-
-/* Line 1455 of yacc.c  */
 #line 12061 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1634:
-
-/* Line 1455 of yacc.c  */
 #line 12062 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1635:
-
-/* Line 1455 of yacc.c  */
 #line 12063 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { int error; (yyval.ulonglong_number)= (ulonglong) my_strtoll10((yyvsp[(1) - (1)].lex_str).str, (char**) 0, &error); }
     break;
 
   case 1636:
-
-/* Line 1455 of yacc.c  */
 #line 12064 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { MYSQL_YYABORT; }
     break;
 
   case 1637:
-
-/* Line 1455 of yacc.c  */
 #line 12069 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { my_parse_error(ER(ER_ONLY_INTEGERS_ALLOWED)); }
     break;
 
   case 1641:
-
-/* Line 1455 of yacc.c  */
 #line 12080 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -33726,15 +31110,11 @@ yyreduce:
     break;
 
   case 1643:
-
-/* Line 1455 of yacc.c  */
 #line 12113 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1644:
-
-/* Line 1455 of yacc.c  */
 #line 12115 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->proc_analyse->max_tree_elements= (yyvsp[(1) - (1)].ulonglong_number);
@@ -33742,8 +31122,6 @@ yyreduce:
     break;
 
   case 1645:
-
-/* Line 1455 of yacc.c  */
 #line 12119 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->proc_analyse->max_tree_elements= (yyvsp[(1) - (3)].ulonglong_number);
@@ -33752,8 +31130,6 @@ yyreduce:
     break;
 
   case 1646:
-
-/* Line 1455 of yacc.c  */
 #line 12127 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             int error;
@@ -33767,8 +31143,6 @@ yyreduce:
     break;
 
   case 1647:
-
-/* Line 1455 of yacc.c  */
 #line 12139 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33778,22 +31152,16 @@ yyreduce:
     break;
 
   case 1648:
-
-/* Line 1455 of yacc.c  */
 #line 12145 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1650:
-
-/* Line 1455 of yacc.c  */
 #line 12150 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1651:
-
-/* Line 1455 of yacc.c  */
 #line 12155 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33816,8 +31184,6 @@ yyreduce:
     break;
 
   case 1652:
-
-/* Line 1455 of yacc.c  */
 #line 12174 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -33857,8 +31223,6 @@ yyreduce:
     break;
 
   case 1653:
-
-/* Line 1455 of yacc.c  */
 #line 12213 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (! Lex->parsing_options.allows_select_into)
@@ -33870,8 +31234,6 @@ yyreduce:
     break;
 
   case 1655:
-
-/* Line 1455 of yacc.c  */
 #line 12225 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -33883,15 +31245,11 @@ yyreduce:
     break;
 
   case 1656:
-
-/* Line 1455 of yacc.c  */
 #line 12233 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->exchange->cs= (yyvsp[(4) - (4)].charset); }
     break;
 
   case 1658:
-
-/* Line 1455 of yacc.c  */
 #line 12236 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33907,8 +31265,6 @@ yyreduce:
     break;
 
   case 1659:
-
-/* Line 1455 of yacc.c  */
 #line 12248 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->uncacheable(UNCACHEABLE_SIDEEFFECT);
@@ -33916,8 +31272,6 @@ yyreduce:
     break;
 
   case 1660:
-
-/* Line 1455 of yacc.c  */
 #line 12259 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33927,8 +31281,6 @@ yyreduce:
     break;
 
   case 1661:
-
-/* Line 1455 of yacc.c  */
 #line 12265 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->insert_list= (yyvsp[(3) - (3)].item_list);
@@ -33936,8 +31288,6 @@ yyreduce:
     break;
 
   case 1662:
-
-/* Line 1455 of yacc.c  */
 #line 12276 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33950,22 +31300,16 @@ yyreduce:
     break;
 
   case 1663:
-
-/* Line 1455 of yacc.c  */
 #line 12285 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1664:
-
-/* Line 1455 of yacc.c  */
 #line 12286 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1665:
-
-/* Line 1455 of yacc.c  */
 #line 12287 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -33985,15 +31329,11 @@ yyreduce:
     break;
 
   case 1666:
-
-/* Line 1455 of yacc.c  */
 #line 12302 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1667:
-
-/* Line 1455 of yacc.c  */
 #line 12304 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34004,8 +31344,6 @@ yyreduce:
     break;
 
   case 1668:
-
-/* Line 1455 of yacc.c  */
 #line 12311 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -34030,8 +31368,6 @@ yyreduce:
     break;
 
   case 1669:
-
-/* Line 1455 of yacc.c  */
 #line 12332 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -34056,8 +31392,6 @@ yyreduce:
     break;
 
   case 1670:
-
-/* Line 1455 of yacc.c  */
 #line 12353 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34073,8 +31407,6 @@ yyreduce:
     break;
 
   case 1671:
-
-/* Line 1455 of yacc.c  */
 #line 12365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_DROP_USER;
@@ -34082,8 +31414,6 @@ yyreduce:
     break;
 
   case 1672:
-
-/* Line 1455 of yacc.c  */
 #line 12369 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34095,15 +31425,11 @@ yyreduce:
     break;
 
   case 1673:
-
-/* Line 1455 of yacc.c  */
 #line 12377 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1674:
-
-/* Line 1455 of yacc.c  */
 #line 12379 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->drop_if_exists= (yyvsp[(3) - (4)].num);
@@ -34113,8 +31439,6 @@ yyreduce:
     break;
 
   case 1675:
-
-/* Line 1455 of yacc.c  */
 #line 12385 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34125,8 +31449,6 @@ yyreduce:
     break;
 
   case 1676:
-
-/* Line 1455 of yacc.c  */
 #line 12392 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34135,8 +31457,6 @@ yyreduce:
     break;
 
   case 1677:
-
-/* Line 1455 of yacc.c  */
 #line 12397 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34145,8 +31465,6 @@ yyreduce:
     break;
 
   case 1678:
-
-/* Line 1455 of yacc.c  */
 #line 12402 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_DROP_SERVER;
@@ -34157,8 +31475,6 @@ yyreduce:
     break;
 
   case 1681:
-
-/* Line 1455 of yacc.c  */
 #line 12417 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (1)].table), NULL,
@@ -34170,8 +31486,6 @@ yyreduce:
     break;
 
   case 1682:
-
-/* Line 1455 of yacc.c  */
 #line 12428 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (2)].table), NULL,
@@ -34185,8 +31499,6 @@ yyreduce:
     break;
 
   case 1685:
-
-/* Line 1455 of yacc.c  */
 #line 12446 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(1) - (1)].table), NULL,
@@ -34198,36 +31510,26 @@ yyreduce:
     break;
 
   case 1686:
-
-/* Line 1455 of yacc.c  */
 #line 12456 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1687:
-
-/* Line 1455 of yacc.c  */
 #line 12457 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1688:
-
-/* Line 1455 of yacc.c  */
 #line 12461 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 1689:
-
-/* Line 1455 of yacc.c  */
 #line 12462 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 1697:
-
-/* Line 1455 of yacc.c  */
 #line 12485 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34238,8 +31540,6 @@ yyreduce:
     break;
 
   case 1698:
-
-/* Line 1455 of yacc.c  */
 #line 12493 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->set_lock_for_tables((yyvsp[(3) - (5)].lock_type));
@@ -34248,15 +31548,11 @@ yyreduce:
     break;
 
   case 1699:
-
-/* Line 1455 of yacc.c  */
 #line 12498 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1700:
-
-/* Line 1455 of yacc.c  */
 #line 12503 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34267,8 +31563,6 @@ yyreduce:
     break;
 
   case 1701:
-
-/* Line 1455 of yacc.c  */
 #line 12510 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->set_lock_for_tables((yyvsp[(3) - (4)].lock_type));
@@ -34277,15 +31571,11 @@ yyreduce:
     break;
 
   case 1702:
-
-/* Line 1455 of yacc.c  */
 #line 12515 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1703:
-
-/* Line 1455 of yacc.c  */
 #line 12520 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_QUERY_CACHE
@@ -34302,15 +31592,11 @@ yyreduce:
     break;
 
   case 1704:
-
-/* Line 1455 of yacc.c  */
 #line 12532 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE_LOW_PRIORITY; }
     break;
 
   case 1705:
-
-/* Line 1455 of yacc.c  */
 #line 12534 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           Lex->keyword_delayed_begin_offset= (uint)(YYLIP->get_tok_start() -
@@ -34327,22 +31613,16 @@ yyreduce:
     break;
 
   case 1706:
-
-/* Line 1455 of yacc.c  */
 #line 12546 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE; }
     break;
 
   case 1707:
-
-/* Line 1455 of yacc.c  */
 #line 12550 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= (yyvsp[(1) - (1)].lock_type); }
     break;
 
   case 1708:
-
-/* Line 1455 of yacc.c  */
 #line 12552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           Lex->keyword_delayed_begin_offset= (uint)(YYLIP->get_tok_start() -
@@ -34359,22 +31639,16 @@ yyreduce:
     break;
 
   case 1709:
-
-/* Line 1455 of yacc.c  */
 #line 12567 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1710:
-
-/* Line 1455 of yacc.c  */
 #line 12568 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1711:
-
-/* Line 1455 of yacc.c  */
 #line 12573 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34385,29 +31659,21 @@ yyreduce:
     break;
 
   case 1712:
-
-/* Line 1455 of yacc.c  */
 #line 12581 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1713:
-
-/* Line 1455 of yacc.c  */
 #line 12582 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1714:
-
-/* Line 1455 of yacc.c  */
 #line 12583 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1715:
-
-/* Line 1455 of yacc.c  */
 #line 12585 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34418,64 +31684,46 @@ yyreduce:
     break;
 
   case 1717:
-
-/* Line 1455 of yacc.c  */
 #line 12595 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->field_list.push_back((yyvsp[(3) - (3)].item)); }
     break;
 
   case 1718:
-
-/* Line 1455 of yacc.c  */
 #line 12596 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->field_list.push_back((yyvsp[(1) - (1)].item)); }
     break;
 
   case 1719:
-
-/* Line 1455 of yacc.c  */
 #line 12600 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1720:
-
-/* Line 1455 of yacc.c  */
 #line 12601 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1721:
-
-/* Line 1455 of yacc.c  */
 #line 12603 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->set_braces(0);}
     break;
 
   case 1722:
-
-/* Line 1455 of yacc.c  */
 #line 12604 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1723:
-
-/* Line 1455 of yacc.c  */
 #line 12606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->set_braces(1);}
     break;
 
   case 1724:
-
-/* Line 1455 of yacc.c  */
 #line 12607 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1729:
-
-/* Line 1455 of yacc.c  */
 #line 12622 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34486,36 +31734,26 @@ yyreduce:
     break;
 
   case 1730:
-
-/* Line 1455 of yacc.c  */
 #line 12631 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1731:
-
-/* Line 1455 of yacc.c  */
 #line 12632 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1732:
-
-/* Line 1455 of yacc.c  */
 #line 12636 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1733:
-
-/* Line 1455 of yacc.c  */
 #line 12637 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1734:
-
-/* Line 1455 of yacc.c  */
 #line 12642 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               if (!(Lex->insert_list = new List_item))
@@ -34524,8 +31762,6 @@ yyreduce:
     break;
 
   case 1735:
-
-/* Line 1455 of yacc.c  */
 #line 12647 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34535,15 +31771,11 @@ yyreduce:
     break;
 
   case 1736:
-
-/* Line 1455 of yacc.c  */
 #line 12655 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1738:
-
-/* Line 1455 of yacc.c  */
 #line 12661 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->insert_list->push_back((yyvsp[(3) - (3)].item)))
@@ -34552,8 +31784,6 @@ yyreduce:
     break;
 
   case 1739:
-
-/* Line 1455 of yacc.c  */
 #line 12666 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->insert_list->push_back((yyvsp[(1) - (1)].item)))
@@ -34562,15 +31792,11 @@ yyreduce:
     break;
 
   case 1740:
-
-/* Line 1455 of yacc.c  */
 #line 12673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item);}
     break;
 
   case 1741:
-
-/* Line 1455 of yacc.c  */
 #line 12675 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_default_value(Lex->current_context());
@@ -34580,15 +31806,11 @@ yyreduce:
     break;
 
   case 1743:
-
-/* Line 1455 of yacc.c  */
 #line 12684 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->duplicates= DUP_UPDATE; }
     break;
 
   case 1745:
-
-/* Line 1455 of yacc.c  */
 #line 12692 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34599,8 +31821,6 @@ yyreduce:
     break;
 
   case 1746:
-
-/* Line 1455 of yacc.c  */
 #line 12700 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34623,15 +31843,11 @@ yyreduce:
     break;
 
   case 1747:
-
-/* Line 1455 of yacc.c  */
 #line 12718 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1750:
-
-/* Line 1455 of yacc.c  */
 #line 12728 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_item_to_list(YYTHD, (yyvsp[(1) - (3)].item)) || add_value_to_list(YYTHD, (yyvsp[(3) - (3)].item)))
@@ -34640,8 +31856,6 @@ yyreduce:
     break;
 
   case 1753:
-
-/* Line 1455 of yacc.c  */
 #line 12741 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
           LEX *lex= Lex;
@@ -34652,22 +31866,16 @@ yyreduce:
     break;
 
   case 1754:
-
-/* Line 1455 of yacc.c  */
 #line 12750 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE_DEFAULT; }
     break;
 
   case 1755:
-
-/* Line 1455 of yacc.c  */
 #line 12751 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE_LOW_PRIORITY; }
     break;
 
   case 1756:
-
-/* Line 1455 of yacc.c  */
 #line 12758 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -34682,8 +31890,6 @@ yyreduce:
     break;
 
   case 1758:
-
-/* Line 1455 of yacc.c  */
 #line 12773 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!Select->add_table_to_list(YYTHD, (yyvsp[(2) - (3)].table), NULL, TL_OPTION_UPDATING,
@@ -34698,15 +31904,11 @@ yyreduce:
     break;
 
   case 1759:
-
-/* Line 1455 of yacc.c  */
 #line 12784 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1760:
-
-/* Line 1455 of yacc.c  */
 #line 12786 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             mysql_init_multi_delete(Lex);
@@ -34716,8 +31918,6 @@ yyreduce:
     break;
 
   case 1761:
-
-/* Line 1455 of yacc.c  */
 #line 12792 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
@@ -34726,8 +31926,6 @@ yyreduce:
     break;
 
   case 1762:
-
-/* Line 1455 of yacc.c  */
 #line 12797 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             mysql_init_multi_delete(Lex);
@@ -34737,8 +31935,6 @@ yyreduce:
     break;
 
   case 1763:
-
-/* Line 1455 of yacc.c  */
 #line 12803 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (multi_delete_set_locks_and_link_aux_tables(Lex))
@@ -34747,8 +31943,6 @@ yyreduce:
     break;
 
   case 1766:
-
-/* Line 1455 of yacc.c  */
 #line 12816 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Table_ident *ti= new Table_ident((yyvsp[(1) - (2)].lex_str));
@@ -34765,8 +31959,6 @@ yyreduce:
     break;
 
   case 1767:
-
-/* Line 1455 of yacc.c  */
 #line 12829 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Table_ident *ti= new Table_ident(YYTHD, (yyvsp[(1) - (4)].lex_str), (yyvsp[(3) - (4)].lex_str), 0);
@@ -34783,57 +31975,41 @@ yyreduce:
     break;
 
   case 1768:
-
-/* Line 1455 of yacc.c  */
 #line 12844 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1769:
-
-/* Line 1455 of yacc.c  */
 #line 12845 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1770:
-
-/* Line 1455 of yacc.c  */
 #line 12849 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1771:
-
-/* Line 1455 of yacc.c  */
 #line 12850 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1772:
-
-/* Line 1455 of yacc.c  */
 #line 12854 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= OPTION_QUICK; }
     break;
 
   case 1773:
-
-/* Line 1455 of yacc.c  */
 #line 12855 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { YYPS->m_lock_type= TL_WRITE_LOW_PRIORITY; }
     break;
 
   case 1774:
-
-/* Line 1455 of yacc.c  */
 #line 12856 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ignore= 1; }
     break;
 
   case 1775:
-
-/* Line 1455 of yacc.c  */
 #line 12861 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX* lex= Lex;
@@ -34848,8 +32024,6 @@ yyreduce:
     break;
 
   case 1776:
-
-/* Line 1455 of yacc.c  */
 #line 12872 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -34862,8 +32036,6 @@ yyreduce:
     break;
 
   case 1783:
-
-/* Line 1455 of yacc.c  */
 #line 12897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_CPU;
@@ -34871,8 +32043,6 @@ yyreduce:
     break;
 
   case 1784:
-
-/* Line 1455 of yacc.c  */
 #line 12901 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_MEMORY;
@@ -34880,8 +32050,6 @@ yyreduce:
     break;
 
   case 1785:
-
-/* Line 1455 of yacc.c  */
 #line 12905 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_BLOCK_IO;
@@ -34889,8 +32057,6 @@ yyreduce:
     break;
 
   case 1786:
-
-/* Line 1455 of yacc.c  */
 #line 12909 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_CONTEXT;
@@ -34898,8 +32064,6 @@ yyreduce:
     break;
 
   case 1787:
-
-/* Line 1455 of yacc.c  */
 #line 12913 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_PAGE_FAULTS;
@@ -34907,8 +32071,6 @@ yyreduce:
     break;
 
   case 1788:
-
-/* Line 1455 of yacc.c  */
 #line 12917 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_IPC;
@@ -34916,8 +32078,6 @@ yyreduce:
     break;
 
   case 1789:
-
-/* Line 1455 of yacc.c  */
 #line 12921 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_SWAPS;
@@ -34925,8 +32085,6 @@ yyreduce:
     break;
 
   case 1790:
-
-/* Line 1455 of yacc.c  */
 #line 12925 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_SOURCE;
@@ -34934,8 +32092,6 @@ yyreduce:
     break;
 
   case 1791:
-
-/* Line 1455 of yacc.c  */
 #line 12929 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_options|= PROFILE_ALL;
@@ -34943,8 +32099,6 @@ yyreduce:
     break;
 
   case 1792:
-
-/* Line 1455 of yacc.c  */
 #line 12936 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_query_id= 0;
@@ -34952,8 +32106,6 @@ yyreduce:
     break;
 
   case 1793:
-
-/* Line 1455 of yacc.c  */
 #line 12940 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
       Lex->profile_query_id= atoi((yyvsp[(3) - (3)].lex_str).str);
@@ -34961,8 +32113,6 @@ yyreduce:
     break;
 
   case 1794:
-
-/* Line 1455 of yacc.c  */
 #line 12949 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -34974,8 +32124,6 @@ yyreduce:
     break;
 
   case 1795:
-
-/* Line 1455 of yacc.c  */
 #line 12957 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -34983,8 +32131,6 @@ yyreduce:
     break;
 
   case 1796:
-
-/* Line 1455 of yacc.c  */
 #line 12964 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              LEX *lex= Lex;
@@ -34995,8 +32141,6 @@ yyreduce:
     break;
 
   case 1797:
-
-/* Line 1455 of yacc.c  */
 #line 12971 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              LEX *lex= Lex;
@@ -35008,8 +32152,6 @@ yyreduce:
     break;
 
   case 1798:
-
-/* Line 1455 of yacc.c  */
 #line 12979 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              LEX *lex= Lex;
@@ -35021,8 +32163,6 @@ yyreduce:
     break;
 
   case 1799:
-
-/* Line 1455 of yacc.c  */
 #line 12987 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              LEX *lex= Lex;
@@ -35034,8 +32174,6 @@ yyreduce:
     break;
 
   case 1800:
-
-/* Line 1455 of yacc.c  */
 #line 12995 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
              LEX *lex= Lex;
@@ -35047,8 +32185,6 @@ yyreduce:
     break;
 
   case 1801:
-
-/* Line 1455 of yacc.c  */
 #line 13003 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35060,8 +32196,6 @@ yyreduce:
     break;
 
   case 1802:
-
-/* Line 1455 of yacc.c  */
 #line 13011 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35072,22 +32206,16 @@ yyreduce:
     break;
 
   case 1803:
-
-/* Line 1455 of yacc.c  */
 #line 13018 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_info.db_type= (yyvsp[(2) - (3)].db_type); }
     break;
 
   case 1804:
-
-/* Line 1455 of yacc.c  */
 #line 13020 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_info.db_type= NULL; }
     break;
 
   case 1805:
-
-/* Line 1455 of yacc.c  */
 #line 13022 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35100,8 +32228,6 @@ yyreduce:
     break;
 
   case 1806:
-
-/* Line 1455 of yacc.c  */
 #line 13031 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_SHOW_BINLOGS;
@@ -35109,8 +32235,6 @@ yyreduce:
     break;
 
   case 1807:
-
-/* Line 1455 of yacc.c  */
 #line 13035 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_SHOW_SLAVE_HOSTS;
@@ -35118,8 +32242,6 @@ yyreduce:
     break;
 
   case 1808:
-
-/* Line 1455 of yacc.c  */
 #line 13039 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35128,8 +32250,6 @@ yyreduce:
     break;
 
   case 1810:
-
-/* Line 1455 of yacc.c  */
 #line 13044 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35138,8 +32258,6 @@ yyreduce:
     break;
 
   case 1812:
-
-/* Line 1455 of yacc.c  */
 #line 13049 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35152,8 +32270,6 @@ yyreduce:
     break;
 
   case 1813:
-
-/* Line 1455 of yacc.c  */
 #line 13058 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35164,8 +32280,6 @@ yyreduce:
     break;
 
   case 1814:
-
-/* Line 1455 of yacc.c  */
 #line 13065 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35174,36 +32288,26 @@ yyreduce:
     break;
 
   case 1815:
-
-/* Line 1455 of yacc.c  */
 #line 13070 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (void) create_select_for_variable("warning_count"); }
     break;
 
   case 1816:
-
-/* Line 1455 of yacc.c  */
 #line 13072 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (void) create_select_for_variable("error_count"); }
     break;
 
   case 1817:
-
-/* Line 1455 of yacc.c  */
 #line 13074 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command = SQLCOM_SHOW_WARNS;}
     break;
 
   case 1818:
-
-/* Line 1455 of yacc.c  */
 #line 13076 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command = SQLCOM_SHOW_ERRORS;}
     break;
 
   case 1819:
-
-/* Line 1455 of yacc.c  */
 #line 13078 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             push_warning_printf(YYTHD, Sql_condition::WARN_LEVEL_WARN,
@@ -35215,8 +32319,6 @@ yyreduce:
     break;
 
   case 1820:
-
-/* Line 1455 of yacc.c  */
 #line 13086 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             push_warning_printf(YYTHD, Sql_condition::WARN_LEVEL_WARN,
@@ -35231,8 +32333,6 @@ yyreduce:
     break;
 
   case 1821:
-
-/* Line 1455 of yacc.c  */
 #line 13097 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35244,15 +32344,11 @@ yyreduce:
     break;
 
   case 1822:
-
-/* Line 1455 of yacc.c  */
 #line 13105 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_SHOW_PROCESSLIST;}
     break;
 
   case 1823:
-
-/* Line 1455 of yacc.c  */
 #line 13107 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35264,8 +32360,6 @@ yyreduce:
     break;
 
   case 1824:
-
-/* Line 1455 of yacc.c  */
 #line 13115 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35276,8 +32370,6 @@ yyreduce:
     break;
 
   case 1825:
-
-/* Line 1455 of yacc.c  */
 #line 13122 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35288,8 +32380,6 @@ yyreduce:
     break;
 
   case 1826:
-
-/* Line 1455 of yacc.c  */
 #line 13129 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35303,8 +32393,6 @@ yyreduce:
     break;
 
   case 1827:
-
-/* Line 1455 of yacc.c  */
 #line 13139 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35315,8 +32403,6 @@ yyreduce:
     break;
 
   case 1828:
-
-/* Line 1455 of yacc.c  */
 #line 13146 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command=SQLCOM_SHOW_CREATE_DB;
@@ -35326,8 +32412,6 @@ yyreduce:
     break;
 
   case 1829:
-
-/* Line 1455 of yacc.c  */
 #line 13152 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35340,8 +32424,6 @@ yyreduce:
     break;
 
   case 1830:
-
-/* Line 1455 of yacc.c  */
 #line 13161 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35353,8 +32435,6 @@ yyreduce:
     break;
 
   case 1831:
-
-/* Line 1455 of yacc.c  */
 #line 13169 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_SHOW_MASTER_STAT;
@@ -35362,8 +32442,6 @@ yyreduce:
     break;
 
   case 1832:
-
-/* Line 1455 of yacc.c  */
 #line 13173 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_SHOW_SLAVE_STAT;
@@ -35371,8 +32449,6 @@ yyreduce:
     break;
 
   case 1833:
-
-/* Line 1455 of yacc.c  */
 #line 13177 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35383,8 +32459,6 @@ yyreduce:
     break;
 
   case 1834:
-
-/* Line 1455 of yacc.c  */
 #line 13184 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35395,8 +32469,6 @@ yyreduce:
     break;
 
   case 1835:
-
-/* Line 1455 of yacc.c  */
 #line 13191 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35406,8 +32478,6 @@ yyreduce:
     break;
 
   case 1836:
-
-/* Line 1455 of yacc.c  */
 #line 13197 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35418,8 +32488,6 @@ yyreduce:
     break;
 
   case 1837:
-
-/* Line 1455 of yacc.c  */
 #line 13204 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35430,8 +32498,6 @@ yyreduce:
     break;
 
   case 1838:
-
-/* Line 1455 of yacc.c  */
 #line 13211 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command= SQLCOM_SHOW_PROC_CODE;
@@ -35440,8 +32506,6 @@ yyreduce:
     break;
 
   case 1839:
-
-/* Line 1455 of yacc.c  */
 #line 13216 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command= SQLCOM_SHOW_FUNC_CODE;
@@ -35450,8 +32514,6 @@ yyreduce:
     break;
 
   case 1840:
-
-/* Line 1455 of yacc.c  */
 #line 13221 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->spname= (yyvsp[(3) - (3)].spname);
@@ -35460,85 +32522,61 @@ yyreduce:
     break;
 
   case 1841:
-
-/* Line 1455 of yacc.c  */
 #line 13229 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_SHOW_ENGINE_STATUS; }
     break;
 
   case 1842:
-
-/* Line 1455 of yacc.c  */
 #line 13231 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_SHOW_ENGINE_MUTEX; }
     break;
 
   case 1843:
-
-/* Line 1455 of yacc.c  */
 #line 13233 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_SHOW_ENGINE_LOGS; }
     break;
 
   case 1848:
-
-/* Line 1455 of yacc.c  */
 #line 13247 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.simple_string)= 0; }
     break;
 
   case 1849:
-
-/* Line 1455 of yacc.c  */
 #line 13248 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.simple_string)= (yyvsp[(2) - (2)].lex_str).str; }
     break;
 
   case 1850:
-
-/* Line 1455 of yacc.c  */
 #line 13252 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->verbose=0; }
     break;
 
   case 1851:
-
-/* Line 1455 of yacc.c  */
 #line 13253 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->verbose=1; }
     break;
 
   case 1854:
-
-/* Line 1455 of yacc.c  */
 #line 13262 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->mi.log_file_name = 0; }
     break;
 
   case 1855:
-
-/* Line 1455 of yacc.c  */
 #line 13263 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->mi.log_file_name = (yyvsp[(2) - (2)].lex_str).str; }
     break;
 
   case 1856:
-
-/* Line 1455 of yacc.c  */
 #line 13267 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->mi.pos = 4; /* skip magic number */ }
     break;
 
   case 1857:
-
-/* Line 1455 of yacc.c  */
 #line 13268 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->mi.pos = (yyvsp[(2) - (2)].ulonglong_number); }
     break;
 
   case 1859:
-
-/* Line 1455 of yacc.c  */
 #line 13274 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->wild= new (YYTHD->mem_root) String((yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length,
@@ -35549,8 +32587,6 @@ yyreduce:
     break;
 
   case 1860:
-
-/* Line 1455 of yacc.c  */
 #line 13281 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->where= (yyvsp[(2) - (2)].item);
@@ -35560,8 +32596,6 @@ yyreduce:
     break;
 
   case 1861:
-
-/* Line 1455 of yacc.c  */
 #line 13291 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35576,8 +32610,6 @@ yyreduce:
     break;
 
   case 1862:
-
-/* Line 1455 of yacc.c  */
 #line 13302 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Select->parsing_place= NO_MATTER;
@@ -35585,22 +32617,16 @@ yyreduce:
     break;
 
   case 1863:
-
-/* Line 1455 of yacc.c  */
 #line 13306 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->describe|= DESCRIBE_NORMAL; }
     break;
 
   case 1864:
-
-/* Line 1455 of yacc.c  */
 #line 13308 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->select_lex.options|= SELECT_DESCRIBE; }
     break;
 
   case 1872:
-
-/* Line 1455 of yacc.c  */
 #line 13326 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((Lex->explain_format= new Explain_format_traditional) == NULL)
@@ -35609,8 +32635,6 @@ yyreduce:
     break;
 
   case 1873:
-
-/* Line 1455 of yacc.c  */
 #line 13331 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((Lex->explain_format= new Explain_format_traditional) == NULL)
@@ -35620,8 +32644,6 @@ yyreduce:
     break;
 
   case 1874:
-
-/* Line 1455 of yacc.c  */
 #line 13337 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((Lex->explain_format= new Explain_format_traditional) == NULL)
@@ -35631,8 +32653,6 @@ yyreduce:
     break;
 
   case 1875:
-
-/* Line 1455 of yacc.c  */
 #line 13343 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!my_strcasecmp(system_charset_info, (yyvsp[(3) - (3)].lex_str).str, "JSON"))
@@ -35655,22 +32675,16 @@ yyreduce:
     break;
 
   case 1876:
-
-/* Line 1455 of yacc.c  */
 #line 13364 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1877:
-
-/* Line 1455 of yacc.c  */
 #line 13365 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->wild= (yyvsp[(1) - (1)].string); }
     break;
 
   case 1878:
-
-/* Line 1455 of yacc.c  */
 #line 13367 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->wild= new (YYTHD->mem_root) String((const char*) (yyvsp[(1) - (1)].lex_str).str,
@@ -35682,8 +32696,6 @@ yyreduce:
     break;
 
   case 1879:
-
-/* Line 1455 of yacc.c  */
 #line 13381 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35694,15 +32706,11 @@ yyreduce:
     break;
 
   case 1880:
-
-/* Line 1455 of yacc.c  */
 #line 13388 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1881:
-
-/* Line 1455 of yacc.c  */
 #line 13393 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->type|= REFRESH_TABLES;
@@ -35716,29 +32724,21 @@ yyreduce:
     break;
 
   case 1882:
-
-/* Line 1455 of yacc.c  */
 #line 13402 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1883:
-
-/* Line 1455 of yacc.c  */
 #line 13403 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1885:
-
-/* Line 1455 of yacc.c  */
 #line 13408 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1886:
-
-/* Line 1455 of yacc.c  */
 #line 13410 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             TABLE_LIST *tables= Lex->query_tables;
@@ -35753,8 +32753,6 @@ yyreduce:
     break;
 
   case 1887:
-
-/* Line 1455 of yacc.c  */
 #line 13421 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->query_tables == NULL) // Table list can't be empty
@@ -35766,8 +32764,6 @@ yyreduce:
     break;
 
   case 1888:
-
-/* Line 1455 of yacc.c  */
 #line 13429 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             TABLE_LIST *tables= Lex->query_tables;
@@ -35782,120 +32778,86 @@ yyreduce:
     break;
 
   case 1890:
-
-/* Line 1455 of yacc.c  */
 #line 13444 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1891:
-
-/* Line 1455 of yacc.c  */
 #line 13449 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_ERROR_LOG; }
     break;
 
   case 1892:
-
-/* Line 1455 of yacc.c  */
 #line 13451 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_ENGINE_LOG; }
     break;
 
   case 1893:
-
-/* Line 1455 of yacc.c  */
 #line 13453 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_GENERAL_LOG; }
     break;
 
   case 1894:
-
-/* Line 1455 of yacc.c  */
 #line 13455 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_SLOW_LOG; }
     break;
 
   case 1895:
-
-/* Line 1455 of yacc.c  */
 #line 13457 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_BINARY_LOG; }
     break;
 
   case 1896:
-
-/* Line 1455 of yacc.c  */
 #line 13459 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_RELAY_LOG; }
     break;
 
   case 1897:
-
-/* Line 1455 of yacc.c  */
 #line 13461 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_QUERY_CACHE_FREE; }
     break;
 
   case 1898:
-
-/* Line 1455 of yacc.c  */
 #line 13463 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_HOSTS; }
     break;
 
   case 1899:
-
-/* Line 1455 of yacc.c  */
 #line 13465 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_GRANT; }
     break;
 
   case 1900:
-
-/* Line 1455 of yacc.c  */
 #line 13467 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_LOG; }
     break;
 
   case 1901:
-
-/* Line 1455 of yacc.c  */
 #line 13469 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_STATUS; }
     break;
 
   case 1902:
-
-/* Line 1455 of yacc.c  */
 #line 13471 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_DES_KEY_FILE; }
     break;
 
   case 1903:
-
-/* Line 1455 of yacc.c  */
 #line 13473 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_USER_RESOURCES; }
     break;
 
   case 1904:
-
-/* Line 1455 of yacc.c  */
 #line 13477 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1905:
-
-/* Line 1455 of yacc.c  */
 #line 13478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1906:
-
-/* Line 1455 of yacc.c  */
 #line 13483 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35904,57 +32866,41 @@ yyreduce:
     break;
 
   case 1907:
-
-/* Line 1455 of yacc.c  */
 #line 13488 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1910:
-
-/* Line 1455 of yacc.c  */
 #line 13497 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_SLAVE; }
     break;
 
   case 1911:
-
-/* Line 1455 of yacc.c  */
 #line 13498 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 1912:
-
-/* Line 1455 of yacc.c  */
 #line 13499 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_MASTER; }
     break;
 
   case 1913:
-
-/* Line 1455 of yacc.c  */
 #line 13500 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type|= REFRESH_QUERY_CACHE;}
     break;
 
   case 1914:
-
-/* Line 1455 of yacc.c  */
 #line 13504 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->reset_slave_info.all= false; }
     break;
 
   case 1915:
-
-/* Line 1455 of yacc.c  */
 #line 13505 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->reset_slave_info.all= true; }
     break;
 
   case 1916:
-
-/* Line 1455 of yacc.c  */
 #line 13510 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -35964,15 +32910,11 @@ yyreduce:
     break;
 
   case 1917:
-
-/* Line 1455 of yacc.c  */
 #line 13516 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1919:
-
-/* Line 1455 of yacc.c  */
 #line 13525 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->to_log = (yyvsp[(2) - (2)].lex_str).str;
@@ -35980,8 +32922,6 @@ yyreduce:
     break;
 
   case 1920:
-
-/* Line 1455 of yacc.c  */
 #line 13529 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -35992,8 +32932,6 @@ yyreduce:
     break;
 
   case 1921:
-
-/* Line 1455 of yacc.c  */
 #line 13541 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -36004,29 +32942,21 @@ yyreduce:
     break;
 
   case 1922:
-
-/* Line 1455 of yacc.c  */
 #line 13550 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type= 0; }
     break;
 
   case 1923:
-
-/* Line 1455 of yacc.c  */
 #line 13551 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type= 0; }
     break;
 
   case 1924:
-
-/* Line 1455 of yacc.c  */
 #line 13552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->type= ONLY_KILL_QUERY; }
     break;
 
   case 1925:
-
-/* Line 1455 of yacc.c  */
 #line 13559 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -36036,8 +32966,6 @@ yyreduce:
     break;
 
   case 1926:
-
-/* Line 1455 of yacc.c  */
 #line 13570 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -36053,8 +32981,6 @@ yyreduce:
     break;
 
   case 1927:
-
-/* Line 1455 of yacc.c  */
 #line 13582 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -36068,8 +32994,6 @@ yyreduce:
     break;
 
   case 1928:
-
-/* Line 1455 of yacc.c  */
 #line 13592 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -36083,57 +33007,41 @@ yyreduce:
     break;
 
   case 1929:
-
-/* Line 1455 of yacc.c  */
 #line 13602 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->exchange->cs= (yyvsp[(15) - (15)].charset); }
     break;
 
   case 1930:
-
-/* Line 1455 of yacc.c  */
 #line 13606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1931:
-
-/* Line 1455 of yacc.c  */
 #line 13610 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.filetype)= FILETYPE_CSV; }
     break;
 
   case 1932:
-
-/* Line 1455 of yacc.c  */
 #line 13611 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.filetype)= FILETYPE_XML; }
     break;
 
   case 1933:
-
-/* Line 1455 of yacc.c  */
 #line 13615 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=0;}
     break;
 
   case 1934:
-
-/* Line 1455 of yacc.c  */
 #line 13616 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=1;}
     break;
 
   case 1935:
-
-/* Line 1455 of yacc.c  */
 #line 13620 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE_DEFAULT; }
     break;
 
   case 1936:
-
-/* Line 1455 of yacc.c  */
 #line 13622 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
 #ifdef HAVE_QUERY_CACHE
@@ -36149,36 +33057,26 @@ yyreduce:
     break;
 
   case 1937:
-
-/* Line 1455 of yacc.c  */
 #line 13633 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lock_type)= TL_WRITE_LOW_PRIORITY; }
     break;
 
   case 1938:
-
-/* Line 1455 of yacc.c  */
 #line 13637 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->duplicates=DUP_ERROR; }
     break;
 
   case 1939:
-
-/* Line 1455 of yacc.c  */
 #line 13638 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->duplicates=DUP_REPLACE; }
     break;
 
   case 1940:
-
-/* Line 1455 of yacc.c  */
 #line 13639 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ignore= 1; }
     break;
 
   case 1945:
-
-/* Line 1455 of yacc.c  */
 #line 13654 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36187,8 +33085,6 @@ yyreduce:
     break;
 
   case 1946:
-
-/* Line 1455 of yacc.c  */
 #line 13659 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -36199,8 +33095,6 @@ yyreduce:
     break;
 
   case 1947:
-
-/* Line 1455 of yacc.c  */
 #line 13666 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36209,8 +33103,6 @@ yyreduce:
     break;
 
   case 1948:
-
-/* Line 1455 of yacc.c  */
 #line 13671 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36219,8 +33111,6 @@ yyreduce:
     break;
 
   case 1953:
-
-/* Line 1455 of yacc.c  */
 #line 13689 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36229,8 +33119,6 @@ yyreduce:
     break;
 
   case 1954:
-
-/* Line 1455 of yacc.c  */
 #line 13694 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36239,22 +33127,16 @@ yyreduce:
     break;
 
   case 1955:
-
-/* Line 1455 of yacc.c  */
 #line 13701 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 1956:
-
-/* Line 1455 of yacc.c  */
 #line 13703 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->exchange->line_term = (yyvsp[(4) - (4)].string); }
     break;
 
   case 1958:
-
-/* Line 1455 of yacc.c  */
 #line 13708 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             DBUG_ASSERT(Lex->exchange != 0);
@@ -36263,64 +33145,46 @@ yyreduce:
     break;
 
   case 1959:
-
-/* Line 1455 of yacc.c  */
 #line 13715 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 1960:
-
-/* Line 1455 of yacc.c  */
 #line 13717 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { }
     break;
 
   case 1961:
-
-/* Line 1455 of yacc.c  */
 #line 13721 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1962:
-
-/* Line 1455 of yacc.c  */
 #line 13722 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1963:
-
-/* Line 1455 of yacc.c  */
 #line 13723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1964:
-
-/* Line 1455 of yacc.c  */
 #line 13728 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->field_list.push_back((yyvsp[(3) - (3)].item)); }
     break;
 
   case 1965:
-
-/* Line 1455 of yacc.c  */
 #line 13730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->field_list.push_back((yyvsp[(1) - (1)].item)); }
     break;
 
   case 1966:
-
-/* Line 1455 of yacc.c  */
 #line 13734 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {(yyval.item)= (yyvsp[(1) - (1)].item);}
     break;
 
   case 1967:
-
-/* Line 1455 of yacc.c  */
 #line 13736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_user_var_as_out_param((yyvsp[(2) - (2)].lex_str));
@@ -36330,22 +33194,16 @@ yyreduce:
     break;
 
   case 1968:
-
-/* Line 1455 of yacc.c  */
 #line 13744 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1969:
-
-/* Line 1455 of yacc.c  */
 #line 13745 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 1972:
-
-/* Line 1455 of yacc.c  */
 #line 13755 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -36364,8 +33222,6 @@ yyreduce:
     break;
 
   case 1973:
-
-/* Line 1455 of yacc.c  */
 #line 13775 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING tmp;
@@ -36393,8 +33249,6 @@ yyreduce:
     break;
 
   case 1974:
-
-/* Line 1455 of yacc.c  */
 #line 13799 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             uint repertoire= Lex->text_string_is_7bit ?
@@ -36410,8 +33264,6 @@ yyreduce:
     break;
 
   case 1975:
-
-/* Line 1455 of yacc.c  */
 #line 13811 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_string *str= new (YYTHD->mem_root) Item_string((yyvsp[(2) - (2)].lex_str).str,
@@ -36426,8 +33278,6 @@ yyreduce:
     break;
 
   case 1976:
-
-/* Line 1455 of yacc.c  */
 #line 13822 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_string* item= (Item_string*) (yyvsp[(1) - (2)].item);
@@ -36447,8 +33297,6 @@ yyreduce:
     break;
 
   case 1977:
-
-/* Line 1455 of yacc.c  */
 #line 13841 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.string)= new (YYTHD->mem_root) String((yyvsp[(1) - (1)].lex_str).str,
@@ -36460,8 +33308,6 @@ yyreduce:
     break;
 
   case 1978:
-
-/* Line 1455 of yacc.c  */
 #line 13849 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *tmp= new (YYTHD->mem_root) Item_hex_string((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36477,8 +33323,6 @@ yyreduce:
     break;
 
   case 1979:
-
-/* Line 1455 of yacc.c  */
 #line 13861 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *tmp= new (YYTHD->mem_root) Item_bin_string((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36494,8 +33338,6 @@ yyreduce:
     break;
 
   case 1980:
-
-/* Line 1455 of yacc.c  */
 #line 13876 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -36517,22 +33359,16 @@ yyreduce:
     break;
 
   case 1981:
-
-/* Line 1455 of yacc.c  */
 #line 13896 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = (yyvsp[(1) - (1)].item); }
     break;
 
   case 1982:
-
-/* Line 1455 of yacc.c  */
 #line 13897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = (yyvsp[(2) - (2)].item_num); }
     break;
 
   case 1983:
-
-/* Line 1455 of yacc.c  */
 #line 13899 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyvsp[(2) - (2)].item_num)->max_length++;
@@ -36541,29 +33377,21 @@ yyreduce:
     break;
 
   case 1984:
-
-/* Line 1455 of yacc.c  */
 #line 13907 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = (yyvsp[(1) - (1)].item); }
     break;
 
   case 1985:
-
-/* Line 1455 of yacc.c  */
 #line 13908 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item) = (yyvsp[(1) - (1)].item_num); }
     break;
 
   case 1986:
-
-/* Line 1455 of yacc.c  */
 #line 13909 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 1987:
-
-/* Line 1455 of yacc.c  */
 #line 13911 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item) = new (YYTHD->mem_root) Item_null();
@@ -36574,8 +33402,6 @@ yyreduce:
     break;
 
   case 1988:
-
-/* Line 1455 of yacc.c  */
 #line 13918 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_int(NAME_STRING("FALSE"), 0, 1);
@@ -36585,8 +33411,6 @@ yyreduce:
     break;
 
   case 1989:
-
-/* Line 1455 of yacc.c  */
 #line 13924 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_int(NAME_STRING("TRUE"), 1, 1);
@@ -36596,8 +33420,6 @@ yyreduce:
     break;
 
   case 1990:
-
-/* Line 1455 of yacc.c  */
 #line 13930 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item) = new (YYTHD->mem_root) Item_hex_string((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36607,8 +33429,6 @@ yyreduce:
     break;
 
   case 1991:
-
-/* Line 1455 of yacc.c  */
 #line 13936 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)= new (YYTHD->mem_root) Item_bin_string((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36618,8 +33438,6 @@ yyreduce:
     break;
 
   case 1992:
-
-/* Line 1455 of yacc.c  */
 #line 13942 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *tmp= new (YYTHD->mem_root) Item_hex_string((yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length);
@@ -36652,8 +33470,6 @@ yyreduce:
     break;
 
   case 1993:
-
-/* Line 1455 of yacc.c  */
 #line 13971 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item *tmp= new (YYTHD->mem_root) Item_bin_string((yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length);
@@ -36685,8 +33501,6 @@ yyreduce:
     break;
 
   case 1994:
-
-/* Line 1455 of yacc.c  */
 #line 14002 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             int error;
@@ -36700,8 +33514,6 @@ yyreduce:
     break;
 
   case 1995:
-
-/* Line 1455 of yacc.c  */
 #line 14012 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             int error;
@@ -36715,8 +33527,6 @@ yyreduce:
     break;
 
   case 1996:
-
-/* Line 1455 of yacc.c  */
 #line 14022 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_num)= new (YYTHD->mem_root) Item_uint((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36726,8 +33536,6 @@ yyreduce:
     break;
 
   case 1997:
-
-/* Line 1455 of yacc.c  */
 #line 14028 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_num)= new (YYTHD->mem_root) Item_decimal((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length,
@@ -36740,8 +33548,6 @@ yyreduce:
     break;
 
   case 1998:
-
-/* Line 1455 of yacc.c  */
 #line 14037 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item_num)= new (YYTHD->mem_root) Item_float((yyvsp[(1) - (1)].lex_str).str, (yyvsp[(1) - (1)].lex_str).length);
@@ -36753,8 +33559,6 @@ yyreduce:
     break;
 
   case 1999:
-
-/* Line 1455 of yacc.c  */
 #line 14049 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.item)= create_temporal_literal(YYTHD, (yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length, YYCSCL,
@@ -36764,8 +33568,6 @@ yyreduce:
     break;
 
   case 2000:
-
-/* Line 1455 of yacc.c  */
 #line 14055 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.item)= create_temporal_literal(YYTHD, (yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length, YYCSCL,
@@ -36775,8 +33577,6 @@ yyreduce:
     break;
 
   case 2001:
-
-/* Line 1455 of yacc.c  */
 #line 14061 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.item)= create_temporal_literal(YYTHD, (yyvsp[(2) - (2)].lex_str).str, (yyvsp[(2) - (2)].lex_str).length, YYCSCL,
@@ -36786,22 +33586,16 @@ yyreduce:
     break;
 
   case 2002:
-
-/* Line 1455 of yacc.c  */
 #line 14076 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=(yyvsp[(1) - (1)].item); }
     break;
 
   case 2003:
-
-/* Line 1455 of yacc.c  */
 #line 14077 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=(yyvsp[(1) - (1)].item); }
     break;
 
   case 2004:
-
-/* Line 1455 of yacc.c  */
 #line 14082 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             SELECT_LEX *sel= Select;
@@ -36814,8 +33608,6 @@ yyreduce:
     break;
 
   case 2005:
-
-/* Line 1455 of yacc.c  */
 #line 14091 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -36832,15 +33624,11 @@ yyreduce:
     break;
 
   case 2006:
-
-/* Line 1455 of yacc.c  */
 #line 14106 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=(yyvsp[(1) - (1)].item); }
     break;
 
   case 2007:
-
-/* Line 1455 of yacc.c  */
 #line 14111 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -36895,15 +33683,11 @@ yyreduce:
     break;
 
   case 2008:
-
-/* Line 1455 of yacc.c  */
 #line 14161 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 2009:
-
-/* Line 1455 of yacc.c  */
 #line 14166 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -36925,15 +33709,11 @@ yyreduce:
     break;
 
   case 2010:
-
-/* Line 1455 of yacc.c  */
 #line 14183 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)= (yyvsp[(1) - (1)].item); }
     break;
 
   case 2011:
-
-/* Line 1455 of yacc.c  */
 #line 14188 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37017,8 +33797,6 @@ yyreduce:
     break;
 
   case 2012:
-
-/* Line 1455 of yacc.c  */
 #line 14268 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37047,8 +33825,6 @@ yyreduce:
     break;
 
   case 2013:
-
-/* Line 1455 of yacc.c  */
 #line 14293 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37080,15 +33856,11 @@ yyreduce:
     break;
 
   case 2014:
-
-/* Line 1455 of yacc.c  */
 #line 14323 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str);}
     break;
 
   case 2015:
-
-/* Line 1455 of yacc.c  */
 #line 14325 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             TABLE_LIST *table= Select->table_list.first;
@@ -37108,8 +33880,6 @@ yyreduce:
     break;
 
   case 2016:
-
-/* Line 1455 of yacc.c  */
 #line 14341 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             TABLE_LIST *table= Select->table_list.first;
@@ -37123,15 +33893,11 @@ yyreduce:
     break;
 
   case 2017:
-
-/* Line 1455 of yacc.c  */
 #line 14350 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(2) - (2)].lex_str);}
     break;
 
   case 2018:
-
-/* Line 1455 of yacc.c  */
 #line 14355 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.table)= new Table_ident((yyvsp[(1) - (1)].lex_str));
@@ -37141,8 +33907,6 @@ yyreduce:
     break;
 
   case 2019:
-
-/* Line 1455 of yacc.c  */
 #line 14361 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.table)= new Table_ident(YYTHD, (yyvsp[(1) - (3)].lex_str),(yyvsp[(3) - (3)].lex_str),0);
@@ -37152,8 +33916,6 @@ yyreduce:
     break;
 
   case 2020:
-
-/* Line 1455 of yacc.c  */
 #line 14367 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /* For Delphi */
@@ -37164,8 +33926,6 @@ yyreduce:
     break;
 
   case 2021:
-
-/* Line 1455 of yacc.c  */
 #line 14377 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.table)= new Table_ident((yyvsp[(1) - (2)].lex_str));
@@ -37175,8 +33935,6 @@ yyreduce:
     break;
 
   case 2022:
-
-/* Line 1455 of yacc.c  */
 #line 14383 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.table)= new Table_ident(YYTHD, (yyvsp[(1) - (4)].lex_str),(yyvsp[(3) - (4)].lex_str),0);
@@ -37186,8 +33944,6 @@ yyreduce:
     break;
 
   case 2023:
-
-/* Line 1455 of yacc.c  */
 #line 14392 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_STRING db={(char*) any_db,3};
@@ -37198,15 +33954,11 @@ yyreduce:
     break;
 
   case 2024:
-
-/* Line 1455 of yacc.c  */
 #line 14401 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)= (yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 2025:
-
-/* Line 1455 of yacc.c  */
 #line 14403 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37237,8 +33989,6 @@ yyreduce:
     break;
 
   case 2026:
-
-/* Line 1455 of yacc.c  */
 #line 14433 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!strcont((yyvsp[(1) - (1)].lex_str).str, "\n"))
@@ -37252,8 +34002,6 @@ yyreduce:
     break;
 
   case 2027:
-
-/* Line 1455 of yacc.c  */
 #line 14446 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37270,8 +34018,6 @@ yyreduce:
     break;
 
   case 2028:
-
-/* Line 1455 of yacc.c  */
 #line 14462 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37288,8 +34034,6 @@ yyreduce:
     break;
 
   case 2029:
-
-/* Line 1455 of yacc.c  */
 #line 14478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37307,15 +34051,11 @@ yyreduce:
     break;
 
   case 2030:
-
-/* Line 1455 of yacc.c  */
 #line 14494 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 2031:
-
-/* Line 1455 of yacc.c  */
 #line 14496 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37327,15 +34067,11 @@ yyreduce:
     break;
 
   case 2032:
-
-/* Line 1455 of yacc.c  */
 #line 14506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str); }
     break;
 
   case 2033:
-
-/* Line 1455 of yacc.c  */
 #line 14508 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37347,29 +34083,21 @@ yyreduce:
     break;
 
   case 2034:
-
-/* Line 1455 of yacc.c  */
 #line 14518 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str);}
     break;
 
   case 2035:
-
-/* Line 1455 of yacc.c  */
 #line 14519 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str);}
     break;
 
   case 2036:
-
-/* Line 1455 of yacc.c  */
 #line 14520 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.lex_str)=(yyvsp[(1) - (1)].lex_str);}
     break;
 
   case 2037:
-
-/* Line 1455 of yacc.c  */
 #line 14525 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37400,8 +34128,6 @@ yyreduce:
     break;
 
   case 2038:
-
-/* Line 1455 of yacc.c  */
 #line 14552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -37438,8 +34164,6 @@ yyreduce:
     break;
 
   case 2039:
-
-/* Line 1455 of yacc.c  */
 #line 14585 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (!((yyval.lex_user)=(LEX_USER*) YYTHD->alloc(sizeof(st_lex_user))))
@@ -37454,2472 +34178,1766 @@ yyreduce:
     break;
 
   case 2040:
-
-/* Line 1455 of yacc.c  */
 #line 14599 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2041:
-
-/* Line 1455 of yacc.c  */
 #line 14600 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2042:
-
-/* Line 1455 of yacc.c  */
 #line 14601 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2043:
-
-/* Line 1455 of yacc.c  */
 #line 14602 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2044:
-
-/* Line 1455 of yacc.c  */
 #line 14603 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2045:
-
-/* Line 1455 of yacc.c  */
 #line 14604 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2046:
-
-/* Line 1455 of yacc.c  */
 #line 14605 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2047:
-
-/* Line 1455 of yacc.c  */
 #line 14606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2048:
-
-/* Line 1455 of yacc.c  */
 #line 14607 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2049:
-
-/* Line 1455 of yacc.c  */
 #line 14608 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2050:
-
-/* Line 1455 of yacc.c  */
 #line 14609 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2051:
-
-/* Line 1455 of yacc.c  */
 #line 14610 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2052:
-
-/* Line 1455 of yacc.c  */
 #line 14611 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2053:
-
-/* Line 1455 of yacc.c  */
 #line 14612 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2054:
-
-/* Line 1455 of yacc.c  */
 #line 14613 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2055:
-
-/* Line 1455 of yacc.c  */
 #line 14614 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2056:
-
-/* Line 1455 of yacc.c  */
 #line 14615 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2057:
-
-/* Line 1455 of yacc.c  */
 #line 14616 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2058:
-
-/* Line 1455 of yacc.c  */
 #line 14617 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2059:
-
-/* Line 1455 of yacc.c  */
 #line 14618 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2060:
-
-/* Line 1455 of yacc.c  */
 #line 14619 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2061:
-
-/* Line 1455 of yacc.c  */
 #line 14620 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2062:
-
-/* Line 1455 of yacc.c  */
 #line 14621 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2063:
-
-/* Line 1455 of yacc.c  */
 #line 14622 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2064:
-
-/* Line 1455 of yacc.c  */
 #line 14623 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2065:
-
-/* Line 1455 of yacc.c  */
 #line 14624 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2066:
-
-/* Line 1455 of yacc.c  */
 #line 14625 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2067:
-
-/* Line 1455 of yacc.c  */
 #line 14626 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2068:
-
-/* Line 1455 of yacc.c  */
 #line 14627 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2069:
-
-/* Line 1455 of yacc.c  */
 #line 14628 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2070:
-
-/* Line 1455 of yacc.c  */
 #line 14629 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2071:
-
-/* Line 1455 of yacc.c  */
 #line 14630 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2072:
-
-/* Line 1455 of yacc.c  */
 #line 14631 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2073:
-
-/* Line 1455 of yacc.c  */
 #line 14632 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2074:
-
-/* Line 1455 of yacc.c  */
 #line 14633 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2075:
-
-/* Line 1455 of yacc.c  */
 #line 14634 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2076:
-
-/* Line 1455 of yacc.c  */
 #line 14635 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2077:
-
-/* Line 1455 of yacc.c  */
 #line 14636 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2078:
-
-/* Line 1455 of yacc.c  */
 #line 14637 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2079:
-
-/* Line 1455 of yacc.c  */
 #line 14638 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2080:
-
-/* Line 1455 of yacc.c  */
 #line 14639 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2081:
-
-/* Line 1455 of yacc.c  */
 #line 14640 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2082:
-
-/* Line 1455 of yacc.c  */
 #line 14641 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2083:
-
-/* Line 1455 of yacc.c  */
 #line 14642 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2084:
-
-/* Line 1455 of yacc.c  */
 #line 14643 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2085:
-
-/* Line 1455 of yacc.c  */
 #line 14644 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2086:
-
-/* Line 1455 of yacc.c  */
 #line 14645 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2087:
-
-/* Line 1455 of yacc.c  */
 #line 14646 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2088:
-
-/* Line 1455 of yacc.c  */
 #line 14647 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2089:
-
-/* Line 1455 of yacc.c  */
 #line 14648 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2090:
-
-/* Line 1455 of yacc.c  */
 #line 14658 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2091:
-
-/* Line 1455 of yacc.c  */
 #line 14659 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2092:
-
-/* Line 1455 of yacc.c  */
 #line 14660 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2093:
-
-/* Line 1455 of yacc.c  */
 #line 14661 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2094:
-
-/* Line 1455 of yacc.c  */
 #line 14662 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2095:
-
-/* Line 1455 of yacc.c  */
 #line 14663 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2096:
-
-/* Line 1455 of yacc.c  */
 #line 14664 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2097:
-
-/* Line 1455 of yacc.c  */
 #line 14665 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2098:
-
-/* Line 1455 of yacc.c  */
 #line 14666 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2099:
-
-/* Line 1455 of yacc.c  */
 #line 14667 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2100:
-
-/* Line 1455 of yacc.c  */
 #line 14668 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2101:
-
-/* Line 1455 of yacc.c  */
 #line 14669 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2102:
-
-/* Line 1455 of yacc.c  */
 #line 14670 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2103:
-
-/* Line 1455 of yacc.c  */
 #line 14671 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2104:
-
-/* Line 1455 of yacc.c  */
 #line 14672 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2105:
-
-/* Line 1455 of yacc.c  */
 #line 14673 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2106:
-
-/* Line 1455 of yacc.c  */
 #line 14674 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2107:
-
-/* Line 1455 of yacc.c  */
 #line 14675 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2108:
-
-/* Line 1455 of yacc.c  */
 #line 14676 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2109:
-
-/* Line 1455 of yacc.c  */
 #line 14677 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2110:
-
-/* Line 1455 of yacc.c  */
 #line 14678 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2111:
-
-/* Line 1455 of yacc.c  */
 #line 14679 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2112:
-
-/* Line 1455 of yacc.c  */
 #line 14680 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2113:
-
-/* Line 1455 of yacc.c  */
 #line 14681 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2114:
-
-/* Line 1455 of yacc.c  */
 #line 14682 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2115:
-
-/* Line 1455 of yacc.c  */
 #line 14683 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2116:
-
-/* Line 1455 of yacc.c  */
 #line 14684 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2117:
-
-/* Line 1455 of yacc.c  */
 #line 14685 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2118:
-
-/* Line 1455 of yacc.c  */
 #line 14686 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2119:
-
-/* Line 1455 of yacc.c  */
 #line 14687 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2120:
-
-/* Line 1455 of yacc.c  */
 #line 14688 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2121:
-
-/* Line 1455 of yacc.c  */
 #line 14689 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2122:
-
-/* Line 1455 of yacc.c  */
 #line 14690 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2123:
-
-/* Line 1455 of yacc.c  */
 #line 14691 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2124:
-
-/* Line 1455 of yacc.c  */
 #line 14692 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2125:
-
-/* Line 1455 of yacc.c  */
 #line 14693 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2126:
-
-/* Line 1455 of yacc.c  */
 #line 14694 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2127:
-
-/* Line 1455 of yacc.c  */
 #line 14695 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2128:
-
-/* Line 1455 of yacc.c  */
 #line 14696 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2129:
-
-/* Line 1455 of yacc.c  */
 #line 14697 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2130:
-
-/* Line 1455 of yacc.c  */
 #line 14698 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2131:
-
-/* Line 1455 of yacc.c  */
 #line 14699 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2132:
-
-/* Line 1455 of yacc.c  */
 #line 14700 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2133:
-
-/* Line 1455 of yacc.c  */
 #line 14701 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2134:
-
-/* Line 1455 of yacc.c  */
 #line 14702 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2135:
-
-/* Line 1455 of yacc.c  */
 #line 14707 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2136:
-
-/* Line 1455 of yacc.c  */
 #line 14708 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2137:
-
-/* Line 1455 of yacc.c  */
 #line 14709 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2138:
-
-/* Line 1455 of yacc.c  */
 #line 14710 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2139:
-
-/* Line 1455 of yacc.c  */
 #line 14711 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2140:
-
-/* Line 1455 of yacc.c  */
 #line 14712 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2141:
-
-/* Line 1455 of yacc.c  */
 #line 14713 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2142:
-
-/* Line 1455 of yacc.c  */
 #line 14714 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2143:
-
-/* Line 1455 of yacc.c  */
 #line 14715 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2144:
-
-/* Line 1455 of yacc.c  */
 #line 14716 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2145:
-
-/* Line 1455 of yacc.c  */
 #line 14717 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2146:
-
-/* Line 1455 of yacc.c  */
 #line 14718 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2147:
-
-/* Line 1455 of yacc.c  */
 #line 14719 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2148:
-
-/* Line 1455 of yacc.c  */
 #line 14720 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2149:
-
-/* Line 1455 of yacc.c  */
 #line 14721 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2150:
-
-/* Line 1455 of yacc.c  */
 #line 14722 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2151:
-
-/* Line 1455 of yacc.c  */
 #line 14723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2152:
-
-/* Line 1455 of yacc.c  */
 #line 14724 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2153:
-
-/* Line 1455 of yacc.c  */
 #line 14725 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2154:
-
-/* Line 1455 of yacc.c  */
 #line 14726 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2155:
-
-/* Line 1455 of yacc.c  */
 #line 14727 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2156:
-
-/* Line 1455 of yacc.c  */
 #line 14728 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2157:
-
-/* Line 1455 of yacc.c  */
 #line 14729 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2158:
-
-/* Line 1455 of yacc.c  */
 #line 14730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2159:
-
-/* Line 1455 of yacc.c  */
 #line 14731 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2160:
-
-/* Line 1455 of yacc.c  */
 #line 14732 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2161:
-
-/* Line 1455 of yacc.c  */
 #line 14733 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2162:
-
-/* Line 1455 of yacc.c  */
 #line 14734 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2163:
-
-/* Line 1455 of yacc.c  */
 #line 14735 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2164:
-
-/* Line 1455 of yacc.c  */
 #line 14736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2165:
-
-/* Line 1455 of yacc.c  */
 #line 14737 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2166:
-
-/* Line 1455 of yacc.c  */
 #line 14738 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2167:
-
-/* Line 1455 of yacc.c  */
 #line 14739 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2168:
-
-/* Line 1455 of yacc.c  */
 #line 14740 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2169:
-
-/* Line 1455 of yacc.c  */
 #line 14741 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2170:
-
-/* Line 1455 of yacc.c  */
 #line 14742 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2171:
-
-/* Line 1455 of yacc.c  */
 #line 14743 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2172:
-
-/* Line 1455 of yacc.c  */
 #line 14744 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2173:
-
-/* Line 1455 of yacc.c  */
 #line 14745 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2174:
-
-/* Line 1455 of yacc.c  */
 #line 14746 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2175:
-
-/* Line 1455 of yacc.c  */
 #line 14747 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2176:
-
-/* Line 1455 of yacc.c  */
 #line 14748 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2177:
-
-/* Line 1455 of yacc.c  */
 #line 14749 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2178:
-
-/* Line 1455 of yacc.c  */
 #line 14750 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2179:
-
-/* Line 1455 of yacc.c  */
 #line 14751 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2180:
-
-/* Line 1455 of yacc.c  */
 #line 14752 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2181:
-
-/* Line 1455 of yacc.c  */
 #line 14753 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2182:
-
-/* Line 1455 of yacc.c  */
 #line 14754 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2183:
-
-/* Line 1455 of yacc.c  */
 #line 14755 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2184:
-
-/* Line 1455 of yacc.c  */
 #line 14756 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2185:
-
-/* Line 1455 of yacc.c  */
 #line 14757 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2186:
-
-/* Line 1455 of yacc.c  */
 #line 14758 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2187:
-
-/* Line 1455 of yacc.c  */
 #line 14759 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2188:
-
-/* Line 1455 of yacc.c  */
 #line 14760 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2189:
-
-/* Line 1455 of yacc.c  */
 #line 14761 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2190:
-
-/* Line 1455 of yacc.c  */
 #line 14762 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2191:
-
-/* Line 1455 of yacc.c  */
 #line 14763 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2192:
-
-/* Line 1455 of yacc.c  */
 #line 14764 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2193:
-
-/* Line 1455 of yacc.c  */
 #line 14765 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2194:
-
-/* Line 1455 of yacc.c  */
 #line 14766 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2195:
-
-/* Line 1455 of yacc.c  */
 #line 14767 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2196:
-
-/* Line 1455 of yacc.c  */
 #line 14768 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2197:
-
-/* Line 1455 of yacc.c  */
 #line 14769 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2198:
-
-/* Line 1455 of yacc.c  */
 #line 14770 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2199:
-
-/* Line 1455 of yacc.c  */
 #line 14771 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2200:
-
-/* Line 1455 of yacc.c  */
 #line 14772 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2201:
-
-/* Line 1455 of yacc.c  */
 #line 14773 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2202:
-
-/* Line 1455 of yacc.c  */
 #line 14774 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2203:
-
-/* Line 1455 of yacc.c  */
 #line 14775 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2204:
-
-/* Line 1455 of yacc.c  */
 #line 14776 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2205:
-
-/* Line 1455 of yacc.c  */
 #line 14777 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2206:
-
-/* Line 1455 of yacc.c  */
 #line 14778 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2207:
-
-/* Line 1455 of yacc.c  */
 #line 14779 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2208:
-
-/* Line 1455 of yacc.c  */
 #line 14780 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2209:
-
-/* Line 1455 of yacc.c  */
 #line 14781 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2210:
-
-/* Line 1455 of yacc.c  */
 #line 14782 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2211:
-
-/* Line 1455 of yacc.c  */
 #line 14783 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2212:
-
-/* Line 1455 of yacc.c  */
 #line 14784 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2213:
-
-/* Line 1455 of yacc.c  */
 #line 14785 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2214:
-
-/* Line 1455 of yacc.c  */
 #line 14786 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2215:
-
-/* Line 1455 of yacc.c  */
 #line 14787 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2216:
-
-/* Line 1455 of yacc.c  */
 #line 14788 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2217:
-
-/* Line 1455 of yacc.c  */
 #line 14789 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2218:
-
-/* Line 1455 of yacc.c  */
 #line 14790 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2219:
-
-/* Line 1455 of yacc.c  */
 #line 14791 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2220:
-
-/* Line 1455 of yacc.c  */
 #line 14792 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2221:
-
-/* Line 1455 of yacc.c  */
 #line 14793 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2222:
-
-/* Line 1455 of yacc.c  */
 #line 14794 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2223:
-
-/* Line 1455 of yacc.c  */
 #line 14795 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2224:
-
-/* Line 1455 of yacc.c  */
 #line 14796 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2225:
-
-/* Line 1455 of yacc.c  */
 #line 14797 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2226:
-
-/* Line 1455 of yacc.c  */
 #line 14798 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2227:
-
-/* Line 1455 of yacc.c  */
 #line 14799 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2228:
-
-/* Line 1455 of yacc.c  */
 #line 14800 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2229:
-
-/* Line 1455 of yacc.c  */
 #line 14801 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2230:
-
-/* Line 1455 of yacc.c  */
 #line 14802 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2231:
-
-/* Line 1455 of yacc.c  */
 #line 14803 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2232:
-
-/* Line 1455 of yacc.c  */
 #line 14804 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2233:
-
-/* Line 1455 of yacc.c  */
 #line 14805 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2234:
-
-/* Line 1455 of yacc.c  */
 #line 14806 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2235:
-
-/* Line 1455 of yacc.c  */
 #line 14807 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2236:
-
-/* Line 1455 of yacc.c  */
 #line 14808 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2237:
-
-/* Line 1455 of yacc.c  */
 #line 14809 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2238:
-
-/* Line 1455 of yacc.c  */
 #line 14810 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2239:
-
-/* Line 1455 of yacc.c  */
 #line 14811 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2240:
-
-/* Line 1455 of yacc.c  */
 #line 14812 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2241:
-
-/* Line 1455 of yacc.c  */
 #line 14813 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2242:
-
-/* Line 1455 of yacc.c  */
 #line 14814 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2243:
-
-/* Line 1455 of yacc.c  */
 #line 14815 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2244:
-
-/* Line 1455 of yacc.c  */
 #line 14816 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2245:
-
-/* Line 1455 of yacc.c  */
 #line 14817 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2246:
-
-/* Line 1455 of yacc.c  */
 #line 14818 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2247:
-
-/* Line 1455 of yacc.c  */
 #line 14819 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2248:
-
-/* Line 1455 of yacc.c  */
 #line 14820 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2249:
-
-/* Line 1455 of yacc.c  */
 #line 14821 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2250:
-
-/* Line 1455 of yacc.c  */
 #line 14822 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2251:
-
-/* Line 1455 of yacc.c  */
 #line 14823 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2252:
-
-/* Line 1455 of yacc.c  */
 #line 14824 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2253:
-
-/* Line 1455 of yacc.c  */
 #line 14825 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2254:
-
-/* Line 1455 of yacc.c  */
 #line 14826 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2255:
-
-/* Line 1455 of yacc.c  */
 #line 14827 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2256:
-
-/* Line 1455 of yacc.c  */
 #line 14828 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2257:
-
-/* Line 1455 of yacc.c  */
 #line 14829 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2258:
-
-/* Line 1455 of yacc.c  */
 #line 14830 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2259:
-
-/* Line 1455 of yacc.c  */
 #line 14831 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2260:
-
-/* Line 1455 of yacc.c  */
 #line 14832 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2261:
-
-/* Line 1455 of yacc.c  */
 #line 14833 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2262:
-
-/* Line 1455 of yacc.c  */
 #line 14834 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2263:
-
-/* Line 1455 of yacc.c  */
 #line 14835 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2264:
-
-/* Line 1455 of yacc.c  */
 #line 14836 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2265:
-
-/* Line 1455 of yacc.c  */
 #line 14837 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2266:
-
-/* Line 1455 of yacc.c  */
 #line 14838 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2267:
-
-/* Line 1455 of yacc.c  */
 #line 14839 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2268:
-
-/* Line 1455 of yacc.c  */
 #line 14840 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2269:
-
-/* Line 1455 of yacc.c  */
 #line 14841 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2270:
-
-/* Line 1455 of yacc.c  */
 #line 14842 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2271:
-
-/* Line 1455 of yacc.c  */
 #line 14843 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2272:
-
-/* Line 1455 of yacc.c  */
 #line 14844 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2273:
-
-/* Line 1455 of yacc.c  */
 #line 14845 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2274:
-
-/* Line 1455 of yacc.c  */
 #line 14846 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2275:
-
-/* Line 1455 of yacc.c  */
 #line 14847 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2276:
-
-/* Line 1455 of yacc.c  */
 #line 14848 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2277:
-
-/* Line 1455 of yacc.c  */
 #line 14849 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2278:
-
-/* Line 1455 of yacc.c  */
 #line 14850 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2279:
-
-/* Line 1455 of yacc.c  */
 #line 14851 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2280:
-
-/* Line 1455 of yacc.c  */
 #line 14852 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2281:
-
-/* Line 1455 of yacc.c  */
 #line 14853 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2282:
-
-/* Line 1455 of yacc.c  */
 #line 14854 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2283:
-
-/* Line 1455 of yacc.c  */
 #line 14855 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2284:
-
-/* Line 1455 of yacc.c  */
 #line 14856 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2285:
-
-/* Line 1455 of yacc.c  */
 #line 14857 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2286:
-
-/* Line 1455 of yacc.c  */
 #line 14858 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2287:
-
-/* Line 1455 of yacc.c  */
 #line 14859 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2288:
-
-/* Line 1455 of yacc.c  */
 #line 14860 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2289:
-
-/* Line 1455 of yacc.c  */
 #line 14861 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2290:
-
-/* Line 1455 of yacc.c  */
 #line 14862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2291:
-
-/* Line 1455 of yacc.c  */
 #line 14863 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2292:
-
-/* Line 1455 of yacc.c  */
 #line 14864 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2293:
-
-/* Line 1455 of yacc.c  */
 #line 14865 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2294:
-
-/* Line 1455 of yacc.c  */
 #line 14866 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2295:
-
-/* Line 1455 of yacc.c  */
 #line 14867 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2296:
-
-/* Line 1455 of yacc.c  */
 #line 14868 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2297:
-
-/* Line 1455 of yacc.c  */
 #line 14869 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2298:
-
-/* Line 1455 of yacc.c  */
 #line 14870 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2299:
-
-/* Line 1455 of yacc.c  */
 #line 14871 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2300:
-
-/* Line 1455 of yacc.c  */
 #line 14872 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2301:
-
-/* Line 1455 of yacc.c  */
 #line 14873 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2302:
-
-/* Line 1455 of yacc.c  */
 #line 14874 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2303:
-
-/* Line 1455 of yacc.c  */
 #line 14875 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2304:
-
-/* Line 1455 of yacc.c  */
 #line 14876 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2305:
-
-/* Line 1455 of yacc.c  */
 #line 14877 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2306:
-
-/* Line 1455 of yacc.c  */
 #line 14878 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2307:
-
-/* Line 1455 of yacc.c  */
 #line 14879 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2308:
-
-/* Line 1455 of yacc.c  */
 #line 14880 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2309:
-
-/* Line 1455 of yacc.c  */
 #line 14881 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2310:
-
-/* Line 1455 of yacc.c  */
 #line 14882 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2311:
-
-/* Line 1455 of yacc.c  */
 #line 14883 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2312:
-
-/* Line 1455 of yacc.c  */
 #line 14884 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2313:
-
-/* Line 1455 of yacc.c  */
 #line 14885 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2314:
-
-/* Line 1455 of yacc.c  */
 #line 14886 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2315:
-
-/* Line 1455 of yacc.c  */
 #line 14887 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2316:
-
-/* Line 1455 of yacc.c  */
 #line 14888 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2317:
-
-/* Line 1455 of yacc.c  */
 #line 14889 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2318:
-
-/* Line 1455 of yacc.c  */
 #line 14890 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2319:
-
-/* Line 1455 of yacc.c  */
 #line 14891 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2320:
-
-/* Line 1455 of yacc.c  */
 #line 14892 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2321:
-
-/* Line 1455 of yacc.c  */
 #line 14893 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2322:
-
-/* Line 1455 of yacc.c  */
 #line 14894 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2323:
-
-/* Line 1455 of yacc.c  */
 #line 14895 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2324:
-
-/* Line 1455 of yacc.c  */
 #line 14896 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2325:
-
-/* Line 1455 of yacc.c  */
 #line 14897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2326:
-
-/* Line 1455 of yacc.c  */
 #line 14898 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2327:
-
-/* Line 1455 of yacc.c  */
 #line 14899 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2328:
-
-/* Line 1455 of yacc.c  */
 #line 14900 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2329:
-
-/* Line 1455 of yacc.c  */
 #line 14901 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2330:
-
-/* Line 1455 of yacc.c  */
 #line 14902 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2331:
-
-/* Line 1455 of yacc.c  */
 #line 14903 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2332:
-
-/* Line 1455 of yacc.c  */
 #line 14904 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2333:
-
-/* Line 1455 of yacc.c  */
 #line 14905 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2334:
-
-/* Line 1455 of yacc.c  */
 #line 14906 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2335:
-
-/* Line 1455 of yacc.c  */
 #line 14907 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2336:
-
-/* Line 1455 of yacc.c  */
 #line 14908 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2337:
-
-/* Line 1455 of yacc.c  */
 #line 14909 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2338:
-
-/* Line 1455 of yacc.c  */
 #line 14910 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2339:
-
-/* Line 1455 of yacc.c  */
 #line 14911 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2340:
-
-/* Line 1455 of yacc.c  */
 #line 14912 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2341:
-
-/* Line 1455 of yacc.c  */
 #line 14913 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2342:
-
-/* Line 1455 of yacc.c  */
 #line 14914 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2343:
-
-/* Line 1455 of yacc.c  */
 #line 14915 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2344:
-
-/* Line 1455 of yacc.c  */
 #line 14916 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2345:
-
-/* Line 1455 of yacc.c  */
 #line 14917 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2346:
-
-/* Line 1455 of yacc.c  */
 #line 14918 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2347:
-
-/* Line 1455 of yacc.c  */
 #line 14919 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2348:
-
-/* Line 1455 of yacc.c  */
 #line 14920 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2349:
-
-/* Line 1455 of yacc.c  */
 #line 14921 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2350:
-
-/* Line 1455 of yacc.c  */
 #line 14922 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2351:
-
-/* Line 1455 of yacc.c  */
 #line 14923 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2352:
-
-/* Line 1455 of yacc.c  */
 #line 14924 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2353:
-
-/* Line 1455 of yacc.c  */
 #line 14925 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2354:
-
-/* Line 1455 of yacc.c  */
 #line 14926 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2355:
-
-/* Line 1455 of yacc.c  */
 #line 14927 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2356:
-
-/* Line 1455 of yacc.c  */
 #line 14928 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2357:
-
-/* Line 1455 of yacc.c  */
 #line 14929 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2358:
-
-/* Line 1455 of yacc.c  */
 #line 14930 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2359:
-
-/* Line 1455 of yacc.c  */
 #line 14931 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2360:
-
-/* Line 1455 of yacc.c  */
 #line 14932 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2361:
-
-/* Line 1455 of yacc.c  */
 #line 14933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2362:
-
-/* Line 1455 of yacc.c  */
 #line 14934 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2363:
-
-/* Line 1455 of yacc.c  */
 #line 14935 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2364:
-
-/* Line 1455 of yacc.c  */
 #line 14936 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2365:
-
-/* Line 1455 of yacc.c  */
 #line 14937 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2366:
-
-/* Line 1455 of yacc.c  */
 #line 14938 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2367:
-
-/* Line 1455 of yacc.c  */
 #line 14939 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2368:
-
-/* Line 1455 of yacc.c  */
 #line 14940 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2369:
-
-/* Line 1455 of yacc.c  */
 #line 14941 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2370:
-
-/* Line 1455 of yacc.c  */
 #line 14942 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2371:
-
-/* Line 1455 of yacc.c  */
 #line 14943 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2372:
-
-/* Line 1455 of yacc.c  */
 #line 14944 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2373:
-
-/* Line 1455 of yacc.c  */
 #line 14945 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2374:
-
-/* Line 1455 of yacc.c  */
 #line 14946 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2375:
-
-/* Line 1455 of yacc.c  */
 #line 14947 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2376:
-
-/* Line 1455 of yacc.c  */
 #line 14948 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2377:
-
-/* Line 1455 of yacc.c  */
 #line 14949 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2378:
-
-/* Line 1455 of yacc.c  */
 #line 14950 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2379:
-
-/* Line 1455 of yacc.c  */
 #line 14951 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2380:
-
-/* Line 1455 of yacc.c  */
 #line 14952 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2381:
-
-/* Line 1455 of yacc.c  */
 #line 14953 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2382:
-
-/* Line 1455 of yacc.c  */
 #line 14954 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2383:
-
-/* Line 1455 of yacc.c  */
 #line 14955 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2384:
-
-/* Line 1455 of yacc.c  */
 #line 14956 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2385:
-
-/* Line 1455 of yacc.c  */
 #line 14957 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2386:
-
-/* Line 1455 of yacc.c  */
 #line 14958 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2387:
-
-/* Line 1455 of yacc.c  */
 #line 14959 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2388:
-
-/* Line 1455 of yacc.c  */
 #line 14960 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2389:
-
-/* Line 1455 of yacc.c  */
 #line 14961 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2390:
-
-/* Line 1455 of yacc.c  */
 #line 14962 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2391:
-
-/* Line 1455 of yacc.c  */
 #line 14963 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2392:
-
-/* Line 1455 of yacc.c  */
 #line 14975 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -39935,15 +35953,11 @@ yyreduce:
     break;
 
   case 2393:
-
-/* Line 1455 of yacc.c  */
 #line 14987 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2394:
-
-/* Line 1455 of yacc.c  */
 #line 14994 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -39952,8 +35966,6 @@ yyreduce:
     break;
 
   case 2396:
-
-/* Line 1455 of yacc.c  */
 #line 15000 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->option_type= OPT_DEFAULT;
@@ -39961,8 +35973,6 @@ yyreduce:
     break;
 
   case 2397:
-
-/* Line 1455 of yacc.c  */
 #line 15004 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -39971,8 +35981,6 @@ yyreduce:
     break;
 
   case 2398:
-
-/* Line 1455 of yacc.c  */
 #line 15009 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->option_type= (yyvsp[(1) - (1)].var_type);
@@ -39980,8 +35988,6 @@ yyreduce:
     break;
 
   case 2400:
-
-/* Line 1455 of yacc.c  */
 #line 15019 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -39990,8 +35996,6 @@ yyreduce:
     break;
 
   case 2402:
-
-/* Line 1455 of yacc.c  */
 #line 15025 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -40000,8 +36004,6 @@ yyreduce:
     break;
 
   case 2405:
-
-/* Line 1455 of yacc.c  */
 #line 15039 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             sp_create_assignment_lex(YYTHD, YY_TOKEN_START);
@@ -40009,8 +36011,6 @@ yyreduce:
     break;
 
   case 2406:
-
-/* Line 1455 of yacc.c  */
 #line 15043 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -40019,8 +36019,6 @@ yyreduce:
     break;
 
   case 2407:
-
-/* Line 1455 of yacc.c  */
 #line 15048 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             sp_create_assignment_lex(YYTHD, YY_TOKEN_START);
@@ -40028,8 +36026,6 @@ yyreduce:
     break;
 
   case 2408:
-
-/* Line 1455 of yacc.c  */
 #line 15052 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
@@ -40038,8 +36034,6 @@ yyreduce:
     break;
 
   case 2409:
-
-/* Line 1455 of yacc.c  */
 #line 15061 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->option_type= (yyvsp[(1) - (1)].var_type);
@@ -40047,85 +36041,61 @@ yyreduce:
     break;
 
   case 2412:
-
-/* Line 1455 of yacc.c  */
 #line 15069 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_GLOBAL; }
     break;
 
   case 2413:
-
-/* Line 1455 of yacc.c  */
 #line 15070 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2414:
-
-/* Line 1455 of yacc.c  */
 #line 15071 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2415:
-
-/* Line 1455 of yacc.c  */
 #line 15075 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2416:
-
-/* Line 1455 of yacc.c  */
 #line 15076 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_GLOBAL; }
     break;
 
   case 2417:
-
-/* Line 1455 of yacc.c  */
 #line 15077 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2418:
-
-/* Line 1455 of yacc.c  */
 #line 15078 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2419:
-
-/* Line 1455 of yacc.c  */
 #line 15082 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_DEFAULT; }
     break;
 
   case 2420:
-
-/* Line 1455 of yacc.c  */
 #line 15083 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_GLOBAL; }
     break;
 
   case 2421:
-
-/* Line 1455 of yacc.c  */
 #line 15084 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2422:
-
-/* Line 1455 of yacc.c  */
 #line 15085 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.var_type)=OPT_SESSION; }
     break;
 
   case 2423:
-
-/* Line 1455 of yacc.c  */
 #line 15091 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40150,8 +36120,6 @@ yyreduce:
     break;
 
   case 2424:
-
-/* Line 1455 of yacc.c  */
 #line 15116 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             sp_head *sp= Lex->sphead;
@@ -40162,8 +36130,6 @@ yyreduce:
     break;
 
   case 2425:
-
-/* Line 1455 of yacc.c  */
 #line 15123 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40260,8 +36226,6 @@ yyreduce:
     break;
 
   case 2426:
-
-/* Line 1455 of yacc.c  */
 #line 15216 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Item_func_set_user_var *item;
@@ -40276,8 +36240,6 @@ yyreduce:
     break;
 
   case 2427:
-
-/* Line 1455 of yacc.c  */
 #line 15227 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40294,8 +36256,6 @@ yyreduce:
     break;
 
   case 2428:
-
-/* Line 1455 of yacc.c  */
 #line 15240 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40315,8 +36275,6 @@ yyreduce:
     break;
 
   case 2429:
-
-/* Line 1455 of yacc.c  */
 #line 15256 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -40333,8 +36291,6 @@ yyreduce:
     break;
 
   case 2430:
-
-/* Line 1455 of yacc.c  */
 #line 15269 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -40360,8 +36316,6 @@ yyreduce:
     break;
 
   case 2431:
-
-/* Line 1455 of yacc.c  */
 #line 15291 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40400,8 +36354,6 @@ yyreduce:
     break;
 
   case 2432:
-
-/* Line 1455 of yacc.c  */
 #line 15326 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX_USER *user= (yyvsp[(3) - (5)].lex_user);
@@ -40444,8 +36396,6 @@ yyreduce:
     break;
 
   case 2433:
-
-/* Line 1455 of yacc.c  */
 #line 15368 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40477,8 +36427,6 @@ yyreduce:
     break;
 
   case 2434:
-
-/* Line 1455 of yacc.c  */
 #line 15396 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -40528,8 +36476,6 @@ yyreduce:
     break;
 
   case 2435:
-
-/* Line 1455 of yacc.c  */
 #line 15442 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             sys_var *tmp=find_sys_var(YYTHD, (yyvsp[(3) - (3)].lex_str).str, (yyvsp[(3) - (3)].lex_str).length);
@@ -40544,8 +36490,6 @@ yyreduce:
     break;
 
   case 2440:
-
-/* Line 1455 of yacc.c  */
 #line 15463 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40564,8 +36508,6 @@ yyreduce:
     break;
 
   case 2441:
-
-/* Line 1455 of yacc.c  */
 #line 15481 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40584,57 +36526,41 @@ yyreduce:
     break;
 
   case 2442:
-
-/* Line 1455 of yacc.c  */
 #line 15498 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= true; }
     break;
 
   case 2443:
-
-/* Line 1455 of yacc.c  */
 #line 15499 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= false; }
     break;
 
   case 2444:
-
-/* Line 1455 of yacc.c  */
 #line 15503 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.tx_isolation)= ISO_READ_UNCOMMITTED; }
     break;
 
   case 2445:
-
-/* Line 1455 of yacc.c  */
 #line 15504 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.tx_isolation)= ISO_READ_COMMITTED; }
     break;
 
   case 2446:
-
-/* Line 1455 of yacc.c  */
 #line 15505 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.tx_isolation)= ISO_REPEATABLE_READ; }
     break;
 
   case 2447:
-
-/* Line 1455 of yacc.c  */
 #line 15506 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.tx_isolation)= ISO_SERIALIZABLE; }
     break;
 
   case 2448:
-
-/* Line 1455 of yacc.c  */
 #line 15510 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.simple_string)=(yyvsp[(1) - (1)].lex_str).str;}
     break;
 
   case 2449:
-
-/* Line 1455 of yacc.c  */
 #line 15512 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if ((yyvsp[(3) - (4)].lex_str).length == 0)
@@ -40656,8 +36582,6 @@ yyreduce:
     break;
 
   case 2450:
-
-/* Line 1455 of yacc.c  */
 #line 15530 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.simple_string)= (yyvsp[(3) - (4)].lex_str).length ? Item_func_old_password::
@@ -40670,22 +36594,16 @@ yyreduce:
     break;
 
   case 2451:
-
-/* Line 1455 of yacc.c  */
 #line 15542 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=(yyvsp[(1) - (1)].item); }
     break;
 
   case 2452:
-
-/* Line 1455 of yacc.c  */
 #line 15543 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.item)=0; }
     break;
 
   case 2453:
-
-/* Line 1455 of yacc.c  */
 #line 15545 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)=new (YYTHD->mem_root) Item_string("ON",  2, system_charset_info);
@@ -40695,8 +36613,6 @@ yyreduce:
     break;
 
   case 2454:
-
-/* Line 1455 of yacc.c  */
 #line 15551 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)=new (YYTHD->mem_root) Item_string("ALL", 3, system_charset_info);
@@ -40706,8 +36622,6 @@ yyreduce:
     break;
 
   case 2455:
-
-/* Line 1455 of yacc.c  */
 #line 15557 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.item)=new (YYTHD->mem_root) Item_string("binary", 6, system_charset_info);
@@ -40717,8 +36631,6 @@ yyreduce:
     break;
 
   case 2456:
-
-/* Line 1455 of yacc.c  */
 #line 15568 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -40733,15 +36645,11 @@ yyreduce:
     break;
 
   case 2457:
-
-/* Line 1455 of yacc.c  */
 #line 15579 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2462:
-
-/* Line 1455 of yacc.c  */
 #line 15594 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             thr_lock_type lock_type= (thr_lock_type) (yyvsp[(3) - (3)].num);
@@ -40755,22 +36663,16 @@ yyreduce:
     break;
 
   case 2463:
-
-/* Line 1455 of yacc.c  */
 #line 15606 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TL_READ_NO_INSERT; }
     break;
 
   case 2464:
-
-/* Line 1455 of yacc.c  */
 #line 15607 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TL_WRITE_DEFAULT; }
     break;
 
   case 2465:
-
-/* Line 1455 of yacc.c  */
 #line 15609 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             (yyval.num)= TL_WRITE_LOW_PRIORITY; 
@@ -40779,15 +36681,11 @@ yyreduce:
     break;
 
   case 2466:
-
-/* Line 1455 of yacc.c  */
 #line 15613 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= TL_READ; }
     break;
 
   case 2467:
-
-/* Line 1455 of yacc.c  */
 #line 15618 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -40802,15 +36700,11 @@ yyreduce:
     break;
 
   case 2468:
-
-/* Line 1455 of yacc.c  */
 #line 15629 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2469:
-
-/* Line 1455 of yacc.c  */
 #line 15638 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40830,8 +36724,6 @@ yyreduce:
     break;
 
   case 2470:
-
-/* Line 1455 of yacc.c  */
 #line 15654 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40851,8 +36743,6 @@ yyreduce:
     break;
 
   case 2471:
-
-/* Line 1455 of yacc.c  */
 #line 15670 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -40874,8 +36764,6 @@ yyreduce:
     break;
 
   case 2472:
-
-/* Line 1455 of yacc.c  */
 #line 15688 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -40897,64 +36785,46 @@ yyreduce:
     break;
 
   case 2473:
-
-/* Line 1455 of yacc.c  */
 #line 15708 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ident= null_lex_str; (yyval.ha_read_mode)=(yyvsp[(1) - (1)].ha_read_mode); }
     break;
 
   case 2474:
-
-/* Line 1455 of yacc.c  */
 #line 15709 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->ident= (yyvsp[(1) - (2)].lex_str); (yyval.ha_read_mode)=(yyvsp[(2) - (2)].ha_read_mode); }
     break;
 
   case 2475:
-
-/* Line 1455 of yacc.c  */
 #line 15713 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RFIRST; }
     break;
 
   case 2476:
-
-/* Line 1455 of yacc.c  */
 #line 15714 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RNEXT;  }
     break;
 
   case 2477:
-
-/* Line 1455 of yacc.c  */
 #line 15718 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RFIRST; }
     break;
 
   case 2478:
-
-/* Line 1455 of yacc.c  */
 #line 15719 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RNEXT;  }
     break;
 
   case 2479:
-
-/* Line 1455 of yacc.c  */
 #line 15720 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RPREV;  }
     break;
 
   case 2480:
-
-/* Line 1455 of yacc.c  */
 #line 15721 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_read_mode)= RLAST;  }
     break;
 
   case 2481:
-
-/* Line 1455 of yacc.c  */
 #line 15723 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             YYTHD->m_parser_state->m_yacc.m_ha_rkey_mode= (yyvsp[(1) - (1)].ha_rkey_mode);
@@ -40965,8 +36835,6 @@ yyreduce:
     break;
 
   case 2482:
-
-/* Line 1455 of yacc.c  */
 #line 15730 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.ha_read_mode)= RKEY;
@@ -40974,57 +36842,41 @@ yyreduce:
     break;
 
   case 2483:
-
-/* Line 1455 of yacc.c  */
 #line 15736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_rkey_mode)=HA_READ_KEY_EXACT;   }
     break;
 
   case 2484:
-
-/* Line 1455 of yacc.c  */
 #line 15737 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_rkey_mode)=HA_READ_KEY_OR_NEXT; }
     break;
 
   case 2485:
-
-/* Line 1455 of yacc.c  */
 #line 15738 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_rkey_mode)=HA_READ_KEY_OR_PREV; }
     break;
 
   case 2486:
-
-/* Line 1455 of yacc.c  */
 #line 15739 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_rkey_mode)=HA_READ_AFTER_KEY;   }
     break;
 
   case 2487:
-
-/* Line 1455 of yacc.c  */
 #line 15740 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.ha_rkey_mode)=HA_READ_BEFORE_KEY;  }
     break;
 
   case 2488:
-
-/* Line 1455 of yacc.c  */
 #line 15746 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_REVOKE; }
     break;
 
   case 2489:
-
-/* Line 1455 of yacc.c  */
 #line 15747 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2490:
-
-/* Line 1455 of yacc.c  */
 #line 15752 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41033,8 +36885,6 @@ yyreduce:
     break;
 
   case 2491:
-
-/* Line 1455 of yacc.c  */
 #line 15757 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41048,8 +36898,6 @@ yyreduce:
     break;
 
   case 2492:
-
-/* Line 1455 of yacc.c  */
 #line 15767 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41063,8 +36911,6 @@ yyreduce:
     break;
 
   case 2493:
-
-/* Line 1455 of yacc.c  */
 #line 15777 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_REVOKE_ALL;
@@ -41072,8 +36918,6 @@ yyreduce:
     break;
 
   case 2494:
-
-/* Line 1455 of yacc.c  */
 #line 15781 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41083,22 +36927,16 @@ yyreduce:
     break;
 
   case 2495:
-
-/* Line 1455 of yacc.c  */
 #line 15789 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->sql_command= SQLCOM_GRANT; }
     break;
 
   case 2496:
-
-/* Line 1455 of yacc.c  */
 #line 15790 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2497:
-
-/* Line 1455 of yacc.c  */
 #line 15796 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41107,8 +36945,6 @@ yyreduce:
     break;
 
   case 2498:
-
-/* Line 1455 of yacc.c  */
 #line 15802 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41122,8 +36958,6 @@ yyreduce:
     break;
 
   case 2499:
-
-/* Line 1455 of yacc.c  */
 #line 15813 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41137,8 +36971,6 @@ yyreduce:
     break;
 
   case 2500:
-
-/* Line 1455 of yacc.c  */
 #line 15823 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41148,8 +36980,6 @@ yyreduce:
     break;
 
   case 2503:
-
-/* Line 1455 of yacc.c  */
 #line 15837 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41160,8 +36990,6 @@ yyreduce:
     break;
 
   case 2504:
-
-/* Line 1455 of yacc.c  */
 #line 15844 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             Lex->all_privileges= 1; 
@@ -41170,260 +36998,186 @@ yyreduce:
     break;
 
   case 2509:
-
-/* Line 1455 of yacc.c  */
 #line 15862 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->which_columns = SELECT_ACL;}
     break;
 
   case 2510:
-
-/* Line 1455 of yacc.c  */
 #line 15863 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2511:
-
-/* Line 1455 of yacc.c  */
 #line 15865 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->which_columns = INSERT_ACL;}
     break;
 
   case 2512:
-
-/* Line 1455 of yacc.c  */
 #line 15866 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2513:
-
-/* Line 1455 of yacc.c  */
 #line 15868 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->which_columns = UPDATE_ACL; }
     break;
 
   case 2514:
-
-/* Line 1455 of yacc.c  */
 #line 15869 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2515:
-
-/* Line 1455 of yacc.c  */
 #line 15871 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->which_columns = REFERENCES_ACL;}
     break;
 
   case 2516:
-
-/* Line 1455 of yacc.c  */
 #line 15872 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2517:
-
-/* Line 1455 of yacc.c  */
 #line 15873 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= DELETE_ACL;}
     break;
 
   case 2518:
-
-/* Line 1455 of yacc.c  */
 #line 15874 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2519:
-
-/* Line 1455 of yacc.c  */
 #line 15875 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= INDEX_ACL;}
     break;
 
   case 2520:
-
-/* Line 1455 of yacc.c  */
 #line 15876 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= ALTER_ACL;}
     break;
 
   case 2521:
-
-/* Line 1455 of yacc.c  */
 #line 15877 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_ACL;}
     break;
 
   case 2522:
-
-/* Line 1455 of yacc.c  */
 #line 15878 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= DROP_ACL;}
     break;
 
   case 2523:
-
-/* Line 1455 of yacc.c  */
 #line 15879 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= EXECUTE_ACL;}
     break;
 
   case 2524:
-
-/* Line 1455 of yacc.c  */
 #line 15880 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= RELOAD_ACL;}
     break;
 
   case 2525:
-
-/* Line 1455 of yacc.c  */
 #line 15881 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= SHUTDOWN_ACL;}
     break;
 
   case 2526:
-
-/* Line 1455 of yacc.c  */
 #line 15882 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= PROCESS_ACL;}
     break;
 
   case 2527:
-
-/* Line 1455 of yacc.c  */
 #line 15883 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= FILE_ACL;}
     break;
 
   case 2528:
-
-/* Line 1455 of yacc.c  */
 #line 15884 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= GRANT_ACL;}
     break;
 
   case 2529:
-
-/* Line 1455 of yacc.c  */
 #line 15885 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= SHOW_DB_ACL;}
     break;
 
   case 2530:
-
-/* Line 1455 of yacc.c  */
 #line 15886 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= SUPER_ACL;}
     break;
 
   case 2531:
-
-/* Line 1455 of yacc.c  */
 #line 15887 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_TMP_ACL;}
     break;
 
   case 2532:
-
-/* Line 1455 of yacc.c  */
 #line 15888 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= LOCK_TABLES_ACL; }
     break;
 
   case 2533:
-
-/* Line 1455 of yacc.c  */
 #line 15889 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= REPL_SLAVE_ACL; }
     break;
 
   case 2534:
-
-/* Line 1455 of yacc.c  */
 #line 15890 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= REPL_CLIENT_ACL; }
     break;
 
   case 2535:
-
-/* Line 1455 of yacc.c  */
 #line 15891 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_VIEW_ACL; }
     break;
 
   case 2536:
-
-/* Line 1455 of yacc.c  */
 #line 15892 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= SHOW_VIEW_ACL; }
     break;
 
   case 2537:
-
-/* Line 1455 of yacc.c  */
 #line 15893 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_PROC_ACL; }
     break;
 
   case 2538:
-
-/* Line 1455 of yacc.c  */
 #line 15894 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= ALTER_PROC_ACL; }
     break;
 
   case 2539:
-
-/* Line 1455 of yacc.c  */
 #line 15895 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_USER_ACL; }
     break;
 
   case 2540:
-
-/* Line 1455 of yacc.c  */
 #line 15896 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= EVENT_ACL;}
     break;
 
   case 2541:
-
-/* Line 1455 of yacc.c  */
 #line 15897 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= TRIGGER_ACL; }
     break;
 
   case 2542:
-
-/* Line 1455 of yacc.c  */
 #line 15898 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= CREATE_TABLESPACE_ACL; }
     break;
 
   case 2543:
-
-/* Line 1455 of yacc.c  */
 #line 15902 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2544:
-
-/* Line 1455 of yacc.c  */
 #line 15903 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2547:
-
-/* Line 1455 of yacc.c  */
 #line 15913 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41437,8 +37191,6 @@ yyreduce:
     break;
 
   case 2548:
-
-/* Line 1455 of yacc.c  */
 #line 15923 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41452,8 +37204,6 @@ yyreduce:
     break;
 
   case 2549:
-
-/* Line 1455 of yacc.c  */
 #line 15933 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41467,8 +37217,6 @@ yyreduce:
     break;
 
   case 2550:
-
-/* Line 1455 of yacc.c  */
 #line 15946 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41487,8 +37235,6 @@ yyreduce:
     break;
 
   case 2551:
-
-/* Line 1455 of yacc.c  */
 #line 15961 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41505,8 +37251,6 @@ yyreduce:
     break;
 
   case 2552:
-
-/* Line 1455 of yacc.c  */
 #line 15974 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -41523,8 +37267,6 @@ yyreduce:
     break;
 
   case 2553:
-
-/* Line 1455 of yacc.c  */
 #line 15987 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41537,8 +37279,6 @@ yyreduce:
     break;
 
   case 2554:
-
-/* Line 1455 of yacc.c  */
 #line 15999 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(1) - (1)].lex_user)))
@@ -41547,8 +37287,6 @@ yyreduce:
     break;
 
   case 2555:
-
-/* Line 1455 of yacc.c  */
 #line 16004 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(3) - (3)].lex_user)))
@@ -41557,8 +37295,6 @@ yyreduce:
     break;
 
   case 2556:
-
-/* Line 1455 of yacc.c  */
 #line 16012 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(1) - (1)].lex_user)))
@@ -41567,8 +37303,6 @@ yyreduce:
     break;
 
   case 2557:
-
-/* Line 1455 of yacc.c  */
 #line 16017 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->users_list.push_back((yyvsp[(3) - (3)].lex_user)))
@@ -41577,8 +37311,6 @@ yyreduce:
     break;
 
   case 2558:
-
-/* Line 1455 of yacc.c  */
 #line 16025 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.lex_user)=(yyvsp[(1) - (4)].lex_user); (yyvsp[(1) - (4)].lex_user)->password=(yyvsp[(4) - (4)].lex_str);
@@ -41600,8 +37332,6 @@ yyreduce:
     break;
 
   case 2559:
-
-/* Line 1455 of yacc.c  */
 #line 16043 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             if (Lex->sql_command == SQLCOM_REVOKE)
@@ -41625,8 +37355,6 @@ yyreduce:
     break;
 
   case 2560:
-
-/* Line 1455 of yacc.c  */
 #line 16063 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->sql_command == SQLCOM_REVOKE)
@@ -41642,8 +37370,6 @@ yyreduce:
     break;
 
   case 2561:
-
-/* Line 1455 of yacc.c  */
 #line 16075 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->sql_command == SQLCOM_REVOKE)
@@ -41660,8 +37386,6 @@ yyreduce:
     break;
 
   case 2562:
-
-/* Line 1455 of yacc.c  */
 #line 16088 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.lex_user)= (yyvsp[(1) - (1)].lex_user);
@@ -41670,8 +37394,6 @@ yyreduce:
     break;
 
   case 2563:
-
-/* Line 1455 of yacc.c  */
 #line 16096 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41680,8 +37402,6 @@ yyreduce:
     break;
 
   case 2567:
-
-/* Line 1455 of yacc.c  */
 #line 16110 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             String *new_str = new (YYTHD->mem_root) String((const char*) (yyvsp[(1) - (1)].lex_str).str,(yyvsp[(1) - (1)].lex_str).length,system_charset_info);
@@ -41710,8 +37430,6 @@ yyreduce:
     break;
 
   case 2569:
-
-/* Line 1455 of yacc.c  */
 #line 16139 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->ssl_type=SSL_TYPE_SPECIFIED;
@@ -41719,8 +37437,6 @@ yyreduce:
     break;
 
   case 2570:
-
-/* Line 1455 of yacc.c  */
 #line 16143 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->ssl_type=SSL_TYPE_ANY;
@@ -41728,8 +37444,6 @@ yyreduce:
     break;
 
   case 2571:
-
-/* Line 1455 of yacc.c  */
 #line 16147 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->ssl_type=SSL_TYPE_X509;
@@ -41737,8 +37451,6 @@ yyreduce:
     break;
 
   case 2572:
-
-/* Line 1455 of yacc.c  */
 #line 16151 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->ssl_type=SSL_TYPE_NONE;
@@ -41746,50 +37458,36 @@ yyreduce:
     break;
 
   case 2573:
-
-/* Line 1455 of yacc.c  */
 #line 16157 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2575:
-
-/* Line 1455 of yacc.c  */
 #line 16162 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2576:
-
-/* Line 1455 of yacc.c  */
 #line 16163 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= GRANT_ACL;}
     break;
 
   case 2577:
-
-/* Line 1455 of yacc.c  */
 #line 16167 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2578:
-
-/* Line 1455 of yacc.c  */
 #line 16168 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2579:
-
-/* Line 1455 of yacc.c  */
 #line 16172 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->grant |= GRANT_ACL;}
     break;
 
   case 2580:
-
-/* Line 1455 of yacc.c  */
 #line 16174 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41799,8 +37497,6 @@ yyreduce:
     break;
 
   case 2581:
-
-/* Line 1455 of yacc.c  */
 #line 16180 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41810,8 +37506,6 @@ yyreduce:
     break;
 
   case 2582:
-
-/* Line 1455 of yacc.c  */
 #line 16186 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41821,8 +37515,6 @@ yyreduce:
     break;
 
   case 2583:
-
-/* Line 1455 of yacc.c  */
 #line 16192 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41832,8 +37524,6 @@ yyreduce:
     break;
 
   case 2584:
-
-/* Line 1455 of yacc.c  */
 #line 16201 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41843,85 +37533,61 @@ yyreduce:
     break;
 
   case 2585:
-
-/* Line 1455 of yacc.c  */
 #line 16206 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2586:
-
-/* Line 1455 of yacc.c  */
 #line 16210 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2587:
-
-/* Line 1455 of yacc.c  */
 #line 16211 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2588:
-
-/* Line 1455 of yacc.c  */
 #line 16216 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_UNKNOWN; }
     break;
 
   case 2589:
-
-/* Line 1455 of yacc.c  */
 #line 16217 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_NO; }
     break;
 
   case 2590:
-
-/* Line 1455 of yacc.c  */
 #line 16218 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_YES; }
     break;
 
   case 2591:
-
-/* Line 1455 of yacc.c  */
 #line 16223 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_UNKNOWN; }
     break;
 
   case 2592:
-
-/* Line 1455 of yacc.c  */
 #line 16224 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_YES; }
     break;
 
   case 2593:
-
-/* Line 1455 of yacc.c  */
 #line 16225 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.m_yes_no_unk)= TVL_NO; }
     break;
 
   case 2594:
-
-/* Line 1455 of yacc.c  */
 #line 16229 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2595:
-
-/* Line 1455 of yacc.c  */
 #line 16230 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2596:
-
-/* Line 1455 of yacc.c  */
 #line 16235 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41934,8 +37600,6 @@ yyreduce:
     break;
 
   case 2597:
-
-/* Line 1455 of yacc.c  */
 #line 16247 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41948,8 +37612,6 @@ yyreduce:
     break;
 
   case 2598:
-
-/* Line 1455 of yacc.c  */
 #line 16257 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41959,8 +37621,6 @@ yyreduce:
     break;
 
   case 2599:
-
-/* Line 1455 of yacc.c  */
 #line 16266 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41970,8 +37630,6 @@ yyreduce:
     break;
 
   case 2600:
-
-/* Line 1455 of yacc.c  */
 #line 16275 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -41981,15 +37639,11 @@ yyreduce:
     break;
 
   case 2601:
-
-/* Line 1455 of yacc.c  */
 #line 16288 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2603:
-
-/* Line 1455 of yacc.c  */
 #line 16294 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_select_to_union_list(Lex, (bool)(yyvsp[(2) - (2)].num), TRUE))
@@ -41998,8 +37652,6 @@ yyreduce:
     break;
 
   case 2604:
-
-/* Line 1455 of yacc.c  */
 #line 16299 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -42011,43 +37663,31 @@ yyreduce:
     break;
 
   case 2605:
-
-/* Line 1455 of yacc.c  */
 #line 16309 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 0; }
     break;
 
   case 2606:
-
-/* Line 1455 of yacc.c  */
 #line 16310 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 2607:
-
-/* Line 1455 of yacc.c  */
 #line 16311 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)= 1; }
     break;
 
   case 2608:
-
-/* Line 1455 of yacc.c  */
 #line 16315 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.is_not_empty)= false; }
     break;
 
   case 2609:
-
-/* Line 1455 of yacc.c  */
 #line 16316 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.is_not_empty)= true; }
     break;
 
   case 2610:
-
-/* Line 1455 of yacc.c  */
 #line 16320 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42067,8 +37707,6 @@ yyreduce:
     break;
 
   case 2611:
-
-/* Line 1455 of yacc.c  */
 #line 16336 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42078,29 +37716,21 @@ yyreduce:
     break;
 
   case 2614:
-
-/* Line 1455 of yacc.c  */
 #line 16349 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=1; }
     break;
 
   case 2615:
-
-/* Line 1455 of yacc.c  */
 #line 16350 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=1; }
     break;
 
   case 2616:
-
-/* Line 1455 of yacc.c  */
 #line 16351 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { (yyval.num)=0; }
     break;
 
   case 2617:
-
-/* Line 1455 of yacc.c  */
 #line 16356 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             (yyval.select_lex)= Lex->current_select->master_unit()->first_select();
@@ -42108,8 +37738,6 @@ yyreduce:
     break;
 
   case 2618:
-
-/* Line 1455 of yacc.c  */
 #line 16360 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             (yyval.select_lex)= Lex->current_select->master_unit()->first_select();
@@ -42117,8 +37745,6 @@ yyreduce:
     break;
 
   case 2620:
-
-/* Line 1455 of yacc.c  */
 #line 16369 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (add_select_to_union_list(Lex, (bool)(yyvsp[(3) - (3)].num), FALSE))
@@ -42127,8 +37753,6 @@ yyreduce:
     break;
 
   case 2621:
-
-/* Line 1455 of yacc.c  */
 #line 16375 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->pop_context();
@@ -42137,8 +37761,6 @@ yyreduce:
     break;
 
   case 2622:
-
-/* Line 1455 of yacc.c  */
 #line 16384 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { 
             (yyval.select_lex)= (yyvsp[(2) - (3)].select_lex);
@@ -42146,8 +37768,6 @@ yyreduce:
     break;
 
   case 2623:
-
-/* Line 1455 of yacc.c  */
 #line 16390 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -42170,8 +37790,6 @@ yyreduce:
     break;
 
   case 2624:
-
-/* Line 1455 of yacc.c  */
 #line 16411 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex=Lex;
@@ -42191,15 +37809,11 @@ yyreduce:
     break;
 
   case 2629:
-
-/* Line 1455 of yacc.c  */
 #line 16439 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= SELECT_STRAIGHT_JOIN; }
     break;
 
   case 2630:
-
-/* Line 1455 of yacc.c  */
 #line 16441 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (check_simple_select())
@@ -42211,29 +37825,21 @@ yyreduce:
     break;
 
   case 2631:
-
-/* Line 1455 of yacc.c  */
 #line 16448 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= SELECT_DISTINCT; }
     break;
 
   case 2632:
-
-/* Line 1455 of yacc.c  */
 #line 16449 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= SELECT_SMALL_RESULT; }
     break;
 
   case 2633:
-
-/* Line 1455 of yacc.c  */
 #line 16450 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= SELECT_BIG_RESULT; }
     break;
 
   case 2634:
-
-/* Line 1455 of yacc.c  */
 #line 16452 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (check_simple_select())
@@ -42243,8 +37849,6 @@ yyreduce:
     break;
 
   case 2635:
-
-/* Line 1455 of yacc.c  */
 #line 16458 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (check_simple_select())
@@ -42254,36 +37858,26 @@ yyreduce:
     break;
 
   case 2636:
-
-/* Line 1455 of yacc.c  */
 #line 16463 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Select->options|= SELECT_ALL; }
     break;
 
   case 2637:
-
-/* Line 1455 of yacc.c  */
 #line 16474 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2638:
-
-/* Line 1455 of yacc.c  */
 #line 16476 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2639:
-
-/* Line 1455 of yacc.c  */
 #line 16478 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2653:
-
-/* Line 1455 of yacc.c  */
 #line 16511 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -42298,8 +37892,6 @@ yyreduce:
     break;
 
   case 2654:
-
-/* Line 1455 of yacc.c  */
 #line 16525 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             YYTHD->lex->definer= get_current_user(YYTHD, (yyvsp[(3) - (3)].lex_user));
@@ -42307,78 +37899,56 @@ yyreduce:
     break;
 
   case 2655:
-
-/* Line 1455 of yacc.c  */
 #line 16538 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2656:
-
-/* Line 1455 of yacc.c  */
 #line 16540 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2657:
-
-/* Line 1455 of yacc.c  */
 #line 16542 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2658:
-
-/* Line 1455 of yacc.c  */
 #line 16547 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_mode= VIEW_CREATE_OR_REPLACE; }
     break;
 
   case 2659:
-
-/* Line 1455 of yacc.c  */
 #line 16552 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_algorithm= VIEW_ALGORITHM_UNDEFINED; }
     break;
 
   case 2660:
-
-/* Line 1455 of yacc.c  */
 #line 16554 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_algorithm= VIEW_ALGORITHM_MERGE; }
     break;
 
   case 2661:
-
-/* Line 1455 of yacc.c  */
 #line 16556 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_algorithm= VIEW_ALGORITHM_TMPTABLE; }
     break;
 
   case 2662:
-
-/* Line 1455 of yacc.c  */
 #line 16561 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_suid= VIEW_SUID_DEFAULT; }
     break;
 
   case 2663:
-
-/* Line 1455 of yacc.c  */
 #line 16563 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_suid= VIEW_SUID_DEFINER; }
     break;
 
   case 2664:
-
-/* Line 1455 of yacc.c  */
 #line 16565 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_suid= VIEW_SUID_INVOKER; }
     break;
 
   case 2665:
-
-/* Line 1455 of yacc.c  */
 #line 16570 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42395,15 +37965,11 @@ yyreduce:
     break;
 
   case 2667:
-
-/* Line 1455 of yacc.c  */
 #line 16587 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2669:
-
-/* Line 1455 of yacc.c  */
 #line 16593 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               Lex->view_list.push_back((LEX_STRING*)
@@ -42412,8 +37978,6 @@ yyreduce:
     break;
 
   case 2670:
-
-/* Line 1455 of yacc.c  */
 #line 16598 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
               Lex->view_list.push_back((LEX_STRING*)
@@ -42422,8 +37986,6 @@ yyreduce:
     break;
 
   case 2671:
-
-/* Line 1455 of yacc.c  */
 #line 16605 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -42436,8 +37998,6 @@ yyreduce:
     break;
 
   case 2672:
-
-/* Line 1455 of yacc.c  */
 #line 16614 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42455,8 +38015,6 @@ yyreduce:
     break;
 
   case 2673:
-
-/* Line 1455 of yacc.c  */
 #line 16631 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (Lex->current_select->set_braces(0))
@@ -42476,8 +38034,6 @@ yyreduce:
     break;
 
   case 2676:
-
-/* Line 1455 of yacc.c  */
 #line 16652 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             if (setup_select_in_parentheses(Lex))
@@ -42486,8 +38042,6 @@ yyreduce:
     break;
 
   case 2678:
-
-/* Line 1455 of yacc.c  */
 #line 16661 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->current_select->table_list.save_and_clear(&Lex->save_list);
@@ -42495,8 +38049,6 @@ yyreduce:
     break;
 
   case 2679:
-
-/* Line 1455 of yacc.c  */
 #line 16665 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->current_select->table_list.push_front(&Lex->save_list);
@@ -42504,36 +38056,26 @@ yyreduce:
     break;
 
   case 2680:
-
-/* Line 1455 of yacc.c  */
 #line 16672 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_check= VIEW_CHECK_NONE; }
     break;
 
   case 2681:
-
-/* Line 1455 of yacc.c  */
 #line 16674 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_check= VIEW_CHECK_CASCADED; }
     break;
 
   case 2682:
-
-/* Line 1455 of yacc.c  */
 #line 16676 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_check= VIEW_CHECK_CASCADED; }
     break;
 
   case 2683:
-
-/* Line 1455 of yacc.c  */
 #line 16678 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->create_view_check= VIEW_CHECK_LOCAL; }
     break;
 
   case 2684:
-
-/* Line 1455 of yacc.c  */
 #line 16695 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {                 /* $8 */
             Lex->raw_trg_on_table_name_begin= YYLIP->get_tok_start();
@@ -42541,8 +38083,6 @@ yyreduce:
     break;
 
   case 2685:
-
-/* Line 1455 of yacc.c  */
 #line 16701 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {                 /* $12 */
             Lex->raw_trg_on_table_name_end= YYLIP->get_tok_start();
@@ -42550,8 +38090,6 @@ yyreduce:
     break;
 
   case 2686:
-
-/* Line 1455 of yacc.c  */
 #line 16706 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {                 /* $15 */
             THD *thd= YYTHD;
@@ -42585,8 +38123,6 @@ yyreduce:
     break;
 
   case 2687:
-
-/* Line 1455 of yacc.c  */
 #line 16736 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $17 */
             THD *thd= YYTHD;
@@ -42615,8 +38151,6 @@ yyreduce:
     break;
 
   case 2688:
-
-/* Line 1455 of yacc.c  */
 #line 16771 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42637,8 +38171,6 @@ yyreduce:
     break;
 
   case 2689:
-
-/* Line 1455 of yacc.c  */
 #line 16789 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42659,8 +38191,6 @@ yyreduce:
     break;
 
   case 2690:
-
-/* Line 1455 of yacc.c  */
 #line 16812 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $5 */
             THD *thd= YYTHD;
@@ -42695,8 +38225,6 @@ yyreduce:
     break;
 
   case 2691:
-
-/* Line 1455 of yacc.c  */
 #line 16844 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $8 */
             Lex->sphead->m_parser_data.set_parameter_end_ptr(
@@ -42705,8 +38233,6 @@ yyreduce:
     break;
 
   case 2692:
-
-/* Line 1455 of yacc.c  */
 #line 16849 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $10 */
             LEX *lex= Lex;
@@ -42718,8 +38244,6 @@ yyreduce:
     break;
 
   case 2693:
-
-/* Line 1455 of yacc.c  */
 #line 16857 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $12 */
             LEX *lex= Lex;
@@ -42746,8 +38270,6 @@ yyreduce:
     break;
 
   case 2694:
-
-/* Line 1455 of yacc.c  */
 #line 16880 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { /* $14 */
             THD *thd= YYTHD;
@@ -42759,8 +38281,6 @@ yyreduce:
     break;
 
   case 2695:
-
-/* Line 1455 of yacc.c  */
 #line 16888 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42819,8 +38339,6 @@ yyreduce:
     break;
 
   case 2696:
-
-/* Line 1455 of yacc.c  */
 #line 16946 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42844,8 +38362,6 @@ yyreduce:
     break;
 
   case 2697:
-
-/* Line 1455 of yacc.c  */
 #line 16966 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             /*
@@ -42861,8 +38377,6 @@ yyreduce:
     break;
 
   case 2698:
-
-/* Line 1455 of yacc.c  */
 #line 16979 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42876,8 +38390,6 @@ yyreduce:
     break;
 
   case 2699:
-
-/* Line 1455 of yacc.c  */
 #line 16989 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42889,8 +38401,6 @@ yyreduce:
     break;
 
   case 2700:
-
-/* Line 1455 of yacc.c  */
 #line 16997 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             THD *thd= YYTHD;
@@ -42903,8 +38413,6 @@ yyreduce:
     break;
 
   case 2701:
-
-/* Line 1455 of yacc.c  */
 #line 17011 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_START;
@@ -42912,8 +38420,6 @@ yyreduce:
     break;
 
   case 2702:
-
-/* Line 1455 of yacc.c  */
 #line 17015 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_END;
@@ -42921,8 +38427,6 @@ yyreduce:
     break;
 
   case 2703:
-
-/* Line 1455 of yacc.c  */
 #line 17019 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_PREPARE;
@@ -42930,8 +38434,6 @@ yyreduce:
     break;
 
   case 2704:
-
-/* Line 1455 of yacc.c  */
 #line 17023 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_COMMIT;
@@ -42939,8 +38441,6 @@ yyreduce:
     break;
 
   case 2705:
-
-/* Line 1455 of yacc.c  */
 #line 17027 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_ROLLBACK;
@@ -42948,8 +38448,6 @@ yyreduce:
     break;
 
   case 2706:
-
-/* Line 1455 of yacc.c  */
 #line 17031 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             Lex->sql_command = SQLCOM_XA_RECOVER;
@@ -42957,8 +38455,6 @@ yyreduce:
     break;
 
   case 2707:
-
-/* Line 1455 of yacc.c  */
 #line 17038 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (1)].string)->length() <= MAXGTRIDSIZE);
@@ -42969,8 +38465,6 @@ yyreduce:
     break;
 
   case 2708:
-
-/* Line 1455 of yacc.c  */
 #line 17045 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (3)].string)->length() <= MAXGTRIDSIZE && (yyvsp[(3) - (3)].string)->length() <= MAXBQUALSIZE);
@@ -42981,8 +38475,6 @@ yyreduce:
     break;
 
   case 2709:
-
-/* Line 1455 of yacc.c  */
 #line 17052 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             MYSQL_YYABORT_UNLESS((yyvsp[(1) - (5)].string)->length() <= MAXGTRIDSIZE && (yyvsp[(3) - (5)].string)->length() <= MAXBQUALSIZE);
@@ -42993,85 +38485,61 @@ yyreduce:
     break;
 
   case 2710:
-
-/* Line 1455 of yacc.c  */
 #line 17061 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2711:
-
-/* Line 1455 of yacc.c  */
 #line 17062 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2712:
-
-/* Line 1455 of yacc.c  */
 #line 17066 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_NONE;        }
     break;
 
   case 2713:
-
-/* Line 1455 of yacc.c  */
 #line 17067 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_JOIN;        }
     break;
 
   case 2714:
-
-/* Line 1455 of yacc.c  */
 #line 17068 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_RESUME;      }
     break;
 
   case 2715:
-
-/* Line 1455 of yacc.c  */
 #line 17072 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_NONE;        }
     break;
 
   case 2716:
-
-/* Line 1455 of yacc.c  */
 #line 17073 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_ONE_PHASE;   }
     break;
 
   case 2717:
-
-/* Line 1455 of yacc.c  */
 #line 17078 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_NONE;        }
     break;
 
   case 2718:
-
-/* Line 1455 of yacc.c  */
 #line 17080 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_SUSPEND;     }
     break;
 
   case 2720:
-
-/* Line 1455 of yacc.c  */
 #line 17085 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {}
     break;
 
   case 2721:
-
-/* Line 1455 of yacc.c  */
 #line 17086 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     { Lex->xa_opt=XA_FOR_MIGRATE; }
     break;
 
   case 2722:
-
-/* Line 1455 of yacc.c  */
 #line 17091 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -43082,8 +38550,6 @@ yyreduce:
     break;
 
   case 2723:
-
-/* Line 1455 of yacc.c  */
 #line 17101 "/home/rdempsey/github/mysql/sql/sql_yacc.yy"
     {
             LEX *lex= Lex;
@@ -43093,9 +38559,8 @@ yyreduce:
     break;
 
 
-
-/* Line 1455 of yacc.c  */
-#line 43099 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
+/* Line 1267 of yacc.c.  */
+#line 38564 "/home/rdempsey/github/mysql-obj/sql/sql_yacc.cc"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -43105,6 +38570,7 @@ yyreduce:
   YY_STACK_PRINT (yyss, yyssp);
 
   *++yyvsp = yyval;
+
 
   /* Now `shift' the result of the reduction.  Determine what state
      that goes to, based on the state we popped back to and the rule
@@ -43170,7 +38636,7 @@ yyerrlab:
 
   if (yyerrstatus == 3)
     {
-      /* If just tried and failed to reuse lookahead token after an
+      /* If just tried and failed to reuse look-ahead token after an
 	 error, discard it.  */
 
       if (yychar <= YYEOF)
@@ -43187,7 +38653,7 @@ yyerrlab:
 	}
     }
 
-  /* Else will try to reuse lookahead token after shifting the error
+  /* Else will try to reuse look-ahead token after shifting the error
      token.  */
   goto yyerrlab1;
 
@@ -43244,6 +38710,9 @@ yyerrlab1:
       YY_STACK_PRINT (yyss, yyssp);
     }
 
+  if (yyn == YYFINAL)
+    YYACCEPT;
+
   *++yyvsp = yylval;
 
 
@@ -43268,7 +38737,7 @@ yyabortlab:
   yyresult = 1;
   goto yyreturn;
 
-#if !defined(yyoverflow) || YYERROR_VERBOSE
+#ifndef yyoverflow
 /*-------------------------------------------------.
 | yyexhaustedlab -- memory exhaustion comes here.  |
 `-------------------------------------------------*/
@@ -43279,7 +38748,7 @@ yyexhaustedlab:
 #endif
 
 yyreturn:
-  if (yychar != YYEMPTY)
+  if (yychar != YYEOF && yychar != YYEMPTY)
      yydestruct ("Cleanup: discarding lookahead",
 		 yytoken, &yylval);
   /* Do not reclaim the symbols of the rule which action triggered
