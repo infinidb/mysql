@@ -1,9 +1,29 @@
 #!/bin/bash
 
-prefix=/usr/local/Calpont
+prefix=/usr/local/Calpont/mysql
 objdir=../mysql-obj
 comment="InfiniDB 5.0 Alpha"
 WITH_DEBUG=
+ncpus=1
+
+usage()
+{
+cat <<EOD
+usage: idbbuild.sh [--prefix=PFX] [--with-debug] [--objdir=DIR]
+                   [--comment="COM"] [--ncpus=N] [--help]
+   --prefix     set install prefix (currently $prefix)
+   --with-debug enable debug symbols (requires matching settings in connector)
+   --objdir     set build dir (currently $objdir)
+   --comment    set server comment (currently "$comment")
+   --ncpus      set build concurrency (autodeteced at $ncpus)
+   --help       display this help
+EOD
+}
+
+ncpus=$(lscpu 2>/dev/null | awk '/^CPU.s.:/ {print $2}')
+if [ -z "$ncpus" ]; then
+	ncpus=1
+fi
 
 for arg in "$@"; do
 	if [ $(expr -- "$arg" : '--prefix=') -eq 9 ]; then
@@ -14,19 +34,15 @@ for arg in "$@"; do
 		objdir="$(echo $arg | awk -F= '{print $2}')"
 	elif [ $(expr -- "$arg" : '--comment=') -eq 10 ]; then
 		comment="$(echo $arg | awk -F= '{print $2}')"
+	elif [ $(expr -- "$arg" : '--ncpus=') -eq 8 ]; then
+		ncpus="$(echo $arg | awk -F= '{print $2}')"
+        elif [ $(expr -- "$arg" : '--help') -eq 6 ]; then
+                usage
+                exit 0
 	else
 		echo "ignoring unknown argument: $arg" 1>&2
 	fi
 done
-
-#extra_ld_flags="-Wl,-rpath -Wl,$prefix/mysql/lib/mysql -Wl,-rpath -Wl,$prefix/lib"
-#
-#./configure --prefix=$prefix/mysql $WITH_DEBUG --without-libedit --with-readline \
-#        --with-plugins=csv,heap,myisam,myisammrg,partition --with-mysqld-ldflags="$extra_ld_flags" \
-#        --with-client-ldflags="$extra_ld_flags" --with-extra-charsets=all --with-ssl
-#
-#make
-#
 
 cmake --version >/dev/null 2>&1
 if [ $? -ne 0 ]; then
@@ -61,5 +77,10 @@ if [ $rc -ne 0 ]; then
 	exit $rc
 fi
 
-make
+jobs=
+if [ $ncpus -gt 1 ]; then
+	jobs="-j$ncpus"
+fi
+
+make $jobs && make install
 
