@@ -62,6 +62,12 @@ else
 	cd $objdir
 fi
 
+if [ -x /usr/local/gcc45/bin/g++ ]; then
+	export CC=/usr/local/gcc45/bin/gcc
+	export CXX=/usr/local/gcc45/bin/g++
+	export LD_LIBRARY_PATH=/usr/local/gcc45/lib64:/usr/local/gmp43/lib:/usr/local/mpfr24/lib:/usr/local/mpc08/lib
+fi
+
 cmakeopts="$WITH_DEBUG \
 	-DCMAKE_INSTALL_PREFIX=$prefix \
 	-DWITH_EXTRA_CHARSETS=all \
