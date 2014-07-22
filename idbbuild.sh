@@ -2,7 +2,7 @@
 
 prefix=/usr/local/Calpont/mysql
 objdir=../mysql-obj
-comment="InfiniDB 5.0 Alpha"
+comment=
 WITH_DEBUG=
 ncpus=1
 
@@ -25,6 +25,8 @@ if [ -z "$ncpus" ]; then
 	ncpus=1
 fi
 
+comment=$(cat compilation_comment 2>/dev/null)
+
 for arg in "$@"; do
 	if [ $(expr -- "$arg" : '--prefix=') -eq 9 ]; then
 		prefix="$(echo $arg | awk -F= '{print $2}')"
@@ -43,6 +45,11 @@ for arg in "$@"; do
 		echo "ignoring unknown argument: $arg" 1>&2
 	fi
 done
+
+if [ -z "$comment" ]; then
+	echo "No compilation comment found. Try adding one to compilation_comment." 1>&2
+	exit 1
+fi
 
 cmake --version >/dev/null 2>&1
 if [ $? -ne 0 ]; then
