@@ -19,10 +19,11 @@
 /* Headers we may want to use. */
 #define STDC_HEADERS 1
 #define _GNU_SOURCE 1
+/* #undef HAVE_LLVM_LIBCPP */
 #define HAVE_ALLOCA_H 1
 #define HAVE_AIO_H 1
 #define HAVE_ARPA_INET_H 1
-/* #undef HAVE_ASM_MSR_H */
+#define HAVE_ASM_MSR_H 1
 #define HAVE_ASM_TERMBITS_H 1
 #define HAVE_BSEARCH 1
 #define HAVE_CRYPT_H 1
@@ -182,7 +183,7 @@
 #define HAVE_LDIV 1
 #define HAVE_LRAND48 1
 #define HAVE_LOCALTIME_R 1
-/* #undef HAVE_LOG2 */
+#define HAVE_LOG2 1
 #define HAVE_LONGJMP 1
 #define HAVE_LSTAT 1
 #define HAVE_MEMALIGN 1
@@ -193,7 +194,7 @@
 #define HAVE_DECL_MADVISE 1
 #define HAVE_DECL_TGOTO 1
 /* #undef HAVE_DECL_MHA_MAPSIZE_VA */
-/* #undef HAVE_MALLOC_INFO */
+#define HAVE_MALLOC_INFO 1
 #define HAVE_MEMCPY 1
 #define HAVE_MEMMOVE 1
 #define HAVE_MKSTEMP 1
@@ -633,26 +634,26 @@
 #define DEFAULT_MYSQL_HOME "/usr/local/Calpont/mysql"
 #define SHAREDIR "/usr/local/Calpont/mysql/share"
 #define DEFAULT_BASEDIR "/usr/local/Calpont/mysql"
-#define MYSQL_DATADIR "/usr/local/Calpont/data"
+#define MYSQL_DATADIR "/usr/local/Calpont/mysql/data"
 #define DEFAULT_CHARSET_HOME "/usr/local/Calpont/mysql"
 #define PLUGINDIR "/usr/local/Calpont/mysql/lib/plugin"
-#define DEFAULT_SYSCONFDIR "/usr/local/Calpont/etc"
+#define DEFAULT_SYSCONFDIR "/usr/local/Calpont/mysql/etc"
 #define DEFAULT_TMPDIR P_tmpdir
 
 /* #undef SO_EXT */
 
 #define MYSQL_VERSION_MAJOR 5
 #define MYSQL_VERSION_MINOR 6
-#define MYSQL_VERSION_PATCH 17
+#define MYSQL_VERSION_PATCH 19
 #define MYSQL_VERSION_EXTRA ""
 
 #define PACKAGE "mysql"
 #define PACKAGE_BUGREPORT ""
 #define PACKAGE_NAME "MySQL Server"
-#define PACKAGE_STRING "MySQL Server 5.6.17"
+#define PACKAGE_STRING "MySQL Server 5.6.19"
 #define PACKAGE_TARNAME "mysql"
-#define PACKAGE_VERSION "5.6.17"
-#define VERSION "5.6.17"
+#define PACKAGE_VERSION "5.6.19"
+#define VERSION "5.6.19"
 #define PROTOCOL_VERSION 10
 
 
