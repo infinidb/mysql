@@ -2534,7 +2534,13 @@ void Item_func_rpad::fix_length_and_dec()
   }
   else
   {
-    max_length= MAX_BLOB_WIDTH;
+	// @bug6149, port fix for Item_func_repeat::fix_length_and_dec.
+    // @InfiniDB. For dynamic (column) count, IDB sets length 256 for order by to go through
+    if (fThd && (fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0) )
+      max_length = 256;
+    else 
+      max_length = MAX_BLOB_WIDTH;
     maybe_null= 1;
   }
 }
@@ -2651,7 +2657,13 @@ void Item_func_lpad::fix_length_and_dec()
   }
   else
   {
-    max_length= MAX_BLOB_WIDTH;
+	// @bug6149, port fix for Item_func_repeat::fix_length_and_dec.
+    // @InfiniDB. For dynamic (column) count, IDB sets length 256 for order by to go through
+    if (fThd && (fThd->infinidb_vtable.vtable_state != THD::INFINIDB_DISABLE_VTABLE ||
+        fThd->variables.infinidb_vtable_mode == 0) )
+      max_length = 256;
+    else 
+      max_length = MAX_BLOB_WIDTH;
     maybe_null= 1;
   }
 }
