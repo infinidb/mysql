@@ -3609,9 +3609,14 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
     //flags|= IS_IN_USE;
     flags&= ~ (uint) IS_IN_USE;
     if (idb_vtable_process(thd, this)) // if failed, fall through to normal path
+    {
       thd->infinidb_vtable.vtable_state = THD::INFINIDB_DISABLE_VTABLE;
+    } 
     else
+    {
+      thd->set_statement(&stmt_backup);
       return false;
+    }
   }
   
   /*
