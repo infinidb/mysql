@@ -269,6 +269,12 @@ void Item_func_window::fix_length_and_dec()
 	else // default for no arg
 	{
 		hybrid_type = INT_RESULT;
+
+		int precision= 18;
+		decimals= 0;
+		max_length= my_decimal_precision_to_length_no_truncation(precision,
+		                                                         decimals,
+		                                                         unsigned_flag);
 	}
 	DBUG_VOID_RETURN;
 }
