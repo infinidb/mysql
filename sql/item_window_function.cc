@@ -270,7 +270,7 @@ void Item_func_window::fix_length_and_dec()
 	{
 		hybrid_type = INT_RESULT;
 
-		int precision= 18;
+		int precision= MY_INT64_NUM_DECIMAL_DIGITS;
 		decimals= 0;
 		max_length= my_decimal_precision_to_length_no_truncation(precision,
 		                                                         decimals,
