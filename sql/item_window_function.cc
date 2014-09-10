@@ -28,7 +28,7 @@
 Boundary::Boundary() : item (NULL)
 {}
 
-Boundary::Boundary(BOUND b): bound(b), item(NULL)
+Boundary::Boundary(BOUND b): item(NULL), bound(b)
 {}
 
 bool Boundary::fix_fields(THD* thd, Item** ref)
@@ -270,7 +270,7 @@ void Item_func_window::fix_length_and_dec()
 	{
 		hybrid_type = INT_RESULT;
 
-		int precision= 18;
+		int precision= MY_INT64_NUM_DECIMAL_DIGITS;
 		decimals= 0;
 		max_length= my_decimal_precision_to_length_no_truncation(precision,
 		                                                         decimals,
@@ -547,7 +547,7 @@ bool Item_func_window_median::fix_fields(THD* thd, Item** ref)
 	SQL_LIST* orders = new SQL_LIST();
 	orders->elements= 0;
 	orders->first= 0;
-	orders->next= (uchar**) &(orders->first);
+	orders->next= &(orders->first);
 	if (add_to_list(thd, *orders, args[0], true, 0)) // decending, null last
 	{
 		IDB_set_error(thd, logging::ERR_WF_ORDER_BY, funcname);
