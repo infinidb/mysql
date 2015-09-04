@@ -5703,6 +5703,7 @@ enum options_mysqld
   OPT_INFINIDB_LOCAL_QUERY,
   OPT_INFINIDB_USE_IMPORT_FOR_BATCHINSERT,
   OPT_INFINIDB_IMPORT_FOR_BATCHINSERT_DELIMITER,
+  OPT_INFINIDB_IMPORT_FOR_BATCHINSERT_ENCLOSED_BY,
   /* InfiniDB */
 };
 
@@ -7368,7 +7369,19 @@ thread is in the relay logs.",
 	0, /* Subtract this overhead from given value before setting var */
 	1, /* Value should be a mult. of this */
 	0},
-/* InfiniDB */
+	// InfiniDB variable
+	{"infinidb_import_for_batchinsert_enclosed_by", OPT_INFINIDB_IMPORT_FOR_BATCHINSERT_ENCLOSED_BY,
+   "LDI and insert with select will use the input character as enclosed by. (default to 8)",
+   (uchar**) &global_system_variables.infinidb_import_for_batchinsert_enclosed_by,
+   (uchar**) &max_system_variables.infinidb_import_for_batchinsert_enclosed_by, 0,
+   GET_ULONG, REQUIRED_ARG,
+	17, /* Default value */
+	17, /* Min allowed value */
+	127, /* Max allowed value */
+	0, /* Subtract this overhead from given value before setting var */
+	1, /* Value should be a mult. of this */
+	0},
+  /* InfiniDB */
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 
 };
