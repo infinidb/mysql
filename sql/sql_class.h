@@ -352,6 +352,7 @@ struct system_variables
   ulong infinidb_local_query;
   my_bool infinidb_use_import_for_batchinsert;
   ulong infinidb_import_for_batchinsert_delimiter;
+  ulong infinidb_import_for_batchinsert_enclosed_by;
 /* InfiniDB */
   ulong div_precincrement;
   ulong sortbuff_size;

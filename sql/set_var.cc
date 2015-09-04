@@ -543,6 +543,8 @@ static sys_var_thd_bool	sys_infinidb_use_import_for_batchinsert(&vars, "infinidb
 					       &SV::infinidb_use_import_for_batchinsert);
 static sys_var_thd_ulong sys_infinidb_import_for_batchinsert_delimiter(&vars, "infinidb_import_for_batchinsert_delimiter",
 					       &SV::infinidb_import_for_batchinsert_delimiter);					     
+static sys_var_thd_ulong sys_infinidb_import_for_batchinsert_enclosed_by(&vars, "infinidb_import_for_batchinsert_enclosed_by",
+					       &SV::infinidb_import_for_batchinsert_enclosed_by);					     
 
 /* InfiniDB */
 static sys_var_thd_ulong	sys_div_precincrement(&vars, "div_precision_increment",
